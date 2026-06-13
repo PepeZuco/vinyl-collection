@@ -12,7 +12,7 @@
 
 [data-theme="dark"]{
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
-  --text:#e8e8e0;--muted:#555;--accent:#c8a951;--danger:#c0392b;
+  --text:#e8e8e0;--muted:#555;--accent:#F5C518;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
   --toggle-icon:'☀'
@@ -50,7 +50,7 @@ select option{background:var(--surface);color:var(--text)}
 .btn{height:34px;padding:0 14px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;color:var(--muted);white-space:nowrap;transition:all .12s;font-family:var(--font);letter-spacing:0}
 .btn:hover{border-color:var(--text);color:var(--text)}
 .btn-primary{border-color:var(--accent);color:var(--accent)}
-.btn-primary:hover{background:rgba(200,169,81,.08)}
+.btn-primary:hover{background:rgba(245,197,24,.08)}
 .btn-sm{height:28px;padding:0 10px;font-size:12px}
 .btn-ghost{background:transparent;border:none;color:var(--muted);padding:0 6px}
 .btn-ghost:hover{color:var(--text)}
@@ -111,13 +111,13 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-scores{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .score-block{display:flex;flex-direction:column;gap:3px}
 .score-label{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.score-block.pepe .score-label{color:#c8a951}
-.score-block.jenni .score-label{color:#9B7FD4}
+.score-block.pepe .score-label{color:#F5C518}
+.score-block.jenni .score-label{color:#D4608A}
 .score-dots{display:flex;gap:2px;align-items:center}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--border);transition:background .1s}
 [data-theme="light"] .dot{background:#ddd}
-.score-block.pepe .dot.on{background:#c8a951}
-.score-block.jenni .dot.on{background:#9B7FD4}
+.score-block.pepe .dot.on{background:#F5C518}
+.score-block.jenni .dot.on{background:#D4608A}
 
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
@@ -143,13 +143,13 @@ select option{background:var(--surface);color:var(--text)}
 .detail-ratings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm)}
 .detail-rating-block{display:flex;flex-direction:column;gap:6px}
 .detail-rating-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
-.detail-rating-block.pepe .detail-rating-label{color:#c8a951}
-.detail-rating-block.jenni .detail-rating-label{color:#9B7FD4}
+.detail-rating-block.pepe .detail-rating-label{color:#F5C518}
+.detail-rating-block.jenni .detail-rating-label{color:#D4608A}
 .detail-dots{display:flex;gap:3px;flex-wrap:wrap}
 .ddot{width:8px;height:8px;border-radius:50%;background:var(--border)}
 [data-theme="light"] .ddot{background:#ddd}
-.detail-rating-block.pepe .ddot.on{background:#c8a951}
-.detail-rating-block.jenni .ddot.on{background:#9B7FD4}
+.detail-rating-block.pepe .ddot.on{background:#F5C518}
+.detail-rating-block.jenni .ddot.on{background:#D4608A}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .detail-item label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:block;margin-bottom:2px}
 .detail-item span{font-size:13px;font-weight:600}
@@ -175,6 +175,11 @@ select option{background:var(--surface);color:var(--text)}
 /* empty */
 .empty{text-align:center;padding:64px 20px;color:var(--muted)}
 .empty i{font-size:40px;opacity:.15;display:block;margin-bottom:10px}
+
+/* spinner */
+.spinner{display:flex;align-items:center;justify-content:center;padding:64px 20px}
+.spinner-disc{width:40px;height:40px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* toast */
 .toast{position:fixed;bottom:20px;right:20px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);z-index:300;opacity:0;transform:translateY(6px);transition:all .18s;pointer-events:none}
@@ -369,10 +374,10 @@ function cardStyles(r) {
   const isBoth  = isPepe && isJenni;
 
   let rgb;
-  if (isBoth)       rgb = isDark ? '177,148,146' : '145,110,120';
-  else if (isPepe)  rgb = isDark ? '200,169,81'  : '160,120,32';
-  else if (isJenni) rgb = isDark ? '155,127,212' : '130,100,190';
-  else              rgb = isDark ? '200,169,81'  : '160,120,32';
+  if (isBoth)       rgb = isDark ? '155,127,212' : '130,100,190';   // lavender
+  else if (isPepe)  rgb = isDark ? '245,197,24'  : '200,155,10';    // electric yellow
+  else if (isJenni) rgb = isDark ? '212,96,138'  : '180,60,110';    // pink
+  else              rgb = isDark ? '245,197,24'  : '200,155,10';    // yellow default
 
   const opacity = isDark ? 0.70 : 0.55;
   return { shadow: `4px 4px 0 0 rgba(${rgb},${opacity})` };
@@ -405,6 +410,8 @@ function setAuthed(val) {
 }
 
 async function loadRecords() {
+  const c = document.getElementById('recordsContainer');
+  c.innerHTML = '<div class="spinner"><div class="spinner-disc"></div></div>';
   const r = await fetch('/api/records');
   records = await r.json();
   render();
