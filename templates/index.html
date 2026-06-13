@@ -110,15 +110,14 @@ select option{background:var(--surface);color:var(--text)}
 /* divider */
 .vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
 
-/* pepe / jenni row */
-.vcard-scores{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.score-block{display:flex;flex-direction:column;gap:3px}
-.score-label{display:none}
-.score-dots{display:flex;gap:3px;align-items:center}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:background .1s}
-[data-theme="light"] .dot{background:#ddd}
-.score-block.pepe .dot.on{background:#F5C518}
-.score-block.jenni .dot.on{background:#D4608A}
+/* combo meter */
+.combo-bar{display:flex;gap:2px;margin-bottom:4px;height:5px}
+.combo-seg{height:100%;border-radius:2px}
+.combo-seg.pepe-fill{background:#F5C518}
+.combo-seg.jenni-fill{background:#D4608A}
+.combo-seg.empty{background:var(--border)}
+.combo-labels{display:flex;justify-content:space-between}
+.combo-lbl{font-size:10px}
 
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
@@ -566,18 +565,27 @@ function cardHTML(r) {
   else if (total >= 6)   totalGlow = isDarkCard ? '0 0 5px rgba(245,197,24,0.40)' : '0 0 4px rgba(200,155,10,0.30)';
   const totalStyle = totalGlow ? ` style="text-shadow:${totalGlow}"` : '';
 
-  const scoresBlock = (myR > 0 || herR > 0) ? `
+  const scoresBlock = (myR > 0 || herR > 0) ? (() => {
+    const MAX = 5;
+    const pepeFill  = Math.round(myR  * 2) / 2;
+    const jenniFill = Math.round(herR * 2) / 2;
+    const pepePct   = (pepeFill  / (MAX * 2)) * 100;
+    const jenniPct  = (jenniFill / (MAX * 2)) * 100;
+    const emptyPct  = 100 - pepePct - jenniPct;
+    const pepeStr   = myR  > 0 ? (myR  % 1 === 0 ? myR  : myR.toFixed(1))  + '/5' : '—';
+    const jenniStr  = herR > 0 ? (herR % 1 === 0 ? herR : herR.toFixed(1)) + '/5' : '—';
+    return `
     <div class="vcard-divider"></div>
-    <div class="vcard-scores">
-      <div class="score-block pepe">
-        <div class="score-label">Pepe</div>
-        ${myR > 0 ? dotsHTML(myR) : '<span style="font-size:11px;color:var(--muted)">—</span>'}
-      </div>
-      <div class="score-block jenni">
-        <div class="score-label">Jenni</div>
-        ${herR > 0 ? dotsHTML(herR) : '<span style="font-size:11px;color:var(--muted)">—</span>'}
-      </div>
-    </div>` : '';
+    <div class="combo-bar">
+      ${pepeFill  > 0 ? `<div class="combo-seg pepe-fill"  style="flex:${pepeFill}"></div>`  : ''}
+      ${jenniFill > 0 ? `<div class="combo-seg jenni-fill" style="flex:${jenniFill}"></div>` : ''}
+      ${(pepeFill + jenniFill) < MAX * 2 ? `<div class="combo-seg empty" style="flex:${MAX*2 - pepeFill - jenniFill}"></div>` : ''}
+    </div>
+    <div class="combo-labels">
+      <span class="combo-lbl" style="color:#F5C518">${pepeStr}</span>
+      <span class="combo-lbl" style="color:#D4608A">${jenniStr}</span>
+    </div>`;
+  })() : '';
 
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
