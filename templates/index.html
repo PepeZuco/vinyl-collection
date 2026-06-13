@@ -272,7 +272,7 @@ select option{background:var(--surface);color:var(--text)}
     </div>
     <div class="chart-box" style="margin-bottom:28px">
       <div class="chart-title">release year distribution</div>
-      <div id="yearWrap" style="width:100%;height:320px"></div>
+      <div id="yearWrap" style="width:100%;height:360px"></div>
     </div>
   </div>
 
@@ -935,6 +935,14 @@ function renderStats() {
   all.forEach(r => { const g = r.genre||'Unknown'; genreCounts[g] = (genreCounts[g]||0)+1; });
   const sortedGenres = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1]);
 
+  const GENRE_COLORS = [
+    '#F5C518','#D4608A','#9B7FD4','#4A90C4','#1D9E75',
+    '#E8750A','#E05555','#7BAE7F','#3DBFA0','#C4A0E0',
+    '#E8956A','#5BA3D9','#B56A8A','#639922','#888780',
+  ];
+  const bgColors  = sortedGenres.map((_,i) => GENRE_COLORS[i % GENRE_COLORS.length] + 'BF'); // 75% opacity
+  const brdColors = sortedGenres.map((_,i) => GENRE_COLORS[i % GENRE_COLORS.length]);
+
   destroyChart('genre');
   chartInstances['genre'] = new Chart(document.getElementById('genreChart'), {
     type: 'bar',
@@ -942,8 +950,8 @@ function renderStats() {
       labels: sortedGenres.map(([g])=>g),
       datasets: [{
         data: sortedGenres.map(([,c])=>c),
-        backgroundColor: 'rgba(245,197,24,0.75)',
-        borderColor: '#F5C518',
+        backgroundColor: bgColors,
+        borderColor: brdColors,
         borderWidth: 1,
         borderRadius: 3,
       }]
@@ -959,13 +967,13 @@ function renderStats() {
     }
   });
 
-  // ── D3 histogram + rug: release year by owner ─────────────────────────────
+  // ── D3 ridgeline areas: release year by owner ─────────────────────────────
   const wrap = document.getElementById('yearWrap');
   wrap.innerHTML = '';
 
   const dark = isDark();
   const COLORS_YEAR = { pepe:'#F5C518', jenni:'#D4608A', both:'#9B7FD4' };
-  const ALPHA = { pepe:'rgba(245,197,24,0.55)', jenni:'rgba(212,96,138,0.55)', both:'rgba(155,127,212,0.55)' };
+  const FILL_YEAR   = { pepe:'rgba(245,197,24,0.45)', jenni:'rgba(212,96,138,0.45)', both:'rgba(155,127,212,0.45)' };
 
   const yearData = { pepe:[], jenni:[], both:[] };
   all.forEach(r => {
@@ -979,101 +987,89 @@ function renderStats() {
   const allYears = [...yearData.pepe, ...yearData.jenni, ...yearData.both];
   if (!allYears.length) { wrap.innerHTML = '<p style="color:var(--muted);padding:20px;font-size:13px">No year data</p>'; return; }
 
-  const W = wrap.clientWidth || 600;
-  const rugH = 18;
-  const rugGap = 4;
-  const margin = {top:16, right:16, bottom:36, left:36};
-  const histH = 200;
-  const totalH = histH + (rugH + rugGap) * 3 + margin.top + margin.bottom + 16;
+  const W = wrap.clientWidth || 660;
+  const laneH = 80;
+  const laneGap = 10;
+  const ml = 52, mr = 20, mt = 16, mb = 32;
+  const owners = ['pepe','jenni','both'];
+  const totalH = mt + owners.length * (laneH + laneGap) - laneGap + mb;
 
   const svg = d3.select(wrap).append('svg')
-    .attr('width', '100%')
-    .attr('height', totalH)
+    .attr('width', '100%').attr('height', totalH)
     .attr('viewBox', `0 0 ${W} ${totalH}`);
 
-  const xMin = d3.min(allYears) - 2;
-  const xMax = d3.max(allYears) + 2;
-  const x = d3.scaleLinear().domain([xMin, xMax]).range([margin.left, W - margin.right]);
+  const xMin = d3.min(allYears) - 3;
+  const xMax = d3.max(allYears) + 3;
+  const x = d3.scaleLinear().domain([xMin, xMax]).range([ml, W - mr]);
 
-  // histogram bins
-  const binner = d3.bin().domain([xMin, xMax]).thresholds(d3.range(xMin, xMax, 3));
-  const bins = { pepe: binner(yearData.pepe), jenni: binner(yearData.jenni), both: binner(yearData.both) };
-  const yMax = d3.max(['pepe','jenni','both'].flatMap(o => bins[o].map(b => b.length)));
-  const y = d3.scaleLinear().domain([0, yMax]).nice().range([margin.top + histH, margin.top]);
-
-  const gc = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
   const tc = dark ? '#666' : '#aaa';
+  const gc = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
 
-  // grid lines
-  y.ticks(4).forEach(t => {
-    svg.append('line')
-      .attr('x1', margin.left).attr('x2', W - margin.right)
-      .attr('y1', y(t)).attr('y2', y(t))
-      .attr('stroke', gc).attr('stroke-width', 1);
-    svg.append('text')
-      .attr('x', margin.left - 6).attr('y', y(t) + 4)
-      .attr('text-anchor', 'end').attr('fill', tc)
-      .attr('font-size', 10).text(t);
-  });
+  const binner = d3.bin().domain([xMin, xMax]).thresholds(d3.range(xMin, xMax, 4));
 
-  // histogram bars per group
-  ['both','jenni','pepe'].forEach(o => {
-    svg.selectAll(`.bar-${o}`)
-      .data(bins[o])
-      .join('rect')
-      .attr('x', d => x(d.x0) + 1)
-      .attr('width', d => Math.max(0, x(d.x1) - x(d.x0) - 2))
-      .attr('y', d => y(d.length))
-      .attr('height', d => y(0) - y(d.length))
-      .attr('fill', ALPHA[o])
-      .attr('stroke', COLORS_YEAR[o])
-      .attr('stroke-width', 0.5);
-  });
+  owners.forEach((o, oi) => {
+    const baseY = mt + oi * (laneH + laneGap) + laneH;
+    const bins = binner(yearData[o]);
+    const maxC = Math.max(...bins.map(b => b.length), 1);
+    const yScale = d3.scaleLinear().domain([0, maxC]).range([0, laneH * 0.9]);
 
-  // x axis
-  const xAxis = d3.axisBottom(x).ticks(10).tickFormat(d3.format('d'));
-  svg.append('g')
-    .attr('transform', `translate(0,${margin.top + histH})`)
-    .call(xAxis)
-    .call(g => g.select('.domain').attr('stroke', gc))
-    .call(g => g.selectAll('.tick line').attr('stroke', gc))
-    .call(g => g.selectAll('.tick text').attr('fill', tc).attr('font-size', 10));
-
-  // rug plots — one row per group below histogram
-  const rugGroups = [['pepe', 0], ['jenni', 1], ['both', 2]];
-  const rugTop = margin.top + histH + margin.bottom;
-
-  rugGroups.forEach(([o, i]) => {
-    const ry = rugTop + i * (rugH + rugGap);
-    // background band
+    // subtle lane background
     svg.append('rect')
-      .attr('x', margin.left).attr('width', W - margin.left - margin.right)
-      .attr('y', ry).attr('height', rugH)
-      .attr('fill', dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)')
-      .attr('rx', 2);
-    // rug ticks
-    svg.selectAll(`.rug-${o}`)
-      .data(yearData[o])
-      .join('line')
-      .attr('x1', d => x(d)).attr('x2', d => x(d))
-      .attr('y1', ry + 3).attr('y2', ry + rugH - 3)
+      .attr('x', ml).attr('y', baseY - laneH)
+      .attr('width', W - ml - mr).attr('height', laneH)
+      .attr('fill', gc).attr('rx', 3);
+
+    // baseline
+    svg.append('line')
+      .attr('x1', ml).attr('x2', W - mr)
+      .attr('y1', baseY).attr('y2', baseY)
+      .attr('stroke', dark ? '#333' : '#ddd').attr('stroke-width', 1);
+
+    // build smooth area points from bins
+    const pts = bins.map(b => [(x(b.x0) + x(b.x1)) / 2, baseY - yScale(b.length)]);
+
+    const areaGen = d3.area()
+      .x(d => d[0]).y0(baseY).y1(d => d[1])
+      .curve(d3.curveCatmullRom.alpha(0.5));
+
+    const lineGen = d3.line()
+      .x(d => d[0]).y(d => d[1])
+      .curve(d3.curveCatmullRom.alpha(0.5));
+
+    svg.append('path').attr('d', areaGen(pts))
+      .attr('fill', FILL_YEAR[o]);
+
+    svg.append('path').attr('d', lineGen(pts))
+      .attr('fill', 'none')
       .attr('stroke', COLORS_YEAR[o])
-      .attr('stroke-width', 1.5)
-      .attr('opacity', 0.7);
-    // label
+      .attr('stroke-width', 2);
+
+    // individual rug ticks on baseline
+    yearData[o].forEach(yr => {
+      svg.append('line')
+        .attr('x1', x(yr)).attr('x2', x(yr))
+        .attr('y1', baseY).attr('y2', baseY + 5)
+        .attr('stroke', COLORS_YEAR[o])
+        .attr('stroke-width', 1.5).attr('opacity', 0.7);
+    });
+
+    // owner label
     svg.append('text')
-      .attr('x', margin.left + 4).attr('y', ry + rugH/2 + 4)
-      .attr('fill', COLORS_YEAR[o]).attr('font-size', 9).attr('font-weight', 600)
+      .attr('x', ml - 6).attr('y', baseY - laneH / 2 + 4)
+      .attr('text-anchor', 'end')
+      .attr('fill', COLORS_YEAR[o])
+      .attr('font-size', 11).attr('font-weight', 600)
       .text(o.toUpperCase());
   });
 
-  // legend
-  const legendX = W - margin.right - 120;
-  ['pepe','jenni','both'].forEach((o, i) => {
-    svg.append('rect').attr('x', legendX).attr('y', margin.top + i*16).attr('width', 10).attr('height', 10).attr('rx', 2).attr('fill', COLORS_YEAR[o]);
-    svg.append('text').attr('x', legendX + 14).attr('y', margin.top + i*16 + 9).attr('fill', tc).attr('font-size', 11)
-      .text(o.charAt(0).toUpperCase() + o.slice(1));
-  });
+  // x axis
+  const xAxisY = mt + owners.length * (laneH + laneGap) - laneGap;
+  const xAxis = d3.axisBottom(x).ticks(10).tickFormat(d3.format('d'));
+  svg.append('g').attr('transform', `translate(0,${xAxisY})`)
+    .call(xAxis)
+    .call(g => g.select('.domain').attr('stroke', dark ? '#333' : '#ddd'))
+    .call(g => g.selectAll('.tick line').attr('stroke', dark ? '#333' : '#ddd'))
+    .call(g => g.selectAll('.tick text').attr('fill', tc).attr('font-size', 10));
 }
 
 init();
