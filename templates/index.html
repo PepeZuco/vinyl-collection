@@ -14,11 +14,6 @@
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
   --text:#e8e8e0;--muted:#555;--accent:#c8a951;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
-  --sh-5:rgba(200,169,81,0.90);
-  --sh-4:rgba(200,169,81,0.65);
-  --sh-3:rgba(200,169,81,0.40);
-  --sh-2:rgba(200,169,81,0.20);
-  --sh-1:rgba(200,169,81,0.08);
   --sh-gray:rgba(100,100,100,0.35);
   --toggle-icon:'☀'
 }
@@ -26,11 +21,6 @@
   --bg:#f4f2ee;--surface:#ffffff;--card:#ffffff;--border:#ddd9d0;
   --text:#1a1a18;--muted:#999;--accent:#a07820;--danger:#c0392b;
   --card-hover:#fafaf8;--search-bg:#ffffff;
-  --sh-5:rgba(120,88,10,0.80);
-  --sh-4:rgba(120,88,10,0.55);
-  --sh-3:rgba(120,88,10,0.32);
-  --sh-2:rgba(120,88,10,0.16);
-  --sh-1:rgba(120,88,10,0.07);
   --sh-gray:rgba(0,0,0,0.18);
   --toggle-icon:'☾'
 }
@@ -76,27 +66,16 @@ select option{background:var(--surface);color:var(--text)}
 @media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr)}}
 
-/* vinyl card — directional shadow bottom+right, colored by rating */
+/* vinyl card — shadow set inline by JS based on buyer + rating */
 .vcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:var(--radius);
   overflow:hidden;cursor:pointer;
-  transition:border-color .15s, box-shadow .25s, transform .15s;
+  transition:border-color .15s, box-shadow .3s, transform .15s;
   position:relative;
 }
 .vcard:hover{border-color:color-mix(in srgb, var(--text) 40%, transparent);transform:translateY(-2px)}
-
-/* not in collection — gray shadow */
-.vcard[data-glow="gray"]{box-shadow:3px 3px 0 0 var(--sh-gray);border-color:var(--border)}
-
-/* in collection, rated — gold shadow graded by score */
-.vcard[data-glow="5"]{box-shadow:5px 5px 0 0 var(--sh-5);border-color:var(--accent)}
-.vcard[data-glow="4"]{box-shadow:5px 5px 0 0 var(--sh-4);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
-.vcard[data-glow="3"]{box-shadow:4px 4px 0 0 var(--sh-3)}
-.vcard[data-glow="2"]{box-shadow:3px 3px 0 0 var(--sh-2)}
-.vcard[data-glow="1"]{box-shadow:3px 3px 0 0 var(--sh-1)}
-.vcard[data-glow="0"]{box-shadow:3px 3px 0 0 var(--sh-1)}
 
 .vcard-cover{width:100%;aspect-ratio:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .vcard-cover img{width:100%;height:100%;object-fit:cover}
@@ -122,7 +101,7 @@ select option{background:var(--surface);color:var(--text)}
 /* top meta row: year left, avg score right */
 .vcard-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
 .vcard-year{font-size:11px;color:var(--muted)}
-.vcard-avg{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:-.01em}
+.vcard-avg{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:-.01em;transition:text-shadow .3s}
 .vcard-avg span{font-size:10px;font-weight:400;color:var(--muted);margin-left:1px}
 
 /* divider */
@@ -133,12 +112,12 @@ select option{background:var(--surface);color:var(--text)}
 .score-block{display:flex;flex-direction:column;gap:3px}
 .score-label{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .score-block.pepe .score-label{color:#c8a951}
-.score-block.jenni .score-label{color:#d4608a}
+.score-block.jenni .score-label{color:#9B7FD4}
 .score-dots{display:flex;gap:2px;align-items:center}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--border);transition:background .1s}
 [data-theme="light"] .dot{background:#ddd}
 .score-block.pepe .dot.on{background:#c8a951}
-.score-block.jenni .dot.on{background:#d4608a}
+.score-block.jenni .dot.on{background:#9B7FD4}
 
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
@@ -165,12 +144,12 @@ select option{background:var(--surface);color:var(--text)}
 .detail-rating-block{display:flex;flex-direction:column;gap:6px}
 .detail-rating-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 .detail-rating-block.pepe .detail-rating-label{color:#c8a951}
-.detail-rating-block.jenni .detail-rating-label{color:#d4608a}
+.detail-rating-block.jenni .detail-rating-label{color:#9B7FD4}
 .detail-dots{display:flex;gap:3px;flex-wrap:wrap}
 .ddot{width:8px;height:8px;border-radius:50%;background:var(--border)}
 [data-theme="light"] .ddot{background:#ddd}
 .detail-rating-block.pepe .ddot.on{background:#c8a951}
-.detail-rating-block.jenni .ddot.on{background:#d4608a}
+.detail-rating-block.jenni .ddot.on{background:#9B7FD4}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .detail-item label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:block;margin-bottom:2px}
 .detail-item span{font-size:13px;font-weight:600}
@@ -373,20 +352,45 @@ function applyTheme(t) {
   localStorage.setItem('vinyl-theme', t);
 }
 applyTheme(theme);
-document.getElementById('themeBtn').addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
+document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); });
 
-// ── shadow level from rating, gray if not in collection ───────────────────
-function glowLevel(r) {
-  if (!r.have_it) return 'gray';
-  const scores = [Number(r.my_rating)||0, Number(r.wife_rating)||0].filter(x => x > 0);
-  if (!scores.length) return 0;
-  const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
-  if (avg >= 9)   return 5;
-  if (avg >= 7.5) return 4;
-  if (avg >= 6)   return 3;
-  if (avg >= 4)   return 2;
-  if (avg >= 2)   return 1;
-  return 0;
+// ── shadow: buyer color × rating intensity ─────────────────────────────────
+function cardStyles(r) {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+  if (!r.have_it) {
+    const g = isDark ? 'rgba(100,100,100,0.35)' : 'rgba(0,0,0,0.18)';
+    return { shadow: `3px 3px 0 0 ${g}`, avgGlow: '' };
+  }
+
+  const buyer = (r.bought_by || '').toLowerCase();
+  const isPepe  = buyer.includes('pepe');
+  const isJenni = buyer.includes('jenni') || buyer.includes('jenifer') || buyer.includes('jennifer');
+  const isBoth  = isPepe && isJenni;
+
+  let rgb;
+  if (isBoth)       rgb = isDark ? '177,148,146' : '145,110,120';  // gold+lavender mix
+  else if (isPepe)  rgb = isDark ? '200,169,81'  : '160,120,32';
+  else if (isJenni) rgb = isDark ? '155,127,212' : '130,100,190';  // lavender
+  else              rgb = isDark ? '200,169,81'  : '160,120,32';
+
+  const myR  = Number(r.my_rating)  || 0;
+  const herR = Number(r.wife_rating) || 0;
+  const scores = [myR, herR].filter(x => x > 0);
+  const avg = scores.length ? scores.reduce((a,b)=>a+b,0) / scores.length : 0;
+
+  let opacity, size, avgGlow;
+  if      (avg >= 9)   { opacity = isDark ? 0.95 : 0.80; size = 6; avgGlow = `0 0 8px rgba(${rgb},0.9), 0 0 16px rgba(${rgb},0.5)`; }
+  else if (avg >= 7.5) { opacity = isDark ? 0.70 : 0.60; size = 5; avgGlow = `0 0 5px rgba(${rgb},0.65)`; }
+  else if (avg >= 6)   { opacity = isDark ? 0.45 : 0.38; size = 4; avgGlow = `0 0 3px rgba(${rgb},0.45)`; }
+  else if (avg >= 4)   { opacity = isDark ? 0.25 : 0.20; size = 3; avgGlow = ''; }
+  else if (avg > 0)    { opacity = isDark ? 0.12 : 0.10; size = 3; avgGlow = ''; }
+  else                 { opacity = isDark ? 0.08 : 0.06; size = 3; avgGlow = ''; }
+
+  return {
+    shadow: `${size}px ${size}px 0 0 rgba(${rgb},${opacity})`,
+    avgGlow
+  };
 }
 
 // ── init ───────────────────────────────────────────────────────────────────
@@ -477,7 +481,7 @@ function dotsHTML(n, max=10) {
 }
 
 function cardHTML(r) {
-  const glow = glowLevel(r);
+  const styles = cardStyles(r);
   const cover = r.cover_data
     ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`
     : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
@@ -487,6 +491,7 @@ function cardHTML(r) {
   const scores = [myR, herR].filter(x => x > 0);
   const avg = scores.length ? (scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
   const avgStr = avg > 0 ? avg.toFixed(1).replace('.0','') : '—';
+  const avgStyle = styles.avgGlow ? ` style="text-shadow:${styles.avgGlow}"` : '';
 
   const scoresBlock = (myR > 0 || herR > 0) ? `
     <div class="vcard-divider"></div>
@@ -501,7 +506,7 @@ function cardHTML(r) {
       </div>
     </div>` : '';
 
-  return `<div class="vcard" data-id="${r.id}" data-glow="${glow}">
+  return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
       ${cover}
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
@@ -510,7 +515,7 @@ function cardHTML(r) {
       <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
       <div class="vcard-meta">
         <span class="vcard-year">${esc(r.year)||'—'}</span>
-        ${avg > 0 ? `<span class="vcard-avg">${avgStr}<span>/10</span></span>` : ''}
+        ${avg > 0 ? `<span class="vcard-avg"${avgStyle}>${avgStr}<span>/10</span></span>` : ''}
       </div>
       ${scoresBlock}
     </div>
