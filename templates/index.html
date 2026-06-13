@@ -363,11 +363,11 @@ select option{background:var(--surface);color:var(--text)}
         <div class="form-group"><label>Last cleaned</label><input id="fCleaned" type="date"></div>
       </div>
       <div class="form-group">
-        <label>Pepe rating (out of 10)</label>
+        <label>Pepe rating (out of 5)</label>
         <div class="rating-row" id="myRatingRow"></div>
       </div>
       <div class="form-group">
-        <label>Jenni rating (out of 10)</label>
+        <label>Jenni rating (out of 5)</label>
         <div class="rating-row" id="wifeRatingRow"></div>
       </div>
       <div class="check-row">
@@ -536,13 +536,13 @@ function renderCount(n) {
   document.getElementById('recordCount').textContent = `— ${n} ${label}`;
 }
 
-function starsHTML(n, max=10, size=9) {
+function starsHTML(n, max=5, size=9) {
   let s='';
   for(let i=1;i<=max;i++) s+=`<span class="star${i<=n?'':' off'}" style="font-size:${size}px">★</span>`;
   return `<div class="stars-mini">${s}</div>`;
 }
 
-function dotsHTML(n, max=10) {
+function dotsHTML(n, max=5) {
   let d='';
   for(let i=1;i<=max;i++) d+=`<span class="dot${i<=n?' on':''}"></span>`;
   return `<div class="score-dots">${d}</div>`;
@@ -556,17 +556,17 @@ function cardHTML(r) {
 
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
-  const avg  = avgRating(r);
-  const avgStr = avg > 0 ? avg.toFixed(1).replace('.0','') : '—';
+  const total = myR + herR;
+  const totalStr = total > 0 ? (total % 1 === 0 ? total : total.toFixed(1)) : '—';
+  const avgStyle = '';
 
-  // glow on the rating number — stronger as rating climbs
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  let avgGlow = '';
-  if      (avg >= 9)   avgGlow = isDark ? '0 0 10px rgba(245,197,24,0.95), 0 0 20px rgba(245,197,24,0.6)' : '0 0 8px rgba(200,155,10,0.8)';
-  else if (avg >= 7.5) avgGlow = isDark ? '0 0 7px rgba(245,197,24,0.70)' : '0 0 6px rgba(200,155,10,0.55)';
-  else if (avg >= 6)   avgGlow = isDark ? '0 0 5px rgba(245,197,24,0.40)' : '0 0 4px rgba(200,155,10,0.30)';
-  const avgStyle = avgGlow ? ` style="text-shadow:${avgGlow}"` : '';
-  const bodyStyle = '';
+  // glow on total score — stronger as it climbs toward 10
+  const isDarkCard = document.documentElement.getAttribute('data-theme') === 'dark';
+  let totalGlow = '';
+  if      (total >= 9)   totalGlow = isDarkCard ? '0 0 10px rgba(245,197,24,0.95), 0 0 20px rgba(245,197,24,0.6)' : '0 0 8px rgba(200,155,10,0.8)';
+  else if (total >= 7.5) totalGlow = isDarkCard ? '0 0 7px rgba(245,197,24,0.70)' : '0 0 6px rgba(200,155,10,0.55)';
+  else if (total >= 6)   totalGlow = isDarkCard ? '0 0 5px rgba(245,197,24,0.40)' : '0 0 4px rgba(200,155,10,0.30)';
+  const totalStyle = totalGlow ? ` style="text-shadow:${totalGlow}"` : '';
 
   const scoresBlock = (myR > 0 || herR > 0) ? `
     <div class="vcard-divider"></div>
@@ -590,7 +590,7 @@ function cardHTML(r) {
       <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
       <div class="vcard-meta">
         <span class="vcard-year">${esc(r.year)||'—'}</span>
-        ${avg > 0 ? `<span class="vcard-avg"${avgStyle}>${avgStr}<span>/10</span></span>` : ''}
+        ${total > 0 ? `<span class="vcard-avg"${totalStyle}>${totalStr}<span>/10</span></span>` : ''}
       </div>
       ${scoresBlock}
     </div>
@@ -607,7 +607,7 @@ function renderFilters() {
   bf.style.display = buyers.length > 1 ? '' : 'none';
 }
 
-function detailDotsHTML(n, max=10) {
+function detailDotsHTML(n, max=5) {
   let d='';
   for(let i=1;i<=max;i++) d+=`<span class="ddot${i<=n?' on':''}"></span>`;
   return `<div class="detail-dots">${d}</div>`;
@@ -628,20 +628,22 @@ function openDetail(id) {
   ];
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
+  const detailTotal = myR + herR;
   document.getElementById('detailBody').innerHTML=`
     ${coverEl}
     <div class="detail-title">${esc(r.album_name)||'untitled'}</div>
     <div class="detail-artist">${esc(r.artist)||'unknown'}</div>
     <div class="detail-ratings">
       <div class="detail-rating-block pepe">
-        <div class="detail-rating-label">Pepe</div>
+        <div class="detail-rating-label">Pepe <span style="font-weight:400;opacity:.6">${myR > 0 ? myR+'/5' : ''}</span></div>
         ${myR > 0 ? detailDotsHTML(myR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
       </div>
       <div class="detail-rating-block jenni">
-        <div class="detail-rating-label">Jenni</div>
+        <div class="detail-rating-label">Jenni <span style="font-weight:400;opacity:.6">${herR > 0 ? herR+'/5' : ''}</span></div>
         ${herR > 0 ? detailDotsHTML(herR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
       </div>
     </div>
+    ${detailTotal > 0 ? `<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Total <strong style="color:var(--accent)">${detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)}</strong><span style="font-size:11px">/10</span></div>` : ''}
     <div class="detail-grid">
       ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
     </div>`;
@@ -675,7 +677,7 @@ async function doDelete(id){
 function buildRatingRows(){
   ['myRatingRow','wifeRatingRow'].forEach((rowId,idx)=>{
     const row=document.getElementById(rowId);
-    for(let i=1;i<=10;i++){
+    for(let i=1;i<=5;i++){
       const s=document.createElement('span');
       s.className='rstar';s.textContent='★';s.dataset.idx=idx;s.dataset.val=i;
       s.addEventListener('click',()=>{if(idx===0){myRating=i}else{wifeRating=i};updateRatingUI();});
@@ -936,7 +938,7 @@ function renderStats() {
     },
     options: {
       responsive:true, maintainAspectRatio:false,
-      scales:{ r:{ min:0, max:10, ticks:{ stepSize:2, color:textColor(), font:{size:10}, backdropColor:'transparent' }, grid:{ color:gridColor() }, angleLines:{ color:gridColor() }, pointLabels:{ color:textColor(), font:{size:11} } } },
+      scales:{ r:{ min:0, max:5, ticks:{ stepSize:1, color:textColor(), font:{size:10}, backdropColor:'transparent' }, grid:{ color:gridColor() }, angleLines:{ color:gridColor() }, pointLabels:{ color:textColor(), font:{size:11} } } },
       plugins:{ legend:{ labels:{ color:textColor(), font:{size:12}, boxWidth:12 } } }
     }
   });
