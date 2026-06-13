@@ -236,7 +236,9 @@ select option{background:var(--surface);color:var(--text)}
       <option value="artist">sort: artist</option>
       <option value="album_name">sort: album</option>
       <option value="year">sort: year ↓</option>
-      <option value="my_rating">sort: my rating ↓</option>
+      <option value="avg_rating">sort: total rating ↓</option>
+      <option value="my_rating">sort: Pepe rating ↓</option>
+      <option value="wife_rating">sort: Jenni rating ↓</option>
       <option value="play_count">sort: plays ↓</option>
     </select>
     <select id="genreFilter"><option value="">all genres</option></select>
@@ -419,6 +421,12 @@ async function loadRecords() {
   render();
 }
 
+// avg uses only ratings that exist — if only one person rated, uses that score alone
+function avgRating(r) {
+  const scores = [Number(r.my_rating)||0, Number(r.wife_rating)||0].filter(x => x > 0);
+  return scores.length ? scores.reduce((a,b)=>a+b,0) / scores.length : 0;
+}
+
 // ── filtering & sorting ────────────────────────────────────────────────────
 function filtered() {
   const q  = document.getElementById('searchInput').value.toLowerCase();
@@ -436,7 +444,8 @@ function filtered() {
     return true;
   }).sort((a, b_) => {
     if (s === 'bought_date') return (b_.bought_date||'').localeCompare(a.bought_date||'');
-    if (['year','my_rating','play_count'].includes(s)) return (Number(b_[s])||0) - (Number(a[s])||0);
+    if (s === 'avg_rating')  return avgRating(b_) - avgRating(a);
+    if (['year','my_rating','wife_rating','play_count'].includes(s)) return (Number(b_[s])||0) - (Number(a[s])||0);
     return (a[s]||'').localeCompare(b_[s]||'');
   });
 }
@@ -482,8 +491,7 @@ function cardHTML(r) {
 
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
-  const scores = [myR, herR].filter(x => x > 0);
-  const avg = scores.length ? (scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
+  const avg  = avgRating(r);
   const avgStr = avg > 0 ? avg.toFixed(1).replace('.0','') : '—';
 
   // glow on the rating number — stronger as rating climbs
