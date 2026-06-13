@@ -267,12 +267,12 @@ select option{background:var(--surface);color:var(--text)}
       </div>
       <div class="chart-box">
         <div class="chart-title">records by genre</div>
-        <div class="chart-wrap" id="genreWrap"><canvas id="genreChart"></canvas></div>
+        <div class="chart-wrap-tall" id="genreWrap"><canvas id="genreChart"></canvas></div>
       </div>
     </div>
     <div class="chart-box" style="margin-bottom:28px">
       <div class="chart-title">release year distribution</div>
-      <div class="chart-wrap" id="yearWrap"><canvas id="yearChart"></canvas></div>
+      <div id="yearWrap" style="width:100%;height:320px"></div>
     </div>
   </div>
 
@@ -396,6 +396,7 @@ select option{background:var(--surface);color:var(--text)}
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script>
 let records = [];
 let authed = false;
@@ -929,54 +930,149 @@ function renderStats() {
     }
   });
 
-  // ── doughnut: % per genre ─────────────────────────────────────────────────
+  // ── horizontal bar: records per genre ────────────────────────────────────
   const genreCounts = {};
   all.forEach(r => { const g = r.genre||'Unknown'; genreCounts[g] = (genreCounts[g]||0)+1; });
   const sortedGenres = Object.entries(genreCounts).sort((a,b)=>b[1]-a[1]);
-  const COLORS = ['#F5C518','#D4608A','#9B7FD4','#4A90C4','#1D9E75','#E8750A','#E05555','#7BAE7F','#c8a951','#888','#3dbfa0','#c4a0e0'];
 
   destroyChart('genre');
   chartInstances['genre'] = new Chart(document.getElementById('genreChart'), {
-    type: 'doughnut',
-    data: {
-      labels: sortedGenres.map(([g])=>g),
-      datasets: [{ data: sortedGenres.map(([,c])=>c), backgroundColor: sortedGenres.map((_,i)=>COLORS[i%COLORS.length]), borderWidth:0, hoverOffset:6 }]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false, cutout:'58%',
-      plugins:{ legend:{ position:'right', labels:{ color:textColor(), font:{size:11}, boxWidth:12, padding:10 } } }
-    }
-  });
-
-  // ── bar: year distribution by owner ──────────────────────────────────────
-  const yearMap = {};
-  all.forEach(r => {
-    const y = r.year ? String(r.year).slice(0,4) : null;
-    if (!y || isNaN(y)) return;
-    if (!yearMap[y]) yearMap[y] = {pepe:0,jenni:0,both:0};
-    yearMap[y][ownerOf(r)] = (yearMap[y][ownerOf(r)]||0) + 1;
-  });
-  const years = Object.keys(yearMap).sort();
-
-  destroyChart('year');
-  chartInstances['year'] = new Chart(document.getElementById('yearChart'), {
     type: 'bar',
     data: {
-      labels: years,
-      datasets: [
-        { label:'Pepe',  data:years.map(y=>yearMap[y].pepe||0),  backgroundColor:'rgba(245,197,24,0.75)', stack:'a' },
-        { label:'Jenni', data:years.map(y=>yearMap[y].jenni||0), backgroundColor:'rgba(212,96,138,0.75)', stack:'a' },
-        { label:'Both',  data:years.map(y=>yearMap[y].both||0),  backgroundColor:'rgba(155,127,212,0.75)', stack:'a' },
-      ]
+      labels: sortedGenres.map(([g])=>g),
+      datasets: [{
+        data: sortedGenres.map(([,c])=>c),
+        backgroundColor: 'rgba(245,197,24,0.75)',
+        borderColor: '#F5C518',
+        borderWidth: 1,
+        borderRadius: 3,
+      }]
     },
     options: {
-      responsive:true, maintainAspectRatio:false,
-      scales:{
-        x:{ stacked:true, grid:{color:gridColor()}, ticks:{color:textColor(),font:{size:10}, maxRotation:45} },
-        y:{ stacked:true, grid:{color:gridColor()}, ticks:{color:textColor(),font:{size:11},stepSize:1} }
-      },
-      plugins:{ legend:{ labels:{ color:textColor(), font:{size:12}, boxWidth:12 } } }
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid:{ color:gridColor() }, ticks:{ color:textColor(), font:{size:11}, stepSize:1 } },
+        y: { grid:{ display:false }, ticks:{ color:textColor(), font:{size:11} } }
+      }
     }
+  });
+
+  // ── D3 histogram + rug: release year by owner ─────────────────────────────
+  const wrap = document.getElementById('yearWrap');
+  wrap.innerHTML = '';
+
+  const dark = isDark();
+  const COLORS_YEAR = { pepe:'#F5C518', jenni:'#D4608A', both:'#9B7FD4' };
+  const ALPHA = { pepe:'rgba(245,197,24,0.55)', jenni:'rgba(212,96,138,0.55)', both:'rgba(155,127,212,0.55)' };
+
+  const yearData = { pepe:[], jenni:[], both:[] };
+  all.forEach(r => {
+    const y = parseInt(r.year);
+    if (!isNaN(y) && y > 1900 && y <= 2030) {
+      const o = ownerOf(r);
+      if (yearData[o]) yearData[o].push(y);
+    }
+  });
+
+  const allYears = [...yearData.pepe, ...yearData.jenni, ...yearData.both];
+  if (!allYears.length) { wrap.innerHTML = '<p style="color:var(--muted);padding:20px;font-size:13px">No year data</p>'; return; }
+
+  const W = wrap.clientWidth || 600;
+  const rugH = 18;
+  const rugGap = 4;
+  const margin = {top:16, right:16, bottom:36, left:36};
+  const histH = 200;
+  const totalH = histH + (rugH + rugGap) * 3 + margin.top + margin.bottom + 16;
+
+  const svg = d3.select(wrap).append('svg')
+    .attr('width', '100%')
+    .attr('height', totalH)
+    .attr('viewBox', `0 0 ${W} ${totalH}`);
+
+  const xMin = d3.min(allYears) - 2;
+  const xMax = d3.max(allYears) + 2;
+  const x = d3.scaleLinear().domain([xMin, xMax]).range([margin.left, W - margin.right]);
+
+  // histogram bins
+  const binner = d3.bin().domain([xMin, xMax]).thresholds(d3.range(xMin, xMax, 3));
+  const bins = { pepe: binner(yearData.pepe), jenni: binner(yearData.jenni), both: binner(yearData.both) };
+  const yMax = d3.max(['pepe','jenni','both'].flatMap(o => bins[o].map(b => b.length)));
+  const y = d3.scaleLinear().domain([0, yMax]).nice().range([margin.top + histH, margin.top]);
+
+  const gc = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tc = dark ? '#666' : '#aaa';
+
+  // grid lines
+  y.ticks(4).forEach(t => {
+    svg.append('line')
+      .attr('x1', margin.left).attr('x2', W - margin.right)
+      .attr('y1', y(t)).attr('y2', y(t))
+      .attr('stroke', gc).attr('stroke-width', 1);
+    svg.append('text')
+      .attr('x', margin.left - 6).attr('y', y(t) + 4)
+      .attr('text-anchor', 'end').attr('fill', tc)
+      .attr('font-size', 10).text(t);
+  });
+
+  // histogram bars per group
+  ['both','jenni','pepe'].forEach(o => {
+    svg.selectAll(`.bar-${o}`)
+      .data(bins[o])
+      .join('rect')
+      .attr('x', d => x(d.x0) + 1)
+      .attr('width', d => Math.max(0, x(d.x1) - x(d.x0) - 2))
+      .attr('y', d => y(d.length))
+      .attr('height', d => y(0) - y(d.length))
+      .attr('fill', ALPHA[o])
+      .attr('stroke', COLORS_YEAR[o])
+      .attr('stroke-width', 0.5);
+  });
+
+  // x axis
+  const xAxis = d3.axisBottom(x).ticks(10).tickFormat(d3.format('d'));
+  svg.append('g')
+    .attr('transform', `translate(0,${margin.top + histH})`)
+    .call(xAxis)
+    .call(g => g.select('.domain').attr('stroke', gc))
+    .call(g => g.selectAll('.tick line').attr('stroke', gc))
+    .call(g => g.selectAll('.tick text').attr('fill', tc).attr('font-size', 10));
+
+  // rug plots — one row per group below histogram
+  const rugGroups = [['pepe', 0], ['jenni', 1], ['both', 2]];
+  const rugTop = margin.top + histH + margin.bottom;
+
+  rugGroups.forEach(([o, i]) => {
+    const ry = rugTop + i * (rugH + rugGap);
+    // background band
+    svg.append('rect')
+      .attr('x', margin.left).attr('width', W - margin.left - margin.right)
+      .attr('y', ry).attr('height', rugH)
+      .attr('fill', dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)')
+      .attr('rx', 2);
+    // rug ticks
+    svg.selectAll(`.rug-${o}`)
+      .data(yearData[o])
+      .join('line')
+      .attr('x1', d => x(d)).attr('x2', d => x(d))
+      .attr('y1', ry + 3).attr('y2', ry + rugH - 3)
+      .attr('stroke', COLORS_YEAR[o])
+      .attr('stroke-width', 1.5)
+      .attr('opacity', 0.7);
+    // label
+    svg.append('text')
+      .attr('x', margin.left + 4).attr('y', ry + rugH/2 + 4)
+      .attr('fill', COLORS_YEAR[o]).attr('font-size', 9).attr('font-weight', 600)
+      .text(o.toUpperCase());
+  });
+
+  // legend
+  const legendX = W - margin.right - 120;
+  ['pepe','jenni','both'].forEach((o, i) => {
+    svg.append('rect').attr('x', legendX).attr('y', margin.top + i*16).attr('width', 10).attr('height', 10).attr('rx', 2).attr('fill', COLORS_YEAR[o]);
+    svg.append('text').attr('x', legendX + 14).attr('y', margin.top + i*16 + 9).attr('fill', tc).attr('font-size', 11)
+      .text(o.charAt(0).toUpperCase() + o.slice(1));
   });
 }
 
