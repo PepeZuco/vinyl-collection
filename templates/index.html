@@ -14,18 +14,24 @@
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
   --text:#e8e8e0;--muted:#555;--accent:#c8a951;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
-  --glow-high:rgba(200,169,81,0.55);
-  --glow-mid:rgba(200,169,81,0.20);
-  --glow-low:rgba(80,80,80,0.10);
+  --sh-5:rgba(200,169,81,0.90);
+  --sh-4:rgba(200,169,81,0.65);
+  --sh-3:rgba(200,169,81,0.40);
+  --sh-2:rgba(200,169,81,0.20);
+  --sh-1:rgba(200,169,81,0.08);
+  --sh-gray:rgba(100,100,100,0.35);
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
   --bg:#f4f2ee;--surface:#ffffff;--card:#ffffff;--border:#ddd9d0;
   --text:#1a1a18;--muted:#999;--accent:#a07820;--danger:#c0392b;
   --card-hover:#fafaf8;--search-bg:#ffffff;
-  --glow-high:rgba(160,120,32,0.40);
-  --glow-mid:rgba(160,120,32,0.14);
-  --glow-low:rgba(0,0,0,0.04);
+  --sh-5:rgba(120,88,10,0.80);
+  --sh-4:rgba(120,88,10,0.55);
+  --sh-3:rgba(120,88,10,0.32);
+  --sh-2:rgba(120,88,10,0.16);
+  --sh-1:rgba(120,88,10,0.07);
+  --sh-gray:rgba(0,0,0,0.18);
   --toggle-icon:'☾'
 }
 
@@ -68,24 +74,27 @@ select option{background:var(--surface);color:var(--text)}
 /* grid */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
 
-/* vinyl card with glow */
+/* vinyl card — directional shadow bottom+right, colored by rating */
 .vcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:var(--radius);
   overflow:hidden;cursor:pointer;
-  transition:border-color .15s, box-shadow .3s, transform .15s;
+  transition:border-color .15s, box-shadow .25s, transform .15s;
   position:relative;
 }
 .vcard:hover{border-color:color-mix(in srgb, var(--text) 40%, transparent);transform:translateY(-2px)}
 
-/* glow levels based on data-glow attribute */
-.vcard[data-glow="5"]{box-shadow:0 0 28px 6px var(--glow-high),0 0 8px 2px var(--glow-high);border-color:var(--accent)}
-.vcard[data-glow="4"]{box-shadow:0 0 18px 4px var(--glow-high);border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
-.vcard[data-glow="3"]{box-shadow:0 0 12px 2px var(--glow-mid)}
-.vcard[data-glow="2"]{box-shadow:0 0 6px 1px var(--glow-low)}
-.vcard[data-glow="1"]{box-shadow:none;opacity:.85}
-.vcard[data-glow="0"]{box-shadow:none;opacity:.65}
+/* not in collection — gray shadow */
+.vcard[data-glow="gray"]{box-shadow:3px 3px 0 0 var(--sh-gray);border-color:var(--border)}
+
+/* in collection, rated — gold shadow graded by score */
+.vcard[data-glow="5"]{box-shadow:5px 5px 0 0 var(--sh-5);border-color:var(--accent)}
+.vcard[data-glow="4"]{box-shadow:5px 5px 0 0 var(--sh-4);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+.vcard[data-glow="3"]{box-shadow:4px 4px 0 0 var(--sh-3)}
+.vcard[data-glow="2"]{box-shadow:3px 3px 0 0 var(--sh-2)}
+.vcard[data-glow="1"]{box-shadow:3px 3px 0 0 var(--sh-1)}
+.vcard[data-glow="0"]{box-shadow:3px 3px 0 0 var(--sh-1)}
 
 .vcard-cover{width:100%;aspect-ratio:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .vcard-cover img{width:100%;height:100%;object-fit:cover}
@@ -341,16 +350,17 @@ function applyTheme(t) {
 applyTheme(theme);
 document.getElementById('themeBtn').addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
 
-// ── glow level from rating (avg of both, or just my_rating) ───────────────
+// ── shadow level from rating, gray if not in collection ───────────────────
 function glowLevel(r) {
+  if (!r.have_it) return 'gray';
   const scores = [Number(r.my_rating)||0, Number(r.wife_rating)||0].filter(x => x > 0);
   if (!scores.length) return 0;
   const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
-  if (avg >= 9)  return 5;
+  if (avg >= 9)   return 5;
   if (avg >= 7.5) return 4;
-  if (avg >= 6)  return 3;
-  if (avg >= 4)  return 2;
-  if (avg >= 2)  return 1;
+  if (avg >= 6)   return 3;
+  if (avg >= 4)   return 2;
+  if (avg >= 2)   return 1;
   return 0;
 }
 
