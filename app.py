@@ -1,4 +1,5 @@
 import os, io, base64, csv, json
+csv.field_size_limit(10 * 1024 * 1024)
 from flask import Flask, request, jsonify, send_file, session, render_template
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
