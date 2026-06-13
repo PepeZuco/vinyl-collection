@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -9,13 +9,28 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
+
+[data-theme="dark"]{
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
   --text:#e8e8e0;--muted:#555;--accent:#c8a951;--danger:#c0392b;
-  --radius:4px;--radius-sm:3px;--font:'Courier Prime',monospace
+  --card-hover:#1f1f1f;--search-bg:transparent;
+  --glow-high:rgba(200,169,81,0.55);
+  --glow-mid:rgba(200,169,81,0.20);
+  --glow-low:rgba(80,80,80,0.10);
+  --toggle-icon:'☀'
 }
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;letter-spacing:.01em}
-a{color:inherit;text-decoration:none}
+[data-theme="light"]{
+  --bg:#f4f2ee;--surface:#ffffff;--card:#ffffff;--border:#ddd9d0;
+  --text:#1a1a18;--muted:#999;--accent:#a07820;--danger:#c0392b;
+  --card-hover:#fafaf8;--search-bg:#ffffff;
+  --glow-high:rgba(160,120,32,0.40);
+  --glow-mid:rgba(160,120,32,0.14);
+  --glow-low:rgba(0,0,0,0.04);
+  --toggle-icon:'☾'
+}
+
+:root{--font:'Courier Prime',monospace;--radius:4px;--radius-sm:3px}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;letter-spacing:.01em;transition:background .2s,color .2s}
 
 .app{max-width:1200px;margin:0 auto;padding:0 24px 64px}
 
@@ -28,63 +43,88 @@ header{display:flex;align-items:baseline;justify-content:space-between;padding:2
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
-.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px}
+.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--search-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px}
 .search input{background:transparent;border:none;outline:none;color:var(--text);font-size:13px;width:100%;font-family:var(--font)}
 .search i{color:var(--muted);font-size:15px}
-select{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer}
+select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer;transition:background .2s,color .2s,border .2s}
 select:focus{border-color:var(--accent)}
-select option{background:#1a1a1a}
+select option{background:var(--surface);color:var(--text)}
 
 /* buttons */
 .btn{height:34px;padding:0 14px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;color:var(--muted);white-space:nowrap;transition:all .12s;font-family:var(--font);letter-spacing:.02em}
-.btn:hover{border-color:#444;color:var(--text)}
+.btn:hover{border-color:var(--text);color:var(--text)}
 .btn-primary{border-color:var(--accent);color:var(--accent)}
 .btn-primary:hover{background:rgba(200,169,81,.08)}
 .btn-sm{height:28px;padding:0 10px;font-size:12px}
 .btn-ghost{background:transparent;border:none;color:var(--muted);padding:0 6px}
 .btn-ghost:hover{color:var(--text)}
-.btn-danger{color:var(--danger);border-color:#2a1010}
-.btn-danger:hover{background:rgba(192,57,43,.08)}
-.view-toggle{display:flex;gap:4px}
-.view-btn{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px}
-.view-btn.active{border-color:#444;color:var(--text)}
+.btn-danger{color:var(--danger);border-color:var(--border)}
+.btn-danger:hover{border-color:var(--danger)}
+.btn-icon{width:34px;padding:0;display:flex;align-items:center;justify-content:center;font-size:15px}
+
+/* theme toggle */
+.theme-btn{font-size:16px;padding:0 10px}
 
 /* grid */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
-.vcard{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .12s}
-.vcard:hover{border-color:#333}
-.vcard-cover{width:100%;aspect-ratio:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+
+/* vinyl card with glow */
+.vcard{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;cursor:pointer;
+  transition:border-color .15s, box-shadow .3s, transform .15s;
+  position:relative;
+}
+.vcard:hover{border-color:color-mix(in srgb, var(--text) 40%, transparent);transform:translateY(-2px)}
+
+/* glow levels based on data-glow attribute */
+.vcard[data-glow="5"]{box-shadow:0 0 28px 6px var(--glow-high),0 0 8px 2px var(--glow-high);border-color:var(--accent)}
+.vcard[data-glow="4"]{box-shadow:0 0 18px 4px var(--glow-high);border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
+.vcard[data-glow="3"]{box-shadow:0 0 12px 2px var(--glow-mid)}
+.vcard[data-glow="2"]{box-shadow:0 0 6px 1px var(--glow-low)}
+.vcard[data-glow="1"]{box-shadow:none;opacity:.85}
+.vcard[data-glow="0"]{box-shadow:none;opacity:.65}
+
+.vcard-cover{width:100%;aspect-ratio:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .vcard-cover img{width:100%;height:100%;object-fit:cover}
 .vcard-cover .no-cover{display:flex;flex-direction:column;align-items:center;gap:4px;color:#2a2a2a;font-size:10px;font-family:var(--font)}
 .vcard-cover .no-cover i{font-size:32px}
-.vcard-body{padding:8px 10px 10px}
-.vcard-artist{font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:.06em}
-.vcard-album{font-size:12px;font-weight:700;line-height:1.3;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px}
-.vcard-foot{display:flex;align-items:center;justify-content:space-between}
-.vcard-year{font-size:11px;color:var(--muted)}
-.stars{display:flex;gap:1px}
-.star{font-size:10px;color:var(--accent)}
-.star.off{color:#2a2a2a}
+[data-theme="light"] .vcard-cover .no-cover{color:#ccc}
 
-/* list */
-.list{display:flex;flex-direction:column;gap:1px}
-.litem{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .12s;margin-bottom:4px}
-.litem:hover{border-color:#333}
-.lthumb{width:42px;height:42px;border-radius:2px;background:#111;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#2a2a2a}
-.lthumb img{width:100%;height:100%;object-fit:cover}
-.linfo{flex:1;min-width:0}
-.lalbum{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lartist{font-size:11px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
-.lright{display:flex;align-items:center;gap:10px;flex-shrink:0}
-.pill{font-size:10px;padding:2px 7px;border-radius:2px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:var(--font);text-transform:uppercase;letter-spacing:.05em}
-.ldate{font-size:11px;color:var(--muted)}
+/* artist overlay on the cover */
+.vcard-artist-overlay{
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(transparent, rgba(0,0,0,0.75));
+  padding:18px 8px 7px;
+  font-size:11px;font-weight:700;
+  color:#fff;
+  text-transform:uppercase;letter-spacing:.07em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  pointer-events:none;
+}
+
+.vcard-body{padding:8px 10px 10px}
+.vcard-album{font-size:12px;font-weight:700;line-height:1.3;margin-bottom:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px}
+
+/* rating rows */
+.vcard-ratings{display:flex;flex-direction:column;gap:3px}
+.rating-line{display:flex;align-items:center;gap:5px}
+.rating-name{font-size:10px;color:var(--muted);min-width:30px;text-transform:uppercase;letter-spacing:.04em}
+.stars-mini{display:flex;gap:1px}
+.star{font-size:9px;color:var(--accent)}
+.star.off{color:var(--border)}
+[data-theme="light"] .star.off{color:#ddd}
+.vcard-foot{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.vcard-year{font-size:11px;color:var(--muted)}
 
 /* modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
 .overlay.hidden{display:none}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
-.modal-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 
@@ -93,7 +133,9 @@ select option{background:#1a1a1a}
 .detail-cover-ph{width:100%;height:160px;background:#111;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#222}
 .detail-title{font-size:20px;font-weight:700;margin-bottom:3px;line-height:1.2}
 .detail-artist{font-size:11px;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.07em}
-.detail-stars{margin-bottom:14px}
+.detail-ratings{display:flex;gap:16px;margin-bottom:14px}
+.detail-rating-block{display:flex;flex-direction:column;gap:3px}
+.detail-rating-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .detail-item label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:block;margin-bottom:2px}
 .detail-item span{font-size:13px;font-weight:700}
@@ -101,15 +143,16 @@ select option{background:#1a1a1a}
 /* form */
 .form-group{margin-bottom:12px}
 .form-group label{font-size:10px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
-.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-size:13px;outline:none;font-family:var(--font)}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-size:13px;outline:none;font-family:var(--font);transition:background .2s,color .2s}
 .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
-.form-group select option{background:#1a1a1a}
+.form-group select option{background:var(--surface)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .rating-row{display:flex;gap:3px}
-.rstar{font-size:20px;cursor:pointer;color:#2a2a2a;transition:color .1s;line-height:1}
+.rstar{font-size:20px;cursor:pointer;color:var(--border);transition:color .1s;line-height:1}
+[data-theme="light"] .rstar{color:#ddd}
 .rstar.on{color:var(--accent)}
 .cover-drop{border:1px dashed var(--border);border-radius:var(--radius-sm);padding:18px;text-align:center;cursor:pointer;position:relative;transition:border-color .12s}
-.cover-drop:hover{border-color:#444}
+.cover-drop:hover{border-color:var(--accent)}
 .cover-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .cover-preview{width:100%;max-height:130px;object-fit:cover;border-radius:var(--radius-sm);margin-top:8px;display:block}
 .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
@@ -125,10 +168,9 @@ select option{background:#1a1a1a}
 
 /* auth */
 .auth-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-sm)}
-.auth-badge.authed{color:var(--accent);border-color:#3a2e12}
+.auth-badge.authed{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
 .lock-icon{font-size:32px;text-align:center;margin-bottom:14px;color:var(--accent)}
 .err-msg{color:var(--danger);font-size:12px;text-align:center;margin-top:6px;min-height:16px}
-.divider{height:1px;background:var(--border);margin:12px 0}
 
 @media(max-width:600px){
   .app{padding:0 14px 32px}
@@ -146,15 +188,16 @@ select option{background:#1a1a1a}
       <span class="record-count" id="recordCount"></span>
     </div>
     <div class="header-right">
+      <button class="btn theme-btn btn-icon" id="themeBtn" title="Toggle theme">☀</button>
       <div class="auth-badge" id="authBadge"><i class="ti ti-lock"></i><span>visitor</span></div>
       <button class="btn" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
-      <button class="btn" id="exportBtn"><i class="ti ti-download"></i><span>export csv</span></button>
+      <button class="btn" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
       <label class="btn" id="importLabel" style="display:none">
-        <i class="ti ti-upload"></i><span>import csv</span>
+        <i class="ti ti-upload"></i><span>import</span>
         <input type="file" accept=".csv" id="importInput" style="display:none">
       </label>
       <button class="btn btn-primary" id="addBtn" style="display:none">
-        <i class="ti ti-plus"></i><span>add record</span>
+        <i class="ti ti-plus"></i><span>add</span>
       </button>
     </div>
   </header>
@@ -164,13 +207,6 @@ select option{background:#1a1a1a}
       <i class="ti ti-search"></i>
       <input type="text" id="searchInput" placeholder="search artist, album, genre...">
     </div>
-    <select id="haveItFilter">
-      <option value="1">in collection</option>
-      <option value="0">wishlist</option>
-      <option value="">all records</option>
-    </select>
-    <select id="genreFilter"><option value="">all genres</option></select>
-    <select id="buyerFilter"><option value="">all buyers</option></select>
     <select id="sortSel">
       <option value="bought_date">sort: date added ↓</option>
       <option value="artist">sort: artist</option>
@@ -179,10 +215,13 @@ select option{background:#1a1a1a}
       <option value="my_rating">sort: my rating ↓</option>
       <option value="play_count">sort: plays ↓</option>
     </select>
-    <div class="view-toggle">
-      <button class="btn view-btn active" id="gridBtn" aria-label="Grid view"><i class="ti ti-layout-grid"></i></button>
-      <button class="btn view-btn" id="listBtn" aria-label="List view"><i class="ti ti-list"></i></button>
-    </div>
+    <select id="genreFilter"><option value="">all genres</option></select>
+    <select id="buyerFilter"><option value="">all buyers</option></select>
+    <select id="haveItFilter">
+      <option value="1">in collection</option>
+      <option value="0">wishlist</option>
+      <option value="">all records</option>
+    </select>
   </div>
 
   <div id="recordsContainer"></div>
@@ -190,7 +229,7 @@ select option{background:#1a1a1a}
 
 <!-- Detail modal -->
 <div class="overlay hidden" id="detailOverlay">
-  <div class="modal" id="detailModal">
+  <div class="modal">
     <div class="modal-head">
       <span class="modal-title">record detail</span>
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><i class="ti ti-x"></i></button>
@@ -208,7 +247,7 @@ select option{background:#1a1a1a}
       <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
-      <div class="cover-drop" id="coverDrop">
+      <div class="cover-drop">
         <input type="file" accept="image/*" id="coverInput">
         <div id="coverDropInner">
           <i class="ti ti-photo" style="font-size:24px;opacity:.2;display:block;margin-bottom:4px"></i>
@@ -239,11 +278,11 @@ select option{background:#1a1a1a}
         <div class="form-group"><label>Last cleaned</label><input id="fCleaned" type="date"></div>
       </div>
       <div class="form-group">
-        <label>My rating (out of 10)</label>
+        <label>Pepe rating (out of 10)</label>
         <div class="rating-row" id="myRatingRow"></div>
       </div>
       <div class="form-group">
-        <label>Wife rating (out of 10)</label>
+        <label>Jenni rating (out of 10)</label>
         <div class="rating-row" id="wifeRatingRow"></div>
       </div>
       <div class="check-row">
@@ -285,12 +324,36 @@ select option{background:#1a1a1a}
 <script>
 let records = [];
 let authed = false;
-let view = 'grid';
 let editingId = null;
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
 let confirmDeleteId = null;
 
+// ── theme ──────────────────────────────────────────────────────────────────
+let theme = localStorage.getItem('vinyl-theme') || 'dark';
+function applyTheme(t) {
+  theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').textContent = t === 'dark' ? '☀' : '☾';
+  localStorage.setItem('vinyl-theme', t);
+}
+applyTheme(theme);
+document.getElementById('themeBtn').addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
+
+// ── glow level from rating (avg of both, or just my_rating) ───────────────
+function glowLevel(r) {
+  const scores = [Number(r.my_rating)||0, Number(r.wife_rating)||0].filter(x => x > 0);
+  if (!scores.length) return 0;
+  const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+  if (avg >= 9)  return 5;
+  if (avg >= 7.5) return 4;
+  if (avg >= 6)  return 3;
+  if (avg >= 4)  return 2;
+  if (avg >= 2)  return 1;
+  return 0;
+}
+
+// ── init ───────────────────────────────────────────────────────────────────
 async function init() {
   await checkAuth();
   await loadRecords();
@@ -307,12 +370,9 @@ async function checkAuth() {
 function setAuthed(val) {
   authed = val;
   const badge = document.getElementById('authBadge');
-  const loginBtn = document.getElementById('loginBtn');
   badge.className = 'auth-badge' + (val ? ' authed' : '');
-  badge.innerHTML = val
-    ? '<i class="ti ti-lock-open"></i><span>editing</span>'
-    : '<i class="ti ti-lock"></i><span>visitor</span>';
-  loginBtn.innerHTML = val
+  badge.innerHTML = val ? '<i class="ti ti-lock-open"></i><span>editing</span>' : '<i class="ti ti-lock"></i><span>visitor</span>';
+  document.getElementById('loginBtn').innerHTML = val
     ? '<i class="ti ti-logout"></i><span>lock</span>'
     : '<i class="ti ti-login"></i><span>edit mode</span>';
   document.getElementById('addBtn').style.display = val ? '' : 'none';
@@ -327,25 +387,21 @@ async function loadRecords() {
 
 // ── filtering & sorting ────────────────────────────────────────────────────
 function filtered() {
-  const q = document.getElementById('searchInput').value.toLowerCase();
-  const g = document.getElementById('genreFilter').value;
-  const b = document.getElementById('buyerFilter').value;
-  const h = document.getElementById('haveItFilter').value;
-  const s = document.getElementById('sortSel').value;
+  const q  = document.getElementById('searchInput').value.toLowerCase();
+  const g  = document.getElementById('genreFilter').value;
+  const b  = document.getElementById('buyerFilter').value;
+  const h  = document.getElementById('haveItFilter').value;
+  const s  = document.getElementById('sortSel').value;
 
   return records.filter(r => {
     if (q && !`${r.artist} ${r.album_name} ${r.genre}`.toLowerCase().includes(q)) return false;
     if (g && r.genre !== g) return false;
     if (b && r.bought_by !== b) return false;
     if (h === '1' && !r.have_it) return false;
-    if (h === '0' && r.have_it) return false;
+    if (h === '0' &&  r.have_it) return false;
     return true;
   }).sort((a, b_) => {
-    if (s === 'bought_date') {
-      const da = a.bought_date || '';
-      const db = b_.bought_date || '';
-      return db.localeCompare(da); // most recent first
-    }
+    if (s === 'bought_date') return (b_.bought_date||'').localeCompare(a.bought_date||'');
     if (['year','my_rating','play_count'].includes(s)) return (Number(b_[s])||0) - (Number(a[s])||0);
     return (a[s]||'').localeCompare(b_[s]||'');
   });
@@ -360,60 +416,49 @@ function render() {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
     return;
   }
-  if (view === 'grid') {
-    c.innerHTML = `<div class="grid">${recs.map(r => cardHTML(r)).join('')}</div>`;
-  } else {
-    c.innerHTML = `<div class="list">${recs.map(r => listItemHTML(r)).join('')}</div>`;
-  }
-  c.querySelectorAll('[data-id]').forEach(el => {
-    el.addEventListener('click', () => openDetail(Number(el.dataset.id)));
-  });
+  c.innerHTML = `<div class="grid">${recs.map(r => cardHTML(r)).join('')}</div>`;
+  c.querySelectorAll('[data-id]').forEach(el =>
+    el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
+  );
 }
 
 function renderCount(n) {
-  const haveIt = document.getElementById('haveItFilter').value;
-  const label = haveIt === '0' ? 'on wishlist' : haveIt === '1' ? 'in collection' : 'total';
+  const h = document.getElementById('haveItFilter').value;
+  const label = h === '0' ? 'on wishlist' : h === '1' ? 'in collection' : 'total';
   document.getElementById('recordCount').textContent = `— ${n} ${label}`;
 }
 
-function starsHTML(n, max=10) {
+function starsHTML(n, max=10, size=9) {
   let s='';
-  for(let i=1;i<=max;i++) s+=`<span class="star${i<=n?'':' off'}">★</span>`;
-  return `<div class="stars">${s}</div>`;
+  for(let i=1;i<=max;i++) s+=`<span class="star${i<=n?'':' off'}" style="font-size:${size}px">★</span>`;
+  return `<div class="stars-mini">${s}</div>`;
 }
 
 function cardHTML(r) {
+  const glow = glowLevel(r);
   const cover = r.cover_data
-    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.style.display='none'">`
-    : `<div class="no-cover"><i class="ti ti-disc"></i><span>no cover</span></div>`;
-  return `<div class="vcard" data-id="${r.id}">
-    <div class="vcard-cover">${cover}</div>
+    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`
+    : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
+
+  const hasMyR  = Number(r.my_rating) > 0;
+  const hasHerR = Number(r.wife_rating) > 0;
+  const ratingsHTML = (hasMyR || hasHerR) ? `
+    <div class="vcard-ratings">
+      ${hasMyR  ? `<div class="rating-line"><span class="rating-name">Pepe</span>${starsHTML(r.my_rating)}</div>` : ''}
+      ${hasHerR ? `<div class="rating-line"><span class="rating-name">Jenni</span>${starsHTML(r.wife_rating)}</div>` : ''}
+    </div>` : '';
+
+  return `<div class="vcard" data-id="${r.id}" data-glow="${glow}">
+    <div class="vcard-cover">
+      ${cover}
+      <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
+    </div>
     <div class="vcard-body">
-      <div class="vcard-artist">${esc(r.artist)||'unknown'}</div>
       <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
+      ${ratingsHTML}
       <div class="vcard-foot">
         <span class="vcard-year">${esc(r.year)||'—'}</span>
-        ${r.my_rating > 0 ? starsHTML(r.my_rating) : ''}
       </div>
-    </div>
-  </div>`;
-}
-
-function listItemHTML(r) {
-  const thumb = r.cover_data
-    ? `<img src="${r.cover_data}" alt="" style="width:42px;height:42px;object-fit:cover" onerror="this.style.display='none'">`
-    : `<i class="ti ti-disc" style="font-size:18px;opacity:.15"></i>`;
-  const dateStr = r.bought_date ? r.bought_date.slice(0,7) : '';
-  return `<div class="litem" data-id="${r.id}">
-    <div class="lthumb">${thumb}</div>
-    <div class="linfo">
-      <div class="lalbum">${esc(r.album_name)||'untitled'}</div>
-      <div class="lartist">${esc(r.artist)||'unknown'}${r.year?' · '+r.year:''}</div>
-    </div>
-    <div class="lright">
-      ${r.genre?`<span class="pill">${esc(r.genre)}</span>`:''}
-      ${dateStr?`<span class="ldate">${dateStr}</span>`:''}
-      ${r.my_rating>0?starsHTML(r.my_rating):''}
     </div>
   </div>`;
 }
@@ -421,35 +466,34 @@ function listItemHTML(r) {
 function renderFilters() {
   const genres = [...new Set(records.map(r=>r.genre).filter(Boolean))].sort();
   const buyers = [...new Set(records.map(r=>r.bought_by).filter(Boolean))].sort();
-  const gf = document.getElementById('genreFilter');
-  const curG = gf.value;
-  gf.innerHTML = '<option value="">all genres</option>' + genres.map(g=>`<option${g===curG?' selected':''}>${esc(g)}</option>`).join('');
-  const bf = document.getElementById('buyerFilter');
-  const curB = bf.value;
-  bf.innerHTML = '<option value="">all buyers</option>' + buyers.map(b=>`<option${b===curB?' selected':''}>${esc(b)}</option>`).join('');
+  const gf=document.getElementById('genreFilter'), curG=gf.value;
+  gf.innerHTML='<option value="">all genres</option>'+genres.map(g=>`<option${g===curG?' selected':''}>${esc(g)}</option>`).join('');
+  const bf=document.getElementById('buyerFilter'), curB=bf.value;
+  bf.innerHTML='<option value="">all buyers</option>'+buyers.map(b=>`<option${b===curB?' selected':''}>${esc(b)}</option>`).join('');
   bf.style.display = buyers.length > 1 ? '' : 'none';
 }
 
 // ── detail modal ───────────────────────────────────────────────────────────
 function openDetail(id) {
-  const r = records.find(x => x.id === id);
-  if (!r) return;
+  const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   const coverEl = r.cover_data
     ? `<img src="${r.cover_data}" class="detail-cover" alt="${esc(r.album_name)}" onerror="this.style.display='none'">`
     : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:48px"></i></div>`;
-  const fields = [
+  const fields=[
     ['Year',r.year],['Genre',r.genre],
     ['Bought date',r.bought_date],['Bought at',r.bought_where],
-    ['Bought by',r.bought_by],['My rating',r.my_rating?r.my_rating+'/10':'—'],
-    ['Wife rating',r.wife_rating?r.wife_rating+'/10':'—'],['Play count',r.play_count||0],
+    ['Bought by',r.bought_by],['Play count',r.play_count||0],
     ['Last cleaned',r.last_cleaned||'—'],['In collection',r.have_it?'yes':'no (wishlist)'],
   ];
-  document.getElementById('detailBody').innerHTML = `
+  document.getElementById('detailBody').innerHTML=`
     ${coverEl}
     <div class="detail-title">${esc(r.album_name)||'untitled'}</div>
     <div class="detail-artist">${esc(r.artist)||'unknown'}</div>
-    <div class="detail-stars">${r.my_rating>0?starsHTML(r.my_rating):''}</div>
+    <div class="detail-ratings">
+      ${Number(r.my_rating)>0?`<div class="detail-rating-block"><div class="detail-rating-label">Pepe</div>${starsHTML(r.my_rating,10,12)}</div>`:''}
+      ${Number(r.wife_rating)>0?`<div class="detail-rating-block"><div class="detail-rating-label">Jenni</div>${starsHTML(r.wife_rating,10,12)}</div>`:''}
+    </div>
     <div class="detail-grid">
       ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
     </div>`;
@@ -458,64 +502,56 @@ function openDetail(id) {
 }
 
 function renderDetailFoot(id) {
-  const foot = document.getElementById('detailFoot');
-  if (confirmDeleteId === id) {
-    foot.innerHTML = `
+  const foot=document.getElementById('detailFoot');
+  if(confirmDeleteId===id){
+    foot.innerHTML=`
       <span style="font-size:12px;color:var(--muted);margin-right:auto">delete this record?</span>
       <button class="btn btn-danger btn-sm" onclick="doDelete(${id})">yes, delete</button>
       <button class="btn btn-sm" onclick="confirmDeleteId=null;renderDetailFoot(${id})">cancel</button>`;
   } else {
-    foot.innerHTML = authed ? `
+    foot.innerHTML=authed?`
       <button class="btn btn-danger btn-sm" onclick="confirmDeleteId=${id};renderDetailFoot(${id})"><i class="ti ti-trash"></i> delete</button>
-      <button class="btn" onclick="openEdit(${id})"><i class="ti ti-edit"></i> edit</button>` : '';
+      <button class="btn" onclick="openEdit(${id})"><i class="ti ti-edit"></i> edit</button>`:'';
   }
 }
 
-function closeDetail() {
-  document.getElementById('detailOverlay').classList.add('hidden');
-  confirmDeleteId = null;
-}
+function closeDetail(){document.getElementById('detailOverlay').classList.add('hidden');confirmDeleteId=null;}
 
-async function doDelete(id) {
-  await fetch(`/api/records/${id}`, {method:'DELETE'});
-  records = records.filter(r => r.id !== id);
-  closeDetail(); render();
-  toast('record deleted');
+async function doDelete(id){
+  await fetch(`/api/records/${id}`,{method:'DELETE'});
+  records=records.filter(r=>r.id!==id);
+  closeDetail();render();toast('record deleted');
 }
 
 // ── form modal ─────────────────────────────────────────────────────────────
-function buildRatingRows() {
-  ['myRatingRow','wifeRatingRow'].forEach((rowId, idx) => {
-    const row = document.getElementById(rowId);
-    for (let i = 1; i <= 10; i++) {
-      const s = document.createElement('span');
-      s.className = 'rstar'; s.textContent = '★';
-      s.dataset.idx = idx; s.dataset.val = i;
-      s.addEventListener('click', () => { if(idx===0){myRating=i}else{wifeRating=i} updateRatingUI(); });
-      s.addEventListener('mouseenter', () => highlightStars(rowId, i));
-      s.addEventListener('mouseleave', () => updateRatingUI());
+function buildRatingRows(){
+  ['myRatingRow','wifeRatingRow'].forEach((rowId,idx)=>{
+    const row=document.getElementById(rowId);
+    for(let i=1;i<=10;i++){
+      const s=document.createElement('span');
+      s.className='rstar';s.textContent='★';s.dataset.idx=idx;s.dataset.val=i;
+      s.addEventListener('click',()=>{if(idx===0){myRating=i}else{wifeRating=i};updateRatingUI();});
+      s.addEventListener('mouseenter',()=>highlightStars(rowId,i));
+      s.addEventListener('mouseleave',()=>updateRatingUI());
       row.appendChild(s);
     }
   });
 }
 
-function highlightStars(rowId, n) {
-  document.querySelectorAll(`#${rowId} .rstar`).forEach(s => s.classList.toggle('on', Number(s.dataset.val)<=n));
+function highlightStars(rowId,n){
+  document.querySelectorAll(`#${rowId} .rstar`).forEach(s=>s.classList.toggle('on',Number(s.dataset.val)<=n));
+}
+function updateRatingUI(){
+  document.querySelectorAll('#myRatingRow .rstar').forEach(s=>s.classList.toggle('on',Number(s.dataset.val)<=myRating));
+  document.querySelectorAll('#wifeRatingRow .rstar').forEach(s=>s.classList.toggle('on',Number(s.dataset.val)<=wifeRating));
 }
 
-function updateRatingUI() {
-  document.querySelectorAll('#myRatingRow .rstar').forEach(s => s.classList.toggle('on', Number(s.dataset.val)<=myRating));
-  document.querySelectorAll('#wifeRatingRow .rstar').forEach(s => s.classList.toggle('on', Number(s.dataset.val)<=wifeRating));
-}
-
-function openAdd() {
-  editingId=null; myRating=0; wifeRating=0; coverDataUri='';
+function openAdd(){
+  editingId=null;myRating=0;wifeRating=0;coverDataUri='';
   document.getElementById('formTitle').textContent='add record';
   ['fArtist','fAlbum','fYear','fWhere','fBuyer'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('fGenre').value='';
-  document.getElementById('fDate').value='';
-  document.getElementById('fCleaned').value='';
-  document.getElementById('fPlays').value='0';
+  document.getElementById('fGenre').value='';document.getElementById('fDate').value='';
+  document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
   document.getElementById('coverPreview').style.display='none';
   document.getElementById('coverDropInner').style.display='';
@@ -524,10 +560,10 @@ function openAdd() {
   document.getElementById('formOverlay').classList.remove('hidden');
 }
 
-function openEdit(id) {
+function openEdit(id){
   closeDetail();
-  const r=records.find(x=>x.id===id); if(!r)return;
-  editingId=id; myRating=Number(r.my_rating)||0; wifeRating=Number(r.wife_rating)||0; coverDataUri=r.cover_data||'';
+  const r=records.find(x=>x.id===id);if(!r)return;
+  editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';
   document.getElementById('formTitle').textContent='edit record';
   document.getElementById('fArtist').value=r.artist||'';
   document.getElementById('fAlbum').value=r.album_name||'';
@@ -552,9 +588,9 @@ function openEdit(id) {
   document.getElementById('formOverlay').classList.remove('hidden');
 }
 
-function closeForm() { document.getElementById('formOverlay').classList.add('hidden'); }
+function closeForm(){document.getElementById('formOverlay').classList.add('hidden');}
 
-async function submitForm() {
+async function submitForm(){
   const body={
     artist:document.getElementById('fArtist').value,
     album_name:document.getElementById('fAlbum').value,
@@ -566,20 +602,20 @@ async function submitForm() {
     play_count:Number(document.getElementById('fPlays').value)||0,
     last_cleaned:document.getElementById('fCleaned').value,
     have_it:document.getElementById('fHaveIt').checked,
-    my_rating:myRating, wife_rating:wifeRating, cover_data:coverDataUri,
+    my_rating:myRating,wife_rating:wifeRating,cover_data:coverDataUri,
   };
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
-  const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const rec=await r.json();
-  if(editingId){ records=records.map(x=>x.id===editingId?rec:x); toast('changes saved'); }
-  else { records.push(rec); toast('record added'); }
-  closeForm(); render();
+  const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const rec=await res.json();
+  if(editingId){records=records.map(x=>x.id===editingId?rec:x);toast('changes saved');}
+  else{records.push(rec);toast('record added');}
+  closeForm();render();
 }
 
 // ── cover upload ───────────────────────────────────────────────────────────
-document.getElementById('coverInput').addEventListener('change', e => {
-  const file=e.target.files[0]; if(!file)return;
+document.getElementById('coverInput').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=ev=>{
     coverDataUri=ev.target.result;
@@ -587,38 +623,31 @@ document.getElementById('coverInput').addEventListener('change', e => {
     document.getElementById('coverPreview').style.display='block';
     document.getElementById('coverDropInner').style.display='none';
   };
-  reader.readAsDataURL(file);
-  e.target.value='';
+  reader.readAsDataURL(file);e.target.value='';
 });
 
 // ── login ──────────────────────────────────────────────────────────────────
-function openLogin(){ document.getElementById('loginOverlay').classList.remove('hidden'); document.getElementById('pwInput').value=''; document.getElementById('loginErr').textContent=''; }
-function closeLogin(){ document.getElementById('loginOverlay').classList.add('hidden'); }
-
+function openLogin(){document.getElementById('loginOverlay').classList.remove('hidden');document.getElementById('pwInput').value='';document.getElementById('loginErr').textContent='';}
+function closeLogin(){document.getElementById('loginOverlay').classList.add('hidden');}
 async function doLogin(){
   const pw=document.getElementById('pwInput').value;
   const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
-  if(r.ok){ setAuthed(true); closeLogin(); render(); toast('edit mode unlocked'); }
-  else { document.getElementById('loginErr').textContent='wrong password.'; }
+  if(r.ok){setAuthed(true);closeLogin();render();toast('edit mode unlocked');}
+  else{document.getElementById('loginErr').textContent='wrong password.';}
 }
-
-async function doLogout(){
-  await fetch('/api/auth/logout',{method:'POST'});
-  setAuthed(false); render(); toast('locked');
-}
+async function doLogout(){await fetch('/api/auth/logout',{method:'POST'});setAuthed(false);render();toast('locked');}
 
 // ── import / export ────────────────────────────────────────────────────────
-document.getElementById('importInput').addEventListener('change', async e => {
-  const file=e.target.files[0]; if(!file)return;
-  const fd=new FormData(); fd.append('file',file);
+document.getElementById('importInput').addEventListener('change',async e=>{
+  const file=e.target.files[0];if(!file)return;
+  const fd=new FormData();fd.append('file',file);
   const r=await fetch('/api/import',{method:'POST',body:fd});
   const d=await r.json();
-  if(d.imported!=null){ await loadRecords(); toast(`imported ${d.imported} records`); }
+  if(d.imported!=null){await loadRecords();toast(`imported ${d.imported} records`);}
   else toast('import failed: '+(d.error||'unknown'));
   e.target.value='';
 });
-
-document.getElementById('exportBtn').addEventListener('click',()=>{ window.location.href='/api/export'; });
+document.getElementById('exportBtn').addEventListener('click',()=>{window.location.href='/api/export';});
 
 // ── events ─────────────────────────────────────────────────────────────────
 function bindEvents(){
@@ -629,22 +658,19 @@ function bindEvents(){
   document.getElementById('buyerFilter').addEventListener('change',render);
   document.getElementById('haveItFilter').addEventListener('change',render);
   document.getElementById('sortSel').addEventListener('change',render);
-  document.getElementById('gridBtn').addEventListener('click',()=>{ view='grid'; document.getElementById('gridBtn').classList.add('active'); document.getElementById('listBtn').classList.remove('active'); render(); });
-  document.getElementById('listBtn').addEventListener('click',()=>{ view='list'; document.getElementById('listBtn').classList.add('active'); document.getElementById('gridBtn').classList.remove('active'); render(); });
-  document.getElementById('detailOverlay').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeDetail(); });
-  document.getElementById('formOverlay').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeForm(); });
-  document.getElementById('loginOverlay').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeLogin(); });
+  document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
+  document.getElementById('formOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeForm();});
+  document.getElementById('loginOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeLogin();});
 }
 
 let toastTimer;
 function toast(msg){
   const el=document.getElementById('toast');
-  el.textContent=msg; el.classList.add('show');
+  el.textContent=msg;el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
 }
-
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 init();
 </script>
