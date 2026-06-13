@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Vinyl Collection</title>
+<title>Zucoloto's Vinyl Collection</title>
 <link rel="icon" type="image/png" href="/static/vinyl-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
@@ -208,7 +208,7 @@ select option{background:var(--surface);color:var(--text)}
   <header>
     <div class="logo-row">
       <img src="/static/vinyl-icon.png" width="32" height="32" alt="Vinyl icon" class="vinyl-logo">
-      <span class="app-name">Vinyl Collection</span>
+      <span class="app-name">Zucoloto's Vinyl Collection</span>
       <span class="record-count" id="recordCount"></span>
     </div>
     <div class="header-right">
@@ -246,6 +246,7 @@ select option{background:var(--surface);color:var(--text)}
       <option value="0">wishlist</option>
       <option value="">all records</option>
     </select>
+    <button class="btn btn-primary" id="randomBtn"><i class="ti ti-dice"></i><span>random</span></button>
   </div>
 
   <div id="recordsContainer"></div>
@@ -733,6 +734,11 @@ document.getElementById('exportBtn').addEventListener('click',()=>{window.locati
 
 // ── events ─────────────────────────────────────────────────────────────────
 function bindEvents(){
+  document.getElementById('randomBtn').addEventListener('click', () => {
+    const recs = filtered();
+    if (!recs.length) { toast('no records to pick from'); return; }
+    openDetail(recs[Math.floor(Math.random() * recs.length)].id);
+  });
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
   document.getElementById('searchInput').addEventListener('input',render);
