@@ -72,7 +72,9 @@ select option{background:var(--surface);color:var(--text)}
 .theme-btn{font-size:16px;padding:0 10px}
 
 /* grid */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr)}}
 
 /* vinyl card — directional shadow bottom+right, colored by rating */
 .vcard{
@@ -160,8 +162,15 @@ select option{background:var(--surface);color:var(--text)}
 .detail-title{font-size:20px;font-weight:700;margin-bottom:3px;line-height:1.2}
 .detail-artist{font-size:11px;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.07em}
 .detail-ratings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm)}
-.detail-rating-block{display:flex;flex-direction:column;gap:4px}
-.detail-rating-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.detail-rating-block{display:flex;flex-direction:column;gap:6px}
+.detail-rating-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.detail-rating-block.pepe .detail-rating-label{color:#c8a951}
+.detail-rating-block.jenni .detail-rating-label{color:#d4608a}
+.detail-dots{display:flex;gap:3px;flex-wrap:wrap}
+.ddot{width:8px;height:8px;border-radius:50%;background:var(--border)}
+[data-theme="light"] .ddot{background:#ddd}
+.detail-rating-block.pepe .ddot.on{background:#c8a951}
+.detail-rating-block.jenni .ddot.on{background:#d4608a}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .detail-item label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:block;margin-bottom:2px}
 .detail-item span{font-size:13px;font-weight:600}
@@ -518,6 +527,12 @@ function renderFilters() {
   bf.style.display = buyers.length > 1 ? '' : 'none';
 }
 
+function detailDotsHTML(n, max=10) {
+  let d='';
+  for(let i=1;i<=max;i++) d+=`<span class="ddot${i<=n?' on':''}"></span>`;
+  return `<div class="detail-dots">${d}</div>`;
+}
+
 // ── detail modal ───────────────────────────────────────────────────────────
 function openDetail(id) {
   const r = records.find(x=>x.id===id); if(!r)return;
@@ -531,18 +546,20 @@ function openDetail(id) {
     ['Bought by',r.bought_by],['Play count',r.play_count||0],
     ['Last cleaned',r.last_cleaned||'—'],['In collection',r.have_it?'yes':'no (wishlist)'],
   ];
+  const myR  = Number(r.my_rating)  || 0;
+  const herR = Number(r.wife_rating) || 0;
   document.getElementById('detailBody').innerHTML=`
     ${coverEl}
     <div class="detail-title">${esc(r.album_name)||'untitled'}</div>
     <div class="detail-artist">${esc(r.artist)||'unknown'}</div>
     <div class="detail-ratings">
-      <div class="detail-rating-block">
+      <div class="detail-rating-block pepe">
         <div class="detail-rating-label">Pepe</div>
-        ${Number(r.my_rating)>0 ? starsHTML(r.my_rating,10,13) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+        ${myR > 0 ? detailDotsHTML(myR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
       </div>
-      <div class="detail-rating-block">
+      <div class="detail-rating-block jenni">
         <div class="detail-rating-label">Jenni</div>
-        ${Number(r.wife_rating)>0 ? starsHTML(r.wife_rating,10,13) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+        ${herR > 0 ? detailDotsHTML(herR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
       </div>
     </div>
     <div class="detail-grid">
