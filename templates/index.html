@@ -4,136 +4,134 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vinyl Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0e0e0e;--surface:#181818;--card:#1e1e1e;--border:#2a2a2a;
-  --text:#f0f0f0;--muted:#888;--accent:#c8a951;--accent2:#e8c97a;
-  --danger:#e05555;--radius:10px;--radius-sm:6px
+  --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
+  --text:#e8e8e0;--muted:#555;--accent:#c8a951;--danger:#c0392b;
+  --radius:4px;--radius-sm:3px;--font:'Courier Prime',monospace
 }
-body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:15px;min-height:100vh}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;letter-spacing:.01em}
 a{color:inherit;text-decoration:none}
 
-/* layout */
-.app{max-width:1280px;margin:0 auto;padding:0 24px 48px}
-header{display:flex;align-items:center;justify-content:space-between;padding:20px 0 24px;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:24px}
-.logo-row{display:flex;align-items:center;gap:14px}
-.disc{width:42px;height:42px;border-radius:50%;background:#111;border:3px solid #333;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0}
-.disc::after{content:'';width:12px;height:12px;border-radius:50%;background:var(--accent);position:absolute}
-.app-name{font-size:20px;font-weight:600;letter-spacing:-.3px}
-.header-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.app{max-width:1200px;margin:0 auto;padding:0 24px 64px}
 
-/* stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:22px}
-.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
-.stat-label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px}
-.stat-val{font-size:26px;font-weight:600;color:var(--accent2)}
+/* header */
+header{display:flex;align-items:baseline;justify-content:space-between;padding:28px 0 20px;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:24px}
+.logo-row{display:flex;align-items:baseline;gap:12px}
+.app-name{font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.record-count{font-size:13px;color:var(--muted)}
+.header-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
-.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 12px;height:38px}
-.search input{background:transparent;border:none;outline:none;color:var(--text);font-size:14px;width:100%}
-.search i{color:var(--muted);font-size:17px}
-select,input{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:38px;font-size:14px;outline:none}
-select:focus,input:focus{border-color:var(--accent)}
+.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px}
+.search input{background:transparent;border:none;outline:none;color:var(--text);font-size:13px;width:100%;font-family:var(--font)}
+.search i{color:var(--muted);font-size:15px}
+select{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer}
+select:focus{border-color:var(--accent)}
+select option{background:#1a1a1a}
 
 /* buttons */
-.btn{height:38px;padding:0 16px;border-radius:var(--radius-sm);font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);white-space:nowrap;transition:all .15s}
-.btn:hover{border-color:#444;background:#252525}
-.btn-gold{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
-.btn-gold:hover{background:var(--accent2);border-color:var(--accent2)}
-.btn-sm{height:30px;padding:0 12px;font-size:13px}
-.btn-ghost{background:transparent;border:none;color:var(--muted);padding:0 8px}
-.btn-ghost:hover{color:var(--text);background:var(--surface)}
-.btn-danger{color:var(--danger);border-color:#3a1a1a}
-.btn-danger:hover{background:#2a0f0f}
+.btn{height:34px;padding:0 14px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;color:var(--muted);white-space:nowrap;transition:all .12s;font-family:var(--font);letter-spacing:.02em}
+.btn:hover{border-color:#444;color:var(--text)}
+.btn-primary{border-color:var(--accent);color:var(--accent)}
+.btn-primary:hover{background:rgba(200,169,81,.08)}
+.btn-sm{height:28px;padding:0 10px;font-size:12px}
+.btn-ghost{background:transparent;border:none;color:var(--muted);padding:0 6px}
+.btn-ghost:hover{color:var(--text)}
+.btn-danger{color:var(--danger);border-color:#2a1010}
+.btn-danger:hover{background:rgba(192,57,43,.08)}
 .view-toggle{display:flex;gap:4px}
-.view-btn{width:38px;height:38px;padding:0;display:flex;align-items:center;justify-content:center;font-size:17px}
-.view-btn.active{border-color:var(--accent);color:var(--accent)}
+.view-btn{width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;font-size:16px}
+.view-btn.active{border-color:#444;color:var(--text)}
 
 /* grid */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px}
-.vcard{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .15s,transform .15s}
-.vcard:hover{border-color:#444;transform:translateY(-2px)}
-.vcard-cover{width:100%;aspect-ratio:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.vcard{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color .12s}
+.vcard:hover{border-color:#333}
+.vcard-cover{width:100%;aspect-ratio:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .vcard-cover img{width:100%;height:100%;object-fit:cover}
-.vcard-cover .no-cover{display:flex;flex-direction:column;align-items:center;gap:6px;color:#333;font-size:11px}
-.vcard-cover .no-cover i{font-size:36px}
-.vcard-body{padding:10px 12px 12px}
-.vcard-artist{font-size:11px;color:var(--muted);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vcard-album{font-size:13px;font-weight:500;line-height:1.35;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
+.vcard-cover .no-cover{display:flex;flex-direction:column;align-items:center;gap:4px;color:#2a2a2a;font-size:10px;font-family:var(--font)}
+.vcard-cover .no-cover i{font-size:32px}
+.vcard-body{padding:8px 10px 10px}
+.vcard-artist{font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:.06em}
+.vcard-album{font-size:12px;font-weight:700;line-height:1.3;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px}
 .vcard-foot{display:flex;align-items:center;justify-content:space-between}
-.vcard-year{font-size:12px;color:var(--muted)}
+.vcard-year{font-size:11px;color:var(--muted)}
 .stars{display:flex;gap:1px}
-.star{font-size:11px;color:var(--accent)}
-.star.off{color:#333}
+.star{font-size:10px;color:var(--accent)}
+.star.off{color:#2a2a2a}
 
 /* list */
-.list{display:flex;flex-direction:column;gap:8px}
-.litem{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .15s}
-.litem:hover{border-color:#444}
-.lthumb{width:46px;height:46px;border-radius:6px;background:#111;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#333}
+.list{display:flex;flex-direction:column;gap:1px}
+.litem{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .12s;margin-bottom:4px}
+.litem:hover{border-color:#333}
+.lthumb{width:42px;height:42px;border-radius:2px;background:#111;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#2a2a2a}
 .lthumb img{width:100%;height:100%;object-fit:cover}
 .linfo{flex:1;min-width:0}
-.lalbum{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.lartist{font-size:12px;color:var(--muted);margin-top:2px}
+.lalbum{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lartist{font-size:11px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
 .lright{display:flex;align-items:center;gap:10px;flex-shrink:0}
-.pill{font-size:11px;padding:3px 9px;border-radius:20px;background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+.pill{font-size:10px;padding:2px 7px;border-radius:2px;background:transparent;color:var(--muted);border:1px solid var(--border);font-family:var(--font);text-transform:uppercase;letter-spacing:.05em}
+.ldate{font-size:11px;color:var(--muted)}
 
 /* modal */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
 .overlay.hidden{display:none}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;position:relative}
-.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
-.modal-title{font-size:16px;font-weight:600}
-.modal-body{padding:20px}
-.modal-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
+.modal-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.modal-body{padding:18px}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 
 /* detail */
-.detail-cover{width:100%;aspect-ratio:1;max-height:240px;object-fit:cover;border-radius:var(--radius-sm);display:block;margin-bottom:16px;background:#111}
-.detail-cover-ph{width:100%;height:180px;background:#111;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#2a2a2a}
-.detail-title{font-size:22px;font-weight:700;margin-bottom:4px;line-height:1.2}
-.detail-artist{font-size:14px;color:var(--muted);margin-bottom:10px}
-.detail-stars{margin-bottom:16px}
+.detail-cover{width:100%;aspect-ratio:1;max-height:220px;object-fit:cover;border-radius:var(--radius-sm);display:block;margin-bottom:16px}
+.detail-cover-ph{width:100%;height:160px;background:#111;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#222}
+.detail-title{font-size:20px;font-weight:700;margin-bottom:3px;line-height:1.2}
+.detail-artist{font-size:11px;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.07em}
+.detail-stars{margin-bottom:14px}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.detail-item label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px}
-.detail-item span{font-size:14px;font-weight:500}
+.detail-item label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:block;margin-bottom:2px}
+.detail-item span{font-size:13px;font-weight:700}
 
 /* form */
-.form-group{margin-bottom:14px}
-.form-group label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px}
-.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:14px;outline:none}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.rating-row{display:flex;gap:4px}
-.rstar{font-size:22px;cursor:pointer;color:#333;transition:color .1s;line-height:1}
+.form-group{margin-bottom:12px}
+.form-group label{font-size:10px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-size:13px;outline:none;font-family:var(--font)}
+.form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+.form-group select option{background:#1a1a1a}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rating-row{display:flex;gap:3px}
+.rstar{font-size:20px;cursor:pointer;color:#2a2a2a;transition:color .1s;line-height:1}
 .rstar.on{color:var(--accent)}
-.cover-drop{border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:20px;text-align:center;cursor:pointer;position:relative;transition:border-color .15s}
-.cover-drop:hover{border-color:var(--accent)}
+.cover-drop{border:1px dashed var(--border);border-radius:var(--radius-sm);padding:18px;text-align:center;cursor:pointer;position:relative;transition:border-color .12s}
+.cover-drop:hover{border-color:#444}
 .cover-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.cover-preview{width:100%;max-height:140px;object-fit:cover;border-radius:var(--radius-sm);margin-top:10px;display:block}
-.check-row{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:4px}
-.check-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent)}
+.cover-preview{width:100%;max-height:130px;object-fit:cover;border-radius:var(--radius-sm);margin-top:8px;display:block}
+.check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
+.check-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent)}
 
 /* empty */
 .empty{text-align:center;padding:64px 20px;color:var(--muted)}
-.empty i{font-size:52px;opacity:.2;display:block;margin-bottom:12px}
+.empty i{font-size:40px;opacity:.15;display:block;margin-bottom:10px}
 
 /* toast */
-.toast{position:fixed;bottom:24px;right:24px;background:#f0f0f0;color:#111;padding:11px 18px;border-radius:var(--radius-sm);font-size:14px;font-weight:500;z-index:300;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);z-index:300;opacity:0;transform:translateY(6px);transition:all .18s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
 
-/* auth badge */
-.auth-badge{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+/* auth */
+.auth-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-sm)}
 .auth-badge.authed{color:var(--accent);border-color:#3a2e12}
-
-/* login modal */
-.lock-icon{font-size:40px;text-align:center;margin-bottom:16px;color:var(--accent)}
-.err-msg{color:var(--danger);font-size:13px;text-align:center;margin-top:8px;min-height:18px}
+.lock-icon{font-size:32px;text-align:center;margin-bottom:14px;color:var(--accent)}
+.err-msg{color:var(--danger);font-size:12px;text-align:center;margin-top:6px;min-height:16px}
+.divider{height:1px;background:var(--border);margin:12px 0}
 
 @media(max-width:600px){
-  .app{padding:0 12px 32px}
+  .app{padding:0 14px 32px}
   .form-grid{grid-template-columns:1fr}
   .detail-grid{grid-template-columns:1fr}
   .header-right .btn span{display:none}
@@ -144,42 +142,42 @@ select:focus,input:focus{border-color:var(--accent)}
 <div class="app">
   <header>
     <div class="logo-row">
-      <div class="disc"></div>
-      <div>
-        <div class="app-name">Vinyl Collection</div>
-      </div>
+      <span class="app-name">Vinyl Collection</span>
+      <span class="record-count" id="recordCount"></span>
     </div>
     <div class="header-right">
-      <div class="auth-badge" id="authBadge">
-        <i class="ti ti-lock"></i><span>Visitor</span>
-      </div>
-      <button class="btn" id="loginBtn"><i class="ti ti-login"></i><span>Edit mode</span></button>
-      <button class="btn" id="exportBtn"><i class="ti ti-download"></i><span>Export CSV</span></button>
+      <div class="auth-badge" id="authBadge"><i class="ti ti-lock"></i><span>visitor</span></div>
+      <button class="btn" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
+      <button class="btn" id="exportBtn"><i class="ti ti-download"></i><span>export csv</span></button>
       <label class="btn" id="importLabel" style="display:none">
-        <i class="ti ti-upload"></i><span>Import CSV</span>
+        <i class="ti ti-upload"></i><span>import csv</span>
         <input type="file" accept=".csv" id="importInput" style="display:none">
       </label>
-      <button class="btn btn-gold" id="addBtn" style="display:none">
-        <i class="ti ti-plus"></i><span>Add record</span>
+      <button class="btn btn-primary" id="addBtn" style="display:none">
+        <i class="ti ti-plus"></i><span>add record</span>
       </button>
     </div>
   </header>
 
-  <div class="stats" id="statsRow"></div>
-
   <div class="toolbar">
     <div class="search">
       <i class="ti ti-search"></i>
-      <input type="text" id="searchInput" placeholder="Search artist, album, genre…">
+      <input type="text" id="searchInput" placeholder="search artist, album, genre...">
     </div>
-    <select id="genreFilter"><option value="">All genres</option></select>
-    <select id="buyerFilter"><option value="">All buyers</option></select>
+    <select id="haveItFilter">
+      <option value="1">in collection</option>
+      <option value="0">wishlist</option>
+      <option value="">all records</option>
+    </select>
+    <select id="genreFilter"><option value="">all genres</option></select>
+    <select id="buyerFilter"><option value="">all buyers</option></select>
     <select id="sortSel">
-      <option value="artist">Sort: Artist</option>
-      <option value="album_name">Sort: Album</option>
-      <option value="year">Sort: Year ↓</option>
-      <option value="my_rating">Sort: My rating ↓</option>
-      <option value="play_count">Sort: Plays ↓</option>
+      <option value="bought_date">sort: date added ↓</option>
+      <option value="artist">sort: artist</option>
+      <option value="album_name">sort: album</option>
+      <option value="year">sort: year ↓</option>
+      <option value="my_rating">sort: my rating ↓</option>
+      <option value="play_count">sort: plays ↓</option>
     </select>
     <div class="view-toggle">
       <button class="btn view-btn active" id="gridBtn" aria-label="Grid view"><i class="ti ti-layout-grid"></i></button>
@@ -194,7 +192,7 @@ select:focus,input:focus{border-color:var(--accent)}
 <div class="overlay hidden" id="detailOverlay">
   <div class="modal" id="detailModal">
     <div class="modal-head">
-      <span class="modal-title">Record detail</span>
+      <span class="modal-title">record detail</span>
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body" id="detailBody"></div>
@@ -206,27 +204,27 @@ select:focus,input:focus{border-color:var(--accent)}
 <div class="overlay hidden" id="formOverlay">
   <div class="modal">
     <div class="modal-head">
-      <span class="modal-title" id="formTitle">Add record</span>
+      <span class="modal-title" id="formTitle">add record</span>
       <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <div class="cover-drop" id="coverDrop">
         <input type="file" accept="image/*" id="coverInput">
         <div id="coverDropInner">
-          <i class="ti ti-photo" style="font-size:28px;opacity:.3;display:block;margin-bottom:6px"></i>
-          <span style="font-size:13px;color:var(--muted)">Click to upload album cover</span>
+          <i class="ti ti-photo" style="font-size:24px;opacity:.2;display:block;margin-bottom:4px"></i>
+          <span style="font-size:12px;color:var(--muted)">click to upload album cover</span>
         </div>
         <img id="coverPreview" class="cover-preview" style="display:none">
       </div>
-      <div style="height:14px"></div>
+      <div style="height:12px"></div>
       <div class="form-grid">
-        <div class="form-group"><label>Artist</label><input id="fArtist" placeholder="Artist name"></div>
-        <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="Album title"></div>
+        <div class="form-group"><label>Artist</label><input id="fArtist" placeholder="artist name"></div>
+        <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
         <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
         <div class="form-group">
           <label>Genre</label>
           <select id="fGenre">
-            <option value="">Select genre</option>
+            <option value="">select genre</option>
             <option>Rock</option><option>Pop</option><option>Jazz</option><option>Blues</option>
             <option>Classical</option><option>Electronic</option><option>Hip-Hop</option>
             <option>R&B</option><option>Folk</option><option>Country</option><option>Latin</option>
@@ -235,8 +233,8 @@ select:focus,input:focus{border-color:var(--accent)}
           </select>
         </div>
         <div class="form-group"><label>Bought date</label><input id="fDate" type="date"></div>
-        <div class="form-group"><label>Bought at</label><input id="fWhere" placeholder="Store / city"></div>
-        <div class="form-group"><label>Bought by</label><input id="fBuyer" placeholder="Name"></div>
+        <div class="form-group"><label>Bought at</label><input id="fWhere" placeholder="store / city"></div>
+        <div class="form-group"><label>Bought by</label><input id="fBuyer" placeholder="name"></div>
         <div class="form-group"><label>Play count</label><input id="fPlays" type="number" min="0" value="0"></div>
         <div class="form-group"><label>Last cleaned</label><input id="fCleaned" type="date"></div>
       </div>
@@ -250,34 +248,34 @@ select:focus,input:focus{border-color:var(--accent)}
       </div>
       <div class="check-row">
         <input type="checkbox" id="fHaveIt" checked>
-        <label for="fHaveIt">I have this record in my collection</label>
+        <label for="fHaveIt">in my collection (uncheck = wishlist)</label>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn" onclick="closeForm()">Cancel</button>
-      <button class="btn btn-gold" id="formSaveBtn">Save</button>
+      <button class="btn" onclick="closeForm()">cancel</button>
+      <button class="btn btn-primary" id="formSaveBtn">save</button>
     </div>
   </div>
 </div>
 
 <!-- Login modal -->
 <div class="overlay hidden" id="loginOverlay">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:340px">
     <div class="modal-head">
-      <span class="modal-title">Edit mode</span>
+      <span class="modal-title">edit mode</span>
       <button class="btn btn-ghost btn-sm" onclick="closeLogin()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
       <div class="lock-icon"><i class="ti ti-lock"></i></div>
       <div class="form-group">
         <label>Password</label>
-        <input type="password" id="pwInput" placeholder="Enter edit password" onkeydown="if(event.key==='Enter')doLogin()">
+        <input type="password" id="pwInput" placeholder="enter password" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <div class="err-msg" id="loginErr"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn" onclick="closeLogin()">Cancel</button>
-      <button class="btn btn-gold" onclick="doLogin()">Unlock editing</button>
+      <button class="btn" onclick="closeLogin()">cancel</button>
+      <button class="btn btn-primary" onclick="doLogin()">unlock</button>
     </div>
   </div>
 </div>
@@ -285,7 +283,6 @@ select:focus,input:focus{border-color:var(--accent)}
 <div class="toast" id="toast"></div>
 
 <script>
-// ── state ──────────────────────────────────────────────────────────────────
 let records = [];
 let authed = false;
 let view = 'grid';
@@ -294,7 +291,6 @@ let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
 let confirmDeleteId = null;
 
-// ── init ───────────────────────────────────────────────────────────────────
 async function init() {
   await checkAuth();
   await loadRecords();
@@ -314,12 +310,12 @@ function setAuthed(val) {
   const loginBtn = document.getElementById('loginBtn');
   badge.className = 'auth-badge' + (val ? ' authed' : '');
   badge.innerHTML = val
-    ? '<i class="ti ti-lock-open"></i><span>Edit mode</span>'
-    : '<i class="ti ti-lock"></i><span>Visitor</span>';
+    ? '<i class="ti ti-lock-open"></i><span>editing</span>'
+    : '<i class="ti ti-lock"></i><span>visitor</span>';
   loginBtn.innerHTML = val
-    ? '<i class="ti ti-logout"></i><span>Lock</span>'
-    : '<i class="ti ti-login"></i><span>Edit mode</span>';
-  document.getElementById('addBtn').style.display   = val ? '' : 'none';
+    ? '<i class="ti ti-logout"></i><span>lock</span>'
+    : '<i class="ti ti-login"></i><span>edit mode</span>';
+  document.getElementById('addBtn').style.display = val ? '' : 'none';
   document.getElementById('importLabel').style.display = val ? '' : 'none';
 }
 
@@ -329,18 +325,27 @@ async function loadRecords() {
   render();
 }
 
-// ── render ─────────────────────────────────────────────────────────────────
+// ── filtering & sorting ────────────────────────────────────────────────────
 function filtered() {
   const q = document.getElementById('searchInput').value.toLowerCase();
   const g = document.getElementById('genreFilter').value;
   const b = document.getElementById('buyerFilter').value;
+  const h = document.getElementById('haveItFilter').value;
   const s = document.getElementById('sortSel').value;
+
   return records.filter(r => {
     if (q && !`${r.artist} ${r.album_name} ${r.genre}`.toLowerCase().includes(q)) return false;
     if (g && r.genre !== g) return false;
     if (b && r.bought_by !== b) return false;
+    if (h === '1' && !r.have_it) return false;
+    if (h === '0' && r.have_it) return false;
     return true;
   }).sort((a, b_) => {
+    if (s === 'bought_date') {
+      const da = a.bought_date || '';
+      const db = b_.bought_date || '';
+      return db.localeCompare(da); // most recent first
+    }
     if (['year','my_rating','play_count'].includes(s)) return (Number(b_[s])||0) - (Number(a[s])||0);
     return (a[s]||'').localeCompare(b_[s]||'');
   });
@@ -348,11 +353,11 @@ function filtered() {
 
 function render() {
   const recs = filtered();
-  renderStats();
+  renderCount(recs.length);
   renderFilters();
   const c = document.getElementById('recordsContainer');
   if (!recs.length) {
-    c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length?'No records match your search.':'No records yet. Add your first vinyl!'}</div>`;
+    c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
     return;
   }
   if (view === 'grid') {
@@ -365,23 +370,27 @@ function render() {
   });
 }
 
+function renderCount(n) {
+  const haveIt = document.getElementById('haveItFilter').value;
+  const label = haveIt === '0' ? 'on wishlist' : haveIt === '1' ? 'in collection' : 'total';
+  document.getElementById('recordCount').textContent = `— ${n} ${label}`;
+}
+
 function starsHTML(n, max=10) {
   let s='';
   for(let i=1;i<=max;i++) s+=`<span class="star${i<=n?'':' off'}">★</span>`;
   return `<div class="stars">${s}</div>`;
 }
 
-function coverImgHTML(r, cls='') {
-  if (r.cover_data) return `<img src="${r.cover_data}" alt="${esc(r.album_name)}" class="${cls}" loading="lazy" onerror="this.style.display='none'">`;
-  return `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
-}
-
 function cardHTML(r) {
+  const cover = r.cover_data
+    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.style.display='none'">`
+    : `<div class="no-cover"><i class="ti ti-disc"></i><span>no cover</span></div>`;
   return `<div class="vcard" data-id="${r.id}">
-    <div class="vcard-cover">${coverImgHTML(r,'')}</div>
+    <div class="vcard-cover">${cover}</div>
     <div class="vcard-body">
-      <div class="vcard-artist">${esc(r.artist)||'Unknown'}</div>
-      <div class="vcard-album">${esc(r.album_name)||'Untitled'}</div>
+      <div class="vcard-artist">${esc(r.artist)||'unknown'}</div>
+      <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
       <div class="vcard-foot">
         <span class="vcard-year">${esc(r.year)||'—'}</span>
         ${r.my_rating > 0 ? starsHTML(r.my_rating) : ''}
@@ -392,31 +401,21 @@ function cardHTML(r) {
 
 function listItemHTML(r) {
   const thumb = r.cover_data
-    ? `<img src="${r.cover_data}" alt="" style="width:46px;height:46px;object-fit:cover" onerror="this.style.display='none'">`
-    : `<i class="ti ti-disc" style="font-size:20px;opacity:.2"></i>`;
+    ? `<img src="${r.cover_data}" alt="" style="width:42px;height:42px;object-fit:cover" onerror="this.style.display='none'">`
+    : `<i class="ti ti-disc" style="font-size:18px;opacity:.15"></i>`;
+  const dateStr = r.bought_date ? r.bought_date.slice(0,7) : '';
   return `<div class="litem" data-id="${r.id}">
     <div class="lthumb">${thumb}</div>
     <div class="linfo">
-      <div class="lalbum">${esc(r.album_name)||'Untitled'}</div>
-      <div class="lartist">${esc(r.artist)||'Unknown'}${r.year?' · '+r.year:''}</div>
+      <div class="lalbum">${esc(r.album_name)||'untitled'}</div>
+      <div class="lartist">${esc(r.artist)||'unknown'}${r.year?' · '+r.year:''}</div>
     </div>
     <div class="lright">
       ${r.genre?`<span class="pill">${esc(r.genre)}</span>`:''}
+      ${dateStr?`<span class="ldate">${dateStr}</span>`:''}
       ${r.my_rating>0?starsHTML(r.my_rating):''}
     </div>
   </div>`;
-}
-
-function renderStats() {
-  const avg = records.length ? (records.reduce((s,r)=>s+(Number(r.my_rating)||0),0)/records.length).toFixed(1) : '—';
-  const plays = records.reduce((s,r)=>s+(Number(r.play_count)||0),0);
-  const genres = new Set(records.map(r=>r.genre).filter(Boolean)).size;
-  document.getElementById('statsRow').innerHTML = [
-    ['Total records', records.length],
-    ['Avg rating', avg],
-    ['Total plays', plays],
-    ['Genres', genres],
-  ].map(([l,v])=>`<div class="stat"><div class="stat-label">${l}</div><div class="stat-val">${v}</div></div>`).join('');
 }
 
 function renderFilters() {
@@ -424,11 +423,11 @@ function renderFilters() {
   const buyers = [...new Set(records.map(r=>r.bought_by).filter(Boolean))].sort();
   const gf = document.getElementById('genreFilter');
   const curG = gf.value;
-  gf.innerHTML = '<option value="">All genres</option>' + genres.map(g=>`<option${g===curG?' selected':''}>${esc(g)}</option>`).join('');
+  gf.innerHTML = '<option value="">all genres</option>' + genres.map(g=>`<option${g===curG?' selected':''}>${esc(g)}</option>`).join('');
   const bf = document.getElementById('buyerFilter');
   const curB = bf.value;
-  bf.innerHTML = '<option value="">All buyers</option>' + buyers.map(b=>`<option${b===curB?' selected':''}>${esc(b)}</option>`).join('');
-  bf.parentElement.style.display = buyers.length > 1 ? '' : 'none';
+  bf.innerHTML = '<option value="">all buyers</option>' + buyers.map(b=>`<option${b===curB?' selected':''}>${esc(b)}</option>`).join('');
+  bf.style.display = buyers.length > 1 ? '' : 'none';
 }
 
 // ── detail modal ───────────────────────────────────────────────────────────
@@ -436,28 +435,24 @@ function openDetail(id) {
   const r = records.find(x => x.id === id);
   if (!r) return;
   confirmDeleteId = null;
-
   const coverEl = r.cover_data
     ? `<img src="${r.cover_data}" class="detail-cover" alt="${esc(r.album_name)}" onerror="this.style.display='none'">`
-    : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:56px"></i></div>`;
-
+    : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:48px"></i></div>`;
   const fields = [
-    ['Year', r.year], ['Genre', r.genre],
-    ['Bought date', r.bought_date], ['Bought at', r.bought_where],
-    ['Bought by', r.bought_by], ['My rating', r.my_rating ? r.my_rating+'/10' : '—'],
-    ['Wife rating', r.wife_rating ? r.wife_rating+'/10' : '—'], ['Play count', r.play_count||0],
-    ['Last cleaned', r.last_cleaned||'—'], ['In collection', r.have_it ? 'Yes' : 'No'],
+    ['Year',r.year],['Genre',r.genre],
+    ['Bought date',r.bought_date],['Bought at',r.bought_where],
+    ['Bought by',r.bought_by],['My rating',r.my_rating?r.my_rating+'/10':'—'],
+    ['Wife rating',r.wife_rating?r.wife_rating+'/10':'—'],['Play count',r.play_count||0],
+    ['Last cleaned',r.last_cleaned||'—'],['In collection',r.have_it?'yes':'no (wishlist)'],
   ];
-
   document.getElementById('detailBody').innerHTML = `
     ${coverEl}
-    <div class="detail-title">${esc(r.album_name)||'Untitled'}</div>
-    <div class="detail-artist">${esc(r.artist)||'Unknown'}</div>
-    <div class="detail-stars">${r.my_rating > 0 ? starsHTML(r.my_rating) : ''}</div>
+    <div class="detail-title">${esc(r.album_name)||'untitled'}</div>
+    <div class="detail-artist">${esc(r.artist)||'unknown'}</div>
+    <div class="detail-stars">${r.my_rating>0?starsHTML(r.my_rating):''}</div>
     <div class="detail-grid">
       ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
     </div>`;
-
   renderDetailFoot(r.id);
   document.getElementById('detailOverlay').classList.remove('hidden');
 }
@@ -466,13 +461,13 @@ function renderDetailFoot(id) {
   const foot = document.getElementById('detailFoot');
   if (confirmDeleteId === id) {
     foot.innerHTML = `
-      <span style="font-size:13px;color:var(--muted);margin-right:auto">Delete this record?</span>
-      <button class="btn btn-danger btn-sm" onclick="doDelete(${id})">Yes, delete</button>
-      <button class="btn btn-sm" onclick="confirmDeleteId=null;renderDetailFoot(${id})">Cancel</button>`;
+      <span style="font-size:12px;color:var(--muted);margin-right:auto">delete this record?</span>
+      <button class="btn btn-danger btn-sm" onclick="doDelete(${id})">yes, delete</button>
+      <button class="btn btn-sm" onclick="confirmDeleteId=null;renderDetailFoot(${id})">cancel</button>`;
   } else {
     foot.innerHTML = authed ? `
-      <button class="btn btn-danger btn-sm" onclick="confirmDeleteId=${id};renderDetailFoot(${id})"><i class="ti ti-trash"></i> Delete</button>
-      <button class="btn" onclick="openEdit(${id})"><i class="ti ti-edit"></i> Edit</button>` : '';
+      <button class="btn btn-danger btn-sm" onclick="confirmDeleteId=${id};renderDetailFoot(${id})"><i class="ti ti-trash"></i> delete</button>
+      <button class="btn" onclick="openEdit(${id})"><i class="ti ti-edit"></i> edit</button>` : '';
   }
 }
 
@@ -484,9 +479,8 @@ function closeDetail() {
 async function doDelete(id) {
   await fetch(`/api/records/${id}`, {method:'DELETE'});
   records = records.filter(r => r.id !== id);
-  closeDetail();
-  render();
-  toast('Record deleted');
+  closeDetail(); render();
+  toast('record deleted');
 }
 
 // ── form modal ─────────────────────────────────────────────────────────────
@@ -495,14 +489,9 @@ function buildRatingRows() {
     const row = document.getElementById(rowId);
     for (let i = 1; i <= 10; i++) {
       const s = document.createElement('span');
-      s.className = 'rstar';
-      s.textContent = '★';
-      s.dataset.idx = idx;
-      s.dataset.val = i;
-      s.addEventListener('click', () => {
-        if (idx === 0) { myRating = i; } else { wifeRating = i; }
-        updateRatingUI();
-      });
+      s.className = 'rstar'; s.textContent = '★';
+      s.dataset.idx = idx; s.dataset.val = i;
+      s.addEventListener('click', () => { if(idx===0){myRating=i}else{wifeRating=i} updateRatingUI(); });
       s.addEventListener('mouseenter', () => highlightStars(rowId, i));
       s.addEventListener('mouseleave', () => updateRatingUI());
       row.appendChild(s);
@@ -511,21 +500,18 @@ function buildRatingRows() {
 }
 
 function highlightStars(rowId, n) {
-  document.querySelectorAll(`#${rowId} .rstar`).forEach(s => {
-    s.classList.toggle('on', Number(s.dataset.val) <= n);
-  });
+  document.querySelectorAll(`#${rowId} .rstar`).forEach(s => s.classList.toggle('on', Number(s.dataset.val)<=n));
 }
 
 function updateRatingUI() {
-  document.querySelectorAll('#myRatingRow .rstar').forEach(s => s.classList.toggle('on', Number(s.dataset.val) <= myRating));
-  document.querySelectorAll('#wifeRatingRow .rstar').forEach(s => s.classList.toggle('on', Number(s.dataset.val) <= wifeRating));
+  document.querySelectorAll('#myRatingRow .rstar').forEach(s => s.classList.toggle('on', Number(s.dataset.val)<=myRating));
+  document.querySelectorAll('#wifeRatingRow .rstar').forEach(s => s.classList.toggle('on', Number(s.dataset.val)<=wifeRating));
 }
 
 function openAdd() {
-  editingId = null;
-  myRating = 0; wifeRating = 0; coverDataUri = '';
-  document.getElementById('formTitle').textContent = 'Add record';
-  ['fArtist','fAlbum','fYear','fWhere','fBuyer'].forEach(id => document.getElementById(id).value='');
+  editingId=null; myRating=0; wifeRating=0; coverDataUri='';
+  document.getElementById('formTitle').textContent='add record';
+  ['fArtist','fAlbum','fYear','fWhere','fBuyer'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('fGenre').value='';
   document.getElementById('fDate').value='';
   document.getElementById('fCleaned').value='';
@@ -534,31 +520,27 @@ function openAdd() {
   document.getElementById('coverPreview').style.display='none';
   document.getElementById('coverDropInner').style.display='';
   updateRatingUI();
-  document.getElementById('formSaveBtn').onclick = submitForm;
+  document.getElementById('formSaveBtn').onclick=submitForm;
   document.getElementById('formOverlay').classList.remove('hidden');
 }
 
 function openEdit(id) {
   closeDetail();
-  const r = records.find(x => x.id === id);
-  if (!r) return;
-  editingId = id;
-  myRating = Number(r.my_rating)||0;
-  wifeRating = Number(r.wife_rating)||0;
-  coverDataUri = r.cover_data||'';
-  document.getElementById('formTitle').textContent = 'Edit record';
-  document.getElementById('fArtist').value = r.artist||'';
-  document.getElementById('fAlbum').value = r.album_name||'';
-  document.getElementById('fYear').value = r.year||'';
-  document.getElementById('fGenre').value = r.genre||'';
-  document.getElementById('fDate').value = r.bought_date||'';
-  document.getElementById('fWhere').value = r.bought_where||'';
-  document.getElementById('fBuyer').value = r.bought_by||'';
-  document.getElementById('fPlays').value = r.play_count||0;
-  document.getElementById('fCleaned').value = r.last_cleaned||'';
-  document.getElementById('fHaveIt').checked = !!r.have_it;
-  if (coverDataUri) {
-    document.getElementById('coverPreview').src = coverDataUri;
+  const r=records.find(x=>x.id===id); if(!r)return;
+  editingId=id; myRating=Number(r.my_rating)||0; wifeRating=Number(r.wife_rating)||0; coverDataUri=r.cover_data||'';
+  document.getElementById('formTitle').textContent='edit record';
+  document.getElementById('fArtist').value=r.artist||'';
+  document.getElementById('fAlbum').value=r.album_name||'';
+  document.getElementById('fYear').value=r.year||'';
+  document.getElementById('fGenre').value=r.genre||'';
+  document.getElementById('fDate').value=r.bought_date||'';
+  document.getElementById('fWhere').value=r.bought_where||'';
+  document.getElementById('fBuyer').value=r.bought_by||'';
+  document.getElementById('fPlays').value=r.play_count||0;
+  document.getElementById('fCleaned').value=r.last_cleaned||'';
+  document.getElementById('fHaveIt').checked=!!r.have_it;
+  if(coverDataUri){
+    document.getElementById('coverPreview').src=coverDataUri;
     document.getElementById('coverPreview').style.display='block';
     document.getElementById('coverDropInner').style.display='none';
   } else {
@@ -566,53 +548,42 @@ function openEdit(id) {
     document.getElementById('coverDropInner').style.display='';
   }
   updateRatingUI();
-  document.getElementById('formSaveBtn').onclick = submitForm;
+  document.getElementById('formSaveBtn').onclick=submitForm;
   document.getElementById('formOverlay').classList.remove('hidden');
 }
 
-function closeForm() {
-  document.getElementById('formOverlay').classList.add('hidden');
-}
+function closeForm() { document.getElementById('formOverlay').classList.add('hidden'); }
 
 async function submitForm() {
-  const body = {
-    artist:       document.getElementById('fArtist').value,
-    album_name:   document.getElementById('fAlbum').value,
-    year:         document.getElementById('fYear').value,
-    genre:        document.getElementById('fGenre').value,
-    bought_date:  document.getElementById('fDate').value,
-    bought_where: document.getElementById('fWhere').value,
-    bought_by:    document.getElementById('fBuyer').value,
-    play_count:   Number(document.getElementById('fPlays').value)||0,
-    last_cleaned: document.getElementById('fCleaned').value,
-    have_it:      document.getElementById('fHaveIt').checked,
-    my_rating:    myRating,
-    wife_rating:  wifeRating,
-    cover_data:   coverDataUri,
+  const body={
+    artist:document.getElementById('fArtist').value,
+    album_name:document.getElementById('fAlbum').value,
+    year:document.getElementById('fYear').value,
+    genre:document.getElementById('fGenre').value,
+    bought_date:document.getElementById('fDate').value,
+    bought_where:document.getElementById('fWhere').value,
+    bought_by:document.getElementById('fBuyer').value,
+    play_count:Number(document.getElementById('fPlays').value)||0,
+    last_cleaned:document.getElementById('fCleaned').value,
+    have_it:document.getElementById('fHaveIt').checked,
+    my_rating:myRating, wife_rating:wifeRating, cover_data:coverDataUri,
   };
-  const url = editingId ? `/api/records/${editingId}` : '/api/records';
-  const method = editingId ? 'PUT' : 'POST';
-  const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  const rec = await r.json();
-  if (editingId) {
-    records = records.map(x => x.id === editingId ? rec : x);
-    toast('Changes saved');
-  } else {
-    records.push(rec);
-    toast('Record added!');
-  }
-  closeForm();
-  render();
+  const url=editingId?`/api/records/${editingId}`:'/api/records';
+  const method=editingId?'PUT':'POST';
+  const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const rec=await r.json();
+  if(editingId){ records=records.map(x=>x.id===editingId?rec:x); toast('changes saved'); }
+  else { records.push(rec); toast('record added'); }
+  closeForm(); render();
 }
 
 // ── cover upload ───────────────────────────────────────────────────────────
 document.getElementById('coverInput').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    coverDataUri = ev.target.result;
-    document.getElementById('coverPreview').src = coverDataUri;
+  const file=e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    coverDataUri=ev.target.result;
+    document.getElementById('coverPreview').src=coverDataUri;
     document.getElementById('coverPreview').style.display='block';
     document.getElementById('coverDropInner').style.display='none';
   };
@@ -621,66 +592,59 @@ document.getElementById('coverInput').addEventListener('change', e => {
 });
 
 // ── login ──────────────────────────────────────────────────────────────────
-function openLogin() { document.getElementById('loginOverlay').classList.remove('hidden'); document.getElementById('pwInput').value=''; document.getElementById('loginErr').textContent=''; }
-function closeLogin() { document.getElementById('loginOverlay').classList.add('hidden'); }
+function openLogin(){ document.getElementById('loginOverlay').classList.remove('hidden'); document.getElementById('pwInput').value=''; document.getElementById('loginErr').textContent=''; }
+function closeLogin(){ document.getElementById('loginOverlay').classList.add('hidden'); }
 
-async function doLogin() {
-  const pw = document.getElementById('pwInput').value;
-  const r = await fetch('/api/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pw})});
-  if (r.ok) { setAuthed(true); closeLogin(); render(); toast('Edit mode unlocked'); }
-  else { document.getElementById('loginErr').textContent='Wrong password. Try again.'; }
+async function doLogin(){
+  const pw=document.getElementById('pwInput').value;
+  const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  if(r.ok){ setAuthed(true); closeLogin(); render(); toast('edit mode unlocked'); }
+  else { document.getElementById('loginErr').textContent='wrong password.'; }
 }
 
-async function doLogout() {
-  await fetch('/api/auth/logout', {method:'POST'});
-  setAuthed(false);
-  render();
-  toast('Locked');
+async function doLogout(){
+  await fetch('/api/auth/logout',{method:'POST'});
+  setAuthed(false); render(); toast('locked');
 }
 
 // ── import / export ────────────────────────────────────────────────────────
 document.getElementById('importInput').addEventListener('change', async e => {
-  const file = e.target.files[0]; if (!file) return;
-  const fd = new FormData(); fd.append('file', file);
-  const r = await fetch('/api/import', {method:'POST', body:fd});
-  const d = await r.json();
-  if (d.imported != null) { await loadRecords(); toast(`Imported ${d.imported} records!`); }
-  else toast('Import failed: ' + (d.error||'unknown error'));
+  const file=e.target.files[0]; if(!file)return;
+  const fd=new FormData(); fd.append('file',file);
+  const r=await fetch('/api/import',{method:'POST',body:fd});
+  const d=await r.json();
+  if(d.imported!=null){ await loadRecords(); toast(`imported ${d.imported} records`); }
+  else toast('import failed: '+(d.error||'unknown'));
   e.target.value='';
 });
 
-document.getElementById('exportBtn').addEventListener('click', () => {
-  window.location.href = '/api/export';
-});
+document.getElementById('exportBtn').addEventListener('click',()=>{ window.location.href='/api/export'; });
 
 // ── events ─────────────────────────────────────────────────────────────────
-function bindEvents() {
-  document.getElementById('loginBtn').addEventListener('click', () => authed ? doLogout() : openLogin());
-  document.getElementById('addBtn').addEventListener('click', openAdd);
-  document.getElementById('searchInput').addEventListener('input', render);
-  document.getElementById('genreFilter').addEventListener('change', render);
-  document.getElementById('buyerFilter').addEventListener('change', render);
-  document.getElementById('sortSel').addEventListener('change', render);
-  document.getElementById('gridBtn').addEventListener('click', () => { view='grid'; document.getElementById('gridBtn').classList.add('active'); document.getElementById('listBtn').classList.remove('active'); render(); });
-  document.getElementById('listBtn').addEventListener('click', () => { view='list'; document.getElementById('listBtn').classList.add('active'); document.getElementById('gridBtn').classList.remove('active'); render(); });
-  document.getElementById('detailOverlay').addEventListener('click', e => { if(e.target===e.currentTarget) closeDetail(); });
-  document.getElementById('formOverlay').addEventListener('click', e => { if(e.target===e.currentTarget) closeForm(); });
-  document.getElementById('loginOverlay').addEventListener('click', e => { if(e.target===e.currentTarget) closeLogin(); });
+function bindEvents(){
+  document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
+  document.getElementById('addBtn').addEventListener('click',openAdd);
+  document.getElementById('searchInput').addEventListener('input',render);
+  document.getElementById('genreFilter').addEventListener('change',render);
+  document.getElementById('buyerFilter').addEventListener('change',render);
+  document.getElementById('haveItFilter').addEventListener('change',render);
+  document.getElementById('sortSel').addEventListener('change',render);
+  document.getElementById('gridBtn').addEventListener('click',()=>{ view='grid'; document.getElementById('gridBtn').classList.add('active'); document.getElementById('listBtn').classList.remove('active'); render(); });
+  document.getElementById('listBtn').addEventListener('click',()=>{ view='list'; document.getElementById('listBtn').classList.add('active'); document.getElementById('gridBtn').classList.remove('active'); render(); });
+  document.getElementById('detailOverlay').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeDetail(); });
+  document.getElementById('formOverlay').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeForm(); });
+  document.getElementById('loginOverlay').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeLogin(); });
 }
 
-// ── toast ──────────────────────────────────────────────────────────────────
 let toastTimer;
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
 }
 
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 init();
 </script>
