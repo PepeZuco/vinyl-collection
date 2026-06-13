@@ -32,11 +32,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .app{max-width:1200px;margin:0 auto;padding:0 24px 64px}
 
 /* header */
-header{display:flex;align-items:baseline;justify-content:space-between;padding:28px 0 20px;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:24px}
-.logo-row{display:flex;align-items:baseline;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;padding:28px 0 20px;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:24px}
+.logo-row{display:flex;align-items:center;gap:12px}
 .app-name{font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-family:var(--font-mono)}
 .record-count{font-size:13px;color:var(--muted)}
 .header-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.vinyl-logo{border-radius:50%;flex-shrink:0;transition:transform .1s;cursor:default}
+.vinyl-logo:hover{animation:vinyl-spin 1.2s linear infinite}
+@keyframes vinyl-spin{to{transform:rotate(360deg)}}
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
@@ -102,8 +105,8 @@ select option{background:var(--surface);color:var(--text)}
 /* top meta row: year left, avg score right */
 .vcard-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
 .vcard-year{font-size:11px;color:var(--muted)}
-.vcard-avg{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:-.01em;transition:text-shadow .3s}
-.vcard-avg span{font-size:10px;font-weight:400;color:var(--muted);margin-left:1px}
+.vcard-avg{font-size:17px;font-weight:700;color:var(--accent);letter-spacing:-.02em;line-height:1}
+.vcard-avg span{font-size:11px;font-weight:400;color:var(--muted);margin-left:1px}
 
 /* divider */
 .vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
@@ -204,7 +207,7 @@ select option{background:var(--surface);color:var(--text)}
 <div class="app">
   <header>
     <div class="logo-row">
-      <img src="/static/vinyl-icon.png" width="32" height="32" alt="Vinyl icon" style="border-radius:50%;flex-shrink:0;margin-bottom:-2px">
+      <img src="/static/vinyl-icon.png" width="32" height="32" alt="Vinyl icon" class="vinyl-logo">
       <span class="app-name">Vinyl Collection</span>
       <span class="record-count" id="recordCount"></span>
     </div>
@@ -483,6 +486,14 @@ function cardHTML(r) {
   const avgStr = avg > 0 ? avg.toFixed(1).replace('.0','') : '—';
   const avgStyle = '';
 
+  // glow background on body — stronger as rating climbs
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  let bodyGlow = '';
+  if (avg >= 9)        bodyGlow = isDark ? 'rgba(245,197,24,0.13)' : 'rgba(200,155,10,0.10)';
+  else if (avg >= 7.5) bodyGlow = isDark ? 'rgba(245,197,24,0.07)' : 'rgba(200,155,10,0.06)';
+  else if (avg >= 6)   bodyGlow = isDark ? 'rgba(245,197,24,0.04)' : 'rgba(200,155,10,0.03)';
+  const bodyStyle = bodyGlow ? ` style="background:${bodyGlow}"` : '';
+
   const scoresBlock = (myR > 0 || herR > 0) ? `
     <div class="vcard-divider"></div>
     <div class="vcard-scores">
@@ -501,7 +512,7 @@ function cardHTML(r) {
       ${cover}
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
     </div>
-    <div class="vcard-body">
+    <div class="vcard-body"${bodyStyle}>
       <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
       <div class="vcard-meta">
         <span class="vcard-year">${esc(r.year)||'—'}</span>
