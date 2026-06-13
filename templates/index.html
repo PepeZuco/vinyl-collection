@@ -208,7 +208,7 @@ select option{background:var(--surface);color:var(--text)}
     </div>
     <div class="header-right">
       <button class="btn theme-btn btn-icon" id="themeBtn" title="Toggle theme">☀</button>
-      <div class="auth-badge" id="authBadge"><i class="ti ti-lock"></i><span>visitor</span></div>
+      <div class="auth-badge" id="authBadge" style="display:none"><i class="ti ti-lock"></i><span>visitor</span></div>
       <button class="btn" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
       <button class="btn" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
       <label class="btn" id="importLabel" style="display:none">
@@ -283,11 +283,6 @@ select option{background:var(--surface);color:var(--text)}
           <label>Genre</label>
           <select id="fGenre">
             <option value="">select genre</option>
-            <option>Rock</option><option>Pop</option><option>Jazz</option><option>Blues</option>
-            <option>Classical</option><option>Electronic</option><option>Hip-Hop</option>
-            <option>R&B</option><option>Folk</option><option>Country</option><option>Latin</option>
-            <option>Reggae</option><option>Metal</option><option>Punk</option><option>Soul</option>
-            <option>Funk</option><option>Easy listening</option><option>Other</option>
           </select>
         </div>
         <div class="form-group"><label>Bought date</label><input id="fDate" type="date"></div>
@@ -401,6 +396,7 @@ function setAuthed(val) {
   authed = val;
   const badge = document.getElementById('authBadge');
   badge.className = 'auth-badge' + (val ? ' authed' : '');
+  badge.style.display = val ? '' : 'none';
   badge.innerHTML = val ? '<i class="ti ti-lock-open"></i><span>editing</span>' : '<i class="ti ti-lock"></i><span>visitor</span>';
   document.getElementById('loginBtn').innerHTML = val
     ? '<i class="ti ti-logout"></i><span>lock</span>'
@@ -611,13 +607,21 @@ function updateRatingUI(){
   document.querySelectorAll('#wifeRatingRow .rstar').forEach(s=>s.classList.toggle('on',Number(s.dataset.val)<=wifeRating));
 }
 
+function populateGenreSelect(current='') {
+  const genres = [...new Set(records.map(r=>r.genre).filter(Boolean))].sort();
+  const sel = document.getElementById('fGenre');
+  sel.innerHTML = '<option value="">select genre</option>'
+    + genres.map(g=>`<option${g===current?' selected':''}>${esc(g)}</option>`).join('');
+}
+
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';
   document.getElementById('formTitle').textContent='add record';
   ['fArtist','fAlbum','fYear','fWhere','fBuyer'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('fGenre').value='';document.getElementById('fDate').value='';
+  document.getElementById('fDate').value='';
   document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
+  populateGenreSelect();
   document.getElementById('coverPreview').style.display='none';
   document.getElementById('coverDropInner').style.display='';
   updateRatingUI();
@@ -633,8 +637,8 @@ function openEdit(id){
   document.getElementById('fArtist').value=r.artist||'';
   document.getElementById('fAlbum').value=r.album_name||'';
   document.getElementById('fYear').value=r.year||'';
-  document.getElementById('fGenre').value=r.genre||'';
   document.getElementById('fDate').value=r.bought_date||'';
+  populateGenreSelect(r.genre||'');
   document.getElementById('fWhere').value=r.bought_where||'';
   document.getElementById('fBuyer').value=r.bought_by||'';
   document.getElementById('fPlays').value=r.play_count||0;
