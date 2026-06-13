@@ -37,9 +37,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:28p
 .app-name{font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-family:var(--font-mono)}
 .record-count{font-size:13px;color:var(--muted)}
 .header-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.vinyl-logo{border-radius:50%;flex-shrink:0;transition:transform .1s;cursor:default}
-.vinyl-logo:hover{animation:vinyl-spin 1.2s linear infinite}
-@keyframes vinyl-spin{to{transform:rotate(360deg)}}
+.vinyl-logo{flex-shrink:0;cursor:default}
+@keyframes vinyl-glint{to{transform:rotate(360deg)}}
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
@@ -233,7 +232,19 @@ select option{background:var(--surface);color:var(--text)}
 <div class="app">
   <header>
     <div class="logo-row">
-      <img src="/static/vinyl-icon.png" width="32" height="32" alt="Vinyl icon" class="vinyl-logo">
+      <svg class="vinyl-logo" width="34" height="34" viewBox="0 0 44 44" aria-label="Vinyl collection logo">
+        <circle cx="22" cy="22" r="21" fill="#9B7FD4"/>
+        <circle cx="22" cy="22" r="16" fill="#F5C518"/>
+        <circle cx="22" cy="22" r="8" fill="#D4608A"/>
+        <circle cx="22" cy="22" r="6" fill="#111"/>
+        <circle cx="22" cy="22" r="4.5" fill="none" stroke="#D4608A" stroke-width="0.7"/>
+        <circle cx="22" cy="22" r="3" fill="none" stroke="#D4608A" stroke-width="0.7"/>
+        <circle cx="22" cy="22" r="1.4" fill="#1a1a1a"/>
+        <g style="animation:vinyl-glint 2s linear infinite;transform-origin:22px 22px">
+          <path d="M22 1 A21 21 0 0 1 36 6" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+          <path d="M22 1 A21 21 0 0 1 29 3" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.35"/>
+        </g>
+      </svg>
       <span class="app-name">Zucoloto's Vinyl Collection</span>
       <span class="record-count" id="recordCount"></span>
     </div>
