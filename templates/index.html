@@ -62,7 +62,7 @@ select option{background:var(--surface);color:var(--text)}
 .theme-btn{font-size:16px;padding:0 10px}
 
 /* grid */
-.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 @media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr)}}
 
@@ -354,13 +354,13 @@ function applyTheme(t) {
 applyTheme(theme);
 document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); });
 
-// ── shadow: buyer color × rating intensity ─────────────────────────────────
+// ── shadow: flat buyer color, no rating influence ──────────────────────────
 function cardStyles(r) {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
   if (!r.have_it) {
     const g = isDark ? 'rgba(100,100,100,0.35)' : 'rgba(0,0,0,0.18)';
-    return { shadow: `3px 3px 0 0 ${g}`, avgGlow: '' };
+    return { shadow: `4px 4px 0 0 ${g}` };
   }
 
   const buyer = (r.bought_by || '').toLowerCase();
@@ -369,28 +369,13 @@ function cardStyles(r) {
   const isBoth  = isPepe && isJenni;
 
   let rgb;
-  if (isBoth)       rgb = isDark ? '177,148,146' : '145,110,120';  // gold+lavender mix
+  if (isBoth)       rgb = isDark ? '177,148,146' : '145,110,120';
   else if (isPepe)  rgb = isDark ? '200,169,81'  : '160,120,32';
-  else if (isJenni) rgb = isDark ? '155,127,212' : '130,100,190';  // lavender
+  else if (isJenni) rgb = isDark ? '155,127,212' : '130,100,190';
   else              rgb = isDark ? '200,169,81'  : '160,120,32';
 
-  const myR  = Number(r.my_rating)  || 0;
-  const herR = Number(r.wife_rating) || 0;
-  const scores = [myR, herR].filter(x => x > 0);
-  const avg = scores.length ? scores.reduce((a,b)=>a+b,0) / scores.length : 0;
-
-  let opacity, size, avgGlow;
-  if      (avg >= 9)   { opacity = isDark ? 0.95 : 0.80; size = 6; avgGlow = `0 0 8px rgba(${rgb},0.9), 0 0 16px rgba(${rgb},0.5)`; }
-  else if (avg >= 7.5) { opacity = isDark ? 0.70 : 0.60; size = 5; avgGlow = `0 0 5px rgba(${rgb},0.65)`; }
-  else if (avg >= 6)   { opacity = isDark ? 0.45 : 0.38; size = 4; avgGlow = `0 0 3px rgba(${rgb},0.45)`; }
-  else if (avg >= 4)   { opacity = isDark ? 0.25 : 0.20; size = 3; avgGlow = ''; }
-  else if (avg > 0)    { opacity = isDark ? 0.12 : 0.10; size = 3; avgGlow = ''; }
-  else                 { opacity = isDark ? 0.08 : 0.06; size = 3; avgGlow = ''; }
-
-  return {
-    shadow: `${size}px ${size}px 0 0 rgba(${rgb},${opacity})`,
-    avgGlow
-  };
+  const opacity = isDark ? 0.70 : 0.55;
+  return { shadow: `4px 4px 0 0 rgba(${rgb},${opacity})` };
 }
 
 // ── init ───────────────────────────────────────────────────────────────────
@@ -491,7 +476,7 @@ function cardHTML(r) {
   const scores = [myR, herR].filter(x => x > 0);
   const avg = scores.length ? (scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
   const avgStr = avg > 0 ? avg.toFixed(1).replace('.0','') : '—';
-  const avgStyle = styles.avgGlow ? ` style="text-shadow:${styles.avgGlow}"` : '';
+  const avgStyle = '';
 
   const scoresBlock = (myR > 0 || herR > 0) ? `
     <div class="vcard-divider"></div>
