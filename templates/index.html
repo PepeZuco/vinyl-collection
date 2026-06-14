@@ -117,6 +117,13 @@ select option{background:var(--surface);color:var(--text)}
 .combo-seg.jenni-fill{background:#D4608A}
 .combo-seg.empty{background:var(--border)}
 
+/* card play count controls */
+.vcard-playcount{display:flex;align-items:center;gap:6px;margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
+.vcard-playcount-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;flex:1}
+.vcard-playcount-value{font-size:14px;font-weight:700;color:var(--accent);min-width:20px;text-align:center}
+.vcard-playcount-btn{width:22px;height:22px;border-radius:2px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .12s;font-family:var(--font);font-weight:600;padding:0}
+.vcard-playcount-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(245,197,24,.08)}
+
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
 .star{color:var(--accent)}
@@ -687,6 +694,15 @@ function cardHTML(r) {
     </div>`;
   })() : '';
 
+  const playCount = Number(r.play_count) || 0;
+  const playcountBlock = authed ? `
+    <div class="vcard-playcount">
+      <span class="vcard-playcount-label">plays</span>
+      <button class="vcard-playcount-btn" onclick="changePlayCount(${r.id}, -1); event.stopPropagation()">−</button>
+      <span class="vcard-playcount-value">${playCount}</span>
+      <button class="vcard-playcount-btn" onclick="changePlayCount(${r.id}, 1); event.stopPropagation()">+</button>
+    </div>` : '';
+
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
       ${cover}
@@ -699,6 +715,7 @@ function cardHTML(r) {
         ${total > 0 ? `<span class="vcard-avg"${totalStyle}>${totalStr}<span>/10</span></span>` : ''}
       </div>
       ${scoresBlock}
+      ${playcountBlock}
     </div>
   </div>`;
 }
@@ -803,9 +820,6 @@ async function changePlayCount(id, delta) {
   
   const newCount = Math.max(0, Number(r.play_count || 0) + delta);
   r.play_count = newCount;
-  
-  // Update display
-  document.getElementById('playcountDisplay').textContent = newCount;
   
   // Save to backend
   const res = await fetch(`/api/records/${id}`, {
