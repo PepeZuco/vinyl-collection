@@ -98,25 +98,24 @@ select option{background:var(--surface);color:var(--text)}
   pointer-events:none;
 }
 
-.vcard-body{padding:9px 10px 10px}
-.vcard-album{font-size:12px;font-weight:700;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px}
-
-/* top meta row: year left, avg score right */
-.vcard-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
-.vcard-year{font-size:13px;color:var(--muted)}
-.vcard-avg{font-size:17px;font-weight:700;color:var(--accent);letter-spacing:-.02em;line-height:1}
+.vcard-body{padding:8px 10px 10px}
+/* row 1: album name + year inline */
+.vcard-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:8px}
+.vcard-album{font-size:12px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+.vcard-year{font-size:11px;color:var(--muted);flex-shrink:0;white-space:nowrap}
+/* row 2: play editor + rating */
+.vcard-bottom-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:7px}
+.vcard-avg{font-size:17px;font-weight:700;color:var(--accent);letter-spacing:-.02em;line-height:1;flex-shrink:0}
 .vcard-avg span{font-size:11px;font-weight:400;color:var(--muted);margin-left:1px}
-
-/* divider */
-.vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
-
-/* play count row (edit mode) */
-.play-count-row{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
-.play-count-inline{flex:1;text-align:center;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:4px;}
-.play-count-static{font-size:11px;color:var(--muted);margin-bottom:7px;display:flex;align-items:center;gap:4px;}
-.play-btn{width:24px;height:24px;border:none;border-radius:3px;background:var(--border);color:var(--text);cursor:pointer;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s, color .12s;font-family:var(--font);flex-shrink:0;}
+/* play count (edit mode) */
+.play-count-row{display:flex;align-items:center;gap:5px;}
+.play-count-inline{font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:3px;min-width:32px;text-align:center;}
+.play-count-static{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:3px;}
+.play-btn{width:22px;height:22px;border:none;border-radius:3px;background:var(--border);color:var(--text);cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s,color .12s;font-family:var(--font);flex-shrink:0;}
 .play-btn:hover{background:var(--danger);color:#fff}
 .play-btn:active{opacity:.7}
+/* divider */
+.vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
 
 /* combo meter */
 .combo-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:4px;gap:0}
@@ -660,17 +659,19 @@ function cardHTML(r) {
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
     </div>
     <div class="vcard-body">
-      <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
-      <div class="vcard-meta">
+      <div class="vcard-title-row">
+        <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
         <span class="vcard-year">${esc(r.year)||'—'}</span>
+      </div>
+      <div class="vcard-bottom-row" onclick="event.stopPropagation()">
+        ${authed ? `
+        <div class="play-count-row">
+          <button class="play-btn" onclick="adjustPlayCount(${r.id}, -1)">−</button>
+          <span class="play-count-inline"><i class="ti ti-headphones" style="font-size:9px;opacity:.45"></i><span id="playCount${r.id}">${r.play_count || 0}</span></span>
+          <button class="play-btn" onclick="adjustPlayCount(${r.id}, +1)">+</button>
+        </div>` : `<div class="play-count-static"><i class="ti ti-headphones" style="font-size:9px;opacity:.45"></i>${r.play_count || 0}</div>`}
         ${total > 0 ? `<span class="vcard-avg"${totalStyle}>${totalStr}<span>/10</span></span>` : ''}
       </div>
-      ${authed ? `
-      <div class="play-count-row" onclick="event.stopPropagation()">
-        <button class="play-btn" onclick="adjustPlayCount(${r.id}, -1)">−</button>
-        <span class="play-count-inline"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i> <span id="playCount${r.id}">${r.play_count || 0}</span></span>
-        <button class="play-btn" onclick="adjustPlayCount(${r.id}, +1)">+</button>
-      </div>` : (r.play_count > 0 ? `<div class="play-count-static"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i> ${r.play_count}</div>` : '')}
       ${scoresBlock}
     </div>
   </div>`;
