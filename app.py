@@ -1,5 +1,4 @@
 import os, io, base64, csv, json
-csv.field_size_limit(10 * 1024 * 1024)
 from flask import Flask, request, jsonify, send_file, session, render_template
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
@@ -31,6 +30,7 @@ class Record(db.Model):
     play_count  = db.Column(db.Integer, default=0)
     last_cleaned= db.Column(db.String(50))
     cover_data  = db.Column(db.Text)      # base64 data URI
+    notes       = db.Column(db.Text)      # markdown notes
 
     def to_dict(self):
         return {
@@ -48,6 +48,7 @@ class Record(db.Model):
             "play_count": self.play_count or 0,
             "last_cleaned": self.last_cleaned or "",
             "cover_data": self.cover_data or "",
+            "notes": self.notes or "",
         }
 
 with app.app_context():
@@ -116,6 +117,7 @@ def create_record():
         play_count  = int(d.get("play_count") or 0),
         last_cleaned= d.get("last_cleaned",""),
         cover_data  = d.get("cover_data",""),
+        notes       = d.get("notes",""),
     )
     db.session.add(r)
     db.session.commit()
@@ -134,6 +136,7 @@ def update_record(rid):
     if "have_it"     in d: r.have_it      = bool(d["have_it"])
     if "play_count"  in d: r.play_count   = int(d["play_count"] or 0)
     if "cover_data"  in d: r.cover_data   = d["cover_data"]
+    if "notes"       in d: r.notes        = d["notes"]
     db.session.commit()
     return jsonify(r.to_dict())
 
@@ -151,7 +154,7 @@ def delete_record(rid):
 def export_csv():
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","my_rating","wife_rating","have_it","play_count","last_cleaned","cover_image_base64"]
+            "bought_by","my_rating","wife_rating","have_it","play_count","last_cleaned","cover_image_base64","notes"]
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -198,6 +201,7 @@ def import_csv():
                 play_count  = int(row.get("play_count") or 0),
                 last_cleaned= row.get("last_cleaned",""),
                 cover_data  = cover,
+                notes       = row.get("notes",""),
             )
             db.session.add(r)
             count += 1
