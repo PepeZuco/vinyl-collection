@@ -110,6 +110,59 @@ select option{background:var(--surface);color:var(--text)}
 /* divider */
 .vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
 
+/* play count editor */
+.play-count-editor{
+  display:none;
+  position:absolute;
+  bottom:10px;right:10px;
+  background:rgba(0,0,0,0.85);
+  border:2px solid #c0392b;
+  border-radius:4px;
+  padding:6px 8px;
+  z-index:10;
+  flex-direction:column;
+  gap:4px;
+}
+.play-count-editor.visible{display:flex}
+.play-count-label{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+  color:#999;
+  font-weight:600;
+  text-align:center;
+  margin-bottom:2px;
+}
+.play-count-display{
+  font-size:20px;
+  font-weight:700;
+  color:#F5C518;
+  text-align:center;
+  min-width:50px;
+}
+.play-count-controls{
+  display:flex;
+  gap:4px;
+}
+.play-btn{
+  width:28px;
+  height:28px;
+  border:none;
+  background:#c0392b;
+  color:#fff;
+  border-radius:3px;
+  cursor:pointer;
+  font-size:16px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:background .12s;
+  font-family:var(--font);
+}
+.play-btn:hover{background:#e74c3c}
+.play-btn:active{background:#a93226}
+
 /* combo meter */
 .combo-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:4px;gap:0}
 .combo-seg{height:100%}
@@ -221,6 +274,21 @@ select option{background:var(--surface);color:var(--text)}
 .bar-val{font-size:11px;color:var(--muted);min-width:32px;text-align:right}
 @media(max-width:700px){.charts-row{grid-template-columns:1fr}}
 
+/* genre multi-select dropdown */
+.genre-dropdown{position:relative;flex-shrink:0}
+.genre-trigger{height:34px;padding:0 12px;display:flex;align-items:center;gap:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-family:var(--font);white-space:nowrap;min-width:130px;justify-content:space-between}
+.genre-trigger:hover{border-color:#444}
+.genre-panel{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-width:200px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden}
+.genre-panel.hidden{display:none}
+.genre-toggle-all{padding:8px 12px;font-size:12px;color:var(--accent);cursor:pointer;border-bottom:1px solid var(--border);font-weight:600}
+.genre-toggle-all:hover{background:var(--card)}
+.genre-list{max-height:240px;overflow-y:auto}
+.genre-item{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;transition:background .1s}
+.genre-item:hover{background:var(--card)}
+.genre-check{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .1s}
+.genre-item.selected .genre-check{background:var(--accent);border-color:var(--accent)}
+.genre-item.selected .genre-check::after{content:'✓';font-size:9px;color:#000;font-weight:700}
+
 /* buyer toggle */
 .buyer-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;height:34px;flex-shrink:0}
 .buyer-btn{padding:0 14px;font-size:13px;cursor:pointer;background:transparent;color:var(--muted);border:none;border-right:1px solid var(--border);font-family:var(--font);transition:all .12s;white-space:nowrap}
@@ -320,7 +388,18 @@ select option{background:var(--surface);color:var(--text)}
       <option value="wife_rating">sort: Jenni rating ↓</option>
       <option value="play_count">sort: plays ↓</option>
     </select>
-    <select id="genreFilter"><option value="">all genres</option></select>
+    <div class="genre-dropdown" id="genreDropdown">
+      <button class="genre-trigger" id="genreTrigger" onclick="toggleGenreDropdown()">
+        <span id="genreLabel">all genres</span>
+        <i class="ti ti-chevron-down" id="genreChevron" style="font-size:12px;transition:transform .15s"></i>
+      </button>
+      <div class="genre-panel hidden" id="genrePanel">
+        <div class="genre-toggle-all" onclick="toggleAllGenres()">
+          <span id="toggleAllLabel">deselect all</span>
+        </div>
+        <div class="genre-list" id="genreList"></div>
+      </div>
+    </div>
     <div class="buyer-toggle" id="buyerToggle">
       <button class="buyer-btn active" id="btnPepe"  onclick="toggleBuyer('pepe')">Pepe</button>
       <button class="buyer-btn active" id="btnBoth"  onclick="toggleBuyer('both')">Both</button>
@@ -504,6 +583,8 @@ function setAuthed(val) {
     : '<i class="ti ti-login"></i><span>edit mode</span>';
   document.getElementById('addBtn').style.display = val ? '' : 'none';
   document.getElementById('importLabel').style.display = val ? '' : 'none';
+  // Re-render cards to show/hide play count editors
+  render();
 }
 
 async function loadRecords() {
@@ -523,14 +604,14 @@ function avgRating(r) {
 // ── filtering & sorting ────────────────────────────────────────────────────
 function filtered() {
   const q  = document.getElementById('searchInput').value.toLowerCase();
-  const g  = document.getElementById('genreFilter').value;
+  const g  = document.getElementById('genreLabel'); // just a ref, actual filter uses selectedGenres
   const b  = { pepe: buyerActive.pepe, jenni: buyerActive.jenni, both: buyerActive.both };
   const h  = document.getElementById('haveItFilter').value;
   const s  = document.getElementById('sortSel').value;
 
   return records.filter(r => {
     if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.notes||''}`.toLowerCase().includes(q)) return false;
-    if (g && r.genre !== g) return false;
+    if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
     // buyer toggle — each owner independently, 'other' always visible
     const o = ownerOf(r);
     if (o === 'pepe'  && !b.pepe)  return false;
@@ -618,10 +699,18 @@ function cardHTML(r) {
     </div>`;
   })() : '';
 
-  return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
+  return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow};position:relative">
     <div class="vcard-cover">
       ${cover}
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
+      ${authed ? `<div class="play-count-editor${r.id}" id="playEditor${r.id}">
+        <div class="play-count-label">plays</div>
+        <div class="play-count-display" id="playCount${r.id}">${r.play_count || 0}</div>
+        <div class="play-count-controls">
+          <button class="play-btn" onclick="adjustPlayCount(${r.id}, -1); event.stopPropagation();">−</button>
+          <button class="play-btn" onclick="adjustPlayCount(${r.id}, +1); event.stopPropagation();">+</button>
+        </div>
+      </div>` : ''}
     </div>
     <div class="vcard-body">
       <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
@@ -636,8 +725,16 @@ function cardHTML(r) {
 
 function renderFilters() {
   const genres = [...new Set(records.map(r=>r.genre).filter(Boolean))].sort();
-  const gf=document.getElementById('genreFilter'), curG=gf.value;
-  gf.innerHTML='<option value="">all genres</option>'+genres.map(g=>`<option${g===curG?' selected':''}>${esc(g)}</option>`).join('');
+  // init selectedGenres with all genres if not set yet
+  if (selectedGenres === null) {
+    selectedGenres = new Set(genres);
+    allGenres = genres;
+  } else {
+    // add any new genres
+    genres.forEach(g => { if (!allGenres.includes(g)) { allGenres.push(g); selectedGenres.add(g); } });
+    allGenres = genres;
+  }
+  buildGenreList();
 }
 
 function detailDotsHTML(n, max=5) {
@@ -864,7 +961,6 @@ function bindEvents(){
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
   document.getElementById('searchInput').addEventListener('input',render);
-  document.getElementById('genreFilter').addEventListener('change',render);
   document.getElementById('haveItFilter').addEventListener('change',render);
   document.getElementById('sortSel').addEventListener('change',render);
   document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
@@ -881,7 +977,41 @@ function toast(msg){
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-// ── buyer toggle state ─────────────────────────────────────────────────────
+// ── play count editor ──────────────────────────────────────────────────────
+async function adjustPlayCount(id, delta) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  
+  const newCount = Math.max(0, (record.play_count || 0) + delta);
+  
+  // Update local state
+  record.play_count = newCount;
+  
+  // Update UI immediately
+  const countEl = document.getElementById(`playCount${id}`);
+  if (countEl) countEl.textContent = newCount;
+  
+  // Save to database
+  try {
+    const res = await fetch(`/api/records/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ play_count: newCount })
+    });
+    if (!res.ok) {
+      // Revert on error
+      record.play_count = (record.play_count || 0) - delta;
+      if (countEl) countEl.textContent = record.play_count;
+      toast('failed to update play count');
+    }
+  } catch (err) {
+    record.play_count = (record.play_count || 0) - delta;
+    if (countEl) countEl.textContent = record.play_count;
+    toast('error updating play count');
+  }
+}
+
+
 const buyerActive = { pepe: true, jenni: true, both: true };
 
 function toggleBuyer(who) {
@@ -893,6 +1023,70 @@ function toggleBuyer(who) {
   document.getElementById(id).classList.toggle('active', buyerActive[who]);
   render();
 }
+
+// ── genre multi-select ─────────────────────────────────────────────────────
+let selectedGenres = null; // null = not init yet (all selected)
+let allGenres = [];
+
+function buildGenreList() {
+  const list = document.getElementById('genreList');
+  list.innerHTML = allGenres.map(g => `
+    <div class="genre-item${selectedGenres.has(g)?' selected':''}" onclick="toggleGenre(${JSON.stringify(g)})">
+      <div class="genre-check"></div>
+      <span>${esc(g)}</span>
+    </div>`).join('');
+  updateGenreLabel();
+}
+
+function toggleGenre(g) {
+  if (selectedGenres.has(g)) {
+    if (selectedGenres.size === 1) return; // keep at least one
+    selectedGenres.delete(g);
+  } else {
+    selectedGenres.add(g);
+  }
+  buildGenreList();
+  render();
+}
+
+function toggleAllGenres() {
+  if (selectedGenres.size === allGenres.length) {
+    // deselect all → keep just first to avoid empty
+    selectedGenres = new Set([allGenres[0]]);
+  } else {
+    selectedGenres = new Set(allGenres);
+  }
+  buildGenreList();
+  render();
+}
+
+function updateGenreLabel() {
+  const label = document.getElementById('genreLabel');
+  const toggleAll = document.getElementById('toggleAllLabel');
+  const allSelected = selectedGenres.size === allGenres.length;
+  label.textContent = allSelected ? 'all genres' : selectedGenres.size === 1
+    ? [...selectedGenres][0]
+    : `${selectedGenres.size} genres`;
+  toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
+}
+
+function toggleGenreDropdown() {
+  const panel = document.getElementById('genrePanel');
+  const chevron = document.getElementById('genreChevron');
+  const open = !panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', open);
+  chevron.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+// close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const dd = document.getElementById('genreDropdown');
+  if (dd && !dd.contains(e.target)) {
+    document.getElementById('genrePanel')?.classList.add('hidden');
+    const ch = document.getElementById('genreChevron');
+    if (ch) ch.style.transform = '';
+  }
+});
 
 // ── tab switching ──────────────────────────────────────────────────────────
 let currentTab = 'collection';
