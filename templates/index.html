@@ -111,13 +111,11 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
 
 /* combo meter */
-.combo-bar{display:flex;gap:2px;margin-bottom:4px;height:5px}
-.combo-seg{height:100%;border-radius:2px}
+.combo-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:4px;gap:0}
+.combo-seg{height:100%}
 .combo-seg.pepe-fill{background:#F5C518}
 .combo-seg.jenni-fill{background:#D4608A}
 .combo-seg.empty{background:var(--border)}
-.combo-labels{display:flex;justify-content:space-between}
-.combo-lbl{font-size:10px}
 
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
@@ -580,10 +578,6 @@ function cardHTML(r) {
       ${pepeFill  > 0 ? `<div class="combo-seg pepe-fill"  style="flex:${pepeFill}"></div>`  : ''}
       ${jenniFill > 0 ? `<div class="combo-seg jenni-fill" style="flex:${jenniFill}"></div>` : ''}
       ${(pepeFill + jenniFill) < MAX * 2 ? `<div class="combo-seg empty" style="flex:${MAX*2 - pepeFill - jenniFill}"></div>` : ''}
-    </div>
-    <div class="combo-labels">
-      <span class="combo-lbl" style="color:#F5C518">${pepeStr}</span>
-      <span class="combo-lbl" style="color:#D4608A">${jenniStr}</span>
     </div>`;
   })() : '';
 
