@@ -221,7 +221,13 @@ select option{background:var(--surface);color:var(--text)}
 .bar-val{font-size:11px;color:var(--muted);min-width:32px;text-align:right}
 @media(max-width:700px){.charts-row{grid-template-columns:1fr}}
 
-/* notes markdown editor */
+/* buyer toggle */
+.buyer-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;height:34px;flex-shrink:0}
+.buyer-btn{padding:0 14px;font-size:13px;cursor:pointer;background:transparent;color:var(--muted);border:none;border-right:1px solid var(--border);font-family:var(--font);transition:all .12s;white-space:nowrap}
+.buyer-btn:last-child{border-right:none}
+.buyer-btn#btnPepe.active{background:rgba(245,197,24,.15);color:#F5C518}
+.buyer-btn#btnJenni.active{background:rgba(212,96,138,.15);color:#D4608A}
+.buyer-btn:not(.active){opacity:.45}
 .notes-editor{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .notes-editor textarea{resize:vertical;min-height:120px;font-family:var(--font-mono);font-size:12px;line-height:1.5}
 .notes-preview{border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;line-height:1.6;overflow-y:auto;min-height:120px;background:var(--card);color:var(--text)}
@@ -314,7 +320,10 @@ select option{background:var(--surface);color:var(--text)}
       <option value="play_count">sort: plays ↓</option>
     </select>
     <select id="genreFilter"><option value="">all genres</option></select>
-    <select id="buyerFilter"><option value="">all buyers</option></select>
+    <div class="buyer-toggle" id="buyerToggle">
+      <button class="buyer-btn active" id="btnPepe" data-buyer="pepe" onclick="toggleBuyer('pepe')">Pepe</button>
+      <button class="buyer-btn active" id="btnJenni" data-buyer="jenni" onclick="toggleBuyer('jenni')">Jenni</button>
+    </div>
     <select id="haveItFilter">
       <option value="1">in collection</option>
       <option value="0">wishlist</option>
@@ -513,14 +522,22 @@ function avgRating(r) {
 function filtered() {
   const q  = document.getElementById('searchInput').value.toLowerCase();
   const g  = document.getElementById('genreFilter').value;
-  const b  = document.getElementById('buyerFilter').value;
+  const b  = { pepe: buyerActive.pepe, jenni: buyerActive.jenni };
   const h  = document.getElementById('haveItFilter').value;
   const s  = document.getElementById('sortSel').value;
 
   return records.filter(r => {
-    if (q && !`${r.artist} ${r.album_name} ${r.genre}`.toLowerCase().includes(q)) return false;
+    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.notes||''}`.toLowerCase().includes(q)) return false;
     if (g && r.genre !== g) return false;
-    if (b && r.bought_by !== b) return false;
+    // buyer toggle — show record if any of its owners are active
+    if (!b.pepe || !b.jenni) {
+      const o = ownerOf(r);
+      if (o === 'pepe'  && !b.pepe)  return false;
+      if (o === 'jenni' && !b.jenni) return false;
+      if (o === 'both'  && !b.pepe && !b.jenni) return false;
+      if (o === 'both'  && b.pepe && !b.jenni) { /* show — pepe is active */ }
+      if (o === 'both'  && !b.pepe && b.jenni) { /* show — jenni is active */ }
+    }
     if (h === '1' && !r.have_it) return false;
     if (h === '0' &&  r.have_it) return false;
     return true;
@@ -621,12 +638,8 @@ function cardHTML(r) {
 
 function renderFilters() {
   const genres = [...new Set(records.map(r=>r.genre).filter(Boolean))].sort();
-  const buyers = [...new Set(records.map(r=>r.bought_by).filter(Boolean))].sort();
   const gf=document.getElementById('genreFilter'), curG=gf.value;
   gf.innerHTML='<option value="">all genres</option>'+genres.map(g=>`<option${g===curG?' selected':''}>${esc(g)}</option>`).join('');
-  const bf=document.getElementById('buyerFilter'), curB=bf.value;
-  bf.innerHTML='<option value="">all buyers</option>'+buyers.map(b=>`<option${b===curB?' selected':''}>${esc(b)}</option>`).join('');
-  bf.style.display = buyers.length > 1 ? '' : 'none';
 }
 
 function detailDotsHTML(n, max=5) {
@@ -854,7 +867,6 @@ function bindEvents(){
   document.getElementById('addBtn').addEventListener('click',openAdd);
   document.getElementById('searchInput').addEventListener('input',render);
   document.getElementById('genreFilter').addEventListener('change',render);
-  document.getElementById('buyerFilter').addEventListener('change',render);
   document.getElementById('haveItFilter').addEventListener('change',render);
   document.getElementById('sortSel').addEventListener('change',render);
   document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
@@ -870,6 +882,19 @@ function toast(msg){
   toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── buyer toggle state ─────────────────────────────────────────────────────
+const buyerActive = { pepe: true, jenni: true };
+
+function toggleBuyer(who) {
+  // don't allow both deselected
+  const other = who === 'pepe' ? 'jenni' : 'pepe';
+  if (buyerActive[who] && !buyerActive[other]) return; // keep at least one
+  buyerActive[who] = !buyerActive[who];
+  document.getElementById('btn' + who.charAt(0).toUpperCase() + who.slice(1))
+    .classList.toggle('active', buyerActive[who]);
+  render();
+}
 
 // ── tab switching ──────────────────────────────────────────────────────────
 let currentTab = 'collection';
