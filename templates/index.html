@@ -221,6 +221,20 @@ select option{background:var(--surface);color:var(--text)}
 .bar-val{font-size:11px;color:var(--muted);min-width:32px;text-align:right}
 @media(max-width:700px){.charts-row{grid-template-columns:1fr}}
 
+/* notes markdown editor */
+.notes-editor{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.notes-editor textarea{resize:vertical;min-height:120px;font-family:var(--font-mono);font-size:12px;line-height:1.5}
+.notes-preview{border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;line-height:1.6;overflow-y:auto;min-height:120px;background:var(--card);color:var(--text)}
+.notes-preview p,.detail-notes-body p{margin-bottom:6px}
+.notes-preview h1,.notes-preview h2,.notes-preview h3,
+.detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
+.notes-preview ul,.notes-preview ol,.detail-notes-body ul,.detail-notes-body ol{padding-left:16px;margin-bottom:6px}
+.notes-preview code,.detail-notes-body code{background:var(--border);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);font-size:11px}
+.notes-preview blockquote,.detail-notes-body blockquote{border-left:2px solid var(--accent);padding-left:8px;color:var(--muted);margin:4px 0}
+.detail-notes{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.detail-notes-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;font-weight:600}
+.detail-notes-body{font-size:13px;line-height:1.7}
+
 </style>
 </head>
 <body>
@@ -369,6 +383,13 @@ select option{background:var(--surface);color:var(--text)}
         <input type="checkbox" id="fHaveIt" checked>
         <label for="fHaveIt">in my collection (uncheck = wishlist)</label>
       </div>
+      <div class="form-group" style="margin-top:14px">
+        <label>Notes <span style="font-weight:400;opacity:.5">(markdown)</span></label>
+        <div class="notes-editor">
+          <textarea id="fNotes" placeholder="Add notes, memories, thoughts…" oninput="updateNotesPreview()"></textarea>
+          <div class="notes-preview" id="fNotesPreview"><span style="color:var(--muted);font-size:12px">preview…</span></div>
+        </div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeForm()">cancel</button>
@@ -403,6 +424,7 @@ select option{background:var(--surface);color:var(--text)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 let records = [];
 let authed = false;
@@ -646,7 +668,8 @@ function openDetail(id) {
     ${detailTotal > 0 ? `<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Total <strong style="color:var(--accent)">${detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)}</strong><span style="font-size:11px">/10</span></div>` : ''}
     <div class="detail-grid">
       ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
-    </div>`;
+    </div>
+    ${r.notes ? `<div class="detail-notes"><div class="detail-notes-label">Notes</div><div class="detail-notes-body">${marked.parse(r.notes)}</div></div>` : ''}`;
   renderDetailFoot(r.id);
   document.getElementById('detailOverlay').classList.remove('hidden');
 }
@@ -703,6 +726,12 @@ function populateGenreSelect(current='') {
     + genres.map(g=>`<option${g===current?' selected':''}>${esc(g)}</option>`).join('');
 }
 
+function updateNotesPreview(){
+  const val = document.getElementById('fNotes').value;
+  const el = document.getElementById('fNotesPreview');
+  el.innerHTML = val ? marked.parse(val) : '<span style="color:var(--muted);font-size:12px">preview…</span>';
+}
+
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';
   document.getElementById('formTitle').textContent='add record';
@@ -710,6 +739,8 @@ function openAdd(){
   document.getElementById('fDate').value='';
   document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
+  document.getElementById('fNotes').value='';
+  updateNotesPreview();
   populateGenreSelect();
   document.getElementById('coverPreview').style.display='none';
   document.getElementById('coverDropInner').style.display='';
@@ -733,6 +764,8 @@ function openEdit(id){
   document.getElementById('fPlays').value=r.play_count||0;
   document.getElementById('fCleaned').value=r.last_cleaned||'';
   document.getElementById('fHaveIt').checked=!!r.have_it;
+  document.getElementById('fNotes').value=r.notes||'';
+  updateNotesPreview();
   if(coverDataUri){
     document.getElementById('coverPreview').src=coverDataUri;
     document.getElementById('coverPreview').style.display='block';
@@ -761,6 +794,7 @@ async function submitForm(){
     last_cleaned:document.getElementById('fCleaned').value,
     have_it:document.getElementById('fHaveIt').checked,
     my_rating:myRating,wife_rating:wifeRating,cover_data:coverDataUri,
+    notes:document.getElementById('fNotes').value,
   };
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
