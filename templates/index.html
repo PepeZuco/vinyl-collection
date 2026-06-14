@@ -227,6 +227,7 @@ select option{background:var(--surface);color:var(--text)}
 .buyer-btn:last-child{border-right:none}
 .buyer-btn#btnPepe.active{background:rgba(245,197,24,.15);color:#F5C518}
 .buyer-btn#btnJenni.active{background:rgba(212,96,138,.15);color:#D4608A}
+.buyer-btn#btnBoth.active{background:rgba(155,127,212,.15);color:#9B7FD4}
 .buyer-btn:not(.active){opacity:.45}
 .notes-editor{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .notes-editor textarea{resize:vertical;min-height:120px;font-family:var(--font-mono);font-size:12px;line-height:1.5}
@@ -323,6 +324,7 @@ select option{background:var(--surface);color:var(--text)}
     <div class="buyer-toggle" id="buyerToggle">
       <button class="buyer-btn active" id="btnPepe" data-buyer="pepe" onclick="toggleBuyer('pepe')">Pepe</button>
       <button class="buyer-btn active" id="btnJenni" data-buyer="jenni" onclick="toggleBuyer('jenni')">Jenni</button>
+      <button class="buyer-btn active" id="btnBoth" data-buyer="both" onclick="toggleBuyer('both')">Both</button>
     </div>
     <select id="haveItFilter">
       <option value="1">in collection</option>
@@ -529,15 +531,12 @@ function filtered() {
   return records.filter(r => {
     if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.notes||''}`.toLowerCase().includes(q)) return false;
     if (g && r.genre !== g) return false;
-    // buyer toggle — show record if any of its owners are active
-    if (!b.pepe || !b.jenni) {
-      const o = ownerOf(r);
-      if (o === 'pepe'  && !b.pepe)  return false;
-      if (o === 'jenni' && !b.jenni) return false;
-      if (o === 'both'  && !b.pepe && !b.jenni) return false;
-      if (o === 'both'  && b.pepe && !b.jenni) { /* show — pepe is active */ }
-      if (o === 'both'  && !b.pepe && b.jenni) { /* show — jenni is active */ }
-    }
+    // buyer toggle — each owner independently
+    const o = ownerOf(r);
+    if (o === 'pepe'  && !b.pepe)  return false;
+    if (o === 'jenni' && !b.jenni) return false;
+    if (o === 'both'  && !b.both)  return false;
+    if (o === 'other' && !b.pepe && !b.jenni && !b.both) return false;
     if (h === '1' && !r.have_it) return false;
     if (h === '0' &&  r.have_it) return false;
     return true;
@@ -884,15 +883,15 @@ function toast(msg){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 // ── buyer toggle state ─────────────────────────────────────────────────────
-const buyerActive = { pepe: true, jenni: true };
+const buyerActive = { pepe: true, jenni: true, both: true };
 
 function toggleBuyer(who) {
-  // don't allow both deselected
-  const other = who === 'pepe' ? 'jenni' : 'pepe';
-  if (buyerActive[who] && !buyerActive[other]) return; // keep at least one
+  const others = Object.keys(buyerActive).filter(k => k !== who);
+  // don't allow all deselected
+  if (buyerActive[who] && others.every(k => !buyerActive[k])) return;
   buyerActive[who] = !buyerActive[who];
-  document.getElementById('btn' + who.charAt(0).toUpperCase() + who.slice(1))
-    .classList.toggle('active', buyerActive[who]);
+  const id = 'btn' + who.charAt(0).toUpperCase() + who.slice(1);
+  document.getElementById(id).classList.toggle('active', buyerActive[who]);
   render();
 }
 
