@@ -110,58 +110,13 @@ select option{background:var(--surface);color:var(--text)}
 /* divider */
 .vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
 
-/* play count editor */
-.play-count-editor{
-  display:none;
-  position:absolute;
-  bottom:10px;right:10px;
-  background:rgba(0,0,0,0.85);
-  border:2px solid #c0392b;
-  border-radius:4px;
-  padding:6px 8px;
-  z-index:10;
-  flex-direction:column;
-  gap:4px;
-}
-.play-count-editor.visible{display:flex}
-.play-count-label{
-  font-size:10px;
-  text-transform:uppercase;
-  letter-spacing:.07em;
-  color:#999;
-  font-weight:600;
-  text-align:center;
-  margin-bottom:2px;
-}
-.play-count-display{
-  font-size:20px;
-  font-weight:700;
-  color:#F5C518;
-  text-align:center;
-  min-width:50px;
-}
-.play-count-controls{
-  display:flex;
-  gap:4px;
-}
-.play-btn{
-  width:28px;
-  height:28px;
-  border:none;
-  background:#c0392b;
-  color:#fff;
-  border-radius:3px;
-  cursor:pointer;
-  font-size:16px;
-  font-weight:700;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  transition:background .12s;
-  font-family:var(--font);
-}
-.play-btn:hover{background:#e74c3c}
-.play-btn:active{background:#a93226}
+/* play count row (edit mode) */
+.play-count-row{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
+.play-count-inline{flex:1;text-align:center;font-size:12px;font-weight:700;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:4px;}
+.play-count-static{font-size:11px;color:var(--muted);margin-bottom:7px;display:flex;align-items:center;gap:4px;}
+.play-btn{width:24px;height:24px;border:none;border-radius:3px;background:var(--border);color:var(--text);cursor:pointer;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s, color .12s;font-family:var(--font);flex-shrink:0;}
+.play-btn:hover{background:var(--danger);color:#fff}
+.play-btn:active{opacity:.7}
 
 /* combo meter */
 .combo-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:4px;gap:0}
@@ -699,18 +654,10 @@ function cardHTML(r) {
     </div>`;
   })() : '';
 
-  return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow};position:relative">
+  return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
       ${cover}
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
-      ${authed ? `<div class="play-count-editor${r.id}" id="playEditor${r.id}">
-        <div class="play-count-label">plays</div>
-        <div class="play-count-display" id="playCount${r.id}">${r.play_count || 0}</div>
-        <div class="play-count-controls">
-          <button class="play-btn" onclick="adjustPlayCount(${r.id}, -1); event.stopPropagation();">−</button>
-          <button class="play-btn" onclick="adjustPlayCount(${r.id}, +1); event.stopPropagation();">+</button>
-        </div>
-      </div>` : ''}
     </div>
     <div class="vcard-body">
       <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
@@ -718,6 +665,12 @@ function cardHTML(r) {
         <span class="vcard-year">${esc(r.year)||'—'}</span>
         ${total > 0 ? `<span class="vcard-avg"${totalStyle}>${totalStr}<span>/10</span></span>` : ''}
       </div>
+      ${authed ? `
+      <div class="play-count-row" onclick="event.stopPropagation()">
+        <button class="play-btn" onclick="adjustPlayCount(${r.id}, -1)">−</button>
+        <span class="play-count-inline"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i> <span id="playCount${r.id}">${r.play_count || 0}</span></span>
+        <button class="play-btn" onclick="adjustPlayCount(${r.id}, +1)">+</button>
+      </div>` : (r.play_count > 0 ? `<div class="play-count-static"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i> ${r.play_count}</div>` : '')}
       ${scoresBlock}
     </div>
   </div>`;
