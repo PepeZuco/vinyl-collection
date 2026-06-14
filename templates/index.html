@@ -322,9 +322,9 @@ select option{background:var(--surface);color:var(--text)}
     </select>
     <select id="genreFilter"><option value="">all genres</option></select>
     <div class="buyer-toggle" id="buyerToggle">
-      <button class="buyer-btn active" id="btnPepe" data-buyer="pepe" onclick="toggleBuyer('pepe')">Pepe</button>
-      <button class="buyer-btn active" id="btnJenni" data-buyer="jenni" onclick="toggleBuyer('jenni')">Jenni</button>
-      <button class="buyer-btn active" id="btnBoth" data-buyer="both" onclick="toggleBuyer('both')">Both</button>
+      <button class="buyer-btn active" id="btnPepe"  onclick="toggleBuyer('pepe')">Pepe</button>
+      <button class="buyer-btn active" id="btnBoth"  onclick="toggleBuyer('both')">Both</button>
+      <button class="buyer-btn active" id="btnJenni" onclick="toggleBuyer('jenni')">Jenni</button>
     </div>
     <select id="haveItFilter">
       <option value="1">in collection</option>
@@ -531,12 +531,11 @@ function filtered() {
   return records.filter(r => {
     if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.notes||''}`.toLowerCase().includes(q)) return false;
     if (g && r.genre !== g) return false;
-    // buyer toggle — each owner independently
+    // buyer toggle — each owner independently, 'other' always visible
     const o = ownerOf(r);
     if (o === 'pepe'  && !b.pepe)  return false;
     if (o === 'jenni' && !b.jenni) return false;
     if (o === 'both'  && !b.both)  return false;
-    if (o === 'other' && !b.pepe && !b.jenni && !b.both) return false;
     if (h === '1' && !r.have_it) return false;
     if (h === '0' &&  r.have_it) return false;
     return true;
@@ -912,11 +911,11 @@ function switchTab(tab) {
 function ownerOf(r) {
   const b = (r.bought_by || '').toLowerCase();
   const p = b.includes('pepe');
-  const j = b.includes('jenni') || b.includes('jenifer') || b.includes('jennifer');
+  const j = b.includes('jenni') || b.includes('jenifer') || b.includes('jennifer') || b.includes('jenni');
   if (p && j) return 'both';
   if (p) return 'pepe';
   if (j) return 'jenni';
-  return 'other';
+  return 'other'; // no known buyer — always shown
 }
 
 function destroyChart(id) {
