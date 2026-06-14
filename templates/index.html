@@ -564,7 +564,7 @@ function filtered() {
   const s  = document.getElementById('sortSel').value;
 
   return records.filter(r => {
-    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.notes||''}`.toLowerCase().includes(q)) return false;
+    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.bought_where||''} ${r.notes||''}`.toLowerCase().includes(q)) return false;
     if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
     // buyer toggle — each owner independently, 'other' always visible
     const o = ownerOf(r);
