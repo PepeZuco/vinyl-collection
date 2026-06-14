@@ -243,13 +243,14 @@ select option{background:var(--surface);color:var(--text)}
 }
 @keyframes slideDown{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .genre-panel.hidden{display:none}
-.genre-toggle-all{
-  padding:10px 14px;font-size:12px;color:var(--accent);cursor:pointer;
-  border-bottom:1px solid var(--border);font-weight:600;
+.genre-select-all{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--border);cursor:pointer;
   background:rgba(245,197,24,.02);transition:background .1s;
-  text-transform:uppercase;letter-spacing:.05em;
+  font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);
 }
-.genre-toggle-all:hover{background:rgba(245,197,24,.08)}
+.genre-select-all:hover{background:rgba(245,197,24,.08)}
+.genre-check-all{border-color:var(--accent)!important}
 .genre-list{max-height:280px;overflow-y:auto}
 .genre-list::-webkit-scrollbar{width:6px}
 .genre-list::-webkit-scrollbar-track{background:transparent}
@@ -290,6 +291,13 @@ select option{background:var(--surface);color:var(--text)}
 .detail-notes{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .detail-notes-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;font-weight:600}
 .detail-notes-body{font-size:13px;line-height:1.7}
+
+/* play count control */
+.detail-playcount{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.playcount-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;display:block;margin-bottom:6px;text-align:center}
+.playcount-value{font-size:28px;font-weight:700;color:var(--accent);min-width:60px;text-align:center;line-height:1}
+.playcount-btn{width:36px;height:36px;border-radius:var(--radius-sm);border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .12s;font-family:var(--font);font-weight:600}
+.playcount-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(245,197,24,.08)}
 
 </style>
 </head>
@@ -375,8 +383,9 @@ select option{background:var(--surface);color:var(--text)}
         <i class="ti ti-chevron-down" id="genreChevron" style="font-size:12px;transition:transform .15s"></i>
       </button>
       <div class="genre-panel hidden" id="genrePanel">
-        <div class="genre-toggle-all" onclick="toggleAllGenres()">
-          <span id="toggleAllLabel">deselect all</span>
+        <div class="genre-select-all" onclick="toggleAllGenres(event)">
+          <div class="genre-check genre-check-all" id="checkAllBox"></div>
+          <span id="toggleAllLabel">select all</span>
         </div>
         <div class="genre-list" id="genreList"></div>
       </div>
@@ -724,12 +733,24 @@ function openDetail(id) {
   const fields=[
     ['Year',r.year],['Genre',r.genre],
     ['Bought date',r.bought_date],['Bought at',r.bought_where],
-    ['Bought by',r.bought_by],['Play count',r.play_count||0],
-    ['Last cleaned',r.last_cleaned||'—'],['In collection',r.have_it?'yes':'no (wishlist)'],
+    ['Bought by',r.bought_by],['Last cleaned',r.last_cleaned||'—'],
+    ['In collection',r.have_it?'yes':'no (wishlist)'],
   ];
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
   const detailTotal = myR + herR;
+  const playCount = Number(r.play_count) || 0;
+  
+  const playcountHTML = authed ? `
+    <div class="detail-playcount">
+      <button class="playcount-btn" id="playcountMinus" onclick="changePlayCount(${id}, -1)">−</button>
+      <div>
+        <div class="playcount-label">Times played</div>
+        <div class="playcount-value" id="playcountDisplay">${playCount}</div>
+      </div>
+      <button class="playcount-btn" id="playcountPlus" onclick="changePlayCount(${id}, 1)">+</button>
+    </div>` : '';
+  
   document.getElementById('detailBody').innerHTML=`
     ${coverEl}
     <div class="detail-title">${esc(r.album_name)||'untitled'}</div>
@@ -745,6 +766,7 @@ function openDetail(id) {
       </div>
     </div>
     ${detailTotal > 0 ? `<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Total <strong style="color:var(--accent)">${detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)}</strong><span style="font-size:11px">/10</span></div>` : ''}
+    ${playcountHTML}
     <div class="detail-grid">
       ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
     </div>
@@ -773,6 +795,31 @@ async function doDelete(id){
   await fetch(`/api/records/${id}`,{method:'DELETE'});
   records=records.filter(r=>r.id!==id);
   closeDetail();render();toast('record deleted');
+}
+
+async function changePlayCount(id, delta) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  
+  const newCount = Math.max(0, Number(r.play_count || 0) + delta);
+  r.play_count = newCount;
+  
+  // Update display
+  document.getElementById('playcountDisplay').textContent = newCount;
+  
+  // Save to backend
+  const res = await fetch(`/api/records/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ play_count: newCount })
+  });
+  
+  if (res.ok) {
+    const updated = await res.json();
+    const idx = records.findIndex(x => x.id === id);
+    if (idx >= 0) records[idx] = updated;
+    render();
+  }
 }
 
 // ── form modal ─────────────────────────────────────────────────────────────
@@ -986,7 +1033,8 @@ function toggleGenre(g) {
   render();
 }
 
-function toggleAllGenres() {
+function toggleAllGenres(e) {
+  if (e) e.stopPropagation();
   if (selectedGenres.size === allGenres.length) {
     // deselect all → keep just first to avoid empty
     selectedGenres = new Set([allGenres[0]]);
@@ -1000,11 +1048,19 @@ function toggleAllGenres() {
 function updateGenreLabel() {
   const label = document.getElementById('genreLabel');
   const toggleAll = document.getElementById('toggleAllLabel');
+  const checkAllBox = document.getElementById('checkAllBox');
   const allSelected = selectedGenres.size === allGenres.length;
   label.textContent = allSelected ? 'all genres' : selectedGenres.size === 1
     ? [...selectedGenres][0]
     : `${selectedGenres.size} genres`;
   toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
+  
+  // Update checkbox appearance
+  if (allSelected) {
+    checkAllBox.classList.add('on');
+  } else {
+    checkAllBox.classList.remove('on');
+  }
 }
 
 function toggleGenreDropdown() {
