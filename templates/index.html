@@ -98,26 +98,31 @@ select option{background:var(--surface);color:var(--text)}
   pointer-events:none;
 }
 
-.vcard-body{padding:9px 10px 10px}
-.vcard-album{font-size:12px;font-weight:700;line-height:1.3;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:32px}
-
-/* top meta row: year left, avg score right */
-.vcard-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
-.vcard-year{font-size:13px;color:var(--muted)}
-.vcard-avg{font-size:17px;font-weight:700;color:var(--accent);letter-spacing:-.02em;line-height:1}
+.vcard-body{padding:8px 10px 10px}
+/* row 1: album name + year inline */
+.vcard-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:8px}
+.vcard-album{font-size:12px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+.vcard-year{font-size:11px;color:var(--muted);flex-shrink:0;white-space:nowrap}
+/* row 2: play editor + rating */
+.vcard-bottom-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:7px}
+.vcard-avg{font-size:17px;font-weight:700;color:var(--accent);letter-spacing:-.02em;line-height:1;flex-shrink:0}
 .vcard-avg span{font-size:11px;font-weight:400;color:var(--muted);margin-left:1px}
-
+/* play count (edit mode) */
+.play-count-row{display:flex;align-items:center;gap:5px;}
+.play-count-inline{font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:3px;min-width:32px;text-align:center;}
+.play-count-static{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:3px;}
+.play-btn{width:22px;height:22px;border:none;border-radius:3px;background:var(--border);color:var(--text);cursor:pointer;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:background .12s,color .12s;font-family:var(--font);flex-shrink:0;}
+.play-btn:hover{background:var(--danger);color:#fff}
+.play-btn:active{opacity:.7}
 /* divider */
 .vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
 
 /* combo meter */
-.combo-bar{display:flex;height:18px;margin-bottom:4px;gap:0;align-items:center}
-.combo-bar-section{display:flex;gap:1px;flex:1}
-.combo-seg{height:16px;flex:1;border:1px solid #000;border-radius:2px}
+.combo-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:4px;gap:0}
+.combo-seg{height:100%}
 .combo-seg.pepe-fill{background:#F5C518}
 .combo-seg.jenni-fill{background:#D4608A}
-.combo-seg.empty{background:transparent;border-color:#666}
-.combo-divider{width:1px;height:16px;background:rgba(0,0,0,0.3);margin:0 2px}
+.combo-seg.empty{background:var(--border)}
 
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
@@ -532,6 +537,8 @@ function setAuthed(val) {
     : '<i class="ti ti-login"></i><span>edit mode</span>';
   document.getElementById('addBtn').style.display = val ? '' : 'none';
   document.getElementById('importLabel').style.display = val ? '' : 'none';
+  // Re-render cards to show/hide play count editors
+  render();
 }
 
 async function loadRecords() {
@@ -557,7 +564,7 @@ function filtered() {
   const s  = document.getElementById('sortSel').value;
 
   return records.filter(r => {
-    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.notes||''}`.toLowerCase().includes(q)) return false;
+    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.bought_where||''} ${r.notes||''}`.toLowerCase().includes(q)) return false;
     if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
     // buyer toggle — each owner independently, 'other' always visible
     const o = ownerOf(r);
@@ -630,17 +637,20 @@ function cardHTML(r) {
 
   const scoresBlock = (myR > 0 || herR > 0) ? (() => {
     const MAX = 5;
-    const pepeInt = Math.floor(myR);
-    const jenniInt = Math.floor(herR);
-    let pepeBoxes = '';
-    for (let i = 0; i < MAX; i++) {
-      pepeBoxes += `<div class="combo-seg${i < pepeInt ? ' pepe-fill' : ' empty'}"></div>`;
-    }
-    let jenniBoxes = '';
-    for (let i = 0; i < MAX; i++) {
-      jenniBoxes += `<div class="combo-seg${i < jenniInt ? ' jenni-fill' : ' empty'}"></div>`;
-    }
-    return `<div class="vcard-divider"></div><div class="combo-bar"><div class="combo-bar-section">${pepeBoxes}</div><div class="combo-divider"></div><div class="combo-bar-section">${jenniBoxes}</div></div>`;
+    const pepeFill  = Math.round(myR  * 2) / 2;
+    const jenniFill = Math.round(herR * 2) / 2;
+    const pepePct   = (pepeFill  / (MAX * 2)) * 100;
+    const jenniPct  = (jenniFill / (MAX * 2)) * 100;
+    const emptyPct  = 100 - pepePct - jenniPct;
+    const pepeStr   = myR  > 0 ? (myR  % 1 === 0 ? myR  : myR.toFixed(1))  + '/5' : '—';
+    const jenniStr  = herR > 0 ? (herR % 1 === 0 ? herR : herR.toFixed(1)) + '/5' : '—';
+    return `
+    <div class="vcard-divider"></div>
+    <div class="combo-bar">
+      ${pepeFill  > 0 ? `<div class="combo-seg pepe-fill"  style="flex:${pepeFill}"></div>`  : ''}
+      ${jenniFill > 0 ? `<div class="combo-seg jenni-fill" style="flex:${jenniFill}"></div>` : ''}
+      ${(pepeFill + jenniFill) < MAX * 2 ? `<div class="combo-seg empty" style="flex:${MAX*2 - pepeFill - jenniFill}"></div>` : ''}
+    </div>`;
   })() : '';
 
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
@@ -649,9 +659,17 @@ function cardHTML(r) {
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
     </div>
     <div class="vcard-body">
-      <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
-      <div class="vcard-meta">
+      <div class="vcard-title-row">
+        <div class="vcard-album">${esc(r.album_name)||'untitled'}</div>
         <span class="vcard-year">${esc(r.year)||'—'}</span>
+      </div>
+      <div class="vcard-bottom-row" onclick="event.stopPropagation()">
+        ${authed ? `
+        <div class="play-count-row">
+          <button class="play-btn" onclick="adjustPlayCount(${r.id}, -1)">−</button>
+          <span class="play-count-inline"><i class="ti ti-headphones" style="font-size:9px;opacity:.45"></i><span id="playCount${r.id}">${r.play_count || 0}</span></span>
+          <button class="play-btn" onclick="adjustPlayCount(${r.id}, +1)">+</button>
+        </div>` : `<div class="play-count-static"><i class="ti ti-headphones" style="font-size:9px;opacity:.45"></i>${r.play_count || 0}</div>`}
         ${total > 0 ? `<span class="vcard-avg"${totalStyle}>${totalStr}<span>/10</span></span>` : ''}
       </div>
       ${scoresBlock}
@@ -913,7 +931,41 @@ function toast(msg){
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-// ── buyer toggle state ─────────────────────────────────────────────────────
+// ── play count editor ──────────────────────────────────────────────────────
+async function adjustPlayCount(id, delta) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  
+  const newCount = Math.max(0, (record.play_count || 0) + delta);
+  
+  // Update local state
+  record.play_count = newCount;
+  
+  // Update UI immediately
+  const countEl = document.getElementById(`playCount${id}`);
+  if (countEl) countEl.textContent = newCount;
+  
+  // Save to database
+  try {
+    const res = await fetch(`/api/records/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ play_count: newCount })
+    });
+    if (!res.ok) {
+      // Revert on error
+      record.play_count = (record.play_count || 0) - delta;
+      if (countEl) countEl.textContent = record.play_count;
+      toast('failed to update play count');
+    }
+  } catch (err) {
+    record.play_count = (record.play_count || 0) - delta;
+    if (countEl) countEl.textContent = record.play_count;
+    toast('error updating play count');
+  }
+}
+
+
 const buyerActive = { pepe: true, jenni: true, both: true };
 
 function toggleBuyer(who) {
