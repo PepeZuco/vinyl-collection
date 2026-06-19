@@ -630,31 +630,17 @@ function cardHTML(r) {
 
   const scoresBlock = (myR > 0 || herR > 0) ? (() => {
     const MAX = 5;
-    const pepeInt = Math.round(myR);
-    const jenniInt = Math.round(herR);
-    const hasBoth = myR > 0 && herR > 0;
-    
+    const pepeInt = Math.floor(myR);
+    const jenniInt = Math.floor(herR);
     let pepeBoxes = '';
-    if (myR > 0) {
-      for (let i = 0; i < MAX; i++) {
-        pepeBoxes += `<div class="combo-seg${i < pepeInt ? ' pepe-fill' : ' empty'}"></div>`;
-      }
+    for (let i = 0; i < MAX; i++) {
+      pepeBoxes += `<div class="combo-seg${i < pepeInt ? ' pepe-fill' : ' empty'}"></div>`;
     }
-    
     let jenniBoxes = '';
-    if (herR > 0) {
-      for (let i = 0; i < MAX; i++) {
-        jenniBoxes += `<div class="combo-seg${i < jenniInt ? ' jenni-fill' : ' empty'}"></div>`;
-      }
+    for (let i = 0; i < MAX; i++) {
+      jenniBoxes += `<div class="combo-seg${i < jenniInt ? ' jenni-fill' : ' empty'}"></div>`;
     }
-    
-    return `
-    <div class="vcard-divider"></div>
-    <div class="combo-bar">
-      ${myR > 0 ? `<div class="combo-bar-section">${pepeBoxes}</div>` : ''}
-      ${hasBoth ? `<div class="combo-divider"></div>` : ''}
-      ${herR > 0 ? `<div class="combo-bar-section">${jenniBoxes}</div>` : ''}
-    </div>`;
+    return `<div class="vcard-divider"></div><div class="combo-bar"><div class="combo-bar-section">${pepeBoxes}</div><div class="combo-divider"></div><div class="combo-bar-section">${jenniBoxes}</div></div>`;
   })() : '';
 
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
