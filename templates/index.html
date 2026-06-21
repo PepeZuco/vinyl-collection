@@ -98,6 +98,13 @@ select option{background:var(--surface);color:var(--text)}
   pointer-events:none;
 }
 
+.vcard-flag{
+  position:absolute;top:6px;right:6px;
+  font-size:16px;line-height:1;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  pointer-events:none;
+}
+
 .vcard-body{padding:8px 10px 10px}
 /* row 1: album name + year inline */
 .vcard-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:8px}
@@ -486,6 +493,11 @@ select option{background:var(--surface);color:var(--text)}
             <div class="form-group"><label>Bought by</label><input id="fBuyer" placeholder="name"></div>
             <div class="form-group"><label>Play count</label><input id="fPlays" type="number" min="0" value="0"></div>
             <div class="form-group"><label>Last cleaned</label><input id="fCleaned" type="date"></div>
+            <div class="form-group">
+              <label>Country</label>
+              <input id="fCountry" list="countryList" placeholder="type to search…" autocomplete="off">
+              <datalist id="countryList"></datalist>
+            </div>
           </div>
           <div class="form-group">
             <label>Pepe rating (out of 5)</label>
@@ -765,6 +777,7 @@ function cardHTML(r) {
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
       ${cover}
+      ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagEmoji(r.country)}</div>` : ''}
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
     </div>
     <div class="vcard-body">
@@ -815,6 +828,7 @@ function openDetail(id) {
     : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:48px"></i></div>`;
   const fields=[
     ['Year',r.year],['Genre',r.genre],
+    ['Country', r.country ? `${flagEmoji(r.country)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—'],
     ['Bought date',r.bought_date],['Bought at',r.bought_where],
     ['Bought by',r.bought_by],['Play count',r.play_count||0],
     ['Last cleaned',r.last_cleaned||'—'],['In collection',r.have_it?'yes':'no (wishlist)'],
@@ -903,6 +917,27 @@ function populateGenreSelect(current='') {
     + genres.map(g=>`<option${g===current?' selected':''}>${esc(g)}</option>`).join('');
 }
 
+// ── country picker (datalist: "Country Name (XX)" <-> "XX" code) ───────────
+function populateCountryList() {
+  const dl = document.getElementById('countryList');
+  dl.innerHTML = COUNTRIES.map(([code,name]) => `<option value="${esc(name)} (${code})">`).join('');
+}
+
+function countryLabelFromCode(code) {
+  if (!code) return '';
+  const found = COUNTRIES.find(([c]) => c === code.toUpperCase());
+  return found ? `${found[1]} (${found[0]})` : '';
+}
+
+function countryCodeFromInput(value) {
+  if (!value) return '';
+  const m = value.match(/\(([A-Za-z]{2})\)\s*$/);
+  if (m) return m[1].toUpperCase();
+  // fallback: exact name match without the "(XX)" suffix typed
+  const found = COUNTRIES.find(([,name]) => name.toLowerCase() === value.trim().toLowerCase());
+  return found ? found[0] : '';
+}
+
 function updateNotesPreview(){
   const val = document.getElementById('fNotes').value;
   const el = document.getElementById('fNotesPreview');
@@ -912,13 +947,14 @@ function updateNotesPreview(){
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';
   document.getElementById('formTitle').textContent='add record';
-  ['fArtist','fAlbum','fYear','fWhere','fBuyer'].forEach(id=>document.getElementById(id).value='');
+  ['fArtist','fAlbum','fYear','fWhere','fBuyer','fCountry'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('fDate').value='';
   document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
   document.getElementById('fNotes').value='';
   updateNotesPreview();
   populateGenreSelect();
+  populateCountryList();
   document.getElementById('coverPreview').style.display='none';
   document.getElementById('coverDropInner').style.display='';
   updateRatingUI();
@@ -936,6 +972,8 @@ function openEdit(id){
   document.getElementById('fYear').value=r.year||'';
   document.getElementById('fDate').value=r.bought_date||'';
   populateGenreSelect(r.genre||'');
+  populateCountryList();
+  document.getElementById('fCountry').value=countryLabelFromCode(r.country||'');
   document.getElementById('fWhere').value=r.bought_where||'';
   document.getElementById('fBuyer').value=r.bought_by||'';
   document.getElementById('fPlays').value=r.play_count||0;
@@ -972,6 +1010,7 @@ async function submitForm(){
     have_it:document.getElementById('fHaveIt').checked,
     my_rating:myRating,wife_rating:wifeRating,cover_data:coverDataUri,
     notes:document.getElementById('fNotes').value,
+    country:countryCodeFromInput(document.getElementById('fCountry').value),
   };
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
@@ -1095,6 +1134,35 @@ function toast(msg){
   toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── country flag helper: ISO 3166-1 alpha-2 code -> flag emoji ─────────────
+function flagEmoji(code) {
+  if (!code || code.length !== 2) return '';
+  const cc = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return '';
+  const base = 0x1F1E6; // regional indicator symbol letter A
+  return String.fromCodePoint(base + (cc.charCodeAt(0) - 65), base + (cc.charCodeAt(1) - 65));
+}
+
+const COUNTRIES = [
+  ['US','United States'],['GB','United Kingdom'],['BR','Brazil'],['CA','Canada'],
+  ['FR','France'],['DE','Germany'],['IT','Italy'],['ES','Spain'],['PT','Portugal'],
+  ['JP','Japan'],['JM','Jamaica'],['AU','Australia'],['NZ','New Zealand'],
+  ['MX','Mexico'],['AR','Argentina'],['CL','Chile'],['CO','Colombia'],['PE','Peru'],
+  ['CU','Cuba'],['NL','Netherlands'],['BE','Belgium'],['SE','Sweden'],['NO','Norway'],
+  ['DK','Denmark'],['FI','Finland'],['IE','Ireland'],['IS','Iceland'],['PL','Poland'],
+  ['AT','Austria'],['CH','Switzerland'],['GR','Greece'],['TR','Turkey'],['RU','Russia'],
+  ['UA','Ukraine'],['ZA','South Africa'],['NG','Nigeria'],['EG','Egypt'],['MA','Morocco'],
+  ['IN','India'],['CN','China'],['KR','South Korea'],['TH','Thailand'],['PH','Philippines'],
+  ['ID','Indonesia'],['VN','Vietnam'],['IL','Israel'],['LB','Lebanon'],
+  ['CZ','Czech Republic'],['HU','Hungary'],['RO','Romania'],['BG','Bulgaria'],
+  ['HR','Croatia'],['RS','Serbia'],['SK','Slovakia'],['UY','Uruguay'],['VE','Venezuela'],
+  ['EC','Ecuador'],['BO','Bolivia'],['PY','Paraguay'],['CR','Costa Rica'],['PA','Panama'],
+  ['DO','Dominican Republic'],['PR','Puerto Rico'],['TT','Trinidad and Tobago'],
+  ['BS','Bahamas'],['BB','Barbados'],['SN','Senegal'],['GH','Ghana'],['ET','Ethiopia'],
+  ['KE','Kenya'],['CD','DR Congo'],['ML','Mali'],['CV','Cabo Verde'],['AO','Angola'],
+  ['MZ','Mozambique'],
+];
 
 // ── play count editor ──────────────────────────────────────────────────────
 async function adjustPlayCount(id, delta) {
