@@ -134,15 +134,15 @@ select option{background:var(--surface);color:var(--text)}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
 .overlay.hidden{display:none}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
-.modal.modal-wide{max-width:780px}
+.modal.modal-wide{max-width:920px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 
 /* detail — split layout: cover left, info right */
-.detail-layout{display:grid;grid-template-columns:260px 1fr;gap:22px}
-@media(max-width:640px){.detail-layout{grid-template-columns:1fr}}
+.detail-layout{display:grid;grid-template-columns:340px 1fr;gap:24px}
+@media(max-width:760px){.detail-layout{grid-template-columns:1fr}}
 .detail-cover-col{display:flex;flex-direction:column}
 .detail-info-col{display:flex;flex-direction:column;min-width:0}
 .detail-cover{width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--radius-sm);display:block;background:#0a0a0a;position:sticky;top:0}
@@ -182,6 +182,15 @@ select option{background:var(--surface);color:var(--text)}
 .cover-preview{width:100%;max-height:130px;object-fit:cover;border-radius:var(--radius-sm);margin-top:8px;display:block}
 .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
 .check-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent)}
+
+/* form — split layout: cover left, fields right (mirrors detail-layout) */
+.form-layout{display:grid;grid-template-columns:340px 1fr;gap:24px}
+@media(max-width:760px){.form-layout{grid-template-columns:1fr}}
+.form-cover-col{display:flex;flex-direction:column}
+.form-info-col{display:flex;flex-direction:column;min-width:0}
+.form-cover-col .cover-drop{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px}
+.form-cover-col .cover-preview{max-height:none;flex:1;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:var(--radius-sm)}
+.form-cover-col .cover-drop{position:relative;overflow:hidden}
 
 /* empty */
 .empty{text-align:center;padding:64px 20px;color:var(--muted)}
@@ -390,48 +399,53 @@ select option{background:var(--surface);color:var(--text)}
 
 <!-- Edit/Add modal -->
 <div class="overlay hidden" id="formOverlay">
-  <div class="modal">
+  <div class="modal modal-wide">
     <div class="modal-head">
       <span class="modal-title" id="formTitle">add record</span>
       <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
-      <div class="cover-drop">
-        <input type="file" accept="image/*" id="coverInput">
-        <div id="coverDropInner">
-          <i class="ti ti-photo" style="font-size:24px;opacity:.2;display:block;margin-bottom:4px"></i>
-          <span style="font-size:12px;color:var(--muted)">click to upload album cover</span>
+      <div class="form-layout">
+        <div class="form-cover-col">
+          <div class="cover-drop">
+            <input type="file" accept="image/*" id="coverInput">
+            <div id="coverDropInner">
+              <i class="ti ti-photo" style="font-size:24px;opacity:.2;display:block;margin-bottom:4px"></i>
+              <span style="font-size:12px;color:var(--muted)">click to upload album cover</span>
+            </div>
+            <img id="coverPreview" class="cover-preview" style="display:none">
+          </div>
         </div>
-        <img id="coverPreview" class="cover-preview" style="display:none">
-      </div>
-      <div style="height:12px"></div>
-      <div class="form-grid">
-        <div class="form-group"><label>Artist</label><input id="fArtist" placeholder="artist name"></div>
-        <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
-        <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
-        <div class="form-group">
-          <label>Genre</label>
-          <select id="fGenre">
-            <option value="">select genre</option>
-          </select>
+        <div class="form-info-col">
+          <div class="form-grid">
+            <div class="form-group"><label>Artist</label><input id="fArtist" placeholder="artist name"></div>
+            <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
+            <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
+            <div class="form-group">
+              <label>Genre</label>
+              <select id="fGenre">
+                <option value="">select genre</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Bought date</label><input id="fDate" type="date"></div>
+            <div class="form-group"><label>Bought at</label><input id="fWhere" placeholder="store / city"></div>
+            <div class="form-group"><label>Bought by</label><input id="fBuyer" placeholder="name"></div>
+            <div class="form-group"><label>Play count</label><input id="fPlays" type="number" min="0" value="0"></div>
+            <div class="form-group"><label>Last cleaned</label><input id="fCleaned" type="date"></div>
+          </div>
+          <div class="form-group">
+            <label>Pepe rating (out of 5)</label>
+            <div class="rating-row" id="myRatingRow"></div>
+          </div>
+          <div class="form-group">
+            <label>Jenni rating (out of 5)</label>
+            <div class="rating-row" id="wifeRatingRow"></div>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="fHaveIt" checked>
+            <label for="fHaveIt">in my collection (uncheck = wishlist)</label>
+          </div>
         </div>
-        <div class="form-group"><label>Bought date</label><input id="fDate" type="date"></div>
-        <div class="form-group"><label>Bought at</label><input id="fWhere" placeholder="store / city"></div>
-        <div class="form-group"><label>Bought by</label><input id="fBuyer" placeholder="name"></div>
-        <div class="form-group"><label>Play count</label><input id="fPlays" type="number" min="0" value="0"></div>
-        <div class="form-group"><label>Last cleaned</label><input id="fCleaned" type="date"></div>
-      </div>
-      <div class="form-group">
-        <label>Pepe rating (out of 5)</label>
-        <div class="rating-row" id="myRatingRow"></div>
-      </div>
-      <div class="form-group">
-        <label>Jenni rating (out of 5)</label>
-        <div class="rating-row" id="wifeRatingRow"></div>
-      </div>
-      <div class="check-row">
-        <input type="checkbox" id="fHaveIt" checked>
-        <label for="fHaveIt">in my collection (uncheck = wishlist)</label>
       </div>
       <div class="form-group" style="margin-top:14px">
         <label>Notes <span style="font-weight:400;opacity:.5">(markdown)</span></label>
