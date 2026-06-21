@@ -1044,12 +1044,18 @@ let allGenres = [];
 function buildGenreList() {
   const list = document.getElementById('genreList');
   list.innerHTML = allGenres.map(g => `
-    <div class="genre-item${selectedGenres.has(g)?' selected':''}" onclick="toggleGenre(${JSON.stringify(g)})">
+    <div class="genre-item${selectedGenres.has(g)?' selected':''}" data-genre="${esc(g)}">
       <div class="genre-check"></div>
       <span>${esc(g)}</span>
     </div>`).join('');
   updateGenreLabel();
 }
+
+// delegated listener avoids quoting issues with genre names containing quotes/special chars
+document.addEventListener('click', e => {
+  const item = e.target.closest('.genre-item');
+  if (item && item.dataset.genre !== undefined) toggleGenre(item.dataset.genre);
+});
 
 function toggleGenre(g) {
   if (selectedGenres.has(g)) {
