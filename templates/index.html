@@ -123,6 +123,8 @@ select option{background:var(--surface);color:var(--text)}
 .score-sq{flex:1;height:7px;border-radius:1.5px;background:var(--border)}
 .score-sq.pepe-on{background:#F5C518}
 .score-sq.jenni-on{background:#D4608A}
+.score-sq.pepe-on.full{box-shadow:0 0 4px rgba(245,197,24,0.9),0 0 8px rgba(245,197,24,0.5)}
+.score-sq.jenni-on.full{box-shadow:0 0 4px rgba(212,96,138,0.9),0 0 8px rgba(212,96,138,0.5)}
 .scores-sep{width:1px;height:11px;background:var(--border);flex-shrink:0}
 
 /* stars — used in detail modal only */
@@ -659,8 +661,10 @@ function cardHTML(r) {
   const scoresBlock = (myR > 0 || herR > 0) ? (() => {
     const pepeFilled  = Math.round(myR);
     const jenniFilled = Math.round(herR);
-    const pepeSquares  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled ? ' pepe-on' : ''}"></div>`).join('');
-    const jenniSquares = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on' : ''}"></div>`).join('');
+    const pepeFullClass  = pepeFilled  >= 5 ? ' full' : '';
+    const jenniFullClass = jenniFilled >= 5 ? ' full' : '';
+    const pepeSquares  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled ? ' pepe-on'+pepeFullClass : ''}"></div>`).join('');
+    const jenniSquares = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on'+jenniFullClass : ''}"></div>`).join('');
     return `
     <div class="vcard-divider"></div>
     <div class="scores-row">
