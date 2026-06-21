@@ -123,8 +123,16 @@ select option{background:var(--surface);color:var(--text)}
 .score-sq{flex:1;height:7px;border-radius:1.5px;background:var(--border)}
 .score-sq.pepe-on{background:#F5C518}
 .score-sq.jenni-on{background:#D4608A}
-.score-sq.pepe-on.full{box-shadow:0 0 4px rgba(245,197,24,0.9),0 0 8px rgba(245,197,24,0.5)}
-.score-sq.jenni-on.full{box-shadow:0 0 4px rgba(212,96,138,0.9),0 0 8px rgba(212,96,138,0.5)}
+.score-sq.pepe-on.full{animation:sq-glow-pepe 2.2s ease-in-out infinite}
+.score-sq.jenni-on.full{animation:sq-glow-jenni 2.2s ease-in-out infinite}
+@keyframes sq-glow-pepe{
+  0%,75%,100%{box-shadow:none}
+  10%{box-shadow:0 0 4px rgba(245,197,24,0.9),0 0 9px rgba(245,197,24,0.6)}
+}
+@keyframes sq-glow-jenni{
+  0%,75%,100%{box-shadow:none}
+  10%{box-shadow:0 0 4px rgba(212,96,138,0.9),0 0 9px rgba(212,96,138,0.6)}
+}
 .scores-sep{width:1px;height:11px;background:var(--border);flex-shrink:0}
 
 /* stars — used in detail modal only */
@@ -663,8 +671,9 @@ function cardHTML(r) {
     const jenniFilled = Math.round(herR);
     const pepeFullClass  = pepeFilled  >= 5 ? ' full' : '';
     const jenniFullClass = jenniFilled >= 5 ? ' full' : '';
-    const pepeSquares  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled ? ' pepe-on'+pepeFullClass : ''}"></div>`).join('');
-    const jenniSquares = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on'+jenniFullClass : ''}"></div>`).join('');
+    const sqDelay = i => ` style="animation-delay:${(i * 0.15).toFixed(2)}s"`;
+    const pepeSquares  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled ? ' pepe-on'+pepeFullClass : ''}"${pepeFullClass ? sqDelay(i) : ''}></div>`).join('');
+    const jenniSquares = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on'+jenniFullClass : ''}"${jenniFullClass ? sqDelay(i) : ''}></div>`).join('');
     return `
     <div class="vcard-divider"></div>
     <div class="scores-row">
