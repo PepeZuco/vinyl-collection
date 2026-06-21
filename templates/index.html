@@ -172,33 +172,9 @@ select option{background:var(--surface);color:var(--text)}
   .detail-nav-btn{display:none}
 }
 
-/* ── record navigation animation ─────────────────────────────────────────── */
-.modal-body{perspective:1400px}
-#detailBody{transform-style:preserve-3d;will-change:transform,opacity}
+/* ── record navigation animation: vertical slide, used on desktop and mobile ── */
+#detailBody{will-change:transform,opacity}
 
-/* desktop: horizontal "flip the sleeve" transition */
-@keyframes flip-out-left{
-  0%{transform:rotateY(0deg) translateX(0);opacity:1}
-  100%{transform:rotateY(-18deg) translateX(-60px);opacity:0}
-}
-@keyframes flip-out-right{
-  0%{transform:rotateY(0deg) translateX(0);opacity:1}
-  100%{transform:rotateY(18deg) translateX(60px);opacity:0}
-}
-@keyframes flip-in-left{
-  0%{transform:rotateY(18deg) translateX(60px);opacity:0}
-  100%{transform:rotateY(0deg) translateX(0);opacity:1}
-}
-@keyframes flip-in-right{
-  0%{transform:rotateY(-18deg) translateX(-60px);opacity:0}
-  100%{transform:rotateY(0deg) translateX(0);opacity:1}
-}
-#detailBody.flip-out-left{animation:flip-out-left .22s ease-in forwards}
-#detailBody.flip-out-right{animation:flip-out-right .22s ease-in forwards}
-#detailBody.flip-in-left{animation:flip-in-left .26s ease-out forwards}
-#detailBody.flip-in-right{animation:flip-in-right .26s ease-out forwards}
-
-/* mobile: vertical tiktok-style slide */
 @keyframes slide-out-up{
   0%{transform:translateY(0);opacity:1}
   100%{transform:translateY(-48px);opacity:0}
@@ -1056,10 +1032,6 @@ function updateDetailNavVisibility() {
   if (mNext) mNext.style.visibility = show ? '' : 'hidden';
 }
 
-function isMobileDetailView() {
-  return window.matchMedia('(max-width: 760px)').matches;
-}
-
 let detailAnimating = false;
 function navigateDetail(delta) {
   if (detailAnimating) return;
@@ -1070,14 +1042,13 @@ function navigateDetail(delta) {
   const nextRecord = recs[nextIdx];
 
   const body = document.getElementById('detailBody');
-  const mobile = isMobileDetailView();
 
-  // delta > 0 means "next": desktop flips to the left, mobile slides up (tiktok-style)
-  const outClass = mobile ? (delta > 0 ? 'slide-out-up' : 'slide-out-down') : (delta > 0 ? 'flip-out-left' : 'flip-out-right');
-  const inClass  = mobile ? (delta > 0 ? 'slide-in-up'  : 'slide-in-down')  : (delta > 0 ? 'flip-in-left'  : 'flip-in-right');
+  // delta > 0 means "next": slides up; delta < 0 means "prev": slides down
+  const outClass = delta > 0 ? 'slide-out-up' : 'slide-out-down';
+  const inClass  = delta > 0 ? 'slide-in-up'  : 'slide-in-down';
 
   detailAnimating = true;
-  body.classList.remove('flip-out-left','flip-out-right','flip-in-left','flip-in-right','slide-out-up','slide-out-down','slide-in-up','slide-in-down');
+  body.classList.remove('slide-out-up','slide-out-down','slide-in-up','slide-in-down');
   body.classList.add(outClass);
 
   const onOutEnd = () => {
