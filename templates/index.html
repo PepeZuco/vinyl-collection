@@ -502,6 +502,17 @@ select option{background:var(--surface);color:var(--text)}
       <div class="chart-title">release year distribution</div>
       <div id="yearWrap" style="width:100%;height:360px"></div>
     </div>
+    <div class="chart-box" style="margin-bottom:28px">
+      <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <span>records by country</span>
+        <span style="display:flex;align-items:center;gap:6px;font-size:10px;text-transform:none;letter-spacing:0;color:var(--muted)">
+          <span>fewer</span>
+          <span style="display:inline-block;width:70px;height:8px;border-radius:4px;background:linear-gradient(to right,#3a3520,#F5C518)"></span>
+          <span>more</span>
+        </span>
+      </div>
+      <div id="worldMapWrap" style="width:100%;height:420px;position:relative"></div>
+    </div>
   </div>
 
   <!-- collection page -->
@@ -663,6 +674,7 @@ select option{background:var(--surface);color:var(--text)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson-client/3.1.0/topojson-client.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 let records = [];
@@ -1373,6 +1385,20 @@ const COUNTRIES = [
   ['MZ','Mozambique'],
 ];
 
+// ISO 3166-1 alpha-2 -> numeric, needed to match our country codes against the
+// world-atlas TopoJSON map (which keys features by numeric ISO code)
+const ALPHA2_TO_NUMERIC = {
+  US:'840',GB:'826',BR:'076',CA:'124',FR:'250',DE:'276',IT:'380',ES:'724',PT:'620',
+  JP:'392',JM:'388',AU:'036',NZ:'554',MX:'484',AR:'032',CL:'152',CO:'170',PE:'604',
+  CU:'192',NL:'528',BE:'056',SE:'752',NO:'578',DK:'208',FI:'246',IE:'372',IS:'352',
+  PL:'616',AT:'040',CH:'756',GR:'300',TR:'792',RU:'643',UA:'804',ZA:'710',NG:'566',
+  EG:'818',MA:'504',IN:'356',CN:'156',KR:'410',TH:'764',PH:'608',ID:'360',VN:'704',
+  IL:'376',LB:'422',CZ:'203',HU:'348',RO:'642',BG:'100',HR:'191',RS:'688',SK:'703',
+  UY:'858',VE:'862',EC:'218',BO:'068',PY:'600',CR:'188',PA:'591',DO:'214',PR:'630',
+  TT:'780',BS:'044',BB:'052',SN:'686',GH:'288',ET:'231',KE:'404',CD:'180',ML:'466',
+  CV:'132',AO:'024',MZ:'508',
+};
+
 // ── play count editor ──────────────────────────────────────────────────────
 async function adjustPlayCount(id, delta) {
   const record = records.find(r => r.id === id);
@@ -1544,6 +1570,7 @@ function toggleGenreDropdown() {
 // ── tab switching ──────────────────────────────────────────────────────────
 let currentTab = 'collection';
 let chartInstances = {};
+let worldMapFeatures = null; // cached GeoJSON features for the country choropleth
 
 function switchTab(tab) {
   currentTab = tab;
@@ -1787,6 +1814,67 @@ function renderStats() {
     .call(g => g.select('.domain').attr('stroke', dark ? '#333' : '#ddd'))
     .call(g => g.selectAll('.tick line').attr('stroke', dark ? '#333' : '#ddd'))
     .call(g => g.selectAll('.tick text').attr('fill', tc).attr('font-size', 10));
+
+  renderWorldMap(all);
+}
+
+// ── D3 choropleth: records by country ───────────────────────────────────────
+async function renderWorldMap(all) {
+  const wrap = document.getElementById('worldMapWrap');
+  if (!wrap) return;
+
+  // count records per ISO numeric code (skip records without a country set)
+  const counts = {};
+  all.forEach(r => {
+    const num = ALPHA2_TO_NUMERIC[(r.country||'').toUpperCase()];
+    if (num) counts[num] = (counts[num] || 0) + 1;
+  });
+  const maxCount = Math.max(1, ...Object.values(counts));
+
+  if (!worldMapFeatures) {
+    wrap.innerHTML = '<div class="spinner" style="padding:40px"><div class="spinner-disc"></div></div>';
+    try {
+      const topo = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+      worldMapFeatures = topojson.feature(topo, topo.objects.countries).features;
+    } catch (err) {
+      wrap.innerHTML = '<p style="color:var(--muted);padding:20px;font-size:13px">map data unavailable</p>';
+      return;
+    }
+  }
+
+  wrap.innerHTML = '';
+  const dark = isDark();
+  const W = wrap.clientWidth || 660;
+  const H = wrap.clientHeight || 420;
+
+  const projection = d3.geoNaturalEarth1().fitSize([W, H], { type: 'Sphere' });
+  const path = d3.geoPath(projection);
+
+  const svg = d3.select(wrap).append('svg')
+    .attr('width', '100%').attr('height', '100%')
+    .attr('viewBox', `0 0 ${W} ${H}`);
+
+  const noDataFill = dark ? '#1d1d1d' : '#e8e5dd';
+  const borderColor = dark ? '#000' : '#fff';
+  const colorScale = d3.scaleLinear().domain([0, maxCount]).range(['#3a3520', '#F5C518']);
+
+  svg.selectAll('path')
+    .data(worldMapFeatures)
+    .join('path')
+    .attr('d', path)
+    .attr('fill', d => {
+      const c = counts[d.id];
+      return c ? colorScale(c) : noDataFill;
+    })
+    .attr('stroke', borderColor)
+    .attr('stroke-width', 0.5)
+    .style('cursor', d => counts[d.id] ? 'pointer' : 'default')
+    .append('title')
+    .text(d => {
+      const c = counts[d.id];
+      const name = d.properties && d.properties.name ? d.properties.name : '';
+      return c ? `${name}: ${c} record${c === 1 ? '' : 's'}` : name;
+    });
 }
 
 init();
