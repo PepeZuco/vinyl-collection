@@ -173,6 +173,54 @@ select option{background:var(--surface);color:var(--text)}
   .detail-nav-btn.prev{left:8px}
   .detail-nav-btn.next{right:8px}
 }
+
+/* ── record navigation animation ─────────────────────────────────────────── */
+.modal-body{perspective:1400px}
+#detailBody{transform-style:preserve-3d;will-change:transform,opacity}
+
+/* desktop: horizontal "flip the sleeve" transition */
+@keyframes flip-out-left{
+  0%{transform:rotateY(0deg) translateX(0);opacity:1}
+  100%{transform:rotateY(-18deg) translateX(-60px);opacity:0}
+}
+@keyframes flip-out-right{
+  0%{transform:rotateY(0deg) translateX(0);opacity:1}
+  100%{transform:rotateY(18deg) translateX(60px);opacity:0}
+}
+@keyframes flip-in-left{
+  0%{transform:rotateY(18deg) translateX(60px);opacity:0}
+  100%{transform:rotateY(0deg) translateX(0);opacity:1}
+}
+@keyframes flip-in-right{
+  0%{transform:rotateY(-18deg) translateX(-60px);opacity:0}
+  100%{transform:rotateY(0deg) translateX(0);opacity:1}
+}
+#detailBody.flip-out-left{animation:flip-out-left .22s ease-in forwards}
+#detailBody.flip-out-right{animation:flip-out-right .22s ease-in forwards}
+#detailBody.flip-in-left{animation:flip-in-left .26s ease-out forwards}
+#detailBody.flip-in-right{animation:flip-in-right .26s ease-out forwards}
+
+/* mobile: vertical tiktok-style slide */
+@keyframes slide-out-up{
+  0%{transform:translateY(0);opacity:1}
+  100%{transform:translateY(-48px);opacity:0}
+}
+@keyframes slide-out-down{
+  0%{transform:translateY(0);opacity:1}
+  100%{transform:translateY(48px);opacity:0}
+}
+@keyframes slide-in-up{
+  0%{transform:translateY(48px);opacity:0}
+  100%{transform:translateY(0);opacity:1}
+}
+@keyframes slide-in-down{
+  0%{transform:translateY(-48px);opacity:0}
+  100%{transform:translateY(0);opacity:1}
+}
+#detailBody.slide-out-up{animation:slide-out-up .18s ease-in forwards}
+#detailBody.slide-out-down{animation:slide-out-down .18s ease-in forwards}
+#detailBody.slide-in-up{animation:slide-in-up .22s ease-out forwards}
+#detailBody.slide-in-down{animation:slide-in-down .22s ease-out forwards}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
@@ -839,10 +887,7 @@ function detailDotsHTML(n, max=5) {
 }
 
 // ── detail modal ───────────────────────────────────────────────────────────
-function openDetail(id) {
-  const r = records.find(x=>x.id===id); if(!r)return;
-  confirmDeleteId = null;
-  currentDetailId = id;
+function renderDetailContent(r) {
   const coverEl = r.cover_data
     ? `<img src="${r.cover_data}" class="detail-cover" alt="${esc(r.album_name)}" onerror="this.style.display='none'">`
     : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:48px"></i></div>`;
@@ -882,6 +927,13 @@ function openDetail(id) {
       </div>
     </div>`;
   renderDetailFoot(r.id);
+}
+
+function openDetail(id) {
+  const r = records.find(x=>x.id===id); if(!r)return;
+  confirmDeleteId = null;
+  currentDetailId = id;
+  renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
 }
@@ -894,12 +946,45 @@ function updateDetailNavVisibility() {
   document.getElementById('detailNextBtn').style.display = show ? '' : 'none';
 }
 
+function isMobileDetailView() {
+  return window.matchMedia('(max-width: 760px)').matches;
+}
+
+let detailAnimating = false;
 function navigateDetail(delta) {
+  if (detailAnimating) return;
   const recs = filtered();
   if (recs.length < 2) return;
   const idx = recs.findIndex(r => r.id === currentDetailId);
   const nextIdx = idx === -1 ? 0 : (idx + delta + recs.length) % recs.length;
-  openDetail(recs[nextIdx].id);
+  const nextRecord = recs[nextIdx];
+
+  const body = document.getElementById('detailBody');
+  const mobile = isMobileDetailView();
+
+  // delta > 0 means "next": desktop flips to the left, mobile slides up (tiktok-style)
+  const outClass = mobile ? (delta > 0 ? 'slide-out-up' : 'slide-out-down') : (delta > 0 ? 'flip-out-left' : 'flip-out-right');
+  const inClass  = mobile ? (delta > 0 ? 'slide-in-up'  : 'slide-in-down')  : (delta > 0 ? 'flip-in-left'  : 'flip-in-right');
+
+  detailAnimating = true;
+  body.classList.remove('flip-out-left','flip-out-right','flip-in-left','flip-in-right','slide-out-up','slide-out-down','slide-in-up','slide-in-down');
+  body.classList.add(outClass);
+
+  const onOutEnd = () => {
+    body.removeEventListener('animationend', onOutEnd);
+    currentDetailId = nextRecord.id;
+    renderDetailContent(nextRecord);
+    updateDetailNavVisibility();
+    body.classList.remove(outClass);
+    body.classList.add(inClass);
+    const onInEnd = () => {
+      body.removeEventListener('animationend', onInEnd);
+      body.classList.remove(inClass);
+      detailAnimating = false;
+    };
+    body.addEventListener('animationend', onInEnd);
+  };
+  body.addEventListener('animationend', onOutEnd);
 }
 
 function renderDetailFoot(id) {
@@ -1119,6 +1204,7 @@ function bindEvents(){
   document.getElementById('formOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeForm();});
   document.getElementById('loginOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeLogin();});
   initDice();
+  initDetailSwipe();
 }
 
 function toggleSortDir() {
@@ -1167,6 +1253,38 @@ function initDice() {
     clearInterval(diceShuffleTimer);
     renderDiceFace(Math.ceil(Math.random()*6));
   });
+}
+
+// ── detail modal: touch swipe navigation ────────────────────────────────────
+// Mobile: vertical swipe, tiktok-style (swipe up -> next, swipe down -> prev)
+// Desktop/tablet touchscreens: horizontal swipe (swipe left -> next, swipe right -> prev)
+function initDetailSwipe() {
+  const overlay = document.getElementById('detailOverlay');
+  let startX = 0, startY = 0, tracking = false;
+  const THRESHOLD = 50;
+
+  overlay.addEventListener('touchstart', e => {
+    if (overlay.classList.contains('hidden')) return;
+    if (e.target.closest('.detail-nav-btn, .modal-foot, button, a, input, textarea')) { tracking = false; return; }
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY;
+    tracking = true;
+  }, { passive: true });
+
+  overlay.addEventListener('touchend', e => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (isMobileDetailView()) {
+      if (Math.abs(dy) < THRESHOLD || Math.abs(dy) < Math.abs(dx)) return;
+      navigateDetail(dy < 0 ? 1 : -1); // swipe up -> next, swipe down -> prev
+    } else {
+      if (Math.abs(dx) < THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
+      navigateDetail(dx < 0 ? 1 : -1); // swipe left -> next, swipe right -> prev
+    }
+  }, { passive: true });
 }
 
 let toastTimer;
