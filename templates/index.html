@@ -123,8 +123,10 @@ select option{background:var(--surface);color:var(--text)}
 .score-sq{flex:1;height:7px;border-radius:1.5px;background:var(--border)}
 .score-sq.pepe-on{background:#F5C518}
 .score-sq.jenni-on{background:#D4608A}
-.score-sq.pepe-on.full{animation:sq-glow-pepe 1.1s ease-out 1 forwards}
-.score-sq.jenni-on.full{animation:sq-glow-jenni 1.1s ease-out 1 forwards}
+.score-sq.pepe-on.full{box-shadow:0 0 4px rgba(245,197,24,0.85)}
+.score-sq.jenni-on.full{box-shadow:0 0 4px rgba(212,96,138,0.85)}
+.score-sq.pepe-on.full.in-view{animation:sq-glow-pepe 1.1s ease-out 1 forwards}
+.score-sq.jenni-on.full.in-view{animation:sq-glow-jenni 1.1s ease-out 1 forwards}
 @keyframes sq-glow-pepe{
   0%{box-shadow:none;filter:brightness(1);transform:scale(1)}
   30%{box-shadow:0 0 6px rgba(245,197,24,1),0 0 14px rgba(245,197,24,0.9),0 0 22px rgba(245,197,24,0.6);filter:brightness(1.6);transform:scale(1.15)}
@@ -628,6 +630,25 @@ function render() {
   c.querySelectorAll('[data-id]').forEach(el =>
     el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
   );
+  observeCardsForGlow();
+}
+
+// ── trigger square-shine animation only once a card is actually visible ────
+let glowObserver = null;
+function observeCardsForGlow() {
+  if (!glowObserver) {
+    glowObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.querySelectorAll('.score-sq.full').forEach(sq => sq.classList.add('in-view'));
+          glowObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+  }
+  document.querySelectorAll('.vcard').forEach(card => {
+    if (card.querySelector('.score-sq.full')) glowObserver.observe(card);
+  });
 }
 
 function renderCount(n) {
