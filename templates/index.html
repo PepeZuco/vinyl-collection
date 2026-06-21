@@ -134,15 +134,21 @@ select option{background:var(--surface);color:var(--text)}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
 .overlay.hidden{display:none}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
+.modal.modal-wide{max-width:780px}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 
-/* detail */
-.detail-cover{width:100%;max-height:340px;object-fit:contain;border-radius:var(--radius-sm);display:block;margin-bottom:16px;background:#0a0a0a}
+/* detail — split layout: cover left, info right */
+.detail-layout{display:grid;grid-template-columns:260px 1fr;gap:22px}
+@media(max-width:640px){.detail-layout{grid-template-columns:1fr}}
+.detail-cover-col{display:flex;flex-direction:column}
+.detail-info-col{display:flex;flex-direction:column;min-width:0}
+.detail-cover{width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--radius-sm);display:block;background:#0a0a0a;position:sticky;top:0}
 [data-theme="light"] .detail-cover{background:#f0f0f0}
-.detail-cover-ph{width:100%;height:160px;background:#111;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;margin-bottom:16px;color:#222}
+.detail-cover-ph{width:100%;aspect-ratio:1;background:#111;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:#222}
+[data-theme="light"] .detail-cover-ph{background:#eee;color:#ccc}
 .detail-title{font-size:20px;font-weight:700;margin-bottom:3px;line-height:1.2}
 .detail-artist{font-size:11px;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.07em}
 .detail-ratings{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm)}
@@ -372,7 +378,7 @@ select option{background:var(--surface);color:var(--text)}
 
 <!-- Detail modal -->
 <div class="overlay hidden" id="detailOverlay">
-  <div class="modal">
+  <div class="modal modal-wide">
     <div class="modal-head">
       <span class="modal-title">record detail</span>
       <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><i class="ti ti-x"></i></button>
@@ -714,24 +720,30 @@ function openDetail(id) {
   const herR = Number(r.wife_rating) || 0;
   const detailTotal = myR + herR;
   document.getElementById('detailBody').innerHTML=`
-    ${coverEl}
-    <div class="detail-title">${esc(r.album_name)||'untitled'}</div>
-    <div class="detail-artist">${esc(r.artist)||'unknown'}</div>
-    <div class="detail-ratings">
-      <div class="detail-rating-block pepe">
-        <div class="detail-rating-label">Pepe <span style="font-weight:400;opacity:.6">${myR > 0 ? myR+'/5' : ''}</span></div>
-        ${myR > 0 ? detailDotsHTML(myR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+    <div class="detail-layout">
+      <div class="detail-cover-col">
+        ${coverEl}
       </div>
-      <div class="detail-rating-block jenni">
-        <div class="detail-rating-label">Jenni <span style="font-weight:400;opacity:.6">${herR > 0 ? herR+'/5' : ''}</span></div>
-        ${herR > 0 ? detailDotsHTML(herR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+      <div class="detail-info-col">
+        <div class="detail-title">${esc(r.album_name)||'untitled'}</div>
+        <div class="detail-artist">${esc(r.artist)||'unknown'}</div>
+        <div class="detail-ratings">
+          <div class="detail-rating-block pepe">
+            <div class="detail-rating-label">Pepe <span style="font-weight:400;opacity:.6">${myR > 0 ? myR+'/5' : ''}</span></div>
+            ${myR > 0 ? detailDotsHTML(myR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+          </div>
+          <div class="detail-rating-block jenni">
+            <div class="detail-rating-label">Jenni <span style="font-weight:400;opacity:.6">${herR > 0 ? herR+'/5' : ''}</span></div>
+            ${herR > 0 ? detailDotsHTML(herR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+          </div>
+        </div>
+        ${detailTotal > 0 ? `<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Total <strong style="color:var(--accent)">${detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)}</strong><span style="font-size:11px">/10</span></div>` : ''}
+        <div class="detail-grid">
+          ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
+        </div>
+        ${r.notes ? `<div class="detail-notes"><div class="detail-notes-label">Notes</div><div class="detail-notes-body">${marked.parse(r.notes)}</div></div>` : ''}
       </div>
-    </div>
-    ${detailTotal > 0 ? `<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Total <strong style="color:var(--accent)">${detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)}</strong><span style="font-size:11px">/10</span></div>` : ''}
-    <div class="detail-grid">
-      ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
-    </div>
-    ${r.notes ? `<div class="detail-notes"><div class="detail-notes-label">Notes</div><div class="detail-notes-body">${marked.parse(r.notes)}</div></div>` : ''}`;
+    </div>`;
   renderDetailFoot(r.id);
   document.getElementById('detailOverlay').classList.remove('hidden');
 }
