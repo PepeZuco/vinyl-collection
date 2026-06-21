@@ -42,7 +42,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:28p
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
-.search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--search-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px}
+.search{flex:0 1 260px;min-width:160px;display:flex;align-items:center;gap:8px;background:var(--search-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px}
 .search input{background:transparent;border:none;outline:none;color:var(--text);font-size:13px;width:100%;font-family:var(--font)}
 .search i{color:var(--muted);font-size:15px}
 select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer;transition:background .2s,color .2s,border .2s}
@@ -281,6 +281,30 @@ select option{background:var(--surface);color:var(--text)}
 .buyer-btn#btnJenni.active{background:rgba(212,96,138,.15);color:#D4608A}
 .buyer-btn#btnBoth.active{background:rgba(155,127,212,.15);color:#9B7FD4}
 .buyer-btn:not(.active){opacity:.45}
+
+/* sort group: select + asc/desc direction toggle */
+.sort-group{display:flex;align-items:center;gap:0;flex-shrink:0}
+.sort-group select{border-radius:var(--radius-sm) 0 0 var(--radius-sm);border-right:none}
+.sort-dir-btn{height:34px;width:30px;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--surface);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:color .12s,background .12s}
+.sort-dir-btn:hover{color:var(--text);background:var(--card)}
+.sort-dir-btn i{transition:transform .15s}
+.sort-dir-btn.desc i{transform:rotate(0deg)}
+.sort-dir-btn.asc i{transform:rotate(180deg)}
+
+/* have-it icon toggle: collection (check) vs wishlist (cart) */
+.haveit-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;height:34px;flex-shrink:0}
+.haveit-btn{width:38px;height:100%;border:none;border-right:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .12s}
+.haveit-btn:last-child{border-right:none}
+.haveit-btn:not(.active){opacity:.4}
+.haveit-btn.active[data-mode="collection"]{background:rgba(80,200,120,.15);color:#4cc471}
+.haveit-btn.active[data-mode="wishlist"]{background:rgba(245,197,24,.15);color:#F5C518}
+
+/* random dice button */
+.dice-btn{width:34px;height:34px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.dice-btn:hover{border-color:var(--text)}
+.dice-face{width:22px;height:22px;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;padding:3px;gap:1px}
+.dice-pip{width:100%;height:100%;border-radius:50%;background:transparent}
+.dice-pip.on{background:#e8e8e0}
 .notes-editor{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .notes-editor textarea{resize:vertical;min-height:120px;font-family:var(--font-mono);font-size:12px;line-height:1.5}
 .notes-preview{border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;line-height:1.6;overflow-y:auto;min-height:120px;background:var(--card);color:var(--text)}
@@ -362,16 +386,19 @@ select option{background:var(--surface);color:var(--text)}
       <i class="ti ti-search"></i>
       <input type="text" id="searchInput" placeholder="search artist, album, genre...">
     </div>
-    <select id="sortSel">
-      <option value="bought_date">sort: date added ↓</option>
-      <option value="artist">sort: artist</option>
-      <option value="album_name">sort: album</option>
-      <option value="year">sort: year ↓</option>
-      <option value="avg_rating">sort: total rating ↓</option>
-      <option value="my_rating">sort: Pepe rating ↓</option>
-      <option value="wife_rating">sort: Jenni rating ↓</option>
-      <option value="play_count">sort: plays ↓</option>
-    </select>
+    <div class="sort-group">
+      <select id="sortSel">
+        <option value="bought_date">date added</option>
+        <option value="artist">artist</option>
+        <option value="album_name">album</option>
+        <option value="year">year</option>
+        <option value="avg_rating">total rating</option>
+        <option value="my_rating">Pepe rating</option>
+        <option value="wife_rating">Jenni rating</option>
+        <option value="play_count">plays</option>
+      </select>
+      <button class="sort-dir-btn desc" id="sortDirBtn" title="toggle sort direction"><i class="ti ti-arrow-down"></i></button>
+    </div>
     <div class="genre-dropdown" id="genreDropdown">
       <button class="genre-trigger" id="genreTrigger" onclick="toggleGenreDropdown()">
         <span id="genreLabel">all genres</span>
@@ -389,12 +416,13 @@ select option{background:var(--surface);color:var(--text)}
       <button class="buyer-btn active" id="btnBoth"  onclick="toggleBuyer('both')">Both</button>
       <button class="buyer-btn active" id="btnJenni" onclick="toggleBuyer('jenni')">Jenni</button>
     </div>
-    <select id="haveItFilter">
-      <option value="1">in collection</option>
-      <option value="0">wishlist</option>
-      <option value="">all records</option>
-    </select>
-    <button class="btn btn-primary" id="randomBtn"><i class="ti ti-dice"></i><span>random</span></button>
+    <div class="haveit-toggle" id="haveItToggle">
+      <button class="haveit-btn active" id="btnHaveCollection" data-mode="collection" title="in collection"><i class="ti ti-check"></i></button>
+      <button class="haveit-btn" id="btnHaveWishlist" data-mode="wishlist" title="wishlist"><i class="ti ti-shopping-cart"></i></button>
+    </div>
+    <button class="dice-btn" id="randomBtn" title="random record">
+      <div class="dice-face" id="diceFace"></div>
+    </button>
     </div>
     <div id="recordsContainer"></div>
   </div>
@@ -591,14 +619,15 @@ function avgRating(r) {
 }
 
 // ── filtering & sorting ────────────────────────────────────────────────────
+let haveItMode = 'collection'; // 'collection' | 'wishlist'
+let sortDir = 'desc'; // 'asc' | 'desc'
+
 function filtered() {
   const q  = document.getElementById('searchInput').value.toLowerCase();
-  const g  = document.getElementById('genreLabel'); // just a ref, actual filter uses selectedGenres
   const b  = { pepe: buyerActive.pepe, jenni: buyerActive.jenni, both: buyerActive.both };
-  const h  = document.getElementById('haveItFilter').value;
   const s  = document.getElementById('sortSel').value;
 
-  return records.filter(r => {
+  const base = records.filter(r => {
     if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.bought_where||''} ${r.notes||''}`.toLowerCase().includes(q)) return false;
     if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
     // buyer toggle — each owner independently, 'other' always visible
@@ -606,15 +635,18 @@ function filtered() {
     if (o === 'pepe'  && !b.pepe)  return false;
     if (o === 'jenni' && !b.jenni) return false;
     if (o === 'both'  && !b.both)  return false;
-    if (h === '1' && !r.have_it) return false;
-    if (h === '0' &&  r.have_it) return false;
+    if (haveItMode === 'collection' && !r.have_it) return false;
+    if (haveItMode === 'wishlist'   &&  r.have_it) return false;
     return true;
   }).sort((a, b_) => {
-    if (s === 'bought_date') return (b_.bought_date||'').localeCompare(a.bought_date||'');
-    if (s === 'avg_rating')  return avgRating(b_) - avgRating(a);
-    if (['year','my_rating','wife_rating','play_count'].includes(s)) return (Number(b_[s])||0) - (Number(a[s])||0);
-    return (a[s]||'').localeCompare(b_[s]||'');
+    let cmp;
+    if (s === 'bought_date') cmp = (b_.bought_date||'').localeCompare(a.bought_date||'');
+    else if (s === 'avg_rating')  cmp = avgRating(b_) - avgRating(a);
+    else if (['year','my_rating','wife_rating','play_count'].includes(s)) cmp = (Number(b_[s])||0) - (Number(a[s])||0);
+    else cmp = (a[s]||'').localeCompare(b_[s]||'');
+    return sortDir === 'asc' ? -cmp : cmp;
   });
+  return base;
 }
 
 function render() {
@@ -652,8 +684,7 @@ function observeCardsForGlow() {
 }
 
 function renderCount(n) {
-  const h = document.getElementById('haveItFilter').value;
-  const label = h === '0' ? 'on wishlist' : h === '1' ? 'in collection' : 'total';
+  const label = haveItMode === 'wishlist' ? 'on wishlist' : 'in collection';
   document.getElementById('recordCount').textContent = `— ${n} ${label}`;
 }
 
@@ -974,11 +1005,62 @@ function bindEvents(){
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
   document.getElementById('searchInput').addEventListener('input',render);
-  document.getElementById('haveItFilter').addEventListener('change',render);
   document.getElementById('sortSel').addEventListener('change',render);
+  document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
+  document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
+  document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
   document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
   document.getElementById('formOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeForm();});
   document.getElementById('loginOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeLogin();});
+  initDice();
+}
+
+function toggleSortDir() {
+  sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+  const btn = document.getElementById('sortDirBtn');
+  btn.classList.toggle('asc', sortDir === 'asc');
+  btn.classList.toggle('desc', sortDir === 'desc');
+  btn.innerHTML = sortDir === 'asc' ? '<i class="ti ti-arrow-up"></i>' : '<i class="ti ti-arrow-down"></i>';
+  render();
+}
+
+function setHaveItMode(mode) {
+  haveItMode = mode;
+  document.getElementById('btnHaveCollection').classList.toggle('active', mode === 'collection');
+  document.getElementById('btnHaveWishlist').classList.toggle('active', mode === 'wishlist');
+  render();
+}
+
+// ── dice button: random face, rapid cycling shuffle on hover ───────────────
+const DICE_PIPS = {
+  1: [4],
+  2: [0,8],
+  3: [0,4,8],
+  4: [0,2,6,8],
+  5: [0,2,4,6,8],
+  6: [0,2,3,5,6,8],
+};
+function renderDiceFace(n) {
+  const el = document.getElementById('diceFace');
+  if (!el) return;
+  const on = new Set(DICE_PIPS[n] || DICE_PIPS[1]);
+  el.innerHTML = Array.from({length:9}, (_,i) => `<div class="dice-pip${on.has(i)?' on':''}"></div>`).join('');
+}
+let diceShuffleTimer = null;
+function initDice() {
+  renderDiceFace(Math.ceil(Math.random()*6));
+  const btn = document.getElementById('randomBtn');
+  btn.addEventListener('mouseenter', () => {
+    let n = 0;
+    diceShuffleTimer = setInterval(() => {
+      n = (n % 6) + 1;
+      renderDiceFace(n);
+    }, 90);
+  });
+  btn.addEventListener('mouseleave', () => {
+    clearInterval(diceShuffleTimer);
+    renderDiceFace(Math.ceil(Math.random()*6));
+  });
 }
 
 let toastTimer;
