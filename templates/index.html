@@ -157,6 +157,22 @@ select option{background:var(--surface);color:var(--text)}
 .overlay.hidden{display:none}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
 .modal.modal-wide{max-width:920px}
+.detail-nav-btn{
+  position:fixed;top:50%;transform:translateY(-50%);
+  width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface);color:var(--text);
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+  cursor:pointer;z-index:101;transition:background .12s,border-color .12s,opacity .12s;
+  opacity:.75;
+}
+.detail-nav-btn:hover{opacity:1;border-color:var(--accent);color:var(--accent)}
+.detail-nav-btn.prev{left:max(16px, calc(50% - 500px))}
+.detail-nav-btn.next{right:max(16px, calc(50% - 500px))}
+@media(max-width:760px){
+  .detail-nav-btn{width:38px;height:38px;font-size:17px}
+  .detail-nav-btn.prev{left:8px}
+  .detail-nav-btn.next{right:8px}
+}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
@@ -448,6 +464,7 @@ select option{background:var(--surface);color:var(--text)}
 
 <!-- Detail modal -->
 <div class="overlay hidden" id="detailOverlay">
+  <button class="detail-nav-btn prev" id="detailPrevBtn" title="previous record" onclick="navigateDetail(-1)"><i class="ti ti-chevron-left"></i></button>
   <div class="modal modal-wide">
     <div class="modal-head">
       <span class="modal-title">record detail</span>
@@ -456,6 +473,7 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-body" id="detailBody"></div>
     <div class="modal-foot" id="detailFoot"></div>
   </div>
+  <button class="detail-nav-btn next" id="detailNextBtn" title="next record" onclick="navigateDetail(1)"><i class="ti ti-chevron-right"></i></button>
 </div>
 
 <!-- Edit/Add modal -->
@@ -562,6 +580,7 @@ let editingId = null;
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
 let confirmDeleteId = null;
+let currentDetailId = null;
 
 // ── theme ──────────────────────────────────────────────────────────────────
 let theme = localStorage.getItem('vinyl-theme') || 'dark';
@@ -823,6 +842,7 @@ function detailDotsHTML(n, max=5) {
 function openDetail(id) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
+  currentDetailId = id;
   const coverEl = r.cover_data
     ? `<img src="${r.cover_data}" class="detail-cover" alt="${esc(r.album_name)}" onerror="this.style.display='none'">`
     : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:48px"></i></div>`;
@@ -862,7 +882,24 @@ function openDetail(id) {
       </div>
     </div>`;
   renderDetailFoot(r.id);
+  updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
+}
+
+// ── prev/next navigation through the currently filtered list ───────────────
+function updateDetailNavVisibility() {
+  const recs = filtered();
+  const show = recs.length > 1;
+  document.getElementById('detailPrevBtn').style.display = show ? '' : 'none';
+  document.getElementById('detailNextBtn').style.display = show ? '' : 'none';
+}
+
+function navigateDetail(delta) {
+  const recs = filtered();
+  if (recs.length < 2) return;
+  const idx = recs.findIndex(r => r.id === currentDetailId);
+  const nextIdx = idx === -1 ? 0 : (idx + delta + recs.length) % recs.length;
+  openDetail(recs[nextIdx].id);
 }
 
 function renderDetailFoot(id) {
@@ -879,7 +916,7 @@ function renderDetailFoot(id) {
   }
 }
 
-function closeDetail(){document.getElementById('detailOverlay').classList.add('hidden');confirmDeleteId=null;}
+function closeDetail(){document.getElementById('detailOverlay').classList.add('hidden');confirmDeleteId=null;currentDetailId=null;}
 
 async function doDelete(id){
   await fetch(`/api/records/${id}`,{method:'DELETE'});
@@ -1073,6 +1110,12 @@ function bindEvents(){
   document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
   document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
   document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
+  document.addEventListener('keydown', e => {
+    if (document.getElementById('detailOverlay').classList.contains('hidden')) return;
+    if (e.key === 'ArrowLeft') navigateDetail(-1);
+    else if (e.key === 'ArrowRight') navigateDetail(1);
+    else if (e.key === 'Escape') closeDetail();
+  });
   document.getElementById('formOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeForm();});
   document.getElementById('loginOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeLogin();});
   initDice();
