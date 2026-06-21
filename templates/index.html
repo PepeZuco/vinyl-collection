@@ -117,12 +117,13 @@ select option{background:var(--surface);color:var(--text)}
 /* divider */
 .vcard-divider{height:1px;background:var(--border);margin-bottom:7px}
 
-/* combo meter */
-.combo-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:4px;gap:0}
-.combo-seg{height:100%}
-.combo-seg.pepe-fill{background:#F5C518}
-.combo-seg.jenni-fill{background:#D4608A}
-.combo-seg.empty{background:var(--border)}
+/* segmented rating blocks: 5 squares per person */
+.scores-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.score-squares{display:flex;gap:2px;flex:1}
+.score-sq{flex:1;height:7px;border-radius:1.5px;background:var(--border)}
+.score-sq.pepe-on{background:#F5C518}
+.score-sq.jenni-on{background:#D4608A}
+.scores-sep{width:1px;height:11px;background:var(--border);flex-shrink:0}
 
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
@@ -656,20 +657,16 @@ function cardHTML(r) {
   const totalStyle = totalGlow ? ` style="text-shadow:${totalGlow}"` : '';
 
   const scoresBlock = (myR > 0 || herR > 0) ? (() => {
-    const MAX = 5;
-    const pepeFill  = Math.round(myR  * 2) / 2;
-    const jenniFill = Math.round(herR * 2) / 2;
-    const pepePct   = (pepeFill  / (MAX * 2)) * 100;
-    const jenniPct  = (jenniFill / (MAX * 2)) * 100;
-    const emptyPct  = 100 - pepePct - jenniPct;
-    const pepeStr   = myR  > 0 ? (myR  % 1 === 0 ? myR  : myR.toFixed(1))  + '/5' : '—';
-    const jenniStr  = herR > 0 ? (herR % 1 === 0 ? herR : herR.toFixed(1)) + '/5' : '—';
+    const pepeFilled  = Math.round(myR);
+    const jenniFilled = Math.round(herR);
+    const pepeSquares  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled ? ' pepe-on' : ''}"></div>`).join('');
+    const jenniSquares = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on' : ''}"></div>`).join('');
     return `
     <div class="vcard-divider"></div>
-    <div class="combo-bar">
-      ${pepeFill  > 0 ? `<div class="combo-seg pepe-fill"  style="flex:${pepeFill}"></div>`  : ''}
-      ${jenniFill > 0 ? `<div class="combo-seg jenni-fill" style="flex:${jenniFill}"></div>` : ''}
-      ${(pepeFill + jenniFill) < MAX * 2 ? `<div class="combo-seg empty" style="flex:${MAX*2 - pepeFill - jenniFill}"></div>` : ''}
+    <div class="scores-row">
+      <div class="score-squares">${pepeSquares}</div>
+      <div class="scores-sep"></div>
+      <div class="score-squares">${jenniSquares}</div>
     </div>`;
   })() : '';
 
