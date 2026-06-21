@@ -32,6 +32,7 @@ class Record(db.Model):
     last_cleaned= db.Column(db.String(50))
     cover_data  = db.Column(db.Text)      # base64 data URI
     notes       = db.Column(db.Text)      # markdown notes
+    country     = db.Column(db.String(2)) # ISO 3166-1 alpha-2 country code, e.g. "BR", "US"
 
     def to_dict(self):
         return {
@@ -50,10 +51,21 @@ class Record(db.Model):
             "last_cleaned": self.last_cleaned or "",
             "cover_data": self.cover_data or "",
             "notes": self.notes or "",
+            "country": self.country or "",
         }
 
 with app.app_context():
     db.create_all()
+    # lightweight auto-migration: db.create_all() only creates missing tables,
+    # it won't add new columns to a table that already exists (e.g. on Railway's
+    # persisted Postgres/SQLite). Add the "country" column if it's missing.
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    existing_cols = [c["name"] for c in inspector.get_columns("record")]
+    if "country" not in existing_cols:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE record ADD COLUMN country VARCHAR(2)"))
+            conn.commit()
 
 # ── auth helpers ──────────────────────────────────────────────────────────────
 
@@ -119,6 +131,7 @@ def create_record():
         last_cleaned= d.get("last_cleaned",""),
         cover_data  = d.get("cover_data",""),
         notes       = d.get("notes",""),
+        country     = (d.get("country") or "").strip().upper()[:2],
     )
     db.session.add(r)
     db.session.commit()
@@ -138,6 +151,7 @@ def update_record(rid):
     if "play_count"  in d: r.play_count   = int(d["play_count"] or 0)
     if "cover_data"  in d: r.cover_data   = d["cover_data"]
     if "notes"       in d: r.notes        = d["notes"]
+    if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
     db.session.commit()
     return jsonify(r.to_dict())
 
@@ -155,7 +169,7 @@ def delete_record(rid):
 def export_csv():
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","my_rating","wife_rating","have_it","play_count","last_cleaned","cover_image_base64","notes"]
+            "bought_by","my_rating","wife_rating","have_it","play_count","last_cleaned","cover_image_base64","notes","country"]
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -203,6 +217,7 @@ def import_csv():
                 last_cleaned= row.get("last_cleaned",""),
                 cover_data  = cover,
                 notes       = row.get("notes",""),
+                country     = (row.get("country","") or "").strip().upper()[:2],
             )
             db.session.add(r)
             count += 1
