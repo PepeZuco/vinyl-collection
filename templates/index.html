@@ -1094,7 +1094,9 @@ function toggleGenreDropdown() {
 // close dropdown when clicking outside
 document.addEventListener('click', e => {
   const dd = document.getElementById('genreDropdown');
-  if (dd && !dd.contains(e.target)) {
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
+  if (dd && !clickedInside) {
     document.getElementById('genrePanel')?.classList.add('hidden');
     const ch = document.getElementById('genreChevron');
     if (ch) ch.style.transform = '';
