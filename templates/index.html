@@ -169,9 +169,7 @@ select option{background:var(--surface);color:var(--text)}
 .detail-nav-btn.prev{left:max(16px, calc(50% - 500px))}
 .detail-nav-btn.next{right:max(16px, calc(50% - 500px))}
 @media(max-width:760px){
-  .detail-nav-btn{width:38px;height:38px;font-size:17px}
-  .detail-nav-btn.prev{left:8px}
-  .detail-nav-btn.next{right:8px}
+  .detail-nav-btn{display:none}
 }
 
 /* ── record navigation animation ─────────────────────────────────────────── */
@@ -250,6 +248,56 @@ select option{background:var(--surface);color:var(--text)}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .detail-item label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:block;margin-bottom:2px}
 .detail-item span{font-size:13px;font-weight:600}
+
+/* ── mobile TikTok-style detail view ─────────────────────────────────────── */
+.detail-mobile-layout{display:none}
+@media(max-width:760px){
+  #detailOverlay{padding:0}
+  #detailOverlay .modal.modal-wide{
+    max-width:none;width:100%;height:100%;max-height:100%;
+    border-radius:0;border:none;display:flex;flex-direction:column;
+  }
+  #detailOverlay .modal-head{display:none}
+  #detailOverlay .modal-body{padding:0;flex:1;overflow:hidden;display:flex}
+  #detailOverlay #detailBody{flex:1;width:100%;min-width:0}
+  #detailOverlay .modal-foot{
+    position:absolute;bottom:0;left:0;right:0;z-index:5;
+    background:linear-gradient(transparent, rgba(0,0,0,.55));border-top:none;
+  }
+  [data-theme="light"] #detailOverlay .modal-foot{background:linear-gradient(transparent, rgba(0,0,0,.25))}
+  .detail-layout{display:none}
+  .detail-mobile-layout{
+    display:flex;flex-direction:column;width:100%;height:100%;
+    position:relative;background:#000;overflow:hidden;
+  }
+  .detail-mobile-cover-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
+  .detail-mobile-cover-wrap img{width:100%;height:100%;object-fit:cover}
+  .detail-mobile-cover-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
+  .detail-mobile-scrim{position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.45) 0%, transparent 22%, transparent 60%, rgba(0,0,0,.75) 100%)}
+
+  /* right side rating rail — mirrors tiktok's like/comment/share stack */
+  .detail-mobile-rail{
+    position:absolute;right:10px;bottom:96px;z-index:3;
+    display:flex;flex-direction:column;align-items:center;gap:18px;
+  }
+  .rail-item{display:flex;flex-direction:column;align-items:center;gap:3px}
+  .rail-squares{display:flex;flex-direction:column;gap:3px}
+  .rail-sq{width:20px;height:7px;border-radius:1.5px;background:rgba(255,255,255,.25)}
+  .rail-sq.pepe-on{background:#F5C518}
+  .rail-sq.jenni-on{background:#D4608A}
+  .rail-label{font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);text-transform:uppercase;letter-spacing:.05em}
+  .rail-total{font-size:22px;font-weight:800;color:#F5C518;text-shadow:0 1px 4px rgba(0,0,0,.8);line-height:1}
+  .rail-total span{font-size:11px;font-weight:500;color:#fff;opacity:.8;margin-left:1px}
+
+  /* bottom-left caption overlay — mirrors tiktok's post caption */
+  .detail-mobile-caption{
+    position:absolute;left:14px;right:74px;bottom:96px;z-index:3;
+    color:#fff;
+  }
+  .detail-mobile-caption .dmc-album{font-size:16px;font-weight:700;line-height:1.25;margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+  .detail-mobile-caption .dmc-meta{font-size:12px;opacity:.85;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+  .detail-mobile-caption .dmc-meta b{font-weight:700;opacity:1}
+}
 
 /* form */
 .form-group{margin-bottom:12px}
@@ -901,6 +949,17 @@ function renderDetailContent(r) {
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
   const detailTotal = myR + herR;
+  const totalStr = detailTotal > 0 ? (detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)) : '—';
+
+  // mobile rail: 5-square indicator per person, same rounding convention as the card grid
+  const railSquares = (val, cls) => {
+    const filled = Math.round(val);
+    return Array.from({length:5}, (_,i) => `<div class="rail-sq${i < filled ? ' '+cls : ''}"></div>`).reverse().join('');
+  };
+  const mobileCoverEl = r.cover_data
+    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" onerror="this.parentElement.innerHTML='<div class=detail-mobile-cover-ph><i class=&quot;ti ti-disc&quot; style=&quot;font-size:64px&quot;></i></div>'">`
+    : `<div class="detail-mobile-cover-ph"><i class="ti ti-disc" style="font-size:64px"></i></div>`;
+
   document.getElementById('detailBody').innerHTML=`
     <div class="detail-layout">
       <div class="detail-cover-col">
@@ -919,11 +978,33 @@ function renderDetailContent(r) {
             ${herR > 0 ? detailDotsHTML(herR) : '<span style="font-size:12px;color:var(--muted)">—</span>'}
           </div>
         </div>
-        ${detailTotal > 0 ? `<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Total <strong style="color:var(--accent)">${detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)}</strong><span style="font-size:11px">/10</span></div>` : ''}
+        ${detailTotal > 0 ? `<div style="font-size:13px;color:var(--muted);margin-bottom:14px">Total <strong style="color:var(--accent)">${totalStr}</strong><span style="font-size:11px">/10</span></div>` : ''}
         <div class="detail-grid">
           ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
         </div>
         ${r.notes ? `<div class="detail-notes"><div class="detail-notes-label">Notes</div><div class="detail-notes-body">${marked.parse(r.notes)}</div></div>` : ''}
+      </div>
+    </div>
+    <div class="detail-mobile-layout">
+      <div class="detail-mobile-cover-wrap">${mobileCoverEl}</div>
+      <div class="detail-mobile-scrim"></div>
+      <div class="detail-mobile-rail">
+        <div class="rail-item">
+          <div class="rail-squares">${railSquares(myR, 'pepe-on')}</div>
+          <div class="rail-label" style="color:#F5C518">Pepe</div>
+        </div>
+        <div class="rail-item">
+          <div class="rail-squares">${railSquares(herR, 'jenni-on')}</div>
+          <div class="rail-label" style="color:#D4608A">Jenni</div>
+        </div>
+        <div class="rail-item">
+          <div class="rail-total">${totalStr}<span>/10</span></div>
+          <div class="rail-label">Total</div>
+        </div>
+      </div>
+      <div class="detail-mobile-caption">
+        <div class="dmc-album">${esc(r.album_name)||'untitled'}</div>
+        <div class="dmc-meta"><b>${esc(r.artist)||'unknown'}</b> · ${esc(r.year)||'—'}</div>
       </div>
     </div>`;
   renderDetailFoot(r.id);
