@@ -470,9 +470,9 @@ select option{background:var(--surface);color:var(--text)}
       <div class="auth-badge" id="authBadge" style="display:none"><i class="ti ti-lock"></i><span>visitor</span></div>
       <button class="btn" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
       <button class="btn" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
-      <label class="btn" id="importLabel" style="display:none">
+      <label class="btn" id="importLabel" style="display:none;position:relative;overflow:hidden">
         <i class="ti ti-upload"></i><span>import</span>
-        <input type="file" accept=".csv" id="importInput" style="display:none">
+        <input type="file" accept=".csv" id="importInput" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
       </label>
       <button class="btn btn-primary" id="addBtn" style="display:none">
         <i class="ti ti-plus"></i><span>add</span>
