@@ -430,9 +430,6 @@ select option{background:var(--surface);color:var(--text)}
 .dice-face{width:22px;height:22px;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;padding:3px;gap:1px}
 .dice-pip{width:100%;height:100%;border-radius:50%;background:transparent}
 .dice-pip.on{background:#e8e8e0}
-.notes-editor{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.notes-editor textarea{resize:vertical;min-height:120px;font-family:var(--font-mono);font-size:12px;line-height:1.5}
-.notes-preview{border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;line-height:1.6;overflow-y:auto;min-height:120px;background:var(--card);color:var(--text)}
 .notes-preview p,.detail-notes-body p{margin-bottom:6px}
 .notes-preview h1,.notes-preview h2,.notes-preview h3,
 .detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
@@ -442,6 +439,26 @@ select option{background:var(--surface);color:var(--text)}
 .detail-notes{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .detail-notes-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;font-weight:600}
 .detail-notes-body{font-size:13px;line-height:1.7}
+
+/* ── multi-note section in form ────────────────────────────────────────────── */
+.notes-section{display:flex;flex-direction:column;gap:10px}
+.notes-add-row{display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:start}
+.notes-add-row textarea{resize:vertical;min-height:72px;font-family:var(--font-mono);font-size:12px;line-height:1.5;width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;outline:none;font-family:var(--font)}
+.notes-add-row textarea:focus{border-color:var(--accent)}
+.notes-add-row input[type=date]{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-size:13px;outline:none;font-family:var(--font);width:100%}
+.notes-add-row input[type=date]:focus{border-color:var(--accent)}
+.notes-list{display:flex;flex-direction:column;gap:8px}
+.note-entry{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;position:relative}
+.note-entry-date{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:600}
+.note-entry-body{font-size:12px;line-height:1.6;color:var(--text)}
+.note-entry-body p{margin-bottom:4px}
+.note-delete{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1}
+.note-delete:hover{color:var(--danger)}
+
+/* ── dated notes in detail view ───────────────────────────────────────────── */
+.detail-note-entry{padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.detail-note-entry:last-child{border-bottom:none;padding-bottom:0;margin-bottom:0}
+.detail-note-date{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:600}
 
 </style>
 </head>
@@ -635,9 +652,13 @@ select option{background:var(--surface);color:var(--text)}
       </div>
       <div class="form-group" style="margin-top:14px">
         <label>Notes <span style="font-weight:400;opacity:.5">(markdown)</span></label>
-        <div class="notes-editor">
-          <textarea id="fNotes" placeholder="Add notes, memories, thoughts…" oninput="updateNotesPreview()"></textarea>
-          <div class="notes-preview" id="fNotesPreview"><span style="color:var(--muted);font-size:12px">preview…</span></div>
+        <div class="notes-section">
+          <div class="notes-add-row">
+            <input type="date" id="fNoteDate">
+            <textarea id="fNoteText" placeholder="Add a note…"></textarea>
+            <button type="button" class="btn btn-primary btn-sm" style="height:34px;align-self:start" onclick="addNote()"><i class="ti ti-plus"></i> add</button>
+          </div>
+          <div class="notes-list" id="fNotesList"></div>
         </div>
       </div>
     </div>
@@ -787,7 +808,7 @@ function filtered() {
   const s  = sortBy;
 
   const base = records.filter(r => {
-    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.bought_where||''} ${r.notes||''}`.toLowerCase().includes(q)) return false;
+    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.bought_where||''} ${parseNotes(r.notes).map(n=>n.text).join(' ')}`.toLowerCase().includes(q)) return false;
     if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
     // buyer toggle — each owner independently, 'other' always visible
     const o = ownerOf(r);
@@ -990,7 +1011,18 @@ function renderDetailContent(r) {
         <div class="detail-grid">
           ${fields.map(([l,v])=>`<div class="detail-item"><label>${l}</label><span>${esc(String(v||'—'))}</span></div>`).join('')}
         </div>
-        ${r.notes ? `<div class="detail-notes"><div class="detail-notes-label">Notes</div><div class="detail-notes-body">${marked.parse(r.notes)}</div></div>` : ''}
+        ${r.notes ? (() => {
+          const notes = parseNotes(r.notes, r.bought_date||today());
+          const sorted = notes.filter(n=>n.text).sort((a,b)=>b.date.localeCompare(a.date));
+          if (!sorted.length) return '';
+          return `<div class="detail-notes">
+            <div class="detail-notes-label">Notes</div>
+            ${sorted.map(n=>`<div class="detail-note-entry">
+              <div class="detail-note-date">${esc(n.date)}</div>
+              <div class="detail-notes-body">${marked.parse(n.text)}</div>
+            </div>`).join('')}
+          </div>`;
+        })() : ''}
       </div>
     </div>
     <div class="detail-mobile-layout">
@@ -1153,10 +1185,64 @@ function countryCodeFromInput(value) {
   return found ? found[0] : '';
 }
 
-function updateNotesPreview(){
-  const val = document.getElementById('fNotes').value;
-  const el = document.getElementById('fNotesPreview');
-  el.innerHTML = val ? marked.parse(val) : '<span style="color:var(--muted);font-size:12px">preview…</span>';
+// ── dated notes helpers ────────────────────────────────────────────────────
+// Notes are stored as JSON: [{date:"YYYY-MM-DD", text:"..."}]
+// Migration: if raw value is plain string (not JSON array), convert it once
+// using the record's bought_date (or today) as the date.
+let formNotes = []; // in-memory list while the form is open
+
+function parseNotes(raw, fallbackDate) {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch(e) {}
+  // plain string — legacy note, migrate it
+  return [{ date: fallbackDate || today(), text: raw }];
+}
+
+function serializeNotes(arr) {
+  const clean = arr.filter(n => n.text && n.text.trim());
+  return clean.length ? JSON.stringify(clean) : '';
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function renderNotesForm() {
+  const list = document.getElementById('fNotesList');
+  if (!formNotes.length) { list.innerHTML = ''; return; }
+  const sorted = [...formNotes].sort((a,b) => b.date.localeCompare(a.date));
+  list.innerHTML = sorted.map((n, i) => {
+    // find original index for delete
+    const origIdx = formNotes.indexOf(formNotes.find(x => x.date===n.date && x.text===n.text));
+    return `<div class="note-entry">
+      <div class="note-entry-date">${esc(n.date)}</div>
+      <div class="note-entry-body">${marked.parse(n.text)}</div>
+      <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
+    </div>`;
+  }).join('');
+}
+
+function addNote() {
+  const dateEl = document.getElementById('fNoteDate');
+  const textEl = document.getElementById('fNoteText');
+  const date = dateEl.value;
+  const text = textEl.value.trim();
+  if (!date) { dateEl.focus(); dateEl.style.borderColor='var(--danger)'; return; }
+  if (!text) { textEl.focus(); textEl.style.borderColor='var(--danger)'; return; }
+  dateEl.style.borderColor='';
+  textEl.style.borderColor='';
+  formNotes.push({ date, text });
+  textEl.value = '';
+  dateEl.value = today();
+  renderNotesForm();
+}
+
+function deleteNote(idx) {
+  formNotes.splice(idx, 1);
+  renderNotesForm();
 }
 
 function openAdd(){
@@ -1166,8 +1252,10 @@ function openAdd(){
   document.getElementById('fDate').value='';
   document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
-  document.getElementById('fNotes').value='';
-  updateNotesPreview();
+  formNotes=[];
+  document.getElementById('fNoteDate').value=today();
+  document.getElementById('fNoteText').value='';
+  renderNotesForm();
   populateGenreSelect();
   populateCountryList();
   document.getElementById('coverPreview').style.display='none';
@@ -1194,8 +1282,10 @@ function openEdit(id){
   document.getElementById('fPlays').value=r.play_count||0;
   document.getElementById('fCleaned').value=r.last_cleaned||'';
   document.getElementById('fHaveIt').checked=!!r.have_it;
-  document.getElementById('fNotes').value=r.notes||'';
-  updateNotesPreview();
+  formNotes=parseNotes(r.notes, r.bought_date||today());
+  document.getElementById('fNoteDate').value=today();
+  document.getElementById('fNoteText').value='';
+  renderNotesForm();
   if(coverDataUri){
     document.getElementById('coverPreview').src=coverDataUri;
     document.getElementById('coverPreview').style.display='block';
@@ -1224,7 +1314,7 @@ async function submitForm(){
     last_cleaned:document.getElementById('fCleaned').value,
     have_it:document.getElementById('fHaveIt').checked,
     my_rating:myRating,wife_rating:wifeRating,cover_data:coverDataUri,
-    notes:document.getElementById('fNotes').value,
+    notes:serializeNotes(formNotes),
     country:countryCodeFromInput(document.getElementById('fCountry').value),
   };
   const url=editingId?`/api/records/${editingId}`:'/api/records';
