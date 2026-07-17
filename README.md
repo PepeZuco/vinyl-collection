@@ -9,6 +9,12 @@ pip install -r requirements.txt
 python app.py
 ```
 
+Para popular o banco local com dados reais (backup exportado via `/api/export`), coloque o CSV como `vinyl_collection.csv` na raiz do projeto (arquivo gitignored, nunca commitado) e rode:
+
+```bash
+python seed_db.py
+```
+
 ## Deploy no Railway
 
 1. Conecte este repositório a um projeto no Railway.

@@ -189,6 +189,36 @@ def export_csv():
     return app.response_class(generate(), mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=vinyl_collection.csv"})
 
+def import_records_from_csv_text(text):
+    reader = csv.DictReader(io.StringIO(text))
+    Record.query.delete()
+    count = 0
+    for row in reader:
+        cover = row.get("cover_image_base64","") or row.get("cover_data","")
+        if cover and not cover.startswith("data:"):
+            cover = "data:image/jpeg;base64," + cover
+        r = Record(
+            artist      = row.get("artist",""),
+            album_name  = row.get("album_name",""),
+            year        = row.get("year",""),
+            genre       = row.get("genre",""),
+            bought_date = row.get("bought_date",""),
+            bought_where= row.get("bought_where",""),
+            bought_by   = row.get("bought_by",""),
+            my_rating   = float(row.get("my_rating") or 0),
+            wife_rating = float(row.get("wife_rating") or 0),
+            have_it     = row.get("have_it","").lower() in ("true","1","yes"),
+            play_count  = int(row.get("play_count") or 0),
+            last_cleaned= row.get("last_cleaned",""),
+            cover_data  = cover,
+            notes       = row.get("notes",""),
+            country     = (row.get("country","") or "").strip().upper()[:2],
+        )
+        db.session.add(r)
+        count += 1
+    db.session.commit()
+    return count
+
 @app.route("/api/import", methods=["POST"])
 @require_auth
 def import_csv():
@@ -197,33 +227,7 @@ def import_csv():
         return jsonify({"error": "No file"}), 400
     try:
         text = file.read().decode("utf-8", errors="replace")
-        reader = csv.DictReader(io.StringIO(text))
-        Record.query.delete()
-        count = 0
-        for row in reader:
-            cover = row.get("cover_image_base64","") or row.get("cover_data","")
-            if cover and not cover.startswith("data:"):
-                cover = "data:image/jpeg;base64," + cover
-            r = Record(
-                artist      = row.get("artist",""),
-                album_name  = row.get("album_name",""),
-                year        = row.get("year",""),
-                genre       = row.get("genre",""),
-                bought_date = row.get("bought_date",""),
-                bought_where= row.get("bought_where",""),
-                bought_by   = row.get("bought_by",""),
-                my_rating   = float(row.get("my_rating") or 0),
-                wife_rating = float(row.get("wife_rating") or 0),
-                have_it     = row.get("have_it","").lower() in ("true","1","yes"),
-                play_count  = int(row.get("play_count") or 0),
-                last_cleaned= row.get("last_cleaned",""),
-                cover_data  = cover,
-                notes       = row.get("notes",""),
-                country     = (row.get("country","") or "").strip().upper()[:2],
-            )
-            db.session.add(r)
-            count += 1
-        db.session.commit()
+        count = import_records_from_csv_text(text)
         return jsonify({"imported": count})
     except Exception as e:
         db.session.rollback()
