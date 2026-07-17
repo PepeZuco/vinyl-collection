@@ -8,7 +8,9 @@ from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///vinyl.db")
+
+_default_sqlite_path = os.path.join(os.environ.get("DATA_DIR", "."), "vinyl.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", f"sqlite:///{_default_sqlite_path}")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB
 
