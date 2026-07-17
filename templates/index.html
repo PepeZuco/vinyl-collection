@@ -528,7 +528,9 @@ select option{background:var(--surface);color:var(--text)}
           <span>more</span>
         </span>
       </div>
-      <div id="worldMapWrap" style="width:100%;height:420px;position:relative"></div>
+      <div id="worldMapWrap" style="width:100%;height:420px;position:relative">
+        <div id="worldMapTooltip" style="position:absolute;pointer-events:none;opacity:0;z-index:10;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;color:var(--text);white-space:nowrap;transition:opacity .1s;box-shadow:0 4px 12px rgba(0,0,0,.2)"></div>
+      </div>
     </div>
   </div>
 
@@ -1925,6 +1927,8 @@ function renderWorldMap(all) {
   });
   const maxCount = Math.max(1, ...Object.values(counts));
 
+  const tooltip = document.getElementById('worldMapTooltip');
+
   if (!worldMapFeatures) {
     try {
       worldMapFeatures = topojson.feature(WORLD_TOPOLOGY, WORLD_TOPOLOGY.objects.countries).features;
@@ -1934,7 +1938,7 @@ function renderWorldMap(all) {
     }
   }
 
-  wrap.innerHTML = '';
+  wrap.querySelectorAll('svg').forEach(el => el.remove());
   const dark = isDark();
   const W = wrap.clientWidth || 660;
   const H = wrap.clientHeight || 420;
@@ -1942,7 +1946,7 @@ function renderWorldMap(all) {
   const projection = d3.geoNaturalEarth1().fitSize([W, H], { type: 'Sphere' });
   const path = d3.geoPath(projection);
 
-  const svg = d3.select(wrap).append('svg')
+  const svg = d3.select(wrap).insert('svg', '#worldMapTooltip')
     .attr('width', '100%').attr('height', '100%')
     .attr('viewBox', `0 0 ${W} ${H}`);
 
@@ -1961,12 +1965,18 @@ function renderWorldMap(all) {
     .attr('stroke', borderColor)
     .attr('stroke-width', 0.5)
     .style('cursor', d => counts[d.id] ? 'pointer' : 'default')
-    .append('title')
-    .text(d => {
+    .on('mousemove', (event, d) => {
       const c = counts[d.id];
       const name = d.properties && d.properties.name ? d.properties.name : '';
-      return c ? `${name}: ${c} record${c === 1 ? '' : 's'}` : name;
-    });
+      const wrapRect = wrap.getBoundingClientRect();
+      const x = event.clientX - wrapRect.left;
+      const y = event.clientY - wrapRect.top;
+      tooltip.textContent = `${name}: ${c || 0} record${c === 1 ? '' : 's'}`;
+      tooltip.style.left = `${Math.min(x + 12, wrapRect.width - tooltip.offsetWidth - 8)}px`;
+      tooltip.style.top = `${Math.max(y - 32, 0)}px`;
+      tooltip.style.opacity = '1';
+    })
+    .on('mouseleave', () => { tooltip.style.opacity = '0'; });
 }
 
 init();
