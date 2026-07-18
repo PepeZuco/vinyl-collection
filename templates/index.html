@@ -105,6 +105,20 @@ select option{background:var(--surface);color:var(--text)}
   pointer-events:none;
 }
 
+/* quick-edit shortcut — desktop hover only, edit mode only */
+.vcard-quick-edit{
+  position:absolute;top:8px;left:8px;
+  width:26px;height:26px;border-radius:5px;
+  background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.2);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:12px;
+  opacity:0;transform:translateY(-2px);
+  transition:opacity .12s,transform .12s;
+  cursor:pointer;
+}
+.vcard:hover .vcard-quick-edit{opacity:1;transform:translateY(0)}
+.vcard-quick-edit:hover{background:rgba(0,0,0,.8);border-color:var(--accent);color:var(--accent)}
+@media(hover:none){.vcard-quick-edit{display:none}}
+
 .vcard-body{padding:8px 10px 10px}
 /* row 1: album name + year inline */
 .vcard-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:8px}
@@ -430,6 +444,51 @@ select option{background:var(--surface);color:var(--text)}
 .dice-face{width:22px;height:22px;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;padding:3px;gap:1px}
 .dice-pip{width:100%;height:100%;border-radius:50%;background:transparent}
 .dice-pip.on{background:#e8e8e0}
+
+/* view toggle: grid / list */
+.view-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;height:34px;flex-shrink:0;margin-left:auto}
+.view-btn{width:34px;height:100%;border:none;border-right:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .12s}
+.view-btn:last-child{border-right:none}
+.view-btn.active{background:rgba(245,197,24,.15);color:var(--accent)}
+@media(max-width:760px){.view-toggle{display:none}}
+
+/* smart filter chips — only rendered once a filter is restricted from its default */
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:-8px 0 16px}
+.filter-chips:empty{display:none;margin:0}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 10px;border-radius:999px;font-size:12px;background:rgba(245,197,24,.08);border:1px solid color-mix(in srgb, var(--accent) 45%, transparent);color:var(--accent);white-space:nowrap}
+.filter-chip button{background:transparent;border:none;color:inherit;opacity:.7;cursor:pointer;font-size:13px;line-height:1;padding:2px;display:flex}
+.filter-chip button:hover{opacity:1}
+.filter-chip.buyer-jenni{background:rgba(212,96,138,.08);border-color:rgba(212,96,138,.45);color:#D4608A}
+.filter-chips-clear{background:transparent;border:none;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;font-family:var(--font)}
+.filter-chips-clear:hover{color:var(--text)}
+
+/* more menu — groups export / import / edit-mode behind the header */
+.more-menu{position:relative;flex-shrink:0}
+.more-panel{position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-width:180px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden;padding:4px;display:flex;flex-direction:column;gap:1px}
+.more-panel.hidden{display:none}
+.menu-item{display:flex;align-items:center;gap:9px;height:34px;padding:0 10px;border-radius:var(--radius-sm);background:transparent;border:none;color:var(--text);font-size:13px;cursor:pointer;text-align:left;width:100%;font-family:var(--font);position:relative;overflow:hidden}
+.menu-item:hover{background:var(--card)}
+.menu-item i{font-size:15px;color:var(--muted);width:16px;text-align:center;flex-shrink:0}
+
+/* list view */
+.list-view-wrap{overflow-x:auto}
+.list-view{min-width:640px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.list-row{display:grid;grid-template-columns:44px 2fr 100px 64px 100px 100px 64px;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.list-row:last-child{border-bottom:none}
+.list-row:hover{background:var(--card-hover)}
+.list-row.list-head{cursor:default;background:var(--surface)}
+.list-row.list-head:hover{background:var(--surface)}
+.list-row.list-head span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.list-cover-wrap{width:36px;height:36px;border-radius:3px;overflow:hidden;flex-shrink:0;background:#111;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:14px}
+.list-cover-wrap img{width:100%;height:100%;object-fit:cover}
+[data-theme="light"] .list-cover-wrap{background:#eee;color:#ccc}
+.list-main{min-width:0}
+.list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-artist{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-genre,.list-year{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-bars{display:flex;gap:2px}
+.list-bars .score-sq{height:6px}
+.list-plays{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;white-space:nowrap}
 .notes-preview p,.detail-notes-body p{margin-bottom:6px}
 .notes-preview h1,.notes-preview h2,.notes-preview h3,
 .detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
@@ -485,12 +544,17 @@ select option{background:var(--surface);color:var(--text)}
     <div class="header-right">
       <button class="btn theme-btn btn-icon" id="themeBtn" title="Toggle theme">☀</button>
       <div class="auth-badge" id="authBadge" style="display:none"><i class="ti ti-lock"></i><span>visitor</span></div>
-      <button class="btn" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
-      <button class="btn" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
-      <label class="btn" id="importLabel" style="display:none;position:relative;overflow:hidden">
-        <i class="ti ti-upload"></i><span>import</span>
-        <input type="file" accept=".csv" id="importInput" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
-      </label>
+      <div class="more-menu" id="moreMenu">
+        <button class="btn btn-icon" id="moreMenuBtn" title="more actions" onclick="toggleMoreMenu()"><i class="ti ti-dots"></i></button>
+        <div class="more-panel hidden" id="morePanel">
+          <button class="menu-item" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
+          <button class="menu-item" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
+          <label class="menu-item" id="importLabel" style="display:none">
+            <i class="ti ti-upload"></i><span>import</span>
+            <input type="file" accept=".csv" id="importInput" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+          </label>
+        </div>
+      </div>
       <button class="btn btn-primary" id="addBtn" style="display:none">
         <i class="ti ti-plus"></i><span>add</span>
       </button>
@@ -578,7 +642,12 @@ select option{background:var(--surface);color:var(--text)}
     <button class="dice-btn" id="randomBtn" title="random record">
       <div class="dice-face" id="diceFace"></div>
     </button>
+    <div class="view-toggle" id="viewToggle">
+      <button class="view-btn active" id="viewGridBtn" data-view="grid" title="grid view"><i class="ti ti-layout-grid"></i></button>
+      <button class="view-btn" id="viewListBtn" data-view="list" title="list view"><i class="ti ti-list"></i></button>
     </div>
+    </div>
+    <div class="filter-chips" id="filterChips"></div>
     <div id="recordsContainer"></div>
   </div>
 </div>
@@ -835,16 +904,105 @@ function render() {
   const recs = filtered();
   renderCount(recs.length);
   renderFilters();
+  renderChips();
   const c = document.getElementById('recordsContainer');
   if (!recs.length) {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
     return;
   }
-  c.innerHTML = `<div class="grid">${recs.map(r => cardHTML(r)).join('')}</div>`;
+  c.innerHTML = viewMode === 'list'
+    ? `<div class="list-view-wrap"><div class="list-view">${listHeadHTML()}${recs.map(r => listRowHTML(r)).join('')}</div></div>`
+    : `<div class="grid">${recs.map(r => cardHTML(r)).join('')}</div>`;
   c.querySelectorAll('[data-id]').forEach(el =>
     el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
   );
   observeCardsForGlow();
+}
+
+// ── grid / list view toggle ─────────────────────────────────────────────────
+let viewMode = localStorage.getItem('vinyl-view') === 'list' ? 'list' : 'grid';
+
+function setViewMode(mode) {
+  viewMode = mode;
+  localStorage.setItem('vinyl-view', mode);
+  document.getElementById('viewGridBtn').classList.toggle('active', mode === 'grid');
+  document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
+  render();
+}
+
+function listHeadHTML() {
+  return `<div class="list-row list-head">
+    <span></span><span>Album</span><span>Genre</span><span>Year</span><span>Pepe</span><span>Jenni</span><span>Plays</span>
+  </div>`;
+}
+
+function listRowHTML(r) {
+  const cover = r.cover_data
+    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+    : `<i class="ti ti-disc"></i>`;
+  const myR  = Number(r.my_rating)  || 0;
+  const herR = Number(r.wife_rating) || 0;
+  const pepeFilled  = Math.round(myR);
+  const jenniFilled = Math.round(herR);
+  const pepeBars  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled  ? ' pepe-on'  : ''}"></div>`).join('');
+  const jenniBars = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on' : ''}"></div>`).join('');
+  return `<div class="list-row" data-id="${r.id}">
+    <div class="list-cover-wrap">${cover}</div>
+    <div class="list-main">
+      <div class="list-album">${esc(r.album_name)||'untitled'}</div>
+      <div class="list-artist">${esc(r.artist)||'unknown'}${r.country ? ' '+flagEmoji(r.country) : ''}</div>
+    </div>
+    <span class="list-genre">${esc(r.genre)||'—'}</span>
+    <span class="list-year">${esc(r.year)||'—'}</span>
+    <div class="list-bars">${pepeBars}</div>
+    <div class="list-bars">${jenniBars}</div>
+    <span class="list-plays"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i>${r.play_count||0}</span>
+  </div>`;
+}
+
+// ── smart filter chips — only shown once a filter is restricted from default ─
+function buyerChipInfo() {
+  const active = ['pepe','both','jenni'].filter(k => buyerActive[k]);
+  if (active.length === 3) return null; // default — nothing restricted
+  const names = { pepe: 'Pepe', both: 'Both', jenni: 'Jenni' };
+  const onlyJenni = active.length === 1 && active[0] === 'jenni';
+  return { label: `Buyer: ${active.map(k => names[k]).join(' + ')}`, jenni: onlyJenni };
+}
+
+function resetBuyerFilter() {
+  buyerActive.pepe = true; buyerActive.both = true; buyerActive.jenni = true;
+  ['Pepe','Both','Jenni'].forEach(name => document.getElementById('btn'+name).classList.add('active'));
+  render();
+}
+
+function resetGenreFilter() {
+  selectedGenres = new Set(allGenres);
+  buildGenreList();
+  render();
+}
+
+function clearAllFilters() {
+  selectedGenres = new Set(allGenres);
+  buildGenreList();
+  buyerActive.pepe = true; buyerActive.both = true; buyerActive.jenni = true;
+  ['Pepe','Both','Jenni'].forEach(name => document.getElementById('btn'+name).classList.add('active'));
+  render();
+}
+
+function renderChips() {
+  const el = document.getElementById('filterChips');
+  const chips = [];
+
+  if (selectedGenres.size < allGenres.length) {
+    chips.push(`<span class="filter-chip">Genres: ${selectedGenres.size} of ${allGenres.length}<button onclick="resetGenreFilter()" title="reset genre filter"><i class="ti ti-x"></i></button></span>`);
+  }
+  const buyerInfo = buyerChipInfo();
+  if (buyerInfo) {
+    chips.push(`<span class="filter-chip${buyerInfo.jenni ? ' buyer-jenni' : ''}">${esc(buyerInfo.label)}<button onclick="resetBuyerFilter()" title="reset buyer filter"><i class="ti ti-x"></i></button></span>`);
+  }
+  if (!chips.length) { el.innerHTML = ''; return; }
+  chips.push(`<button class="filter-chips-clear" onclick="clearAllFilters()">clear filters</button>`);
+  el.innerHTML = chips.join('');
 }
 
 // ── trigger square-shine animation only once a card is actually visible ────
@@ -922,6 +1080,7 @@ function cardHTML(r) {
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
       ${cover}
+      ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagEmoji(r.country)}</div>` : ''}
       <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
     </div>
@@ -1379,6 +1538,13 @@ function bindEvents(){
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
   document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
+  document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
+  document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
+  document.getElementById('viewGridBtn').classList.toggle('active', viewMode === 'grid');
+  document.getElementById('viewListBtn').classList.toggle('active', viewMode === 'list');
+  document.getElementById('morePanel').addEventListener('click', e => {
+    if (e.target.closest('.menu-item')) document.getElementById('morePanel').classList.add('hidden');
+  });
   document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
   document.addEventListener('keydown', e => {
     if (document.getElementById('detailOverlay').classList.contains('hidden')) return;
@@ -1662,6 +1828,18 @@ function toggleGenreDropdown() {
   panel.classList.toggle('hidden', open);
   chevron.style.transform = open ? '' : 'rotate(180deg)';
 }
+
+// ── header "more actions" menu — export / import / edit mode ───────────────
+function toggleMoreMenu() {
+  document.getElementById('morePanel').classList.toggle('hidden');
+}
+
+document.addEventListener('click', e => {
+  const dd = document.getElementById('moreMenu');
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
+  if (dd && !clickedInside) document.getElementById('morePanel')?.classList.add('hidden');
+});
 
 // ── tab switching ──────────────────────────────────────────────────────────
 let currentTab = 'collection';
