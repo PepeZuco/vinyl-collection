@@ -385,6 +385,17 @@ select option{background:var(--surface);color:var(--text)}
 .chart-title{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:14px;font-weight:600}
 .chart-wrap{position:relative;height:240px}
 .chart-wrap-tall{position:relative;height:300px}
+
+/* stats: top artists / most played rankings */
+.ranking-list{display:flex;flex-direction:column}
+.ranking-row{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border)}
+.ranking-row:last-child{border-bottom:none}
+.ranking-rank{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--accent);width:14px;flex-shrink:0;text-align:right}
+.ranking-cover-wrap{width:32px;height:32px;border-radius:3px;overflow:hidden;flex-shrink:0;background:#111;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:13px}
+.ranking-cover-wrap img{width:100%;height:100%;object-fit:cover}
+[data-theme="light"] .ranking-cover-wrap{background:#eee;color:#ccc}
+.ranking-name{flex:1;min-width:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ranking-count{font-size:12px;color:var(--muted);flex-shrink:0;font-variant-numeric:tabular-nums;display:flex;align-items:center}
 .bar-chart{display:flex;flex-direction:column;gap:8px}
 .bar-row{display:flex;align-items:center;gap:8px}
 .bar-label{font-size:11px;color:var(--muted);min-width:110px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -655,6 +666,16 @@ select option{background:var(--surface);color:var(--text)}
       <div class="chart-box">
         <div class="chart-title">records by genre</div>
         <div class="chart-wrap-tall" id="genreWrap"><canvas id="genreChart"></canvas></div>
+      </div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">top artists</div>
+        <div class="ranking-list" id="topArtistsList"></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">most played</div>
+        <div class="ranking-list" id="mostPlayedList"></div>
       </div>
     </div>
     <div class="chart-box" style="margin-bottom:28px">
@@ -2028,6 +2049,8 @@ function renderStats() {
     const vals = arr.map(r => Number(r[key])||0).filter(x => x > 0);
     return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : '—';
   };
+  const totalPlays = all.reduce((sum, r) => sum + (Number(r.play_count)||0), 0);
+  const countryCount = new Set(all.map(r => (r.country||'').toUpperCase()).filter(Boolean)).size;
 
   // ── stat cards ────────────────────────────────────────────────────────────
   document.getElementById('statsCards').innerHTML = `
@@ -2060,6 +2083,16 @@ function renderStats() {
       <div class="stat-card-label">Total in collection</div>
       <div class="stat-card-value">${all.length}</div>
       <div class="stat-card-sub">${records.filter(r=>!r.have_it).length} on wishlist</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">Total plays</div>
+      <div class="stat-card-value">${totalPlays}</div>
+      <div class="stat-card-sub">across the collection</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-label">Countries</div>
+      <div class="stat-card-value">${countryCount}</div>
+      <div class="stat-card-sub">represented editions</div>
     </div>
   `;
 
@@ -2128,6 +2161,45 @@ function renderStats() {
       }
     }
   });
+
+  // ── rankings: top artists by record count, most played by play count ──────
+  const coverPh = `<i class="ti ti-disc"></i>`;
+  const coverWrap = cover => cover
+    ? `<div class="ranking-cover-wrap"><img src="${cover}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'"></div>`
+    : `<div class="ranking-cover-wrap">${coverPh}</div>`;
+
+  const artistCounts = {};
+  all.forEach(r => {
+    const name = (r.artist||'').trim();
+    if (!name) return;
+    if (!artistCounts[name]) artistCounts[name] = { count: 0, cover: '' };
+    artistCounts[name].count++;
+    if (!artistCounts[name].cover && r.cover_data) artistCounts[name].cover = r.cover_data;
+  });
+  const topArtists = Object.entries(artistCounts).sort((a,b) => b[1].count - a[1].count).slice(0, 5);
+
+  document.getElementById('topArtistsList').innerHTML = topArtists.length
+    ? topArtists.map(([name, info], i) => `
+      <div class="ranking-row">
+        <span class="ranking-rank">${i+1}</span>
+        ${coverWrap(info.cover)}
+        <span class="ranking-name">${esc(name)}</span>
+        <span class="ranking-count">${info.count} record${info.count===1?'':'s'}</span>
+      </div>`).join('')
+    : `<p style="color:var(--muted);font-size:13px;padding:8px 2px">no records yet.</p>`;
+
+  const mostPlayed = all.filter(r => Number(r.play_count) > 0)
+    .sort((a,b) => Number(b.play_count) - Number(a.play_count)).slice(0, 5);
+
+  document.getElementById('mostPlayedList').innerHTML = mostPlayed.length
+    ? mostPlayed.map((r, i) => `
+      <div class="ranking-row">
+        <span class="ranking-rank">${i+1}</span>
+        ${coverWrap(r.cover_data)}
+        <span class="ranking-name">${esc(r.album_name)||'untitled'}</span>
+        <span class="ranking-count"><i class="ti ti-headphones" style="font-size:10px;opacity:.5;margin-right:4px"></i>${r.play_count}</span>
+      </div>`).join('')
+    : `<p style="color:var(--muted);font-size:13px;padding:8px 2px">no plays logged yet.</p>`;
 
   // ── D3 ridgeline areas: release year by owner ─────────────────────────────
   const wrap = document.getElementById('yearWrap');
