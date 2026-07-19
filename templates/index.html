@@ -723,9 +723,20 @@ select option{background:var(--surface);color:var(--text)}
   .cal-cell-evs{display:none}
   .cal-cell-dots{display:flex}
   .cal-grid,.cal-dow-row{gap:4px}
-  .cal-week-grid{display:flex;overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;margin:0 -4px;padding:0 4px 4px}
-  .cal-week-col{min-width:118px;flex:0 0 auto;scroll-snap-align:start}
-  .cal-week-chip-txt{font-size:10.5px}
+  .cal-week-grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .cal-week-col{padding:5px 3px;gap:4px;min-height:auto;border-radius:var(--radius-sm)}
+  .cal-week-col-head{gap:0;padding-bottom:4px}
+  .cal-week-col-dow{font-size:8.5px;letter-spacing:.03em}
+  .cal-week-col-num{font-size:13px}
+  .cal-week-col-body{gap:3px}
+  .cal-week-chip{display:block;width:100%;aspect-ratio:1;padding:0;border-radius:5px;border:2px solid transparent;background:var(--card)}
+  .cal-week-chip.bought{border-color:var(--accent);background:rgba(245,197,24,.1)}
+  .cal-week-chip.cleaned{border-color:#4AA3C4;background:rgba(74,163,196,.1)}
+  .cal-week-chip.played{border-color:#5FBF7A;background:rgba(95,191,122,.1)}
+  .cal-week-chip.note{border-color:#9B7FD4;background:rgba(155,127,212,.1)}
+  .cal-week-chip-cover{width:100%;height:100%;border-radius:2px;font-size:14px}
+  .cal-week-chip-txt{display:none}
+  .cal-week-empty{font-size:9px;padding:4px 0}
 }
 </style>
 </head>
