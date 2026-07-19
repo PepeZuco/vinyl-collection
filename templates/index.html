@@ -608,6 +608,74 @@ select option{background:var(--surface);color:var(--text)}
 .detail-note-entry:last-child{border-bottom:none;padding-bottom:0;margin-bottom:0}
 .detail-note-date{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:600}
 
+/* ── calendar page ─────────────────────────────────────────────────────────
+   event colors: bought = accent gold, cleaned = teal, note = logo purple */
+.calendar-page{display:none}
+.calendar-page.visible{display:block}
+.cal-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.cal-nav{display:flex;align-items:center;gap:6px}
+.cal-title{font-family:var(--font-mono);font-weight:700;font-size:15px;margin-left:8px;text-transform:lowercase;white-space:nowrap}
+.cal-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+.cal-types{display:flex;gap:6px}
+.cal-type-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;font-size:12px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s}
+.cal-type-btn .cal-dot{opacity:.45}
+.cal-type-btn.active{color:var(--text);border-color:color-mix(in srgb, var(--text) 30%, var(--border))}
+.cal-type-btn.active .cal-dot{opacity:1}
+.cal-scale{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0}
+.cal-scale-btn{height:32px;padding:0 13px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .12s}
+.cal-scale-btn+.cal-scale-btn{border-left:1px solid var(--border)}
+.cal-scale-btn.active{background:var(--card);color:var(--accent);font-weight:600}
+.cal-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
+.cal-dot.bought{background:var(--accent)}
+.cal-dot.cleaned{background:#4AA3C4}
+.cal-dot.note{background:#9B7FD4}
+/* month grid */
+.cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.cal-dow{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:center;font-weight:600}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-height:96px;padding:6px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.cal-cell.has-ev{cursor:pointer;transition:border-color .12s}
+.cal-cell.has-ev:hover{border-color:var(--accent)}
+.cal-cell.cal-out{opacity:.35}
+.cal-cell.cal-today .cal-cell-num{color:var(--accent);font-weight:700}
+.cal-cell.cal-today{border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
+.cal-cell-num{font-size:11px;color:var(--muted);font-family:var(--font-mono);line-height:1}
+.cal-cell-evs{display:flex;flex-direction:column;gap:3px;min-width:0}
+.cal-pill{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);min-width:0}
+.cal-pill-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-more{font-size:10px;color:var(--muted)}
+.cal-cell-dots{display:none;flex-wrap:wrap;gap:3px;align-items:center}
+/* agenda (week / day views) */
+.cal-agenda{display:flex;flex-direction:column;gap:12px}
+.cal-day-sec{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px}
+.cal-day-sec.cal-today{border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
+.cal-day-head{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;font-family:var(--font-mono)}
+.cal-day-sec.cal-today .cal-day-head{color:var(--accent)}
+.cal-day-empty{font-size:12px;color:var(--muted);margin-top:6px}
+.cal-event{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.cal-event:last-child{border-bottom:none;padding-bottom:2px}
+.cal-event:first-of-type{margin-top:8px;border-top:1px solid var(--border);padding-top:11px}
+.cal-event:hover .cal-ev-title{color:var(--accent)}
+.cal-ev-cover-wrap{width:40px;height:40px;border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.cal-ev-cover-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.cal-ev-main{flex:1;min-width:0}
+.cal-ev-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .12s}
+.cal-ev-artist{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.cal-ev-note{font-size:12.5px;color:var(--text);opacity:.85;margin-top:6px;line-height:1.6}
+.cal-ev-note.preview{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cal-badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;flex-shrink:0;margin-top:2px}
+.cal-badge.bought{color:var(--accent);border-color:color-mix(in srgb, var(--accent) 45%, transparent);background:rgba(245,197,24,.07)}
+.cal-badge.cleaned{color:#4AA3C4;border-color:rgba(74,163,196,.45);background:rgba(74,163,196,.07)}
+.cal-badge.note{color:#9B7FD4;border-color:rgba(155,127,212,.45);background:rgba(155,127,212,.07)}
+@media(max-width:760px){
+  .cal-toolbar{gap:8px}
+  .cal-controls{margin-left:0;width:100%;justify-content:space-between}
+  .cal-title{font-size:13px;margin-left:4px}
+  .cal-cell{min-height:56px;padding:5px}
+  .cal-cell-evs{display:none}
+  .cal-cell-dots{display:flex}
+  .cal-grid,.cal-dow-row{gap:4px}
+}
 </style>
 </head>
 <body>
@@ -652,7 +720,33 @@ select option{background:var(--surface);color:var(--text)}
 
   <div class="nav-tabs">
     <button class="nav-tab active" id="tabCollection"><i class="ti ti-layout-grid"></i> Collection</button>
+    <button class="nav-tab" id="tabCalendar"><i class="ti ti-calendar-month"></i> Calendar</button>
     <button class="nav-tab" id="tabStats"><i class="ti ti-chart-bar"></i> Statistics</button>
+  </div>
+
+  <!-- calendar page -->
+  <div class="calendar-page" id="calendarPage">
+    <div class="cal-toolbar">
+      <div class="cal-nav">
+        <button class="btn btn-icon" onclick="calNavigate(-1)" title="previous"><i class="ti ti-chevron-left"></i></button>
+        <button class="btn" onclick="calNavigate(0)">today</button>
+        <button class="btn btn-icon" onclick="calNavigate(1)" title="next"><i class="ti ti-chevron-right"></i></button>
+        <span class="cal-title" id="calTitle"></span>
+      </div>
+      <div class="cal-controls">
+        <div class="cal-types" id="calTypesBar">
+          <button class="cal-type-btn active" data-type="bought" onclick="toggleCalType('bought')"><span class="cal-dot bought"></span>bought</button>
+          <button class="cal-type-btn active" data-type="cleaned" onclick="toggleCalType('cleaned')"><span class="cal-dot cleaned"></span>cleaned</button>
+          <button class="cal-type-btn active" data-type="note" onclick="toggleCalType('note')"><span class="cal-dot note"></span>notes</button>
+        </div>
+        <div class="cal-scale" id="calScaleBar">
+          <button class="cal-scale-btn active" data-scale="month" onclick="setCalScale('month')">month</button>
+          <button class="cal-scale-btn" data-scale="week" onclick="setCalScale('week')">week</button>
+          <button class="cal-scale-btn" data-scale="day" onclick="setCalScale('day')">day</button>
+        </div>
+      </div>
+    </div>
+    <div id="calBody"></div>
   </div>
 
   <!-- stats page -->
@@ -783,6 +877,9 @@ select option{background:var(--surface);color:var(--text)}
     <i class="ti ti-heart"></i><span>Wishlist</span>
   </button>
   <button class="mtab-fab" id="mtabFab" style="display:none" onclick="openAdd()" title="add record"><i class="ti ti-plus"></i></button>
+  <button class="mtab-item" id="mtabCalendar" onclick="switchTab('calendar')">
+    <i class="ti ti-calendar-month"></i><span>Calendar</span>
+  </button>
   <button class="mtab-item" id="mtabStats" onclick="switchTab('stats')">
     <i class="ti ti-chart-bar"></i><span>Stats</span>
   </button>
@@ -900,6 +997,17 @@ select option{background:var(--surface);color:var(--text)}
   </div>
 </div>
 
+<!-- Calendar day detail modal -->
+<div class="overlay hidden" id="calDayOverlay">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <span class="modal-title" id="calDayTitle">day</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeCalDay()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" id="calDayBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -989,6 +1097,7 @@ async function loadRecords() {
   const r = await fetch('/api/records');
   records = await r.json();
   render();
+  if (currentTab === 'calendar') renderCalendar();
 }
 
 // avg uses only ratings that exist — if only one person rated, uses that score alone
@@ -1672,6 +1781,11 @@ document.getElementById('exportBtn').addEventListener('click',()=>{window.locati
 function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
+  document.getElementById('tabCalendar').addEventListener('click', () => switchTab('calendar'));
+  document.getElementById('calDayOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDay();});
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('calDayOverlay').classList.contains('hidden')) closeCalDay();
+  });
   document.getElementById('randomBtn').addEventListener('click', () => {
     const recs = filtered();
     if (!recs.length) { toast('no records to pick from'); return; }
@@ -2005,18 +2119,22 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('collectionPage').classList.toggle('hidden', tab !== 'collection');
   document.getElementById('statsPage').classList.toggle('visible', tab === 'stats');
+  document.getElementById('calendarPage').classList.toggle('visible', tab === 'calendar');
   document.getElementById('tabCollection').classList.toggle('active', tab === 'collection');
   document.getElementById('tabStats').classList.toggle('active', tab === 'stats');
+  document.getElementById('tabCalendar').classList.toggle('active', tab === 'calendar');
   syncMobileTabbar();
   if (tab === 'stats') renderStats();
+  if (tab === 'calendar') renderCalendar();
 }
 
 // ── mobile bottom tab bar — mirrors haveItMode + currentTab, no separate state ─
 function syncMobileTabbar() {
-  const onStats = currentTab === 'stats';
-  document.getElementById('mtabCollection').classList.toggle('active', !onStats && haveItMode === 'collection');
-  document.getElementById('mtabWishlist').classList.toggle('active', !onStats && haveItMode === 'wishlist');
-  document.getElementById('mtabStats').classList.toggle('active', onStats);
+  const onCollection = currentTab === 'collection';
+  document.getElementById('mtabCollection').classList.toggle('active', onCollection && haveItMode === 'collection');
+  document.getElementById('mtabWishlist').classList.toggle('active', onCollection && haveItMode === 'wishlist');
+  document.getElementById('mtabCalendar').classList.toggle('active', currentTab === 'calendar');
+  document.getElementById('mtabStats').classList.toggle('active', currentTab === 'stats');
 }
 
 // ── statistics ─────────────────────────────────────────────────────────────
@@ -2370,6 +2488,187 @@ function renderWorldMap(all) {
       tooltip.style.opacity = '1';
     })
     .on('mouseleave', () => { tooltip.style.opacity = '0'; });
+}
+
+// ── calendar ───────────────────────────────────────────────────────────────
+// month / week / day views over bought_date, last_cleaned and dated notes
+let calScale = 'month';                  // 'month' | 'week' | 'day'
+let calAnchor = new Date();              // any date inside the visible range
+let calTypes = { bought: true, cleaned: true, note: true };
+
+const CAL_TYPE_LABEL = { bought: 'bought', cleaned: 'cleaned', note: 'note' };
+
+function calValidDate(s) { return /^\d{4}-\d{2}-\d{2}/.test(s || ''); }
+function calKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function calParseKey(k) {
+  const [y,m,d] = k.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function calFmtLong(d) {
+  return d.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric', year:'numeric' }).toLowerCase();
+}
+
+// map of 'YYYY-MM-DD' -> [{type, r, text?}], honoring the active type filters
+function calEventsByDay() {
+  const map = new Map();
+  const add = (date, ev) => {
+    const k = date.slice(0, 10);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(ev);
+  };
+  records.forEach(r => {
+    if (calTypes.bought && calValidDate(r.bought_date)) add(r.bought_date, { type:'bought', r });
+    if (calTypes.cleaned && calValidDate(r.last_cleaned)) add(r.last_cleaned, { type:'cleaned', r });
+    if (calTypes.note) parseNotes(r.notes, r.bought_date).forEach(n => {
+      if (calValidDate(n.date) && n.text && n.text.trim()) add(n.date, { type:'note', r, text:n.text });
+    });
+  });
+  const order = { bought:0, cleaned:1, note:2 };
+  map.forEach(list => list.sort((a,b) => order[a.type]-order[b.type] || String(a.r.album_name).localeCompare(String(b.r.album_name))));
+  return map;
+}
+
+function calNavigate(dir) {
+  if (dir === 0) calAnchor = new Date();
+  else if (calScale === 'month') calAnchor.setMonth(calAnchor.getMonth() + dir);
+  else if (calScale === 'week') calAnchor.setDate(calAnchor.getDate() + 7*dir);
+  else calAnchor.setDate(calAnchor.getDate() + dir);
+  renderCalendar();
+}
+
+function setCalScale(scale) {
+  calScale = scale;
+  document.querySelectorAll('#calScaleBar .cal-scale-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.scale === scale));
+  renderCalendar();
+}
+
+function toggleCalType(type) {
+  calTypes[type] = !calTypes[type];
+  const btn = document.querySelector(`#calTypesBar .cal-type-btn[data-type="${type}"]`);
+  if (btn) btn.classList.toggle('active', calTypes[type]);
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const events = calEventsByDay();
+  if (calScale === 'month') renderCalMonth(events);
+  else if (calScale === 'week') renderCalWeek(events);
+  else renderCalDayView(events);
+}
+
+// one event row — shared by week view, day view and the day modal
+function calEventRow(ev, fullNote) {
+  const r = ev.r;
+  const cover = r.cover_data
+    ? `<div class="cal-ev-cover-wrap"><img src="${r.cover_data}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'"></div>`
+    : `<div class="cal-ev-cover-wrap"><i class="ti ti-disc"></i></div>`;
+  let noteHtml = '';
+  if (ev.type === 'note' && ev.text) {
+    const rendered = typeof marked !== 'undefined'
+      ? marked.parse(ev.text)
+      : esc(ev.text).replace(/\n/g, '<br>');
+    noteHtml = fullNote
+      ? `<div class="cal-ev-note detail-notes-body">${rendered}</div>`
+      : `<div class="cal-ev-note preview">${esc(ev.text.replace(/\s+/g,' ').trim())}</div>`;
+  }
+  return `<div class="cal-event" onclick="openDetailFromCal(${r.id})">
+    ${cover}
+    <div class="cal-ev-main">
+      <div class="cal-ev-title">${esc(r.album_name) || 'untitled'}</div>
+      <div class="cal-ev-artist">${esc(r.artist)}</div>
+      ${noteHtml}
+    </div>
+    <span class="cal-badge ${ev.type}">${CAL_TYPE_LABEL[ev.type]}</span>
+  </div>`;
+}
+
+function renderCalMonth(events) {
+  const y = calAnchor.getFullYear(), m = calAnchor.getMonth();
+  document.getElementById('calTitle').textContent =
+    calAnchor.toLocaleDateString('en-US', { month:'long', year:'numeric' }).toLowerCase();
+  const firstDow = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const weeks = Math.ceil((firstDow + daysInMonth) / 7);
+  const todayK = calKey(new Date());
+  const dows = ['sun','mon','tue','wed','thu','fri','sat'];
+  const cur = new Date(y, m, 1 - firstDow);
+  let cells = '';
+  for (let i = 0; i < weeks*7; i++) {
+    const k = calKey(cur);
+    const evs = events.get(k) || [];
+    const shown = evs.slice(0, 3);
+    const typesPresent = [...new Set(evs.map(e => e.type))];
+    cells += `<div class="cal-cell${cur.getMonth() !== m ? ' cal-out' : ''}${k === todayK ? ' cal-today' : ''}${evs.length ? ' has-ev' : ''}"${evs.length ? ` onclick="openCalDay('${k}')"` : ''}>
+      <div class="cal-cell-num">${cur.getDate()}</div>
+      <div class="cal-cell-evs">
+        ${shown.map(ev => `<div class="cal-pill"><span class="cal-dot ${ev.type}"></span><span class="cal-pill-txt">${esc(ev.r.album_name || ev.r.artist)}</span></div>`).join('')}
+        ${evs.length > 3 ? `<div class="cal-more">+${evs.length-3} more</div>` : ''}
+      </div>
+      <div class="cal-cell-dots">${typesPresent.map(t => `<span class="cal-dot ${t}"></span>`).join('')}</div>
+    </div>`;
+    cur.setDate(cur.getDate() + 1);
+  }
+  document.getElementById('calBody').innerHTML =
+    `<div class="cal-dow-row">${dows.map(d => `<div class="cal-dow">${d}</div>`).join('')}</div>
+     <div class="cal-grid">${cells}</div>`;
+}
+
+function renderCalWeek(events) {
+  const start = new Date(calAnchor);
+  start.setDate(start.getDate() - start.getDay()); // back to sunday
+  const end = new Date(start); end.setDate(end.getDate() + 6);
+  const sameMonth = start.getMonth() === end.getMonth();
+  const t = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric' }).toLowerCase();
+  document.getElementById('calTitle').textContent =
+    `${t(start)} – ${sameMonth ? end.getDate() : t(end)}, ${end.getFullYear()}`;
+  const todayK = calKey(new Date());
+  const cur = new Date(start);
+  let html = '<div class="cal-agenda">';
+  for (let i = 0; i < 7; i++) {
+    const k = calKey(cur);
+    const evs = events.get(k) || [];
+    html += `<div class="cal-day-sec${k === todayK ? ' cal-today' : ''}">
+      <div class="cal-day-head">${calFmtLong(cur)}</div>
+      ${evs.length ? evs.map(ev => calEventRow(ev, false)).join('') : '<div class="cal-day-empty">nothing on this day</div>'}
+    </div>`;
+    cur.setDate(cur.getDate() + 1);
+  }
+  document.getElementById('calBody').innerHTML = html + '</div>';
+}
+
+function renderCalDayView(events) {
+  const k = calKey(calAnchor);
+  document.getElementById('calTitle').textContent = calFmtLong(calAnchor);
+  const evs = events.get(k) || [];
+  const todayK = calKey(new Date());
+  document.getElementById('calBody').innerHTML = `<div class="cal-agenda">
+    <div class="cal-day-sec${k === todayK ? ' cal-today' : ''}">
+      <div class="cal-day-head">${calFmtLong(calAnchor)}</div>
+      ${evs.length ? evs.map(ev => calEventRow(ev, true)).join('') : '<div class="cal-day-empty">nothing on this day</div>'}
+    </div>
+  </div>`;
+}
+
+// day modal — opened from a month cell
+function openCalDay(k) {
+  const evs = calEventsByDay().get(k) || [];
+  document.getElementById('calDayTitle').textContent = calFmtLong(calParseKey(k));
+  document.getElementById('calDayBody').innerHTML = evs.length
+    ? evs.map(ev => calEventRow(ev, true)).join('')
+    : '<div class="cal-day-empty">nothing on this day</div>';
+  document.getElementById('calDayOverlay').classList.remove('hidden');
+}
+
+function closeCalDay() {
+  document.getElementById('calDayOverlay').classList.add('hidden');
+}
+
+function openDetailFromCal(id) {
+  closeCalDay();
+  openDetail(id);
 }
 
 init();
