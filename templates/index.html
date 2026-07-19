@@ -682,8 +682,8 @@ select option{background:var(--surface);color:var(--text)}
 .cal-badge.played{color:#5FBF7A;border-color:rgba(95,191,122,.45);background:rgba(95,191,122,.07)}
 .cal-badge.note{color:#9B7FD4;border-color:rgba(155,127,212,.45);background:rgba(155,127,212,.07)}
 /* week grid (google-calendar-like columns of compact event chips) */
-.cal-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:start}
-.cal-week-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 6px;display:flex;flex-direction:column;gap:6px;min-height:150px}
+.cal-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:start}
+.cal-week-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 6px;display:flex;flex-direction:column;gap:6px;min-height:150px;min-width:0}
 .cal-week-col.cal-today{border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
 .cal-week-col-head{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding-bottom:6px;border-bottom:1px solid var(--border);transition:opacity .12s;background:none;border-top:none;border-left:none;border-right:none;width:100%;font-family:var(--font)}
 .cal-week-col-head:hover{opacity:.7}
@@ -697,11 +697,9 @@ select option{background:var(--surface);color:var(--text)}
 .cal-week-chip.cleaned{border-left-color:#4AA3C4;background:rgba(74,163,196,.08)}
 .cal-week-chip.played{border-left-color:#5FBF7A;background:rgba(95,191,122,.08)}
 .cal-week-chip.note{border-left-color:#9B7FD4;background:rgba(155,127,212,.08)}
-.cal-week-chip-cover{width:22px;height:22px;border-radius:4px;overflow:hidden;flex-shrink:0;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px}
+.cal-week-chip-cover{width:30px;height:30px;border-radius:5px;overflow:hidden;flex-shrink:0;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
 .cal-week-chip-cover img{width:100%;height:100%;object-fit:cover;display:block}
-.cal-week-chip-txt{font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.cal-week-more{font-size:10.5px;color:var(--muted);text-align:center;cursor:pointer;padding:3px 0;background:none;border:none;width:100%;font-family:var(--font)}
-.cal-week-more:hover{color:var(--accent)}
+.cal-week-chip-txt{font-size:11.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
 .cal-week-empty{font-size:10.5px;color:var(--muted);text-align:center;opacity:.5;padding:6px 0}
 
 /* date picker modal */
@@ -2827,8 +2825,6 @@ function renderCalMonth(events) {
      <div class="cal-grid">${cells}</div>`;
 }
 
-const CAL_WEEK_CHIP_CAP = 4;
-
 function renderCalWeek(events) {
   const start = new Date(calAnchor);
   start.setDate(start.getDate() - start.getDay()); // back to sunday
@@ -2845,7 +2841,6 @@ function renderCalWeek(events) {
   for (let i = 0; i < 7; i++) {
     const k = calKey(cur);
     const evs = events.get(k) || [];
-    const shown = evs.slice(0, CAL_WEEK_CHIP_CAP);
     const dow = calCapitalizeStr(cur.toLocaleDateString('en-US', { weekday:'short' }));
     cols += `<div class="cal-week-col${k === todayK ? ' cal-today' : ''}">
       <button type="button" class="cal-week-col-head" onclick="openCalDay('${k}')">
@@ -2853,9 +2848,7 @@ function renderCalWeek(events) {
         <span class="cal-week-col-num">${cur.getDate()}</span>
       </button>
       <div class="cal-week-col-body">
-        ${shown.map(ev => calWeekChip(ev)).join('')}
-        ${evs.length > CAL_WEEK_CHIP_CAP ? `<button type="button" class="cal-week-more" onclick="openCalDay('${k}')">+${evs.length - CAL_WEEK_CHIP_CAP} more</button>` : ''}
-        ${evs.length === 0 ? '<div class="cal-week-empty">—</div>' : ''}
+        ${evs.length ? evs.map(ev => calWeekChip(ev)).join('') : '<div class="cal-week-empty">—</div>'}
       </div>
     </div>`;
     cur.setDate(cur.getDate() + 1);
