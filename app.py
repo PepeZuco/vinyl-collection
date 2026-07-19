@@ -31,6 +31,7 @@ class Record(db.Model):
     wife_rating = db.Column(db.Float, default=0)
     have_it     = db.Column(db.Boolean, default=True)
     play_count  = db.Column(db.Integer, default=0)
+    play_dates  = db.Column(db.Text)      # JSON array of ISO datetime strings, one per play
     last_cleaned= db.Column(db.String(50))
     cover_data  = db.Column(db.Text)      # base64 data URI
     notes       = db.Column(db.Text)      # markdown notes
@@ -50,6 +51,7 @@ class Record(db.Model):
             "wife_rating": self.wife_rating or 0,
             "have_it": bool(self.have_it),
             "play_count": self.play_count or 0,
+            "play_dates": self.play_dates or "",
             "last_cleaned": self.last_cleaned or "",
             "cover_data": self.cover_data or "",
             "notes": self.notes or "",
@@ -60,14 +62,19 @@ with app.app_context():
     db.create_all()
     # lightweight auto-migration: db.create_all() only creates missing tables,
     # it won't add new columns to a table that already exists (e.g. on Railway's
-    # persisted Postgres/SQLite). Add the "country" column if it's missing.
+    # persisted Postgres/SQLite). Add any columns that are missing.
     from sqlalchemy import inspect, text
     inspector = inspect(db.engine)
     existing_cols = [c["name"] for c in inspector.get_columns("record")]
-    if "country" not in existing_cols:
-        with db.engine.connect() as conn:
-            conn.execute(text("ALTER TABLE record ADD COLUMN country VARCHAR(2)"))
-            conn.commit()
+    missing_cols = {
+        "country": "VARCHAR(2)",
+        "play_dates": "TEXT",
+    }
+    for col, ddl_type in missing_cols.items():
+        if col not in existing_cols:
+            with db.engine.connect() as conn:
+                conn.execute(text(f"ALTER TABLE record ADD COLUMN {col} {ddl_type}"))
+                conn.commit()
 
 # ── auth helpers ──────────────────────────────────────────────────────────────
 
@@ -130,6 +137,7 @@ def create_record():
         wife_rating = float(d.get("wife_rating") or 0),
         have_it     = bool(d.get("have_it", True)),
         play_count  = int(d.get("play_count") or 0),
+        play_dates  = d.get("play_dates",""),
         last_cleaned= d.get("last_cleaned",""),
         cover_data  = d.get("cover_data",""),
         notes       = d.get("notes",""),
@@ -151,6 +159,7 @@ def update_record(rid):
     if "wife_rating" in d: r.wife_rating  = float(d["wife_rating"] or 0)
     if "have_it"     in d: r.have_it      = bool(d["have_it"])
     if "play_count"  in d: r.play_count   = int(d["play_count"] or 0)
+    if "play_dates"  in d: r.play_dates   = d["play_dates"]
     if "cover_data"  in d: r.cover_data   = d["cover_data"]
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
@@ -171,7 +180,7 @@ def delete_record(rid):
 def export_csv():
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","my_rating","wife_rating","have_it","play_count","last_cleaned","cover_image_base64","notes","country"]
+            "bought_by","my_rating","wife_rating","have_it","play_count","play_dates","last_cleaned","cover_image_base64","notes","country"]
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -209,6 +218,7 @@ def import_records_from_csv_text(text):
             wife_rating = float(row.get("wife_rating") or 0),
             have_it     = row.get("have_it","").lower() in ("true","1","yes"),
             play_count  = int(row.get("play_count") or 0),
+            play_dates  = row.get("play_dates",""),
             last_cleaned= row.get("last_cleaned",""),
             cover_data  = cover,
             notes       = row.get("notes",""),
