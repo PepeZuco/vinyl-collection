@@ -622,7 +622,7 @@ select option{background:var(--surface);color:var(--text)}
 .calendar-page.visible{display:block}
 .cal-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
 .cal-nav{display:flex;align-items:center;gap:6px}
-.cal-title{font-family:var(--font-mono);font-weight:700;font-size:15px;margin-left:8px;text-transform:lowercase;white-space:nowrap}
+.cal-title{font-family:var(--font-mono);font-weight:700;font-size:15px;margin-left:8px;white-space:nowrap}
 .cal-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
 .cal-types{display:flex;gap:6px}
 .cal-type-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;font-size:12px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s}
@@ -661,11 +661,15 @@ select option{background:var(--surface);color:var(--text)}
 .cal-day-head{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;font-family:var(--font-mono)}
 .cal-day-sec.cal-today .cal-day-head{color:var(--accent)}
 .cal-day-empty{font-size:12px;color:var(--muted);margin-top:6px}
-.cal-event{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.cal-event{display:flex;gap:12px;align-items:flex-start;padding:11px 0 11px 10px;border-bottom:1px solid var(--border);border-left:3px solid transparent;cursor:pointer}
 .cal-event:last-child{border-bottom:none;padding-bottom:2px}
 .cal-event:first-of-type{margin-top:8px;border-top:1px solid var(--border);padding-top:11px}
 .cal-event:hover .cal-ev-title{color:var(--accent)}
-.cal-ev-cover-wrap{width:40px;height:40px;border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.cal-event.bought{border-left-color:var(--accent)}
+.cal-event.cleaned{border-left-color:#4AA3C4}
+.cal-event.played{border-left-color:#5FBF7A}
+.cal-event.note{border-left-color:#9B7FD4}
+.cal-ev-cover-wrap{width:48px;height:48px;border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--muted)}
 .cal-ev-cover-wrap img{width:100%;height:100%;object-fit:cover;display:block}
 .cal-ev-main{flex:1;min-width:0}
 .cal-ev-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .12s}
@@ -677,6 +681,28 @@ select option{background:var(--surface);color:var(--text)}
 .cal-badge.cleaned{color:#4AA3C4;border-color:rgba(74,163,196,.45);background:rgba(74,163,196,.07)}
 .cal-badge.played{color:#5FBF7A;border-color:rgba(95,191,122,.45);background:rgba(95,191,122,.07)}
 .cal-badge.note{color:#9B7FD4;border-color:rgba(155,127,212,.45);background:rgba(155,127,212,.07)}
+/* week grid (google-calendar-like columns of compact event chips) */
+.cal-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:start}
+.cal-week-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 6px;display:flex;flex-direction:column;gap:6px;min-height:150px}
+.cal-week-col.cal-today{border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
+.cal-week-col-head{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding-bottom:6px;border-bottom:1px solid var(--border);transition:opacity .12s;background:none;border-top:none;border-left:none;border-right:none;width:100%;font-family:var(--font)}
+.cal-week-col-head:hover{opacity:.7}
+.cal-week-col-dow{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.cal-week-col-num{font-size:15px;font-weight:700;font-family:var(--font-mono);line-height:1.3;color:var(--text)}
+.cal-week-col.cal-today .cal-week-col-num{color:var(--accent)}
+.cal-week-col-body{display:flex;flex-direction:column;gap:5px;min-width:0}
+.cal-week-chip{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:var(--radius-sm);background:var(--card);border-left:3px solid transparent;cursor:pointer;transition:all .12s;min-width:0;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;font-family:var(--font)}
+.cal-week-chip:hover{filter:brightness(1.1)}
+.cal-week-chip.bought{border-left-color:var(--accent);background:rgba(245,197,24,.08)}
+.cal-week-chip.cleaned{border-left-color:#4AA3C4;background:rgba(74,163,196,.08)}
+.cal-week-chip.played{border-left-color:#5FBF7A;background:rgba(95,191,122,.08)}
+.cal-week-chip.note{border-left-color:#9B7FD4;background:rgba(155,127,212,.08)}
+.cal-week-chip-cover{width:22px;height:22px;border-radius:4px;overflow:hidden;flex-shrink:0;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px}
+.cal-week-chip-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.cal-week-chip-txt{font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.cal-week-more{font-size:10.5px;color:var(--muted);text-align:center;cursor:pointer;padding:3px 0;background:none;border:none;width:100%;font-family:var(--font)}
+.cal-week-more:hover{color:var(--accent)}
+.cal-week-empty{font-size:10.5px;color:var(--muted);text-align:center;opacity:.5;padding:6px 0}
 
 /* date picker modal */
 .cal-title{cursor:pointer;transition:all .12s}
@@ -699,6 +725,9 @@ select option{background:var(--surface);color:var(--text)}
   .cal-cell-evs{display:none}
   .cal-cell-dots{display:flex}
   .cal-grid,.cal-dow-row{gap:4px}
+  .cal-week-grid{display:flex;overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;margin:0 -4px;padding:0 4px 4px}
+  .cal-week-col{min-width:118px;flex:0 0 auto;scroll-snap-align:start}
+  .cal-week-chip-txt{font-size:10.5px}
 }
 </style>
 </head>
@@ -2744,7 +2773,7 @@ function calEventRow(ev, fullNote) {
       ? `<div class="cal-ev-note detail-notes-body">${rendered}</div>`
       : `<div class="cal-ev-note preview">${esc(ev.text.replace(/\s+/g,' ').trim())}</div>`;
   }
-  return `<div class="cal-event" onclick="openDetailFromCal(${r.id})">
+  return `<div class="cal-event ${ev.type}" onclick="openDetailFromCal(${r.id})">
     ${cover}
     <div class="cal-ev-main">
       <div class="cal-ev-title">${esc(r.album_name) || 'untitled'}</div>
@@ -2753,6 +2782,19 @@ function calEventRow(ev, fullNote) {
     </div>
     <span class="cal-badge ${ev.type}">${CAL_TYPE_LABEL[ev.type]}</span>
   </div>`;
+}
+
+// compact event chip — used by the week grid (cover art + type color, no detail text)
+function calWeekChip(ev) {
+  const r = ev.r;
+  const label = esc(r.album_name) || esc(r.artist) || 'untitled';
+  const cover = r.cover_data
+    ? `<img src="${r.cover_data}" alt="" loading="lazy" onerror="this.remove()">`
+    : `<i class="ti ti-disc"></i>`;
+  return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(r.artist)} — ${label} (${CAL_TYPE_LABEL[ev.type]})">
+    <span class="cal-week-chip-cover">${cover}</span>
+    <span class="cal-week-chip-txt">${label}</span>
+  </button>`;
 }
 
 function renderCalMonth(events) {
@@ -2785,6 +2827,8 @@ function renderCalMonth(events) {
      <div class="cal-grid">${cells}</div>`;
 }
 
+const CAL_WEEK_CHIP_CAP = 4;
+
 function renderCalWeek(events) {
   const start = new Date(calAnchor);
   start.setDate(start.getDate() - start.getDay()); // back to sunday
@@ -2797,17 +2841,26 @@ function renderCalWeek(events) {
     `${startStr} – ${endStr}, ${end.getFullYear()}`;
   const todayK = calKey(new Date());
   const cur = new Date(start);
-  let html = '<div class="cal-agenda">';
+  let cols = '';
   for (let i = 0; i < 7; i++) {
     const k = calKey(cur);
     const evs = events.get(k) || [];
-    html += `<div class="cal-day-sec${k === todayK ? ' cal-today' : ''}">
-      <div class="cal-day-head">${calFmtLong(cur)}</div>
-      ${evs.length ? evs.map(ev => calEventRow(ev, false)).join('') : '<div class="cal-day-empty">nothing on this day</div>'}
+    const shown = evs.slice(0, CAL_WEEK_CHIP_CAP);
+    const dow = calCapitalizeStr(cur.toLocaleDateString('en-US', { weekday:'short' }));
+    cols += `<div class="cal-week-col${k === todayK ? ' cal-today' : ''}">
+      <button type="button" class="cal-week-col-head" onclick="openCalDay('${k}')">
+        <span class="cal-week-col-dow">${dow}</span>
+        <span class="cal-week-col-num">${cur.getDate()}</span>
+      </button>
+      <div class="cal-week-col-body">
+        ${shown.map(ev => calWeekChip(ev)).join('')}
+        ${evs.length > CAL_WEEK_CHIP_CAP ? `<button type="button" class="cal-week-more" onclick="openCalDay('${k}')">+${evs.length - CAL_WEEK_CHIP_CAP} more</button>` : ''}
+        ${evs.length === 0 ? '<div class="cal-week-empty">—</div>' : ''}
+      </div>
     </div>`;
     cur.setDate(cur.getDate() + 1);
   }
-  document.getElementById('calBody').innerHTML = html + '</div>';
+  document.getElementById('calBody').innerHTML = `<div class="cal-week-grid">${cols}</div>`;
 }
 
 function renderCalDayView(events) {
