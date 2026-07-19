@@ -42,9 +42,17 @@ header{display:flex;align-items:center;justify-content:space-between;padding:28p
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
-.search{flex:1 1 340px;min-width:200px;max-width:480px;display:flex;align-items:center;gap:8px;background:var(--search-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px}
+.search{flex:1 1 340px;min-width:200px;max-width:480px;display:flex;align-items:center;gap:4px;background:var(--search-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px;position:relative}
 .search input{background:transparent;border:none;outline:none;color:var(--text);font-size:13px;width:100%;font-family:var(--font)}
-.search i{color:var(--muted);font-size:15px}
+.search i{color:var(--muted);font-size:15px;flex-shrink:0}
+.search-fields-btn{padding:4px 6px;height:auto}
+.search-fields-panel{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);border-top:none;margin-top:-1px;padding:12px;z-index:100;min-width:200px}
+.search-fields-panel.hidden{display:none}
+.search-fields-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
+.search-fields-list{display:flex;flex-direction:column;gap:8px}
+.search-field-check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text)}
+.search-field-check input{cursor:pointer}
+.search-field-check:hover span{color:var(--accent)}
 select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer;transition:background .2s,color .2s,border .2s}
 select:focus{border-color:var(--accent)}
 select option{background:var(--surface);color:var(--text)}
@@ -669,6 +677,20 @@ select option{background:var(--surface);color:var(--text)}
 .cal-badge.cleaned{color:#4AA3C4;border-color:rgba(74,163,196,.45);background:rgba(74,163,196,.07)}
 .cal-badge.played{color:#5FBF7A;border-color:rgba(95,191,122,.45);background:rgba(95,191,122,.07)}
 .cal-badge.note{color:#9B7FD4;border-color:rgba(155,127,212,.45);background:rgba(155,127,212,.07)}
+
+/* date picker modal */
+.cal-title{cursor:pointer;transition:all .12s}
+.cal-title:hover{opacity:0.8}
+.cal-picker-body{padding:16px}
+.cal-picker-month{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:16px}
+.cal-picker-title{font-weight:600;min-width:140px;text-align:center}
+.cal-picker-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-picker-day{display:flex;align-items:center;justify-content:center;aspect-ratio:1;border-radius:8px;font-size:13px;cursor:pointer;background:var(--bg-alt);border:1px solid transparent;transition:all .12s}
+.cal-picker-day:hover{background:rgba(245,197,24,.1);border-color:var(--accent)}
+.cal-picker-day.today{background:var(--accent);color:white}
+.cal-picker-day.other{opacity:0.3}
+.cal-picker-day.disabled{opacity:0.3;cursor:not-allowed}
+.cal-picker-day.disabled:hover{background:var(--bg-alt);border-color:transparent}
 @media(max-width:760px){
   .cal-toolbar{gap:8px}
   .cal-controls{margin-left:0;width:100%;justify-content:space-between}
@@ -733,7 +755,7 @@ select option{background:var(--surface);color:var(--text)}
         <button class="btn btn-icon" onclick="calNavigate(-1)" title="previous"><i class="ti ti-chevron-left"></i></button>
         <button class="btn" onclick="calNavigate(0)">today</button>
         <button class="btn btn-icon" onclick="calNavigate(1)" title="next"><i class="ti ti-chevron-right"></i></button>
-        <span class="cal-title" id="calTitle"></span>
+        <button class="cal-title" id="calTitle" onclick="openCalDatePicker()"></button>
       </div>
       <div class="cal-controls">
         <div class="cal-types" id="calTypesBar">
@@ -800,6 +822,34 @@ select option{background:var(--surface);color:var(--text)}
     <div class="search">
       <i class="ti ti-search"></i>
       <input type="text" id="searchInput" placeholder="search artist, album, genre...">
+      <button class="btn btn-icon search-fields-btn" id="searchFieldsBtn" onclick="toggleSearchFields()" title="search in">
+        <i class="ti ti-filter-search"></i>
+      </button>
+    </div>
+    <div class="search-fields-panel hidden" id="searchFieldsPanel">
+      <div class="search-fields-label">search in:</div>
+      <div class="search-fields-list">
+        <label class="search-field-check">
+          <input type="checkbox" id="searchField_artist" onchange="toggleSearchField('artist')" checked>
+          <span>Artist</span>
+        </label>
+        <label class="search-field-check">
+          <input type="checkbox" id="searchField_album" onchange="toggleSearchField('album')" checked>
+          <span>Album</span>
+        </label>
+        <label class="search-field-check">
+          <input type="checkbox" id="searchField_genre" onchange="toggleSearchField('genre')">
+          <span>Genre</span>
+        </label>
+        <label class="search-field-check">
+          <input type="checkbox" id="searchField_notes" onchange="toggleSearchField('notes')">
+          <span>Notes</span>
+        </label>
+        <label class="search-field-check">
+          <input type="checkbox" id="searchField_bought_at" onchange="toggleSearchField('bought_at')">
+          <span>Bought At</span>
+        </label>
+      </div>
     </div>
     <button class="filter-sheet-btn" id="filterSheetBtn" onclick="toggleFilterSheet()" title="filters">
       <i class="ti ti-adjustments-horizontal"></i>
@@ -1011,6 +1061,24 @@ select option{background:var(--surface);color:var(--text)}
   </div>
 </div>
 
+<!-- Calendar date picker modal -->
+<div class="overlay hidden" id="calDatePickerOverlay">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-head">
+      <span class="modal-title">jump to date</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeCalDatePicker()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="cal-picker-month">
+        <button class="btn btn-icon" onclick="calPickerNavigate(-1)"><i class="ti ti-chevron-left"></i></button>
+        <span class="cal-picker-title" id="calPickerTitle"></span>
+        <button class="btn btn-icon" onclick="calPickerNavigate(1)"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-picker-grid" id="calPickerGrid"></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -1021,6 +1089,7 @@ select option{background:var(--surface);color:var(--text)}
 let records = [];
 let authed = false;
 let editingId = null;
+let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
 let confirmDeleteId = null;
@@ -1099,6 +1168,7 @@ async function loadRecords() {
   c.innerHTML = '<div class="spinner"><div class="spinner-disc"></div></div>';
   const r = await fetch('/api/records');
   records = await r.json();
+  calUpdateDateRange();
   render();
   if (currentTab === 'calendar') renderCalendar();
 }
@@ -1125,13 +1195,31 @@ const SORT_OPTIONS = [
   { value: 'play_count',   label: 'Plays',         icon: 'ti-headphones' },
 ];
 
+function toggleSearchField(field) {
+  searchFields[field] = !searchFields[field];
+  render();
+}
+
+function toggleSearchFields() {
+  const panel = document.getElementById('searchFieldsPanel');
+  panel.classList.toggle('hidden');
+}
+
 function filtered() {
   const q  = document.getElementById('searchInput').value.toLowerCase();
   const b  = { pepe: buyerActive.pepe, jenni: buyerActive.jenni, both: buyerActive.both };
   const s  = sortBy;
 
   const base = records.filter(r => {
-    if (q && !`${r.artist} ${r.album_name} ${r.genre} ${r.bought_where||''} ${parseNotes(r.notes).map(n=>n.text).join(' ')}`.toLowerCase().includes(q)) return false;
+    if (q) {
+      const searchText = [];
+      if (searchFields.artist) searchText.push(r.artist || '');
+      if (searchFields.album) searchText.push(r.album_name || '');
+      if (searchFields.genre) searchText.push(r.genre || '');
+      if (searchFields.bought_at) searchText.push(r.bought_where || '');
+      if (searchFields.notes) searchText.push(parseNotes(r.notes).map(n=>n.text).join(' '));
+      if (!searchText.join(' ').toLowerCase().includes(q)) return false;
+    }
     if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
     // buyer toggle — each owner independently, 'other' always visible
     const o = ownerOf(r);
@@ -1784,10 +1872,17 @@ document.getElementById('exportBtn').addEventListener('click',()=>{window.locati
 function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
-  document.getElementById('tabCalendar').addEventListener('click', () => switchTab('calendar'));
+  document.getElementById('tabCalendar').addEventListener('click', () => {
+    switchTab('calendar');
+    calUpdateDateRange();
+  });
   document.getElementById('calDayOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDay();});
+  document.getElementById('calDatePickerOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDatePicker();});
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !document.getElementById('calDayOverlay').classList.contains('hidden')) closeCalDay();
+    if (e.key === 'Escape') {
+      if (!document.getElementById('calDayOverlay').classList.contains('hidden')) closeCalDay();
+      else if (!document.getElementById('calDatePickerOverlay').classList.contains('hidden')) closeCalDatePicker();
+    }
   });
   document.getElementById('randomBtn').addEventListener('click', () => {
     const recs = filtered();
@@ -2096,6 +2191,18 @@ document.addEventListener('click', e => {
     document.getElementById('sortPanel')?.classList.add('hidden');
     const ch = document.getElementById('sortChevron');
     if (ch) ch.style.transform = '';
+  }
+});
+
+// close search fields panel when clicking outside
+document.addEventListener('click', e => {
+  const search = document.getElementById('searchInput');
+  const btn = document.getElementById('searchFieldsBtn');
+  const panel = document.getElementById('searchFieldsPanel');
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = path.includes(search) || path.includes(btn) || path.includes(panel);
+  if (panel && !clickedInside && !panel.classList.contains('hidden')) {
+    panel.classList.add('hidden');
   }
 });
 
@@ -2513,6 +2620,8 @@ function renderWorldMap(all) {
 let calScale = 'month';                  // 'month' | 'week' | 'day'
 let calAnchor = new Date();              // any date inside the visible range
 let calTypes = { bought: true, cleaned: true, played: true, note: true };
+let calMinDate = null, calMaxDate = null; // date range constraints
+let calPickerAnchor = new Date();        // date picker navigation
 
 const CAL_TYPE_LABEL = { bought: 'bought', cleaned: 'cleaned', played: 'played', note: 'note' };
 
@@ -2524,8 +2633,40 @@ function calParseKey(k) {
   const [y,m,d] = k.split('-').map(Number);
   return new Date(y, m-1, d);
 }
+function calCapitalizeStr(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function calFmtLong(d) {
-  return d.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric', year:'numeric' }).toLowerCase();
+  const fmt = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  return fmt.split(' ').map(calCapitalizeStr).join(' ');
+}
+function calFmtShort(d) {
+  const fmt = d.toLocaleDateString('en-US', { month:'long', day:'numeric' });
+  return fmt.split(' ').map(calCapitalizeStr).join(' ');
+}
+function calFmtMonth(d) {
+  const fmt = d.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  return fmt.split(' ').map(calCapitalizeStr).join(' ');
+}
+
+// calculate date range across all event types
+function calUpdateDateRange() {
+  const dates = [];
+  records.forEach(r => {
+    if (calValidDate(r.bought_date)) dates.push(calParseKey(r.bought_date.slice(0,10)));
+    if (calValidDate(r.last_cleaned)) dates.push(calParseKey(r.last_cleaned.slice(0,10)));
+    parsePlayDates(r.play_dates).forEach(dt => {
+      if (calValidDate(dt)) dates.push(calParseKey(dt.slice(0,10)));
+    });
+    parseNotes(r.notes, r.bought_date).forEach(n => {
+      if (calValidDate(n.date)) dates.push(calParseKey(n.date.slice(0,10)));
+    });
+  });
+  if (dates.length) {
+    calMinDate = new Date(Math.min(...dates.map(d => d.getTime())));
+    calMaxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  } else {
+    calMinDate = null;
+    calMaxDate = null;
+  }
 }
 
 // map of 'YYYY-MM-DD' -> [{type, r, text?}], honoring the active type filters
@@ -2553,9 +2694,17 @@ function calEventsByDay() {
 
 function calNavigate(dir) {
   if (dir === 0) calAnchor = new Date();
-  else if (calScale === 'month') calAnchor.setMonth(calAnchor.getMonth() + dir);
-  else if (calScale === 'week') calAnchor.setDate(calAnchor.getDate() + 7*dir);
-  else calAnchor.setDate(calAnchor.getDate() + dir);
+  else {
+    const newAnchor = new Date(calAnchor);
+    if (calScale === 'month') newAnchor.setMonth(newAnchor.getMonth() + dir);
+    else if (calScale === 'week') newAnchor.setDate(newAnchor.getDate() + 7*dir);
+    else newAnchor.setDate(newAnchor.getDate() + dir);
+
+    // constrain to date range
+    if (calMinDate && newAnchor < calMinDate) return;
+    if (calMaxDate && newAnchor > calMaxDate) return;
+    calAnchor = newAnchor;
+  }
   renderCalendar();
 }
 
@@ -2608,8 +2757,7 @@ function calEventRow(ev, fullNote) {
 
 function renderCalMonth(events) {
   const y = calAnchor.getFullYear(), m = calAnchor.getMonth();
-  document.getElementById('calTitle').textContent =
-    calAnchor.toLocaleDateString('en-US', { month:'long', year:'numeric' }).toLowerCase();
+  document.getElementById('calTitle').textContent = calFmtMonth(calAnchor);
   const firstDow = new Date(y, m, 1).getDay();
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const weeks = Math.ceil((firstDow + daysInMonth) / 7);
@@ -2642,9 +2790,11 @@ function renderCalWeek(events) {
   start.setDate(start.getDate() - start.getDay()); // back to sunday
   const end = new Date(start); end.setDate(end.getDate() + 6);
   const sameMonth = start.getMonth() === end.getMonth();
-  const t = d => d.toLocaleDateString('en-US', { month:'short', day:'numeric' }).toLowerCase();
+  const t = d => d.toLocaleDateString('en-US', { month:'long', day:'numeric' });
+  const startStr = calCapitalizeStr(t(start));
+  const endStr = sameMonth ? end.getDate() : calCapitalizeStr(t(end));
   document.getElementById('calTitle').textContent =
-    `${t(start)} – ${sameMonth ? end.getDate() : t(end)}, ${end.getFullYear()}`;
+    `${startStr} – ${endStr}, ${end.getFullYear()}`;
   const todayK = calKey(new Date());
   const cur = new Date(start);
   let html = '<div class="cal-agenda">';
@@ -2690,6 +2840,54 @@ function closeCalDay() {
 function openDetailFromCal(id) {
   closeCalDay();
   openDetail(id);
+}
+
+// date picker modal
+function openCalDatePicker() {
+  calPickerAnchor = new Date(calAnchor);
+  renderCalDatePicker();
+  document.getElementById('calDatePickerOverlay').classList.remove('hidden');
+}
+
+function closeCalDatePicker() {
+  document.getElementById('calDatePickerOverlay').classList.add('hidden');
+}
+
+function calPickerNavigate(dir) {
+  calPickerAnchor.setMonth(calPickerAnchor.getMonth() + dir);
+  renderCalDatePicker();
+}
+
+function renderCalDatePicker() {
+  const y = calPickerAnchor.getFullYear(), m = calPickerAnchor.getMonth();
+  document.getElementById('calPickerTitle').textContent = calFmtMonth(calPickerAnchor);
+
+  const firstDow = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const weeks = Math.ceil((firstDow + daysInMonth) / 7);
+  const cur = new Date(y, m, 1 - firstDow);
+  let cells = '';
+
+  for (let i = 0; i < weeks*7; i++) {
+    const isOther = cur.getMonth() !== m;
+    const isToday = calKey(cur) === calKey(calAnchor);
+    const isDisabled = (calMinDate && cur < calMinDate) || (calMaxDate && cur > calMaxDate);
+    const dateStr = calKey(cur);
+
+    const cls = isOther ? 'other' : isToday ? 'today' : isDisabled ? 'disabled' : '';
+    const onclick = !isOther && !isDisabled ? ` onclick="calJumpToDate('${dateStr}')"` : 'style="cursor:not-allowed"';
+    cells += `<button class="cal-picker-day ${cls}" type="button"${onclick}>${cur.getDate()}</button>`;
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  document.getElementById('calPickerGrid').innerHTML = cells;
+}
+
+function calJumpToDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  calAnchor = new Date(y, m-1, d);
+  closeCalDatePicker();
+  renderCalendar();
 }
 
 init();
