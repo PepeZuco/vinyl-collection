@@ -300,20 +300,19 @@ select option{background:var(--surface);color:var(--text)}
   .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
   [data-theme="light"] .dm-slide-ph{color:#ccc}
 
-  /* the crate — every sleeve edge-on; current is pulled up and kept centered */
+  /* the crate — square cover thumbnails: up to 5 each side, current centered */
   .dm-crate-wrap{margin:6px 14px 0;border:1px solid var(--border);border-radius:10px;
     background:linear-gradient(color-mix(in srgb,var(--card) 72%,#000), var(--bg));
-    overflow:hidden;flex-shrink:0}
+    overflow:hidden;flex-shrink:0;padding:8px 6px}
   [data-theme="light"] .dm-crate-wrap{background:linear-gradient(#e8e4da,#f2efe8)}
-  .dm-crate{display:flex;align-items:flex-end;gap:3px;overflow-x:auto;
-    height:58px;padding:10px calc(50% - 8px) 0;scrollbar-width:none}
-  .dm-crate::-webkit-scrollbar{display:none}
-  .dm-spine{flex:0 0 13px;height:38px;border-radius:2px 2px 0 0;overflow:hidden;
-    transform:skewX(-5deg);opacity:.55;transition:flex-basis .2s,height .2s,opacity .2s;
-    background:#26231d;border:none;padding:0;cursor:pointer}
-  [data-theme="light"] .dm-spine{background:#c9c2b4}
-  .dm-spine img{width:100%;height:100%;object-fit:cover;display:block}
-  .dm-spine.on{flex-basis:24px;height:48px;opacity:1;box-shadow:0 0 0 1.5px var(--accent)}
+  .dm-crate{display:flex;align-items:center;justify-content:center;gap:3px}
+  .dm-thumb{flex:1 1 0;min-width:0;max-width:30px;aspect-ratio:1;border-radius:4px;
+    overflow:hidden;opacity:.5;background:#26231d;border:none;padding:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;color:#4a463e;font-size:13px;
+    transition:opacity .2s}
+  [data-theme="light"] .dm-thumb{background:#c9c2b4;color:#a39c8e}
+  .dm-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .dm-thumb.on{flex-grow:1.5;max-width:40px;opacity:1;box-shadow:0 0 0 2px var(--accent)}
 
   /* info sheet below the crate */
   .dm-info{padding:16px 16px 120px}
@@ -1622,7 +1621,7 @@ function renderDetailContent(r) {
         <span class="dm-top-spacer"></span>
       </div>
       <div class="dm-carousel" id="dmCarousel">${dmList.map(dmSlideHTML).join('')}</div>
-      <div class="dm-crate-wrap"><div class="dm-crate" id="dmCrate">${dmList.map(dmSpineHTML).join('')}</div></div>
+      <div class="dm-crate-wrap"><div class="dm-crate" id="dmCrate"></div></div>
       <div class="dm-info" id="dmInfo"></div>
     </div>`;
   dmBind();
@@ -1640,9 +1639,23 @@ function dmSlideHTML(rec) {
   return `<div class="dm-slide" data-id="${rec.id}">${img}</div>`;
 }
 
-function dmSpineHTML(rec) {
-  const img = rec.cover_data ? `<img src="${rec.cover_data}" alt="" loading="lazy">` : '';
-  return `<button type="button" class="dm-spine" data-id="${rec.id}" title="${esc(rec.album_name)}">${img}</button>`;
+const DM_CRATE_SIDE = 5; // thumbnails shown on each side of the current record
+
+function dmThumbHTML(rec, on) {
+  const img = rec.cover_data
+    ? `<img src="${rec.cover_data}" alt="" loading="lazy">`
+    : `<i class="ti ti-disc"></i>`;
+  return `<button type="button" class="dm-thumb${on ? ' on' : ''}" data-id="${rec.id}" title="${esc(rec.album_name)}">${img}</button>`;
+}
+
+function dmRenderCrate(idx) {
+  const crate = document.getElementById('dmCrate');
+  if (!crate) return;
+  const from = Math.max(0, idx - DM_CRATE_SIDE);
+  const to = Math.min(dmList.length - 1, idx + DM_CRATE_SIDE);
+  let h = '';
+  for (let i = from; i <= to; i++) h += dmThumbHTML(dmList[i], i === idx);
+  crate.innerHTML = h;
 }
 
 function dmInfoHTML(r) {
@@ -1695,8 +1708,7 @@ function dmSetCurrent(idx) {
   currentDetailId = rec.id;
   const car = document.getElementById('dmCarousel');
   if (car) [...car.children].forEach((s,k)=>s.classList.toggle('cur', k===idx));
-  const crate = document.getElementById('dmCrate');
-  if (crate) [...crate.children].forEach((s,k)=>s.classList.toggle('on', k===idx));
+  dmRenderCrate(idx);
   const count = document.getElementById('dmCount');
   if (count) count.innerHTML = `<b>${idx+1}</b> / ${dmList.length}`;
   const info = document.getElementById('dmInfo');
@@ -1709,13 +1721,6 @@ function dmCenterSlide(idx, smooth) {
   const s = car && car.children[idx];
   if (!s) return;
   car.scrollTo({left: s.offsetLeft + s.offsetWidth/2 - car.clientWidth/2, behavior: smooth ? 'smooth' : 'auto'});
-}
-
-function dmCenterSpine(idx, smooth) {
-  const crate = document.getElementById('dmCrate');
-  const sp = crate && crate.children[idx];
-  if (!sp) return;
-  crate.scrollTo({left: sp.offsetLeft + sp.offsetWidth/2 - crate.clientWidth/2, behavior: smooth ? 'smooth' : 'auto'});
 }
 
 function dmBind() {
@@ -1731,16 +1736,14 @@ function dmBind() {
         const d = Math.abs(s.offsetLeft + s.offsetWidth/2 - mid);
         if (d < bd) { bd = d; best = k; }
       });
-      if (best !== dmIdx) {
-        dmSetCurrent(best);
-        dmCenterSpine(best, true);
-      }
+      if (best !== dmIdx) dmSetCurrent(best);
     });
   }, {passive: true});
   document.getElementById('dmCrate').addEventListener('click', e => {
-    const sp = e.target.closest('.dm-spine');
-    if (!sp) return;
-    dmCenterSlide([...sp.parentElement.children].indexOf(sp), true);
+    const th = e.target.closest('.dm-thumb');
+    if (!th) return;
+    const idx = dmList.findIndex(r => r.id === Number(th.dataset.id));
+    if (idx !== -1) dmCenterSlide(idx, true);
   });
 }
 
@@ -1752,10 +1755,7 @@ function openDetail(id) {
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
-  if (window.matchMedia('(max-width:760px)').matches) {
-    dmCenterSlide(dmIdx, false);
-    dmCenterSpine(dmIdx, false);
-  }
+  if (window.matchMedia('(max-width:760px)').matches) dmCenterSlide(dmIdx, false);
 }
 
 // ── prev/next navigation through the currently filtered list ───────────────
