@@ -252,7 +252,7 @@ select option{background:var(--surface);color:var(--text)}
 .detail-item label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:block;margin-bottom:2px}
 .detail-item span{font-size:13px;font-weight:600}
 
-/* ── mobile TikTok-style detail view ─────────────────────────────────────── */
+/* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
 .detail-mobile-layout{display:none}
 @media(max-width:760px){
   #detailOverlay{padding:0}
@@ -271,54 +271,104 @@ select option{background:var(--surface);color:var(--text)}
   .detail-layout{display:none}
   .detail-mobile-layout{
     display:flex;flex-direction:column;width:100%;height:100%;
-    position:relative;background:#000;overflow:hidden;
-  }
-  .detail-mobile-cover-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
-  .detail-mobile-cover-wrap img{width:100%;height:100%;object-fit:contain}
-  .detail-mobile-cover-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
-  .detail-mobile-scrim{position:absolute;inset:0;background:linear-gradient(to bottom, rgba(0,0,0,.45) 0%, transparent 22%, transparent 60%, rgba(0,0,0,.75) 100%)}
-
-  /* vertical up/down nav arrows — replace swipe on mobile */
-  .detail-mobile-vnav{
-    position:absolute;right:10px;top:14px;z-index:6;
-    display:flex;flex-direction:column;gap:10px;
-  }
-  .detail-mobile-vnav-btn{
-    width:38px;height:38px;border-radius:50%;
-    border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.45);color:#fff;
-    display:flex;align-items:center;justify-content:center;font-size:18px;
-    cursor:pointer;transition:background .12s,opacity .12s;
-  }
-  .detail-mobile-vnav-btn:active{background:rgba(0,0,0,.7)}
-  .detail-mobile-close{
-    position:absolute;left:10px;top:14px;z-index:6;
-    width:38px;height:38px;border-radius:50%;
-    border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.45);color:#fff;
-    display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer;
+    background:var(--bg);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
   }
 
-  /* right side rating rail — mirrors tiktok's like/comment/share stack */
-  .detail-mobile-rail{
-    position:absolute;right:10px;bottom:96px;z-index:3;
-    display:flex;flex-direction:column;align-items:center;gap:18px;
+  .dm-top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 14px 8px;position:sticky;top:0;z-index:6;
+    background:linear-gradient(var(--bg) 55%,transparent);flex-shrink:0;
   }
-  .rail-item{display:flex;flex-direction:column;align-items:center;gap:3px}
-  .rail-squares{display:flex;flex-direction:column;gap:3px}
-  .rail-sq{width:20px;height:7px;border-radius:1.5px;background:rgba(255,255,255,.25)}
-  .rail-sq.pepe-on{background:#F5C518}
-  .rail-sq.jenni-on{background:#D4608A}
-  .rail-label{font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);text-transform:uppercase;letter-spacing:.05em}
-  .rail-total{font-size:22px;font-weight:800;color:#F5C518;text-shadow:0 1px 4px rgba(0,0,0,.8);line-height:1}
-  .rail-total span{font-size:11px;font-weight:500;color:#fff;opacity:.8;margin-left:1px}
+  .dm-close{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);
+    background:var(--card);color:var(--muted);display:flex;align-items:center;
+    justify-content:center;font-size:16px;cursor:pointer}
+  .dm-count{font-size:11px;letter-spacing:.12em;color:var(--muted);
+    font-variant-numeric:tabular-nums;text-transform:uppercase}
+  .dm-count b{color:var(--accent);font-weight:700}
+  .dm-top-spacer{width:36px}
 
-  /* bottom-left caption overlay — mirrors tiktok's post caption */
-  .detail-mobile-caption{
-    position:absolute;left:14px;right:74px;bottom:96px;z-index:3;
-    color:#fff;
-  }
-  .detail-mobile-caption .dmc-album{font-size:16px;font-weight:700;line-height:1.25;margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.7)}
-  .detail-mobile-caption .dmc-meta{font-size:12px;opacity:.85;text-shadow:0 1px 3px rgba(0,0,0,.7)}
-  .detail-mobile-caption .dmc-meta b{font-weight:700;opacity:1}
+  /* cover carousel — native snap scroll, neighbors peek in from the edges */
+  .dm-carousel{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;
+    padding:2px 7% 4px;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex-shrink:0}
+  .dm-carousel::-webkit-scrollbar{display:none}
+  .dm-slide{flex:0 0 86%;scroll-snap-align:center;scroll-snap-stop:always;
+    aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:#0a0a0a;
+    transition:transform .25s,opacity .25s;transform:scale(.94);opacity:.55}
+  [data-theme="light"] .dm-slide{background:#eee}
+  .dm-slide.cur{transform:scale(1);opacity:1;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .dm-slide img{width:100%;height:100%;object-fit:cover;display:block}
+  .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
+  [data-theme="light"] .dm-slide-ph{color:#ccc}
+
+  /* the crate — every sleeve edge-on; current is pulled up and kept centered */
+  .dm-crate-wrap{margin:6px 14px 0;border:1px solid var(--border);border-radius:10px;
+    background:linear-gradient(color-mix(in srgb,var(--card) 72%,#000), var(--bg));
+    overflow:hidden;flex-shrink:0}
+  [data-theme="light"] .dm-crate-wrap{background:linear-gradient(#e8e4da,#f2efe8)}
+  .dm-crate{display:flex;align-items:flex-end;gap:3px;overflow-x:auto;
+    height:58px;padding:10px calc(50% - 8px) 0;scrollbar-width:none}
+  .dm-crate::-webkit-scrollbar{display:none}
+  .dm-spine{flex:0 0 13px;height:38px;border-radius:2px 2px 0 0;overflow:hidden;
+    transform:skewX(-5deg);opacity:.55;transition:flex-basis .2s,height .2s,opacity .2s;
+    background:#26231d;border:none;padding:0;cursor:pointer}
+  [data-theme="light"] .dm-spine{background:#c9c2b4}
+  .dm-spine img{width:100%;height:100%;object-fit:cover;display:block}
+  .dm-spine.on{flex-basis:24px;height:48px;opacity:1;box-shadow:0 0 0 1.5px var(--accent)}
+
+  /* info sheet below the crate */
+  .dm-info{padding:16px 16px 120px}
+  .dm-album{font-size:22px;font-weight:800;line-height:1.15}
+  .dm-album .dm-year{font-size:14px;color:var(--muted);font-weight:500;margin-left:8px}
+  .dm-artist{margin-top:4px;font-size:14px;color:var(--muted)}
+  .dm-rates{display:flex;align-items:center;gap:12px;margin-top:14px;
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
+  .dm-rate{flex:1;min-width:0}
+  .dm-rate .who{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+  .dm-rate.pepe .who{color:#F5C518}
+  .dm-rate.jenni .who{color:#D4608A}
+  .dm-bars{display:flex;gap:3px}
+  .dm-bars i{flex:1;height:7px;border-radius:2px;background:var(--border)}
+  .dm-rate.pepe .dm-bars i.f{background:#F5C518}
+  .dm-rate.jenni .dm-bars i.f{background:#D4608A}
+  .dm-rate .rv{font-size:10px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+  .dm-total{flex:0 0 auto;text-align:right;padding-left:12px;border-left:1px solid var(--border)}
+  .dm-total .who{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:4px}
+  .dm-total .tv{font-size:26px;font-weight:800;color:var(--accent);line-height:1;font-variant-numeric:tabular-nums}
+  .dm-total .tv small{font-size:12px;color:var(--muted);font-weight:600}
+  .dm-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .dm-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted)}
+  .dm-chip .dm-dot{width:7px;height:7px;border-radius:50%}
+  .dm-chip.plays .dm-dot{background:#5FBF7A}
+  .dm-chip.genre .dm-dot{background:#4AA3C4}
+  .dm-chip.wish .dm-dot{background:#9B7FD4}
+  .dm-chip b{color:var(--text);font-variant-numeric:tabular-nums}
+  .dm-seemore{width:100%;margin-top:14px;padding:11px;border-radius:var(--radius-sm);
+    border:1px dashed var(--border);color:var(--muted);font-size:13px;font-weight:600;
+    background:none;display:flex;align-items:center;justify-content:center;gap:8px;
+    font-family:var(--font);cursor:pointer}
+  .dm-seemore i{transition:transform .25s;font-size:14px}
+  .dm-seemore.open i{transform:rotate(180deg)}
+  .dm-more{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s ease}
+  .dm-more.open{grid-template-rows:1fr}
+  .dm-more>div{overflow:hidden}
+  .dm-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .dm-mcell{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 11px}
+  .dm-mcell label{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);display:block;margin-bottom:3px}
+  .dm-mcell span{font-size:13px;font-weight:600}
+  .dm-notes{margin-top:14px}
+  .dm-notes h4{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px}
+  .dm-note{position:relative;padding:0 0 14px 16px;border-left:2px solid var(--border);margin-left:5px}
+  .dm-note:last-child{padding-bottom:2px}
+  .dm-note::before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;
+    border-radius:50%;background:#9B7FD4;border:2px solid var(--bg)}
+  .dm-note .nd{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-bottom:2px}
+  .dm-note .nt{font-size:13px;line-height:1.5}
+  .dm-note .nt p{margin:0 0 4px}
+  .dm-note .nt p:last-child{margin-bottom:0}
 }
 
 /* form */
@@ -1524,14 +1574,10 @@ function renderDetailContent(r) {
   const detailTotal = myR + herR;
   const totalStr = detailTotal > 0 ? (detailTotal % 1 === 0 ? detailTotal : detailTotal.toFixed(1)) : '—';
 
-  // mobile rail: 5-square indicator per person, same rounding convention as the card grid
-  const railSquares = (val, cls) => {
-    const filled = Math.round(val);
-    return Array.from({length:5}, (_,i) => `<div class="rail-sq${i < filled ? ' '+cls : ''}"></div>`).reverse().join('');
-  };
-  const mobileCoverEl = r.cover_data
-    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" onerror="this.parentElement.innerHTML='<div class=detail-mobile-cover-ph><i class=&quot;ti ti-disc&quot; style=&quot;font-size:64px&quot;></i></div>'">`
-    : `<div class="detail-mobile-cover-ph"><i class="ti ti-disc" style="font-size:64px"></i></div>`;
+  // mobile: crate carousel navigates the same filtered list as the desktop arrows
+  const dmRecs = filtered();
+  dmList = dmRecs.length && dmRecs.some(x => x.id === r.id) ? dmRecs : [r];
+  dmIdx = Math.max(0, dmList.findIndex(x => x.id === r.id));
 
   document.getElementById('detailBody').innerHTML=`
     <div class="detail-layout">
@@ -1569,43 +1615,147 @@ function renderDetailContent(r) {
         })() : ''}
       </div>
     </div>
-    <div class="detail-mobile-layout">
-      <div class="detail-mobile-cover-wrap">${mobileCoverEl}</div>
-      <div class="detail-mobile-scrim"></div>
-      <button class="detail-mobile-close" onclick="closeDetail()"><i class="ti ti-x"></i></button>
-      <div class="detail-mobile-vnav">
-        <button class="detail-mobile-vnav-btn" id="detailMobilePrevBtn" onclick="navigateDetail(-1)" title="previous record"><i class="ti ti-chevron-up"></i></button>
-        <button class="detail-mobile-vnav-btn" id="detailMobileNextBtn" onclick="navigateDetail(1)" title="next record"><i class="ti ti-chevron-down"></i></button>
+    <div class="detail-mobile-layout" id="dmLayout">
+      <div class="dm-top">
+        <button class="dm-close" onclick="closeDetail()" title="close"><i class="ti ti-x"></i></button>
+        <span class="dm-count" id="dmCount"></span>
+        <span class="dm-top-spacer"></span>
       </div>
-      <div class="detail-mobile-rail">
-        <div class="rail-item">
-          <div class="rail-squares">${railSquares(myR, 'pepe-on')}</div>
-          <div class="rail-label" style="color:#F5C518">Pepe</div>
-        </div>
-        <div class="rail-item">
-          <div class="rail-squares">${railSquares(herR, 'jenni-on')}</div>
-          <div class="rail-label" style="color:#D4608A">Jenni</div>
-        </div>
-        <div class="rail-item">
-          <div class="rail-total">${totalStr}<span>/10</span></div>
-          <div class="rail-label">Total</div>
-        </div>
-      </div>
-      <div class="detail-mobile-caption">
-        <div class="dmc-album">${esc(r.album_name)||'untitled'}</div>
-        <div class="dmc-meta"><b>${esc(r.artist)||'unknown'}</b> · ${esc(r.year)||'—'}</div>
-      </div>
+      <div class="dm-carousel" id="dmCarousel">${dmList.map(dmSlideHTML).join('')}</div>
+      <div class="dm-crate-wrap"><div class="dm-crate" id="dmCrate">${dmList.map(dmSpineHTML).join('')}</div></div>
+      <div class="dm-info" id="dmInfo"></div>
     </div>`;
+  dmBind();
+  dmSetCurrent(dmIdx);
   renderDetailFoot(r.id);
+}
+
+// ── mobile crate carousel ───────────────────────────────────────────────────
+let dmList = [], dmIdx = 0, dmMoreOpen = false;
+
+function dmSlideHTML(rec) {
+  const img = rec.cover_data
+    ? `<img src="${rec.cover_data}" alt="${esc(rec.album_name)}" loading="lazy" onerror="this.style.display='none'">`
+    : `<div class="dm-slide-ph"><i class="ti ti-disc" style="font-size:56px"></i></div>`;
+  return `<div class="dm-slide" data-id="${rec.id}">${img}</div>`;
+}
+
+function dmSpineHTML(rec) {
+  const img = rec.cover_data ? `<img src="${rec.cover_data}" alt="" loading="lazy">` : '';
+  return `<button type="button" class="dm-spine" data-id="${rec.id}" title="${esc(rec.album_name)}">${img}</button>`;
+}
+
+function dmInfoHTML(r) {
+  const myR = Number(r.my_rating) || 0;
+  const herR = Number(r.wife_rating) || 0;
+  const tot = myR + herR;
+  const totalStr = tot > 0 ? (tot % 1 === 0 ? tot : tot.toFixed(1)) : '—';
+  const bars = v => `<div class="dm-bars">${Array.from({length:5},(_,i)=>`<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('')}</div>`;
+  const notes = r.notes
+    ? parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).sort((a,b)=>b.date.localeCompare(a.date))
+    : [];
+  const countryStr = r.country
+    ? `${flagEmoji(r.country)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
+  return `
+    <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
+    <div class="dm-artist">${esc(r.artist)||'unknown'}</div>
+    <div class="dm-rates">
+      <div class="dm-rate pepe"><div class="who">Pepe</div>${myR>0?bars(myR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
+      <div class="dm-rate jenni"><div class="who">Jenni</div>${herR>0?bars(herR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${herR>0?herR+'/5':''}</div></div>
+      <div class="dm-total"><div class="who">Total</div><div class="tv">${totalStr}<small>/10</small></div></div>
+    </div>
+    <div class="dm-chips">
+      <span class="dm-chip plays"><span class="dm-dot"></span><b>${r.play_count||0}</b>&nbsp;plays</span>
+      ${r.genre ? `<span class="dm-chip genre"><span class="dm-dot"></span>${esc(r.genre)}</span>` : ''}
+      ${r.have_it ? '' : '<span class="dm-chip wish"><span class="dm-dot"></span>wishlist</span>'}
+    </div>
+    <button type="button" class="dm-seemore${dmMoreOpen?' open':''}" onclick="dmToggleMore(this)">See more <i class="ti ti-chevron-down"></i></button>
+    <div class="dm-more${dmMoreOpen?' open':''}"><div>
+      <div class="dm-mgrid">
+        <div class="dm-mcell"><label>Bought</label><span>${esc(r.bought_date||'—')}</span></div>
+        <div class="dm-mcell"><label>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
+        <div class="dm-mcell"><label>Bought by</label><span>${esc(r.bought_by||'—')}</span></div>
+        <div class="dm-mcell"><label>Country</label><span>${countryStr}</span></div>
+      </div>
+      ${notes.length ? `<div class="dm-notes"><h4>Notes across time</h4>${notes.map(n=>`
+        <div class="dm-note"><div class="nd">${esc(n.date)}</div><div class="nt">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div></div>`).join('')}</div>` : ''}
+    </div></div>`;
+}
+
+function dmToggleMore(btn) {
+  dmMoreOpen = !dmMoreOpen;
+  btn.classList.toggle('open', dmMoreOpen);
+  btn.nextElementSibling.classList.toggle('open', dmMoreOpen);
+}
+
+function dmSetCurrent(idx) {
+  const rec = dmList[idx];
+  if (!rec) return;
+  dmIdx = idx;
+  currentDetailId = rec.id;
+  const car = document.getElementById('dmCarousel');
+  if (car) [...car.children].forEach((s,k)=>s.classList.toggle('cur', k===idx));
+  const crate = document.getElementById('dmCrate');
+  if (crate) [...crate.children].forEach((s,k)=>s.classList.toggle('on', k===idx));
+  const count = document.getElementById('dmCount');
+  if (count) count.innerHTML = `<b>${idx+1}</b> / ${dmList.length}`;
+  const info = document.getElementById('dmInfo');
+  if (info) info.innerHTML = dmInfoHTML(rec);
+  renderDetailFoot(rec.id);
+}
+
+function dmCenterSlide(idx, smooth) {
+  const car = document.getElementById('dmCarousel');
+  const s = car && car.children[idx];
+  if (!s) return;
+  car.scrollTo({left: s.offsetLeft + s.offsetWidth/2 - car.clientWidth/2, behavior: smooth ? 'smooth' : 'auto'});
+}
+
+function dmCenterSpine(idx, smooth) {
+  const crate = document.getElementById('dmCrate');
+  const sp = crate && crate.children[idx];
+  if (!sp) return;
+  crate.scrollTo({left: sp.offsetLeft + sp.offsetWidth/2 - crate.clientWidth/2, behavior: smooth ? 'smooth' : 'auto'});
+}
+
+function dmBind() {
+  const car = document.getElementById('dmCarousel');
+  if (!car) return;
+  let raf;
+  car.addEventListener('scroll', () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const mid = car.scrollLeft + car.clientWidth/2;
+      let best = 0, bd = Infinity;
+      [...car.children].forEach((s,k) => {
+        const d = Math.abs(s.offsetLeft + s.offsetWidth/2 - mid);
+        if (d < bd) { bd = d; best = k; }
+      });
+      if (best !== dmIdx) {
+        dmSetCurrent(best);
+        dmCenterSpine(best, true);
+      }
+    });
+  }, {passive: true});
+  document.getElementById('dmCrate').addEventListener('click', e => {
+    const sp = e.target.closest('.dm-spine');
+    if (!sp) return;
+    dmCenterSlide([...sp.parentElement.children].indexOf(sp), true);
+  });
 }
 
 function openDetail(id) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   currentDetailId = id;
+  dmMoreOpen = false;
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
+  if (window.matchMedia('(max-width:760px)').matches) {
+    dmCenterSlide(dmIdx, false);
+    dmCenterSpine(dmIdx, false);
+  }
 }
 
 // ── prev/next navigation through the currently filtered list ───────────────
@@ -1614,10 +1764,6 @@ function updateDetailNavVisibility() {
   const show = recs.length > 1;
   document.getElementById('detailPrevBtn').style.display = show ? '' : 'none';
   document.getElementById('detailNextBtn').style.display = show ? '' : 'none';
-  const mPrev = document.getElementById('detailMobilePrevBtn');
-  const mNext = document.getElementById('detailMobileNextBtn');
-  if (mPrev) mPrev.style.visibility = show ? '' : 'hidden';
-  if (mNext) mNext.style.visibility = show ? '' : 'hidden';
 }
 
 let detailAnimating = false;
