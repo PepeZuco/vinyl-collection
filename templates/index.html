@@ -129,8 +129,11 @@ select option{background:var(--surface);color:var(--text)}
 
 .vcard-body{padding:8px 10px 10px}
 /* row 1: album name + year inline */
-.vcard-title-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:8px}
-.vcard-album{font-size:12px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+.vcard-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:8px}
+/* reserve 2 lines of height always, so a short one-line title still occupies the
+   same space as a wrapped one — keeps the rows below (play count, ratings) aligned
+   across cards in the same grid row regardless of album name length */
+.vcard-album{font-size:12px;font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:1;min-height:2.6em}
 .vcard-year{font-size:11px;color:var(--muted);flex-shrink:0;white-space:nowrap}
 /* row 2: play editor + rating */
 .vcard-bottom-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:7px}
@@ -300,19 +303,23 @@ select option{background:var(--surface);color:var(--text)}
   .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
   [data-theme="light"] .dm-slide-ph{color:#ccc}
 
-  /* the crate — square cover thumbnails: up to 5 each side, current centered */
+  /* the crate — square cover thumbnails, freely scrollable; only a tap changes
+     the current record, dragging the strip just browses it */
   .dm-crate-wrap{margin:6px 14px 0;border:1px solid var(--border);border-radius:10px;
     background:linear-gradient(color-mix(in srgb,var(--card) 72%,#000), var(--bg));
-    overflow:hidden;flex-shrink:0;padding:8px 6px}
+    overflow:hidden;flex-shrink:0;padding:8px 0}
   [data-theme="light"] .dm-crate-wrap{background:linear-gradient(#e8e4da,#f2efe8)}
-  .dm-crate{display:flex;align-items:center;justify-content:center;gap:3px}
-  .dm-thumb{flex:1 1 0;min-width:0;max-width:30px;aspect-ratio:1;border-radius:4px;
+  .dm-crate{display:flex;align-items:center;gap:3px;overflow-x:auto;
+    scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+    padding:0 calc(50% - 16px)}
+  .dm-crate::-webkit-scrollbar{display:none}
+  .dm-thumb{flex:0 0 30px;width:30px;aspect-ratio:1;border-radius:4px;
     overflow:hidden;opacity:.5;background:#26231d;border:none;padding:0;cursor:pointer;
     display:flex;align-items:center;justify-content:center;color:#4a463e;font-size:13px;
-    transition:opacity .2s}
+    transition:opacity .2s,transform .2s;scroll-snap-align:center}
   [data-theme="light"] .dm-thumb{background:#c9c2b4;color:#a39c8e}
-  .dm-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-  .dm-thumb.on{flex-grow:1.5;max-width:40px;opacity:1;box-shadow:0 0 0 2px var(--accent)}
+  .dm-thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+  .dm-thumb.on{opacity:1;transform:scale(1.3);box-shadow:0 0 0 2px var(--accent);z-index:1}
 
   /* info sheet below the crate */
   .dm-info{padding:16px 16px 120px}
@@ -1616,6 +1623,7 @@ function renderDetailContent(r) {
       <div class="dm-crate-wrap"><div class="dm-crate" id="dmCrate"></div></div>
       <div class="dm-info" id="dmInfo"></div>
     </div>`;
+  dmBuildCrate();
   dmBind();
   dmSetCurrent(dmIdx);
   renderDetailFoot(r.id);
@@ -1631,23 +1639,31 @@ function dmSlideHTML(rec) {
   return `<div class="dm-slide" data-id="${rec.id}">${img}</div>`;
 }
 
-const DM_CRATE_SIDE = 5; // thumbnails shown on each side of the current record
-
-function dmThumbHTML(rec, on) {
+function dmThumbHTML(rec) {
   const img = rec.cover_data
     ? `<img src="${rec.cover_data}" alt="" loading="lazy">`
     : `<i class="ti ti-disc"></i>`;
-  return `<button type="button" class="dm-thumb${on ? ' on' : ''}" data-id="${rec.id}" title="${esc(rec.album_name)}">${img}</button>`;
+  return `<button type="button" class="dm-thumb" data-id="${rec.id}" title="${esc(rec.album_name)}">${img}</button>`;
 }
 
-function dmRenderCrate(idx) {
+// crate is built once per open; scrolling it never changes the current record —
+// only tapping a thumbnail does (see dmBind's click handler)
+function dmBuildCrate() {
   const crate = document.getElementById('dmCrate');
   if (!crate) return;
-  const from = Math.max(0, idx - DM_CRATE_SIDE);
-  const to = Math.min(dmList.length - 1, idx + DM_CRATE_SIDE);
-  let h = '';
-  for (let i = from; i <= to; i++) h += dmThumbHTML(dmList[i], i === idx);
-  crate.innerHTML = h;
+  crate.innerHTML = dmList.map(dmThumbHTML).join('');
+}
+
+function dmHighlightCrate(idx) {
+  const crate = document.getElementById('dmCrate');
+  if (crate) [...crate.children].forEach((el,k)=>el.classList.toggle('on', k===idx));
+}
+
+function dmCenterCrateThumb(idx, smooth) {
+  const crate = document.getElementById('dmCrate');
+  const th = crate && crate.children[idx];
+  if (!th) return;
+  crate.scrollTo({left: th.offsetLeft + th.offsetWidth/2 - crate.clientWidth/2, behavior: smooth ? 'smooth' : 'auto'});
 }
 
 const DM_MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1699,7 +1715,8 @@ function dmSetCurrent(idx) {
   currentDetailId = rec.id;
   const car = document.getElementById('dmCarousel');
   if (car) [...car.children].forEach((s,k)=>s.classList.toggle('cur', k===idx));
-  dmRenderCrate(idx);
+  dmHighlightCrate(idx);
+  dmCenterCrateThumb(idx, true);
   const count = document.getElementById('dmCount');
   if (count) count.innerHTML = `<b>${idx+1}</b> / ${dmList.length}`;
   const info = document.getElementById('dmInfo');
@@ -1745,7 +1762,10 @@ function openDetail(id) {
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
-  if (window.matchMedia('(max-width:760px)').matches) dmCenterSlide(dmIdx, false);
+  if (window.matchMedia('(max-width:760px)').matches) {
+    dmCenterSlide(dmIdx, false);
+    dmCenterCrateThumb(dmIdx, false);
+  }
 }
 
 // ── prev/next navigation through the currently filtered list ───────────────
