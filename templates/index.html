@@ -1022,15 +1022,15 @@ select option{background:var(--surface);color:var(--text)}
   <button class="mtab-item active" id="mtabCollection" onclick="setHaveItMode('collection');switchTab('collection')">
     <span class="mtab-icon-wrap"><i class="ti ti-layout-grid"></i></span><span>Collection</span>
   </button>
-  <button class="mtab-item" id="mtabWishlist" onclick="setHaveItMode('wishlist');switchTab('collection')">
-    <span class="mtab-icon-wrap"><i class="ti ti-heart"></i></span><span>Wishlist</span>
-  </button>
-  <button class="mtab-fab" id="mtabFab" style="display:none" onclick="openAdd()" title="add record"><i class="ti ti-plus"></i></button>
   <button class="mtab-item" id="mtabCalendar" onclick="switchTab('calendar')">
     <span class="mtab-icon-wrap"><i class="ti ti-calendar-month"></i></span><span>Calendar</span>
   </button>
+  <button class="mtab-fab" id="mtabFab" style="display:none" onclick="openAdd()" title="add record"><i class="ti ti-plus"></i></button>
   <button class="mtab-item" id="mtabStats" onclick="switchTab('stats')">
     <span class="mtab-icon-wrap"><i class="ti ti-chart-bar"></i></span><span>Stats</span>
+  </button>
+  <button class="mtab-item" id="mtabWishlist" onclick="setHaveItMode('wishlist');switchTab('collection')">
+    <span class="mtab-icon-wrap"><i class="ti ti-shopping-cart"></i></span><span>Wishlist</span>
   </button>
 </nav>
 
