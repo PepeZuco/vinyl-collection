@@ -343,16 +343,7 @@ select option{background:var(--surface);color:var(--text)}
   .dm-chip.genre .dm-dot{background:#4AA3C4}
   .dm-chip.wish .dm-dot{background:#9B7FD4}
   .dm-chip b{color:var(--text);font-variant-numeric:tabular-nums}
-  .dm-seemore{width:100%;margin-top:14px;padding:11px;border-radius:var(--radius-sm);
-    border:1px dashed var(--border);color:var(--muted);font-size:13px;font-weight:600;
-    background:none;display:flex;align-items:center;justify-content:center;gap:8px;
-    font-family:var(--font);cursor:pointer}
-  .dm-seemore i{transition:transform .25s;font-size:14px}
-  .dm-seemore.open i{transform:rotate(180deg)}
-  .dm-more{display:grid;grid-template-rows:0fr;transition:grid-template-rows .3s ease}
-  .dm-more.open{grid-template-rows:1fr}
-  .dm-more>div{overflow:hidden}
-  .dm-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .dm-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
   .dm-mcell{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 11px}
   .dm-mcell label{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
     color:var(--muted);display:block;margin-bottom:3px}
@@ -364,7 +355,7 @@ select option{background:var(--surface);color:var(--text)}
   .dm-note:last-child{padding-bottom:2px}
   .dm-note::before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;
     border-radius:50%;background:#9B7FD4;border:2px solid var(--bg)}
-  .dm-note .nd{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-bottom:2px}
+  .dm-note .nd{font-size:11.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:3px}
   .dm-note .nt{font-size:13px;line-height:1.5}
   .dm-note .nt p{margin:0 0 4px}
   .dm-note .nt p:last-child{margin-bottom:0}
@@ -1630,7 +1621,7 @@ function renderDetailContent(r) {
 }
 
 // ── mobile crate carousel ───────────────────────────────────────────────────
-let dmList = [], dmIdx = 0, dmMoreOpen = false;
+let dmList = [], dmIdx = 0;
 
 function dmSlideHTML(rec) {
   const img = rec.cover_data
@@ -1658,6 +1649,14 @@ function dmRenderCrate(idx) {
   crate.innerHTML = h;
 }
 
+const DM_MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function dmFormatNoteDate(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr || '');
+  if (!m) return esc(dateStr || '');
+  const [, y, mo, d] = m;
+  return `${Number(d)} - ${DM_MONTHS_PT[Number(mo)-1]} - ${y}`;
+}
+
 function dmInfoHTML(r) {
   const myR = Number(r.my_rating) || 0;
   const herR = Number(r.wife_rating) || 0;
@@ -1682,23 +1681,14 @@ function dmInfoHTML(r) {
       ${r.genre ? `<span class="dm-chip genre"><span class="dm-dot"></span>${esc(r.genre)}</span>` : ''}
       ${r.have_it ? '' : '<span class="dm-chip wish"><span class="dm-dot"></span>wishlist</span>'}
     </div>
-    <button type="button" class="dm-seemore${dmMoreOpen?' open':''}" onclick="dmToggleMore(this)">See more <i class="ti ti-chevron-down"></i></button>
-    <div class="dm-more${dmMoreOpen?' open':''}"><div>
-      <div class="dm-mgrid">
-        <div class="dm-mcell"><label>Bought</label><span>${esc(r.bought_date||'—')}</span></div>
-        <div class="dm-mcell"><label>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
-        <div class="dm-mcell"><label>Bought by</label><span>${esc(r.bought_by||'—')}</span></div>
-        <div class="dm-mcell"><label>Country</label><span>${countryStr}</span></div>
-      </div>
-      ${notes.length ? `<div class="dm-notes"><h4>Notes across time</h4>${notes.map(n=>`
-        <div class="dm-note"><div class="nd">${esc(n.date)}</div><div class="nt">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div></div>`).join('')}</div>` : ''}
-    </div></div>`;
-}
-
-function dmToggleMore(btn) {
-  dmMoreOpen = !dmMoreOpen;
-  btn.classList.toggle('open', dmMoreOpen);
-  btn.nextElementSibling.classList.toggle('open', dmMoreOpen);
+    <div class="dm-mgrid">
+      <div class="dm-mcell"><label>Bought</label><span>${esc(r.bought_date||'—')}</span></div>
+      <div class="dm-mcell"><label>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
+      <div class="dm-mcell"><label>Bought by</label><span>${esc(r.bought_by||'—')}</span></div>
+      <div class="dm-mcell"><label>Country</label><span>${countryStr}</span></div>
+    </div>
+    ${notes.length ? `<div class="dm-notes"><h4>Notes across time</h4>${notes.map(n=>`
+      <div class="dm-note"><div class="nd">${dmFormatNoteDate(n.date)}</div><div class="nt">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div></div>`).join('')}</div>` : ''}`;
 }
 
 function dmSetCurrent(idx) {
@@ -1751,7 +1741,6 @@ function openDetail(id) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   currentDetailId = id;
-  dmMoreOpen = false;
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
