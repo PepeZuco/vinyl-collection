@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Zucoloto's Vinyl Collection</title>
 <link rel="icon" type="image/png" href="/static/vinyl-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,6 +10,12 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+
+/* app-like touch behaviour: allow scrolling in both directions but disable
+   pinch-to-zoom and double-tap-to-zoom. Doing it via touch-action (rather than
+   swallowing touchend) keeps rapid taps working — e.g. hitting the play-count
+   +/- buttons twice in a row still registers both taps. */
+html,body{touch-action:pan-x pan-y}
 
 [data-theme="dark"]{
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
@@ -2091,7 +2097,17 @@ function bindEvents(){
   document.getElementById('formOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeForm();});
   document.getElementById('loginOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeLogin();});
   bindCalSwipe();
+  blockZoomGestures();
   initDice();
+}
+
+// iOS Safari still honours its proprietary pinch "gesture" events even when
+// touch-action/user-scalable say otherwise, so cancel those explicitly. These
+// only fire for multi-touch pinches, so single taps and scrolling are untouched.
+function blockZoomGestures() {
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(type => {
+    document.addEventListener(type, e => e.preventDefault(), { passive: false });
+  });
 }
 
 // swipe left/right on the calendar body to move to the next/previous period (touch only)
