@@ -49,7 +49,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:28p
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
 .search{flex:1 1 340px;min-width:200px;max-width:480px;display:flex;align-items:center;gap:4px;background:var(--search-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;height:34px;position:relative}
-.search input{background:transparent;border:none;outline:none;color:var(--text);font-size:13px;width:100%;font-family:var(--font)}
+/* direct child only — as a descendant selector this also hit the checkboxes in
+   the search-fields panel below, stretching them to 100% and shoving the labels
+   out of the panel */
+.search > input[type=text]{background:transparent;border:none;outline:none;color:var(--text);font-size:13px;width:100%;font-family:var(--font)}
 .search i{color:var(--muted);font-size:15px;flex-shrink:0}
 .search-fields-btn{padding:4px 6px;height:auto}
 .search-fields-panel{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);border-top:none;margin-top:-1px;padding:12px;z-index:100;min-width:200px}
@@ -57,7 +60,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:28p
 .search-fields-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
 .search-fields-list{display:flex;flex-direction:column;gap:8px}
 .search-field-check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text)}
-.search-field-check input{cursor:pointer}
+.search-field-check input[type=checkbox]{width:15px;height:15px;flex:0 0 15px;margin:0;
+  accent-color:var(--accent);cursor:pointer}
+.search-field-check span{white-space:nowrap}
 .search-field-check:hover span{color:var(--accent)}
 select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer;transition:background .2s,color .2s,border .2s}
 select:focus{border-color:var(--accent)}
@@ -309,11 +314,9 @@ select option{background:var(--surface);color:var(--text)}
   #detailOverlay .modal-head{display:none}
   #detailOverlay .modal-body{padding:0;flex:1;overflow:hidden;display:flex}
   #detailOverlay #detailBody{flex:1;width:100%;min-width:0}
-  #detailOverlay .modal-foot{
-    position:absolute;bottom:0;left:0;right:0;z-index:5;
-    background:linear-gradient(transparent, rgba(0,0,0,.55));border-top:none;
-  }
-  [data-theme="light"] #detailOverlay .modal-foot{background:linear-gradient(transparent, rgba(0,0,0,.25))}
+  /* actions live at the end of the scrolled content (see .dm-foot), not
+     floating over the bottom-right corner */
+  #detailOverlay .modal-foot{display:none}
   .detail-layout{display:none}
   .detail-mobile-layout{
     display:flex;flex-direction:column;width:100%;height:100%;
@@ -350,23 +353,30 @@ select option{background:var(--surface);color:var(--text)}
      the current record, dragging the strip just browses it */
   .dm-crate-wrap{margin:6px 14px 0;border:1px solid var(--border);border-radius:10px;
     background:linear-gradient(color-mix(in srgb,var(--card) 72%,#000), var(--bg));
-    overflow:hidden;flex-shrink:0;padding:8px 0}
+    overflow:hidden;flex-shrink:0}
   [data-theme="light"] .dm-crate-wrap{background:linear-gradient(#e8e4da,#f2efe8)}
-  .dm-crate{display:flex;align-items:center;gap:3px;overflow-x:auto;
+  /* overflow-y must be explicit: with overflow-x:auto a `visible` y-axis computes
+     to auto, which let the scaled-up active thumb create a stray vertical scroll */
+  .dm-crate{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;
     scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;
-    padding:0 calc(50% - 16px)}
+    padding:11px calc(50% - 27px)}
   .dm-crate::-webkit-scrollbar{display:none}
-  .dm-thumb{flex:0 0 30px;width:30px;aspect-ratio:1;border-radius:4px;
+  .dm-thumb{flex:0 0 54px;width:54px;aspect-ratio:1;border-radius:6px;
     overflow:hidden;opacity:.5;background:#26231d;border:none;padding:0;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;color:#4a463e;font-size:13px;
+    display:flex;align-items:center;justify-content:center;color:#4a463e;font-size:20px;
     transition:opacity .2s,transform .2s;scroll-snap-align:center}
   [data-theme="light"] .dm-thumb{background:#c9c2b4;color:#a39c8e}
   .dm-thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-  .dm-thumb.on{opacity:1;transform:scale(1.3);box-shadow:0 0 0 2px var(--accent);z-index:1}
+  /* scale stays within the strip's vertical padding so nothing gets clipped */
+  .dm-thumb.on{opacity:1;transform:scale(1.14);box-shadow:0 0 0 2px var(--accent);z-index:1}
 
   /* info sheet below the crate — content classes (dm-album, dm-rates, etc.)
      live outside this media query so the desktop drawer can reuse them too */
-  .dm-info{padding:16px 16px 120px}
+  .dm-info{padding:16px 16px 4px}
+  /* delete/edit sit after the notes, scrolling with the content */
+  .dm-foot{display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;
+    margin:16px 16px 0;padding:14px 0 32px;border-top:1px solid var(--border)}
+  .dm-foot:empty{display:none}
 }
 
 /* form */
@@ -697,6 +707,19 @@ select option{background:var(--surface);color:var(--text)}
 .note-entry-body p{margin-bottom:4px}
 .note-delete{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1}
 .note-delete:hover{color:var(--danger)}
+
+/* ── play-date editor in form ──────────────────────────────────────────────── */
+.playdates-section{display:flex;flex-direction:column;gap:8px}
+.playdates-list{display:flex;flex-wrap:wrap;gap:8px}
+.playdates-list:empty{display:none}
+.playdate-row{display:flex;align-items:center;gap:4px;background:var(--card);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 4px 4px 8px}
+.playdate-row input[type=date]{background:transparent;color:var(--text);border:none;
+  font-size:13px;outline:none;font-family:var(--font);padding:2px 0;width:130px}
+.playdate-delete{background:transparent;border:none;color:var(--muted);cursor:pointer;
+  font-size:13px;padding:3px 4px;border-radius:3px;line-height:1;display:flex}
+.playdate-delete:hover{color:var(--danger)}
+.playdates-empty{font-size:12px;color:var(--muted);padding:2px 0}
 
 /* ── calendar page ─────────────────────────────────────────────────────────
    event colors: bought = accent gold, cleaned = teal, note = logo purple */
@@ -1129,6 +1152,13 @@ select option{background:var(--surface);color:var(--text)}
             <input type="checkbox" id="fHaveIt" checked>
             <label for="fHaveIt">in my collection (uncheck = wishlist)</label>
           </div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:14px">
+        <label>Played on <span style="font-weight:400;opacity:.5">(dates this record was played)</span></label>
+        <div class="playdates-section">
+          <div class="playdates-list" id="fPlayDatesList"></div>
+          <button type="button" class="btn btn-sm" id="fAddPlayDate" style="align-self:start" onclick="addPlayDate()"><i class="ti ti-plus"></i> add play date</button>
         </div>
       </div>
       <div class="form-group" style="margin-top:14px">
@@ -1613,6 +1643,7 @@ function renderDetailContent(r) {
       <div class="dm-carousel" id="dmCarousel">${dmList.map(dmSlideHTML).join('')}</div>
       <div class="dm-crate-wrap"><div class="dm-crate" id="dmCrate"></div></div>
       <div class="dm-info" id="dmInfo"></div>
+      <div class="dm-foot" id="dmFoot"></div>
     </div>`;
   dmBuildCrate();
   dmBind();
@@ -1672,7 +1703,7 @@ function dmInfoHTML(r) {
   const totalStr = tot > 0 ? (tot % 1 === 0 ? tot : tot.toFixed(1)) : '—';
   const bars = v => `<div class="dm-bars">${Array.from({length:5},(_,i)=>`<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('')}</div>`;
   const notes = r.notes
-    ? parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).sort((a,b)=>b.date.localeCompare(a.date))
+    ? parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).sort((a,b)=>a.date.localeCompare(b.date))
     : [];
   const countryStr = r.country
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
@@ -1804,17 +1835,18 @@ function navigateDetail(delta) {
 }
 
 function renderDetailFoot(id) {
-  const foot=document.getElementById('detailFoot');
-  if(confirmDeleteId===id){
-    foot.innerHTML=`
-      <span style="font-size:12px;color:var(--muted);margin-right:auto">delete this record?</span>
-      <button class="btn btn-danger btn-sm" onclick="doDelete(${id})">yes, delete</button>
-      <button class="btn btn-sm" onclick="confirmDeleteId=null;renderDetailFoot(${id})">cancel</button>`;
-  } else {
-    foot.innerHTML=authed?`
-      <button class="btn btn-danger btn-sm" onclick="confirmDeleteId=${id};renderDetailFoot(${id})"><i class="ti ti-trash"></i> delete</button>
-      <button class="btn" onclick="openEdit(${id})"><i class="ti ti-edit"></i> edit</button>`:'';
-  }
+  const html = confirmDeleteId === id
+    ? `<span style="font-size:12px;color:var(--muted);margin-right:auto">delete this record?</span>
+       <button class="btn btn-danger btn-sm" onclick="doDelete(${id})">yes, delete</button>
+       <button class="btn btn-sm" onclick="confirmDeleteId=null;renderDetailFoot(${id})">cancel</button>`
+    : (authed
+      ? `<button class="btn btn-danger btn-sm" onclick="confirmDeleteId=${id};renderDetailFoot(${id})"><i class="ti ti-trash"></i> delete</button>
+         <button class="btn" onclick="openEdit(${id})"><i class="ti ti-edit"></i> edit</button>`
+      : '');
+  // desktop drawer footer + the mobile copy that sits after the notes
+  document.getElementById('detailFoot').innerHTML = html;
+  const dmFoot = document.getElementById('dmFoot');
+  if (dmFoot) dmFoot.innerHTML = html;
 }
 
 function closeDetail(){document.getElementById('detailOverlay').classList.add('hidden');confirmDeleteId=null;currentDetailId=null;}
@@ -1881,6 +1913,7 @@ function countryCodeFromInput(value) {
 // Migration: if raw value is plain string (not JSON array), convert it once
 // using the record's bought_date (or today) as the date.
 let formNotes = []; // in-memory list while the form is open
+let formPlayDates = []; // ditto for the play-date editor
 
 function parseNotes(raw, fallbackDate) {
   if (!raw) return [];
@@ -1904,16 +1937,56 @@ function today() {
 function renderNotesForm() {
   const list = document.getElementById('fNotesList');
   if (!formNotes.length) { list.innerHTML = ''; return; }
-  const sorted = [...formNotes].sort((a,b) => b.date.localeCompare(a.date));
+  const sorted = [...formNotes].sort((a,b) => a.date.localeCompare(b.date)); // oldest first, matching the detail view
   list.innerHTML = sorted.map((n, i) => {
     // find original index for delete
     const origIdx = formNotes.indexOf(formNotes.find(x => x.date===n.date && x.text===n.text));
     return `<div class="note-entry">
       <div class="note-entry-date">${esc(n.date)}</div>
-      <div class="note-entry-body">${marked.parse(n.text)}</div>
+      <div class="note-entry-body">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div>
       <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
+}
+
+// ── play dates in the form ──────────────────────────────────────────────────
+// stored as plain YYYY-MM-DD strings; the calendar already slices dates to 10
+// chars, so this stays compatible with the ISO timestamps logged by the +/- buttons
+function renderPlayDatesForm() {
+  const list = document.getElementById('fPlayDatesList');
+  if (!formPlayDates.length) {
+    list.innerHTML = '<div class="playdates-empty">no play dates logged yet</div>';
+    return;
+  }
+  // sort for display but keep each entry's real index for the handlers
+  const rows = formPlayDates.map((d, i) => ({ d, i })).sort((a, b) => a.d.localeCompare(b.d));
+  list.innerHTML = rows.map(({ d, i }) => `
+    <div class="playdate-row">
+      <input type="date" value="${esc(d)}" onchange="updatePlayDate(${i}, this.value)">
+      <button type="button" class="playdate-delete" title="remove this play" onclick="deletePlayDate(${i})"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+function bumpPlayCount(delta) {
+  const el = document.getElementById('fPlays');
+  el.value = Math.max(0, (Number(el.value) || 0) + delta);
+}
+
+function addPlayDate() {
+  formPlayDates.push(today());
+  bumpPlayCount(1); // keep the count in step, mirroring the card's +/- buttons
+  renderPlayDatesForm();
+}
+
+// no re-render here: rebuilding the inputs mid-edit would steal focus
+function updatePlayDate(idx, value) {
+  if (value) formPlayDates[idx] = value;
+}
+
+function deletePlayDate(idx) {
+  formPlayDates.splice(idx, 1);
+  bumpPlayCount(-1);
+  renderPlayDatesForm();
 }
 
 function addNote() {
@@ -1944,6 +2017,8 @@ function openAdd(){
   document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
   formNotes=[];
+  formPlayDates=[];
+  renderPlayDatesForm();
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteText').value='';
   renderNotesForm();
@@ -1974,6 +2049,8 @@ function openEdit(id){
   document.getElementById('fCleaned').value=r.last_cleaned||'';
   document.getElementById('fHaveIt').checked=!!r.have_it;
   formNotes=parseNotes(r.notes, r.bought_date||today());
+  formPlayDates=parsePlayDates(r.play_dates).map(d => String(d).slice(0,10)).filter(Boolean);
+  renderPlayDatesForm();
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteText').value='';
   renderNotesForm();
@@ -2006,6 +2083,7 @@ async function submitForm(){
     have_it:document.getElementById('fHaveIt').checked,
     my_rating:myRating,wife_rating:wifeRating,cover_data:coverDataUri,
     notes:serializeNotes(formNotes),
+    play_dates:JSON.stringify(formPlayDates),
     country:countryCodeFromInput(document.getElementById('fCountry').value),
   };
   const url=editingId?`/api/records/${editingId}`:'/api/records';
