@@ -1725,6 +1725,7 @@ function dmInfoHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-map-pin"></i>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-user"></i>Bought by</label><span>${esc(r.bought_by||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
+      <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${esc(r.last_cleaned||'—')}</span></div>
     </div>
     ${notes.length ? `<div class="dm-notes"><h4>Notes across time</h4>${notes.map(n=>`
       <div class="dm-note"><div class="nd">${dmFormatNoteDate(n.date)}</div><div class="nt detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div></div>`).join('')}</div>` : ''}`;
