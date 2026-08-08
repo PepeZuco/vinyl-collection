@@ -682,6 +682,7 @@ select option{background:var(--surface);color:var(--text)}
 .list-main{min-width:0}
 .list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-artist{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.multi-artist-badge{font-size:10px;opacity:.6;margin-left:4px}
 .list-genre,.list-year{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-bars{display:flex;gap:2px}
 .list-bars .score-sq{height:6px}
@@ -1331,6 +1332,23 @@ function avgRating(r) {
   return scores.length ? scores.reduce((a,b)=>a+b,0) / scores.length : 0;
 }
 
+// ── multi-artist records ────────────────────────────────────────────────────
+// artist field stores multiple names as "Name A; Name B" — semicolon was chosen
+// over comma because band names can legitimately contain commas (e.g. "Earth,
+// Wind & Fire"), which would false-positive as "multiple artists"
+function artistList(r) {
+  return (r.artist||'').split(';').map(s => s.trim()).filter(Boolean);
+}
+function isMultiArtist(r) {
+  return artistList(r).length > 1;
+}
+function artistDisplay(r) {
+  return artistList(r).join(' / ');
+}
+function multiArtistBadgeHTML() {
+  return '<i class="ti ti-users multi-artist-badge" title="multiple artists"></i>';
+}
+
 // ── filtering & sorting ────────────────────────────────────────────────────
 let haveItMode = 'collection'; // 'collection' | 'wishlist'
 let sortDir = 'desc'; // 'asc' | 'desc'
@@ -1442,7 +1460,7 @@ function listRowHTML(r) {
     <div class="list-cover-wrap">${cover}</div>
     <div class="list-main">
       <div class="list-album">${esc(r.album_name)||'untitled'}</div>
-      <div class="list-artist">${esc(r.artist)||'unknown'}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
+      <div class="list-artist">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
     </div>
     <span class="list-genre">${esc(r.genre)||'—'}</span>
     <span class="list-year">${esc(r.year)||'—'}</span>
@@ -1579,7 +1597,7 @@ function cardHTML(r) {
       ${cover}
       ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagImgHTML(r.country, 28)}</div>` : ''}
-      <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
+      <div class="vcard-artist-overlay">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
     </div>
     <div class="vcard-body">
       <div class="vcard-title-row">
@@ -1709,7 +1727,7 @@ function dmInfoHTML(r) {
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
   return `
     <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
-    <div class="dm-artist">${esc(r.artist)||'unknown'}</div>
+    <div class="dm-artist">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
     <div class="dm-rates">
       <div class="dm-rate pepe"><div class="who">Pepe</div>${myR>0?bars(myR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
       <div class="dm-rate jenni"><div class="who">Jenni</div>${herR>0?bars(herR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${herR>0?herR+'/5':''}</div></div>
