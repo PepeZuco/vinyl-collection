@@ -261,6 +261,7 @@ select option{background:var(--surface);color:var(--text)}
 .dm-album{font-size:22px;font-weight:800;line-height:1.15}
 .dm-album .dm-year{font-size:14px;color:var(--muted);font-weight:500;margin-left:8px}
 .dm-artist{margin-top:4px;font-size:14px;color:var(--muted)}
+.dm-artist .multi-artist-badge{margin-right:0;margin-left:4px}
 .dm-rates{display:flex;align-items:center;gap:12px;margin-top:14px;
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
 .dm-rate{flex:1;min-width:0}
@@ -396,6 +397,7 @@ select option{background:var(--surface);color:var(--text)}
 .cover-preview{width:100%;max-height:130px;object-fit:cover;border-radius:var(--radius-sm);margin-top:8px;display:block}
 .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
 .check-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent)}
+.form-group .check-row label{font-size:13px;text-transform:none;letter-spacing:0;margin-bottom:0;display:inline;color:var(--text)}
 
 /* form — split layout: cover left, fields right (mirrors detail-layout) */
 .form-layout{display:grid;grid-template-columns:340px 1fr;gap:24px}
@@ -682,7 +684,7 @@ select option{background:var(--surface);color:var(--text)}
 .list-main{min-width:0}
 .list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-artist{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.multi-artist-badge{font-size:10px;opacity:.6;margin-left:4px}
+.multi-artist-badge{font-size:10px;opacity:.6;margin-right:4px}
 .list-genre,.list-year{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-bars{display:flex;gap:2px}
 .list-bars .score-sq{height:6px}
@@ -1485,7 +1487,7 @@ function listRowHTML(r) {
     <div class="list-cover-wrap">${cover}</div>
     <div class="list-main">
       <div class="list-album">${esc(r.album_name)||'untitled'}</div>
-      <div class="list-artist">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
+      <div class="list-artist">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
     </div>
     <span class="list-genre">${esc(r.genre)||'—'}</span>
     <span class="list-year">${esc(r.year)||'—'}</span>
@@ -1622,7 +1624,7 @@ function cardHTML(r) {
       ${cover}
       ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagImgHTML(r.country, 28)}</div>` : ''}
-      <div class="vcard-artist-overlay">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
+      <div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>
     </div>
     <div class="vcard-body">
       <div class="vcard-title-row">
@@ -2062,6 +2064,9 @@ function deleteArtistRow(idx) {
 
 function toggleMultiArtist() {
   const multi = document.getElementById('fMultiArtist').checked;
+  if (!multi) {
+    document.getElementById('fArtist').value = formArtists.filter(Boolean).join('; ');
+  }
   document.getElementById('fArtist').style.display = multi ? 'none' : '';
   document.getElementById('fArtistsList').style.display = multi ? '' : 'none';
   document.getElementById('fAddArtist').style.display = multi ? '' : 'none';
@@ -2700,7 +2705,7 @@ function textColor() { return isDark() ? '#888' : '#999'; }
 // shared hover-tooltip body for chart bins: title + up to `cap` records, "+N more" beyond that
 function chartTooltipHTML(title, recs, cap = 20) {
   const shown = recs.slice(0, cap);
-  const list = shown.map(r => `<div class="ct-item"><b>${esc(r.artist)||'unknown'}</b> – ${esc(r.album_name)||'untitled'}</div>`).join('');
+  const list = shown.map(r => `<div class="ct-item"><b>${esc(artistDisplay(r))||'unknown'}</b> – ${esc(r.album_name)||'untitled'}</div>`).join('');
   const more = recs.length > cap ? `<div class="ct-more">+${recs.length - cap} more</div>` : '';
   return `<div class="ct-title">${esc(title)} (${recs.length})</div><div class="ct-list">${list}</div>${more}`;
 }
@@ -3184,7 +3189,7 @@ function calEventRow(ev, fullNote) {
     ${cover}
     <div class="cal-ev-main">
       <div class="cal-ev-title">${esc(r.album_name) || 'untitled'}</div>
-      <div class="cal-ev-artist">${esc(r.artist)}</div>
+      <div class="cal-ev-artist">${esc(artistDisplay(r))}</div>
       ${noteHtml}
     </div>
     <span class="cal-badge ${ev.type}">${CAL_TYPE_LABEL[ev.type]}</span>
@@ -3194,11 +3199,11 @@ function calEventRow(ev, fullNote) {
 // compact event chip — used by the week grid (cover art + type color, no detail text)
 function calWeekChip(ev) {
   const r = ev.r;
-  const label = esc(r.album_name) || esc(r.artist) || 'untitled';
+  const label = esc(r.album_name) || esc(artistDisplay(r)) || 'untitled';
   const cover = r.cover_data
     ? `<img src="${r.cover_data}" alt="" loading="lazy" onerror="this.remove()">`
     : `<i class="ti ti-disc"></i>`;
-  return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(r.artist)} — ${label} (${CAL_TYPE_LABEL[ev.type]})">
+  return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(artistDisplay(r))} — ${label} (${CAL_TYPE_LABEL[ev.type]})">
     <span class="cal-week-chip-cover">${cover}</span>
     <span class="cal-week-chip-txt">${label}</span>
   </button>`;
@@ -3222,7 +3227,7 @@ function renderCalMonth(events) {
     cells += `<div class="cal-cell${cur.getMonth() !== m ? ' cal-out' : ''}${k === todayK ? ' cal-today' : ''}${evs.length ? ' has-ev' : ''}"${evs.length ? ` onclick="openCalDay('${k}')"` : ''}>
       <div class="cal-cell-num">${cur.getDate()}</div>
       <div class="cal-cell-evs">
-        ${shown.map(ev => `<div class="cal-pill"><span class="cal-dot ${ev.type}"></span><span class="cal-pill-txt">${esc(ev.r.album_name || ev.r.artist)}</span></div>`).join('')}
+        ${shown.map(ev => `<div class="cal-pill"><span class="cal-dot ${ev.type}"></span><span class="cal-pill-txt">${esc(ev.r.album_name || artistDisplay(ev.r))}</span></div>`).join('')}
         ${evs.length > 3 ? `<div class="cal-more">+${evs.length-3} more</div>` : ''}
       </div>
       <div class="cal-cell-dots">${typesPresent.map(t => `<span class="cal-dot ${t}"></span>`).join('')}</div>

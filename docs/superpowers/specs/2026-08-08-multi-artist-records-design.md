@@ -59,11 +59,18 @@ semicolons in a single input.
 
 A small icon badge (tabler icon, e.g. `ti-users`, matching the icon set already
 used elsewhere in the UI) is shown next to the artist name whenever
-`isMultiArtist(r)` is true, in all three places the artist is rendered:
+`isMultiArtist(r)` is true, in the three main record views:
 
 - List view (`.list-artist`)
 - Card overlay (`.vcard-artist-overlay`)
 - Detail modal (`.dm-artist`)
+
+Other, more compact/secondary UI that also renders the artist string —
+the calendar view (`.cal-ev-artist`), week-chip tooltips, and the stats
+tooltip (`chartTooltipHTML`) — intentionally omits the badge to avoid
+clutter in those dense views. Those places still use the joined `" / "`
+display (via `artistDisplay(r)`) rather than the raw semicolon, they just
+don't render the icon.
 
 The visible artist text itself joins the names with `" / "` (e.g.
 "Artist A / Artist B") rather than showing the raw semicolon delimiter.
