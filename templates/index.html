@@ -1400,6 +1400,12 @@ function filtered() {
     if (haveItMode === 'wishlist'   &&  r.have_it) return false;
     return true;
   }).sort((a, b_) => {
+    if (s === 'artist') {
+      const aMulti = isMultiArtist(a), bMulti = isMultiArtist(b_);
+      if (aMulti !== bMulti) return aMulti ? 1 : -1; // multi-artist records always last, regardless of sortDir
+      const cmp = (a.artist||'').localeCompare(b_.artist||'');
+      return sortDir === 'asc' ? -cmp : cmp;
+    }
     let cmp;
     if (s === 'bought_date') cmp = (b_.bought_date||'').localeCompare(a.bought_date||'');
     else if (s === 'avg_rating')  cmp = avgRating(b_) - avgRating(a);
