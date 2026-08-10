@@ -313,7 +313,10 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry .ht{font-size:13px;line-height:1.5;flex:1;min-width:0}
 .dm-hist-entry .ht p{margin:0 0 4px}
 .dm-hist-entry .ht p:last-child{margin-bottom:0}
-.dm-hist-label{color:var(--muted);font-weight:600}
+.dm-hist-icon{font-size:13px}
+.dm-hist-entry.bought .dm-hist-icon{color:var(--accent)}
+.dm-hist-entry.cleaned .dm-hist-icon{color:#4AA3C4}
+.dm-hist-entry.played .dm-hist-icon{color:#5FBF7A}
 
 /* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
 .detail-mobile-layout{display:none}
@@ -1783,11 +1786,12 @@ function dmHistoryGroups(events) {
 }
 
 const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned' };
+const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet' };
 
 function dmHistoryEntryHTML(ev) {
   const body = ev.type === 'note'
     ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}</div>`
-    : `<div class="ht"><span class="dm-hist-label">${DM_HIST_LABEL[ev.type]}</span></div>`;
+    : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i></div>`;
   return `<div class="dm-hist-entry ${ev.type}"><span class="dot"></span>${body}</div>`;
 }
 
