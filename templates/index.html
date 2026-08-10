@@ -295,18 +295,24 @@ select option{background:var(--surface);color:var(--text)}
 .dm-history{margin-top:14px}
 .dm-history h4{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--muted);margin-bottom:8px}
-.dm-hist-item{position:relative;padding:0 0 14px 16px;border-left:2px solid var(--border);margin-left:5px}
-.dm-hist-item:last-child{padding-bottom:2px}
-.dm-hist-item::before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;
-  border-radius:50%;background:#9B7FD4;border:2px solid var(--bg)}
-.dm-hist-item.bought::before{background:var(--accent)}
-.dm-hist-item.cleaned::before{background:#4AA3C4}
-.dm-hist-item.played::before{background:#5FBF7A}
-.dm-hist-item.note::before{background:#9B7FD4}
-.dm-hist-item .hd{font-size:11.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:3px}
-.dm-hist-item .ht{font-size:13px;line-height:1.5}
-.dm-hist-item .ht p{margin:0 0 4px}
-.dm-hist-item .ht p:last-child{margin-bottom:0}
+/* one group per date — the timeline marker on the border-left line represents
+   the date itself, not any one event type, so it stays neutral */
+.dm-hist-group{position:relative;padding:0 0 14px 16px;border-left:2px solid var(--border);margin-left:5px}
+.dm-hist-group:last-child{padding-bottom:2px}
+.dm-hist-group::before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;
+  border-radius:50%;background:var(--muted);border:2px solid var(--bg)}
+.dm-hist-group .hd{font-size:11.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:6px}
+/* individual events within a date group — each keeps its own type color via its dot */
+.dm-hist-entry{display:flex;align-items:flex-start;gap:7px;margin-bottom:6px}
+.dm-hist-entry:last-child{margin-bottom:0}
+.dm-hist-entry .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;background:#9B7FD4}
+.dm-hist-entry.bought .dot{background:var(--accent)}
+.dm-hist-entry.cleaned .dot{background:#4AA3C4}
+.dm-hist-entry.played .dot{background:#5FBF7A}
+.dm-hist-entry.note .dot{background:#9B7FD4}
+.dm-hist-entry .ht{font-size:13px;line-height:1.5;flex:1;min-width:0}
+.dm-hist-entry .ht p{margin:0 0 4px}
+.dm-hist-entry .ht p:last-child{margin-bottom:0}
 .dm-hist-label{color:var(--muted);font-weight:600}
 
 /* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
@@ -1756,21 +1762,37 @@ function dmFormatNoteDate(dateStr) {
 function dmHistoryEvents(r) {
   const events = [];
   if (r.bought_date) events.push({ type:'bought', date:r.bought_date });
-  parsePlayDates(r.play_dates).forEach(dt => { if (dt) events.push({ type:'played', date:dt }); });
   parseCleanedDates(r.cleaned_dates).forEach(dt => { if (dt) events.push({ type:'cleaned', date:dt }); });
+  parsePlayDates(r.play_dates).forEach(dt => { if (dt) events.push({ type:'played', date:dt }); });
   if (r.notes) parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).forEach(n => {
     events.push({ type:'note', date:n.date, text:n.text });
   });
   return events.sort((a,b) => (b.date||'').slice(0,10).localeCompare((a.date||'').slice(0,10)));
 }
 
+// collapses same-day events into one group so the date renders once, not once per event
+function dmHistoryGroups(events) {
+  const groups = [];
+  events.forEach(ev => {
+    const day = (ev.date||'').slice(0,10);
+    const last = groups[groups.length-1];
+    if (last && last.day === day) last.items.push(ev);
+    else groups.push({ day, items: [ev] });
+  });
+  return groups;
+}
+
 const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned' };
 
-function dmHistoryItemHTML(ev) {
+function dmHistoryEntryHTML(ev) {
   const body = ev.type === 'note'
     ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}</div>`
     : `<div class="ht"><span class="dm-hist-label">${DM_HIST_LABEL[ev.type]}</span></div>`;
-  return `<div class="dm-hist-item ${ev.type}"><div class="hd">${dmFormatNoteDate(ev.date)}</div>${body}</div>`;
+  return `<div class="dm-hist-entry ${ev.type}"><span class="dot"></span>${body}</div>`;
+}
+
+function dmHistoryGroupHTML(group) {
+  return `<div class="dm-hist-group"><div class="hd">${dmFormatNoteDate(group.day)}</div>${group.items.map(dmHistoryEntryHTML).join('')}</div>`;
 }
 
 function dmInfoHTML(r) {
@@ -1779,7 +1801,7 @@ function dmInfoHTML(r) {
   const tot = myR + herR;
   const totalStr = tot > 0 ? (tot % 1 === 0 ? tot : tot.toFixed(1)) : '—';
   const bars = v => `<div class="dm-bars">${Array.from({length:5},(_,i)=>`<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('')}</div>`;
-  const history = dmHistoryEvents(r);
+  const historyGroups = dmHistoryGroups(dmHistoryEvents(r));
   const countryStr = r.country
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
   return `
@@ -1801,7 +1823,7 @@ function dmInfoHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-user"></i>Bought by</label><span>${esc(r.bought_by||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
     </div>
-    ${history.length ? `<div class="dm-history"><h4>History</h4>${history.map(dmHistoryItemHTML).join('')}</div>` : ''}`;
+    ${historyGroups.length ? `<div class="dm-history"><h4>History</h4>${historyGroups.map(dmHistoryGroupHTML).join('')}</div>` : ''}`;
 }
 
 function dmSetCurrent(idx) {
