@@ -32,7 +32,8 @@ class Record(db.Model):
     have_it     = db.Column(db.Boolean, default=True)
     play_count  = db.Column(db.Integer, default=0)
     play_dates  = db.Column(db.Text)      # JSON array of ISO datetime strings, one per play
-    last_cleaned= db.Column(db.String(50))
+    last_cleaned= db.Column(db.String(50))  # deprecated: superseded by cleaned_dates, kept for migration only
+    cleaned_dates = db.Column(db.Text)    # JSON array of ISO date strings, one per cleaning
     cover_data  = db.Column(db.Text)      # base64 data URI
     notes       = db.Column(db.Text)      # markdown notes
     country     = db.Column(db.String(2)) # ISO 3166-1 alpha-2 country code, e.g. "BR", "US"
@@ -52,7 +53,7 @@ class Record(db.Model):
             "have_it": bool(self.have_it),
             "play_count": self.play_count or 0,
             "play_dates": self.play_dates or "",
-            "last_cleaned": self.last_cleaned or "",
+            "cleaned_dates": self.cleaned_dates or "",
             "cover_data": self.cover_data or "",
             "notes": self.notes or "",
             "country": self.country or "",
@@ -69,12 +70,26 @@ with app.app_context():
     missing_cols = {
         "country": "VARCHAR(2)",
         "play_dates": "TEXT",
+        "cleaned_dates": "TEXT",
     }
+    added_cleaned_dates = "cleaned_dates" not in existing_cols
     for col, ddl_type in missing_cols.items():
         if col not in existing_cols:
             with db.engine.connect() as conn:
                 conn.execute(text(f"ALTER TABLE record ADD COLUMN {col} {ddl_type}"))
                 conn.commit()
+
+    # one-time backfill: seed cleaned_dates from the old single-value last_cleaned
+    # column for any row that hasn't been migrated yet
+    if added_cleaned_dates:
+        stale = Record.query.filter(
+            Record.last_cleaned.isnot(None), Record.last_cleaned != "",
+            (Record.cleaned_dates.is_(None)) | (Record.cleaned_dates == "")
+        ).all()
+        for r in stale:
+            r.cleaned_dates = json.dumps([r.last_cleaned])
+        if stale:
+            db.session.commit()
 
 # ── auth helpers ──────────────────────────────────────────────────────────────
 
@@ -138,7 +153,7 @@ def create_record():
         have_it     = bool(d.get("have_it", True)),
         play_count  = int(d.get("play_count") or 0),
         play_dates  = d.get("play_dates",""),
-        last_cleaned= d.get("last_cleaned",""),
+        cleaned_dates = d.get("cleaned_dates",""),
         cover_data  = d.get("cover_data",""),
         notes       = d.get("notes",""),
         country     = (d.get("country") or "").strip().upper()[:2],
@@ -152,7 +167,7 @@ def create_record():
 def update_record(rid):
     r = Record.query.get_or_404(rid)
     d = request.get_json(silent=True) or {}
-    for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by","last_cleaned"]:
+    for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by"]:
         if field in d:
             setattr(r, field, d[field])
     if "my_rating"   in d: r.my_rating   = float(d["my_rating"] or 0)
@@ -160,6 +175,7 @@ def update_record(rid):
     if "have_it"     in d: r.have_it      = bool(d["have_it"])
     if "play_count"  in d: r.play_count   = int(d["play_count"] or 0)
     if "play_dates"  in d: r.play_dates   = d["play_dates"]
+    if "cleaned_dates" in d: r.cleaned_dates = d["cleaned_dates"]
     if "cover_data"  in d: r.cover_data   = d["cover_data"]
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
@@ -180,7 +196,7 @@ def delete_record(rid):
 def export_csv():
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","my_rating","wife_rating","have_it","play_count","play_dates","last_cleaned","cover_image_base64","notes","country"]
+            "bought_by","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country"]
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -206,6 +222,9 @@ def import_records_from_csv_text(text):
         cover = row.get("cover_image_base64","") or row.get("cover_data","")
         if cover and not cover.startswith("data:"):
             cover = "data:image/jpeg;base64," + cover
+        cleaned_dates = row.get("cleaned_dates","")
+        if not cleaned_dates and row.get("last_cleaned",""):
+            cleaned_dates = json.dumps([row["last_cleaned"]])
         r = Record(
             artist      = row.get("artist",""),
             album_name  = row.get("album_name",""),
@@ -219,7 +238,7 @@ def import_records_from_csv_text(text):
             have_it     = row.get("have_it","").lower() in ("true","1","yes"),
             play_count  = int(row.get("play_count") or 0),
             play_dates  = row.get("play_dates",""),
-            last_cleaned= row.get("last_cleaned",""),
+            cleaned_dates = cleaned_dates,
             cover_data  = cover,
             notes       = row.get("notes",""),
             country     = (row.get("country","") or "").strip().upper()[:2],

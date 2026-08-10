@@ -1,7 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -c \"import ast; print\\('ok'\\)\")"
+      "Bash(python3 -c \"import ast; print\\('ok'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(python3 -c \"import flask, flask_sqlalchemy\")",
+      "Bash(python3 -m venv --help)",
+      "Bash(pip3 --version)",
+      "Bash(pip3 install *)",
+      "Bash(python3 *)",
+      "Bash(sudo -n true)",
+      "Bash(command -v node)",
+      "Bash(node --check /tmp/claude-1000/-home-jujuz-code-vinyl-collection/c07ad3fb-83cf-479e-a482-de72f2fdc2d9/scratchpad/script_4.js)",
+      "Bash(xxd])",
+      "Bash(git --version)",
+      "Bash(git diff *)"
     ]
   }
 }

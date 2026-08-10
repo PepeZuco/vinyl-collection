@@ -292,17 +292,22 @@ select option{background:var(--surface);color:var(--text)}
   color:var(--muted);display:flex;align-items:center;gap:5px;margin-bottom:3px}
 .dm-mcell label i{font-size:12px;color:var(--accent)}
 .dm-mcell span{font-size:13px;font-weight:600}
-.dm-notes{margin-top:14px}
-.dm-notes h4{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+.dm-history{margin-top:14px}
+.dm-history h4{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--muted);margin-bottom:8px}
-.dm-note{position:relative;padding:0 0 14px 16px;border-left:2px solid var(--border);margin-left:5px}
-.dm-note:last-child{padding-bottom:2px}
-.dm-note::before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;
+.dm-hist-item{position:relative;padding:0 0 14px 16px;border-left:2px solid var(--border);margin-left:5px}
+.dm-hist-item:last-child{padding-bottom:2px}
+.dm-hist-item::before{content:"";position:absolute;left:-6px;top:3px;width:10px;height:10px;
   border-radius:50%;background:#9B7FD4;border:2px solid var(--bg)}
-.dm-note .nd{font-size:11.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:3px}
-.dm-note .nt{font-size:13px;line-height:1.5}
-.dm-note .nt p{margin:0 0 4px}
-.dm-note .nt p:last-child{margin-bottom:0}
+.dm-hist-item.bought::before{background:var(--accent)}
+.dm-hist-item.cleaned::before{background:#4AA3C4}
+.dm-hist-item.played::before{background:#5FBF7A}
+.dm-hist-item.note::before{background:#9B7FD4}
+.dm-hist-item .hd{font-size:11.5px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;margin-bottom:3px}
+.dm-hist-item .ht{font-size:13px;line-height:1.5}
+.dm-hist-item .ht p{margin:0 0 4px}
+.dm-hist-item .ht p:last-child{margin-bottom:0}
+.dm-hist-label{color:var(--muted);font-weight:600}
 
 /* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
 .detail-mobile-layout{display:none}
@@ -1155,7 +1160,6 @@ select option{background:var(--surface);color:var(--text)}
             <div class="form-group"><label>Bought at</label><input id="fWhere" placeholder="store / city"></div>
             <div class="form-group"><label>Bought by</label><input id="fBuyer" placeholder="name"></div>
             <div class="form-group"><label>Play count</label><input id="fPlays" type="number" min="0" value="0"></div>
-            <div class="form-group"><label>Last cleaned</label><input id="fCleaned" type="date"></div>
             <div class="form-group">
               <label>Country</label>
               <input id="fCountry" list="countryList" placeholder="type to search…" autocomplete="off">
@@ -1181,6 +1185,13 @@ select option{background:var(--surface);color:var(--text)}
         <div class="playdates-section">
           <div class="playdates-list" id="fPlayDatesList"></div>
           <button type="button" class="btn btn-sm" id="fAddPlayDate" style="align-self:start" onclick="addPlayDate()"><i class="ti ti-plus"></i> add play date</button>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:14px">
+        <label>Cleaned on <span style="font-weight:400;opacity:.5">(dates this record was cleaned)</span></label>
+        <div class="playdates-section">
+          <div class="playdates-list" id="fCleanedDatesList"></div>
+          <button type="button" class="btn btn-sm" id="fAddCleanedDate" style="align-self:start" onclick="addCleanedDate()"><i class="ti ti-plus"></i> add cleaning date</button>
         </div>
       </div>
       <div class="form-group" style="margin-top:14px">
@@ -1741,15 +1752,34 @@ function dmFormatNoteDate(dateStr) {
   return `${Number(d)} - ${DM_MONTHS_PT[Number(mo)-1]} - ${y}`;
 }
 
+// merges bought/played/cleaned/notes into one chronological (newest-first) timeline
+function dmHistoryEvents(r) {
+  const events = [];
+  if (r.bought_date) events.push({ type:'bought', date:r.bought_date });
+  parsePlayDates(r.play_dates).forEach(dt => { if (dt) events.push({ type:'played', date:dt }); });
+  parseCleanedDates(r.cleaned_dates).forEach(dt => { if (dt) events.push({ type:'cleaned', date:dt }); });
+  if (r.notes) parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).forEach(n => {
+    events.push({ type:'note', date:n.date, text:n.text });
+  });
+  return events.sort((a,b) => (b.date||'').slice(0,10).localeCompare((a.date||'').slice(0,10)));
+}
+
+const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned' };
+
+function dmHistoryItemHTML(ev) {
+  const body = ev.type === 'note'
+    ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}</div>`
+    : `<div class="ht"><span class="dm-hist-label">${DM_HIST_LABEL[ev.type]}</span></div>`;
+  return `<div class="dm-hist-item ${ev.type}"><div class="hd">${dmFormatNoteDate(ev.date)}</div>${body}</div>`;
+}
+
 function dmInfoHTML(r) {
   const myR = Number(r.my_rating) || 0;
   const herR = Number(r.wife_rating) || 0;
   const tot = myR + herR;
   const totalStr = tot > 0 ? (tot % 1 === 0 ? tot : tot.toFixed(1)) : '—';
   const bars = v => `<div class="dm-bars">${Array.from({length:5},(_,i)=>`<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('')}</div>`;
-  const notes = r.notes
-    ? parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).sort((a,b)=>a.date.localeCompare(b.date))
-    : [];
+  const history = dmHistoryEvents(r);
   const countryStr = r.country
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
   return `
@@ -1770,10 +1800,8 @@ function dmInfoHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-map-pin"></i>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-user"></i>Bought by</label><span>${esc(r.bought_by||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
-      <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${esc(r.last_cleaned||'—')}</span></div>
     </div>
-    ${notes.length ? `<div class="dm-notes"><h4>Notes across time</h4>${notes.map(n=>`
-      <div class="dm-note"><div class="nd">${dmFormatNoteDate(n.date)}</div><div class="nt detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div></div>`).join('')}</div>` : ''}`;
+    ${history.length ? `<div class="dm-history"><h4>History</h4>${history.map(dmHistoryItemHTML).join('')}</div>` : ''}`;
 }
 
 function dmSetCurrent(idx) {
@@ -1960,6 +1988,7 @@ function countryCodeFromInput(value) {
 // using the record's bought_date (or today) as the date.
 let formNotes = []; // in-memory list while the form is open
 let formPlayDates = []; // ditto for the play-date editor
+let formCleanedDates = []; // ditto for the cleaned-date editor
 let formArtists = []; // ditto for the multi-artist editor
 
 function parseNotes(raw, fallbackDate) {
@@ -2036,6 +2065,36 @@ function deletePlayDate(idx) {
   renderPlayDatesForm();
 }
 
+// ── cleaned dates in the form ───────────────────────────────────────────────
+// same shape and behavior as the play-date editor above, minus the play-count bump
+function renderCleanedDatesForm() {
+  const list = document.getElementById('fCleanedDatesList');
+  if (!formCleanedDates.length) {
+    list.innerHTML = '<div class="playdates-empty">no cleaning dates logged yet</div>';
+    return;
+  }
+  const rows = formCleanedDates.map((d, i) => ({ d, i })).sort((a, b) => a.d.localeCompare(b.d));
+  list.innerHTML = rows.map(({ d, i }) => `
+    <div class="playdate-row">
+      <input type="date" value="${esc(d)}" onchange="updateCleanedDate(${i}, this.value)">
+      <button type="button" class="playdate-delete" title="remove this cleaning" onclick="deleteCleanedDate(${i})"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+function addCleanedDate() {
+  formCleanedDates.push(today());
+  renderCleanedDatesForm();
+}
+
+function updateCleanedDate(idx, value) {
+  if (value) formCleanedDates[idx] = value;
+}
+
+function deleteCleanedDate(idx) {
+  formCleanedDates.splice(idx, 1);
+  renderCleanedDatesForm();
+}
+
 // ── multi-artist editor in the form ─────────────────────────────────────────
 function renderArtistsForm() {
   const list = document.getElementById('fArtistsList');
@@ -2108,11 +2167,13 @@ function openAdd(){
   document.getElementById('fAddArtist').style.display='none';
   renderArtistsForm();
   document.getElementById('fDate').value='';
-  document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
+  document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
   formNotes=[];
   formPlayDates=[];
   renderPlayDatesForm();
+  formCleanedDates=[];
+  renderCleanedDatesForm();
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteText').value='';
   renderNotesForm();
@@ -2155,11 +2216,12 @@ function openEdit(id){
   document.getElementById('fWhere').value=r.bought_where||'';
   document.getElementById('fBuyer').value=r.bought_by||'';
   document.getElementById('fPlays').value=r.play_count||0;
-  document.getElementById('fCleaned').value=r.last_cleaned||'';
   document.getElementById('fHaveIt').checked=!!r.have_it;
   formNotes=parseNotes(r.notes, r.bought_date||today());
   formPlayDates=parsePlayDates(r.play_dates).map(d => String(d).slice(0,10)).filter(Boolean);
   renderPlayDatesForm();
+  formCleanedDates=parseCleanedDates(r.cleaned_dates).map(d => String(d).slice(0,10)).filter(Boolean);
+  renderCleanedDatesForm();
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteText').value='';
   renderNotesForm();
@@ -2190,11 +2252,11 @@ async function submitForm(){
     bought_where:document.getElementById('fWhere').value,
     bought_by:document.getElementById('fBuyer').value,
     play_count:Number(document.getElementById('fPlays').value)||0,
-    last_cleaned:document.getElementById('fCleaned').value,
     have_it:document.getElementById('fHaveIt').checked,
     my_rating:myRating,wife_rating:wifeRating,cover_data:coverDataUri,
     notes:serializeNotes(formNotes),
     play_dates:JSON.stringify(formPlayDates),
+    cleaned_dates:JSON.stringify(formCleanedDates),
     country:countryCodeFromInput(document.getElementById('fCountry').value),
   };
   const url=editingId?`/api/records/${editingId}`:'/api/records';
@@ -2448,6 +2510,11 @@ function parsePlayDates(raw) {
     if (Array.isArray(parsed)) return parsed;
   } catch(e) {}
   return [];
+}
+
+// same JSON-array-of-ISO-date-strings shape as play_dates
+function parseCleanedDates(raw) {
+  return parsePlayDates(raw);
 }
 
 async function adjustPlayCount(id, delta) {
@@ -3057,7 +3124,7 @@ function renderWorldMap(all) {
 }
 
 // ── calendar ───────────────────────────────────────────────────────────────
-// month / week / day views over bought_date, last_cleaned and dated notes
+// month / week / day views over bought_date, cleaned_dates, play_dates and dated notes
 let calScale = 'month';                  // 'month' | 'week' | 'day'
 let calAnchor = new Date();              // any date inside the visible range
 let calTypes = { bought: true, cleaned: true, played: true, note: true };
@@ -3093,7 +3160,9 @@ function calUpdateDateRange() {
   const dates = [];
   records.forEach(r => {
     if (calValidDate(r.bought_date)) dates.push(calParseKey(r.bought_date.slice(0,10)));
-    if (calValidDate(r.last_cleaned)) dates.push(calParseKey(r.last_cleaned.slice(0,10)));
+    parseCleanedDates(r.cleaned_dates).forEach(dt => {
+      if (calValidDate(dt)) dates.push(calParseKey(dt.slice(0,10)));
+    });
     parsePlayDates(r.play_dates).forEach(dt => {
       if (calValidDate(dt)) dates.push(calParseKey(dt.slice(0,10)));
     });
@@ -3120,7 +3189,9 @@ function calEventsByDay() {
   };
   records.forEach(r => {
     if (calTypes.bought && calValidDate(r.bought_date)) add(r.bought_date, { type:'bought', r });
-    if (calTypes.cleaned && calValidDate(r.last_cleaned)) add(r.last_cleaned, { type:'cleaned', r });
+    if (calTypes.cleaned) parseCleanedDates(r.cleaned_dates).forEach(dt => {
+      if (calValidDate(dt)) add(dt, { type:'cleaned', r });
+    });
     if (calTypes.played) parsePlayDates(r.play_dates).forEach(dt => {
       if (calValidDate(dt)) add(dt, { type:'played', r });
     });
