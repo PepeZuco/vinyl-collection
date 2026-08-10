@@ -261,6 +261,7 @@ select option{background:var(--surface);color:var(--text)}
 .dm-album{font-size:22px;font-weight:800;line-height:1.15}
 .dm-album .dm-year{font-size:14px;color:var(--muted);font-weight:500;margin-left:8px}
 .dm-artist{margin-top:4px;font-size:14px;color:var(--muted)}
+.dm-artist .multi-artist-badge{margin-right:0;margin-left:4px}
 .dm-rates{display:flex;align-items:center;gap:12px;margin-top:14px;
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
 .dm-rate{flex:1;min-width:0}
@@ -396,6 +397,7 @@ select option{background:var(--surface);color:var(--text)}
 .cover-preview{width:100%;max-height:130px;object-fit:cover;border-radius:var(--radius-sm);margin-top:8px;display:block}
 .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
 .check-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent)}
+.form-group .check-row label{font-size:13px;text-transform:none;letter-spacing:0;margin-bottom:0;display:inline;color:var(--text)}
 
 /* form — split layout: cover left, fields right (mirrors detail-layout) */
 .form-layout{display:grid;grid-template-columns:340px 1fr;gap:24px}
@@ -682,6 +684,7 @@ select option{background:var(--surface);color:var(--text)}
 .list-main{min-width:0}
 .list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-artist{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.multi-artist-badge{font-size:10px;opacity:.6;margin-right:4px}
 .list-genre,.list-year{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-bars{display:flex;gap:2px}
 .list-bars .score-sq{height:6px}
@@ -720,6 +723,16 @@ select option{background:var(--surface);color:var(--text)}
   font-size:13px;padding:3px 4px;border-radius:3px;line-height:1;display:flex}
 .playdate-delete:hover{color:var(--danger)}
 .playdates-empty{font-size:12px;color:var(--muted);padding:2px 0}
+
+/* ── multi-artist editor in form ───────────────────────────────────────────── */
+.artists-list{display:flex;flex-direction:column;gap:6px}
+.artist-row{display:flex;align-items:center;gap:4px;background:var(--card);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 4px 4px 8px}
+.artist-row input[type=text]{background:transparent;color:var(--text);border:none;
+  font-size:13px;outline:none;font-family:var(--font);padding:2px 0;flex:1}
+.artist-delete{background:transparent;border:none;color:var(--muted);cursor:pointer;
+  font-size:13px;padding:3px 4px;border-radius:3px;line-height:1;display:flex}
+.artist-delete:hover{color:var(--danger)}
 
 /* ── calendar page ─────────────────────────────────────────────────────────
    event colors: bought = accent gold, cleaned = teal, note = logo purple */
@@ -1120,7 +1133,16 @@ select option{background:var(--surface);color:var(--text)}
         </div>
         <div class="form-info-col">
           <div class="form-grid">
-            <div class="form-group"><label>Artist</label><input id="fArtist" placeholder="artist name"></div>
+            <div class="form-group">
+              <label>Artist</label>
+              <input id="fArtist" placeholder="artist name">
+              <div class="check-row" style="margin-top:6px">
+                <input type="checkbox" id="fMultiArtist" onchange="toggleMultiArtist()">
+                <label for="fMultiArtist">multiple artists (e.g. compilation)</label>
+              </div>
+              <div class="artists-list" id="fArtistsList" style="display:none"></div>
+              <button type="button" class="btn btn-sm" id="fAddArtist" style="margin-top:6px;display:none" onclick="addArtistRow()"><i class="ti ti-plus"></i> add artist</button>
+            </div>
             <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
             <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
             <div class="form-group">
@@ -1331,6 +1353,23 @@ function avgRating(r) {
   return scores.length ? scores.reduce((a,b)=>a+b,0) / scores.length : 0;
 }
 
+// ── multi-artist records ────────────────────────────────────────────────────
+// artist field stores multiple names as "Name A; Name B" — semicolon was chosen
+// over comma because band names can legitimately contain commas (e.g. "Earth,
+// Wind & Fire"), which would false-positive as "multiple artists"
+function artistList(r) {
+  return (r.artist||'').split(';').map(s => s.trim()).filter(Boolean);
+}
+function isMultiArtist(r) {
+  return artistList(r).length > 1;
+}
+function artistDisplay(r) {
+  return artistList(r).join(' / ');
+}
+function multiArtistBadgeHTML() {
+  return '<i class="ti ti-users multi-artist-badge" title="multiple artists"></i>';
+}
+
 // ── filtering & sorting ────────────────────────────────────────────────────
 let haveItMode = 'collection'; // 'collection' | 'wishlist'
 let sortDir = 'desc'; // 'asc' | 'desc'
@@ -1382,6 +1421,12 @@ function filtered() {
     if (haveItMode === 'wishlist'   &&  r.have_it) return false;
     return true;
   }).sort((a, b_) => {
+    if (s === 'artist') {
+      const aMulti = isMultiArtist(a), bMulti = isMultiArtist(b_);
+      if (aMulti !== bMulti) return aMulti ? 1 : -1; // multi-artist records always last, regardless of sortDir
+      const cmp = (a.artist||'').localeCompare(b_.artist||'');
+      return sortDir === 'asc' ? -cmp : cmp;
+    }
     let cmp;
     if (s === 'bought_date') cmp = (b_.bought_date||'').localeCompare(a.bought_date||'');
     else if (s === 'avg_rating')  cmp = avgRating(b_) - avgRating(a);
@@ -1442,7 +1487,7 @@ function listRowHTML(r) {
     <div class="list-cover-wrap">${cover}</div>
     <div class="list-main">
       <div class="list-album">${esc(r.album_name)||'untitled'}</div>
-      <div class="list-artist">${esc(r.artist)||'unknown'}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
+      <div class="list-artist">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
     </div>
     <span class="list-genre">${esc(r.genre)||'—'}</span>
     <span class="list-year">${esc(r.year)||'—'}</span>
@@ -1579,7 +1624,7 @@ function cardHTML(r) {
       ${cover}
       ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagImgHTML(r.country, 28)}</div>` : ''}
-      <div class="vcard-artist-overlay">${esc(r.artist)||'unknown'}</div>
+      <div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>
     </div>
     <div class="vcard-body">
       <div class="vcard-title-row">
@@ -1709,7 +1754,7 @@ function dmInfoHTML(r) {
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
   return `
     <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
-    <div class="dm-artist">${esc(r.artist)||'unknown'}</div>
+    <div class="dm-artist">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
     <div class="dm-rates">
       <div class="dm-rate pepe"><div class="who">Pepe</div>${myR>0?bars(myR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
       <div class="dm-rate jenni"><div class="who">Jenni</div>${herR>0?bars(herR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${herR>0?herR+'/5':''}</div></div>
@@ -1725,6 +1770,7 @@ function dmInfoHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-map-pin"></i>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-user"></i>Bought by</label><span>${esc(r.bought_by||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
+      <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${esc(r.last_cleaned||'—')}</span></div>
     </div>
     ${notes.length ? `<div class="dm-notes"><h4>Notes across time</h4>${notes.map(n=>`
       <div class="dm-note"><div class="nd">${dmFormatNoteDate(n.date)}</div><div class="nt detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div></div>`).join('')}</div>` : ''}`;
@@ -1914,6 +1960,7 @@ function countryCodeFromInput(value) {
 // using the record's bought_date (or today) as the date.
 let formNotes = []; // in-memory list while the form is open
 let formPlayDates = []; // ditto for the play-date editor
+let formArtists = []; // ditto for the multi-artist editor
 
 function parseNotes(raw, fallbackDate) {
   if (!raw) return [];
@@ -1989,6 +2036,47 @@ function deletePlayDate(idx) {
   renderPlayDatesForm();
 }
 
+// ── multi-artist editor in the form ─────────────────────────────────────────
+function renderArtistsForm() {
+  const list = document.getElementById('fArtistsList');
+  list.innerHTML = formArtists.map((name, i) => `
+    <div class="artist-row">
+      <input type="text" value="${esc(name)}" placeholder="artist name" onchange="updateArtistRow(${i}, this.value)">
+      <button type="button" class="artist-delete" title="remove this artist" onclick="deleteArtistRow(${i})"><i class="ti ti-trash"></i></button>
+    </div>`).join('');
+}
+
+function addArtistRow() {
+  formArtists.push('');
+  renderArtistsForm();
+}
+
+// no re-render here: rebuilding the inputs mid-edit would steal focus
+function updateArtistRow(idx, value) {
+  formArtists[idx] = value;
+}
+
+function deleteArtistRow(idx) {
+  formArtists.splice(idx, 1);
+  if (!formArtists.length) formArtists.push('');
+  renderArtistsForm();
+}
+
+function toggleMultiArtist() {
+  const multi = document.getElementById('fMultiArtist').checked;
+  if (!multi) {
+    document.getElementById('fArtist').value = formArtists.filter(Boolean).join('; ');
+  }
+  document.getElementById('fArtist').style.display = multi ? 'none' : '';
+  document.getElementById('fArtistsList').style.display = multi ? '' : 'none';
+  document.getElementById('fAddArtist').style.display = multi ? '' : 'none';
+  if (multi && formArtists.length === 0) {
+    const existing = document.getElementById('fArtist').value.trim();
+    formArtists = existing ? [existing] : [''];
+    renderArtistsForm();
+  }
+}
+
 function addNote() {
   const dateEl = document.getElementById('fNoteDate');
   const textEl = document.getElementById('fNoteText');
@@ -2013,6 +2101,12 @@ function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';
   document.getElementById('formTitle').textContent='add record';
   ['fArtist','fAlbum','fYear','fWhere','fBuyer','fCountry'].forEach(id=>document.getElementById(id).value='');
+  formArtists=[];
+  document.getElementById('fMultiArtist').checked=false;
+  document.getElementById('fArtist').style.display='';
+  document.getElementById('fArtistsList').style.display='none';
+  document.getElementById('fAddArtist').style.display='none';
+  renderArtistsForm();
   document.getElementById('fDate').value='';
   document.getElementById('fCleaned').value='';document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
@@ -2036,7 +2130,22 @@ function openEdit(id){
   const r=records.find(x=>x.id===id);if(!r)return;
   editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';
   document.getElementById('formTitle').textContent='edit record';
-  document.getElementById('fArtist').value=r.artist||'';
+  if (isMultiArtist(r)) {
+    formArtists = artistList(r);
+    document.getElementById('fMultiArtist').checked = true;
+    document.getElementById('fArtist').value = '';
+    document.getElementById('fArtist').style.display = 'none';
+    document.getElementById('fArtistsList').style.display = '';
+    document.getElementById('fAddArtist').style.display = '';
+  } else {
+    formArtists = [];
+    document.getElementById('fMultiArtist').checked = false;
+    document.getElementById('fArtist').value = r.artist||'';
+    document.getElementById('fArtist').style.display = '';
+    document.getElementById('fArtistsList').style.display = 'none';
+    document.getElementById('fAddArtist').style.display = 'none';
+  }
+  renderArtistsForm();
   document.getElementById('fAlbum').value=r.album_name||'';
   document.getElementById('fYear').value=r.year||'';
   document.getElementById('fDate').value=r.bought_date||'';
@@ -2071,7 +2180,9 @@ function closeForm(){document.getElementById('formOverlay').classList.add('hidde
 
 async function submitForm(){
   const body={
-    artist:document.getElementById('fArtist').value,
+    artist: document.getElementById('fMultiArtist').checked
+      ? formArtists.map(s => s.trim()).filter(Boolean).join('; ')
+      : document.getElementById('fArtist').value,
     album_name:document.getElementById('fAlbum').value,
     year:document.getElementById('fYear').value,
     genre:document.getElementById('fGenre').value,
@@ -2594,7 +2705,7 @@ function textColor() { return isDark() ? '#888' : '#999'; }
 // shared hover-tooltip body for chart bins: title + up to `cap` records, "+N more" beyond that
 function chartTooltipHTML(title, recs, cap = 20) {
   const shown = recs.slice(0, cap);
-  const list = shown.map(r => `<div class="ct-item"><b>${esc(r.artist)||'unknown'}</b> – ${esc(r.album_name)||'untitled'}</div>`).join('');
+  const list = shown.map(r => `<div class="ct-item"><b>${esc(artistDisplay(r))||'unknown'}</b> – ${esc(r.album_name)||'untitled'}</div>`).join('');
   const more = recs.length > cap ? `<div class="ct-more">+${recs.length - cap} more</div>` : '';
   return `<div class="ct-title">${esc(title)} (${recs.length})</div><div class="ct-list">${list}</div>${more}`;
 }
@@ -3078,7 +3189,7 @@ function calEventRow(ev, fullNote) {
     ${cover}
     <div class="cal-ev-main">
       <div class="cal-ev-title">${esc(r.album_name) || 'untitled'}</div>
-      <div class="cal-ev-artist">${esc(r.artist)}</div>
+      <div class="cal-ev-artist">${esc(artistDisplay(r))}</div>
       ${noteHtml}
     </div>
     <span class="cal-badge ${ev.type}">${CAL_TYPE_LABEL[ev.type]}</span>
@@ -3088,11 +3199,11 @@ function calEventRow(ev, fullNote) {
 // compact event chip — used by the week grid (cover art + type color, no detail text)
 function calWeekChip(ev) {
   const r = ev.r;
-  const label = esc(r.album_name) || esc(r.artist) || 'untitled';
+  const label = esc(r.album_name) || esc(artistDisplay(r)) || 'untitled';
   const cover = r.cover_data
     ? `<img src="${r.cover_data}" alt="" loading="lazy" onerror="this.remove()">`
     : `<i class="ti ti-disc"></i>`;
-  return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(r.artist)} — ${label} (${CAL_TYPE_LABEL[ev.type]})">
+  return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(artistDisplay(r))} — ${label} (${CAL_TYPE_LABEL[ev.type]})">
     <span class="cal-week-chip-cover">${cover}</span>
     <span class="cal-week-chip-txt">${label}</span>
   </button>`;
@@ -3116,7 +3227,7 @@ function renderCalMonth(events) {
     cells += `<div class="cal-cell${cur.getMonth() !== m ? ' cal-out' : ''}${k === todayK ? ' cal-today' : ''}${evs.length ? ' has-ev' : ''}"${evs.length ? ` onclick="openCalDay('${k}')"` : ''}>
       <div class="cal-cell-num">${cur.getDate()}</div>
       <div class="cal-cell-evs">
-        ${shown.map(ev => `<div class="cal-pill"><span class="cal-dot ${ev.type}"></span><span class="cal-pill-txt">${esc(ev.r.album_name || ev.r.artist)}</span></div>`).join('')}
+        ${shown.map(ev => `<div class="cal-pill"><span class="cal-dot ${ev.type}"></span><span class="cal-pill-txt">${esc(ev.r.album_name || artistDisplay(ev.r))}</span></div>`).join('')}
         ${evs.length > 3 ? `<div class="cal-more">+${evs.length-3} more</div>` : ''}
       </div>
       <div class="cal-cell-dots">${typesPresent.map(t => `<span class="cal-dot ${t}"></span>`).join('')}</div>
