@@ -130,9 +130,13 @@ Append to `requirements.txt` (keep the existing three lines):
 anthropic==1.0.0
 requests==2.34.2
 pytest==9.1.1
+jsonschema==4.26.0
 ```
 
-These are the versions actually installed and verified in `.venv`.
+These are the versions actually installed and verified in `.venv`. `jsonschema`
+is test-only: it validates that the structured-output schemas this feature
+builds actually behave as intended (see Task 5), which plain unit tests with a
+mocked client cannot check.
 
 **On `anthropic` 1.x:** 1.0.0 is the current major version, and its
 `messages.create` surface is unchanged from 0.x for everything this plan
@@ -1033,7 +1037,11 @@ def _sleeve_schema(genres: list[str]) -> dict:
         "properties": {
             "artist": nullable_string,
             "album_name": nullable_string,
-            "genre": {"type": ["string", "null"], "enum": genres},
+            # anyOf, NOT {"type": ["string","null"], "enum": genres} — `type` and
+            # `enum` are ANDed, so null fails the enum and becomes unreachable,
+            # forcing the model to invent a genre it was told to omit.
+            "genre": {"anyOf": [{"type": "string", "enum": genres},
+                                {"type": "null"}]},
             "label": nullable_string,
             "catalog_number": nullable_string,
         },
@@ -1191,7 +1199,8 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
                 "effort": "low",
                 "format": {"type": "json_schema", "schema": {
                     "type": "object",
-                    "properties": {"genre": {"type": ["string", "null"], "enum": genres}},
+                    "properties": {"genre": {"anyOf": [{"type": "string", "enum": genres},
+                                                       {"type": "null"}]}},
                     "required": ["genre"],
                     "additionalProperties": False,
                 }},
