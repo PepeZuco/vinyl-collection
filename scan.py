@@ -41,9 +41,9 @@ def _normalise(value: str) -> str:
 
 def find_duplicate(artist: str, album: str, existing: list[dict]) -> dict | None:
     """Return the first existing record matching artist + album, else None."""
-    if not artist or not album:
-        return None
     key = (_normalise(artist), _normalise(album))
+    if not key[0] or not key[1]:
+        return None
     for record in existing:
         if (_normalise(record.get("artist", "")),
                 _normalise(record.get("album_name", ""))) == key:

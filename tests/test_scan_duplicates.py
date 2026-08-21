@@ -41,3 +41,10 @@ def test_album_must_also_match():
 def test_empty_inputs_return_none():
     assert find_duplicate("", "", EXISTING) is None
     assert find_duplicate("Adele", "30", []) is None
+
+
+def test_junk_normalising_to_empty_key_returns_none():
+    """Punctuation-only input reduces to an empty key; it must never match."""
+    junk = [{"id": 99, "artist": "---", "album_name": "***"}]
+    assert find_duplicate("???", "!!!", junk) is None
+    assert find_duplicate("   ", "   ", junk) is None
