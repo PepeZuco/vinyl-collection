@@ -2079,8 +2079,9 @@ function toggleAlternates(){
 
 - [ ] **Step 3: Reset scan state when the form opens**
 
-Find `openForm` / the add-record entry point and add these lines alongside
-the existing field resets:
+The add-record entry point is `openAdd()` at `templates/index.html:2185`
+(the edit path is `openEdit`, further down). Add these lines to `openAdd`
+alongside the existing field resets:
 
 ```js
 scanCandidates = [];
