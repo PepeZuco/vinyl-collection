@@ -1,4 +1,5 @@
 """Record identification: sleeve photos and Spotify links to record fields."""
+import base64
 import os
 import re
 import threading
@@ -132,3 +133,58 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
             "album_name": group.get("title") or album,
         })
     return candidates
+
+
+COVER_TIMEOUT = 4.0
+
+
+def _download_image(url: str) -> str | None:
+    """Download an image URL and return it as a base64 data URI."""
+    try:
+        response = requests.get(url, timeout=COVER_TIMEOUT)
+    except requests.RequestException:
+        return None
+    if response.status_code != 200 or not response.content:
+        return None
+    media_type = response.headers.get("Content-Type", "image/jpeg").split(";")[0]
+    encoded = base64.b64encode(response.content).decode("ascii")
+    return f"data:{media_type};base64,{encoded}"
+
+
+def _itunes_artwork_url(artist: str, album: str) -> str | None:
+    try:
+        response = requests.get(
+            "https://itunes.apple.com/search",
+            params={"term": f"{artist} {album}", "entity": "album", "limit": 1},
+            timeout=COVER_TIMEOUT,
+        )
+        results = response.json().get("results") or []
+    except (requests.RequestException, ValueError):
+        return None
+    if not results:
+        return None
+    art = results[0].get("artworkUrl100")
+    return art.replace("100x100bb", "600x600bb") if art else None
+
+
+def fetch_cover(candidate: dict, spotify_image_url: str | None = None) -> str | None:
+    """Return cover art as a base64 data URI, or None if every source misses."""
+    mbid = candidate.get("mbid")
+    if mbid:
+        cover = _download_image(
+            f"https://coverartarchive.org/release-group/{mbid}/front-500"
+        )
+        if cover:
+            return cover
+
+    itunes_url = _itunes_artwork_url(
+        candidate.get("artist", ""), candidate.get("album_name", "")
+    )
+    if itunes_url:
+        cover = _download_image(itunes_url)
+        if cover:
+            return cover
+
+    if spotify_image_url:
+        return _download_image(spotify_image_url)
+    return None
