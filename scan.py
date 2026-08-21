@@ -1,11 +1,13 @@
 """Record identification: sleeve photos and Spotify links to record fields."""
 import base64
+import json
 import os
 import re
 import threading
 import time
 import unicodedata
 
+import anthropic
 import requests
 
 _SPOTIFY_URL_RE = re.compile(
@@ -188,3 +190,70 @@ def fetch_cover(candidate: dict, spotify_image_url: str | None = None) -> str | 
     if spotify_image_url:
         return _download_image(spotify_image_url)
     return None
+
+
+VISION_MODEL = "claude-sonnet-5"
+GENRE_MODEL = "claude-haiku-4-5"
+
+_SLEEVE_SYSTEM = (
+    "You read record sleeves. Report only what is printed on the image.\n"
+    "Rules:\n"
+    "1. If a field is not legible, return null. Never guess.\n"
+    "2. Never infer or recall the release year or the country. Those are "
+    "looked up from a music database afterwards. Reporting a year printed "
+    "on the sleeve would give a pressing date, which is wrong here."
+)
+
+
+def _anthropic_client():
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    return anthropic.Anthropic(api_key=key)
+
+
+def _sleeve_schema(genres: list[str]) -> dict:
+    nullable_string = {"type": ["string", "null"]}
+    return {
+        "type": "object",
+        "properties": {
+            "artist": nullable_string,
+            "album_name": nullable_string,
+            "genre": {"type": ["string", "null"], "enum": genres},
+            "label": nullable_string,
+            "catalog_number": nullable_string,
+        },
+        "required": ["artist", "album_name", "genre", "label", "catalog_number"],
+        "additionalProperties": False,
+    }
+
+
+def _media_type_and_data(data_uri: str) -> tuple[str, str]:
+    header, _, payload = data_uri.partition(",")
+    media_type = header.split(":")[1].split(";")[0] if ":" in header else "image/jpeg"
+    return media_type, payload
+
+
+def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
+    """Read artist, album, genre, label and catalog number off a sleeve photo."""
+    client = _anthropic_client()
+    media_type, data = _media_type_and_data(image_data_uri)
+
+    response = client.messages.create(
+        model=VISION_MODEL,
+        max_tokens=1024,
+        system=_SLEEVE_SYSTEM,
+        output_config={"effort": "low",
+                       "format": {"type": "json_schema",
+                                  "schema": _sleeve_schema(genres)}},
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": media_type, "data": data}},
+                {"type": "text", "text": "Read this record sleeve."},
+            ],
+        }],
+    )
+    text = next(b.text for b in response.content if b.type == "text")
+    return json.loads(text)
