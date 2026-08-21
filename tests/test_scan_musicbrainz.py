@@ -50,6 +50,34 @@ def test_missing_release_date_yields_no_year():
     assert candidates[1]["country"] == "US"
 
 
+def test_country_falls_back_to_area_iso_code():
+    """When the artist's `country` field is null, fall back to
+    `area.iso-3166-1-codes[0]` rather than leaving country unset.
+    """
+    responses = [
+        _response(load_fixture("mb_release_group_withers")),
+        _response(load_fixture("mb_artist_country_fallback")),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Bill Withers", "Live at Carnegie Hall")
+
+    assert candidates[0]["country"] == "GB"
+
+
+def test_country_none_when_both_country_and_area_missing():
+    """Neither `country` nor `area` present: country comes back None,
+    not a raised exception or a bogus value.
+    """
+    responses = [
+        _response(load_fixture("mb_release_group_withers")),
+        _response({"id": "cccccccc-0000-0000-0000-000000000003", "name": "No Country Artist"}),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Bill Withers", "Live at Carnegie Hall")
+
+    assert candidates[0]["country"] is None
+
+
 def test_no_match_returns_empty_list():
     with patch.object(scan.requests, "get", return_value=_response({"release-groups": []})):
         assert scan.lookup_musicbrainz("Nobody", "Nothing") == []
