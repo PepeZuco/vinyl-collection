@@ -316,6 +316,13 @@ def test_album_must_also_match():
 def test_empty_inputs_return_none():
     assert find_duplicate("", "", EXISTING) is None
     assert find_duplicate("Adele", "30", []) is None
+
+
+def test_junk_normalising_to_empty_key_returns_none():
+    """Punctuation-only input reduces to an empty key; it must never match."""
+    junk = [{"id": 99, "artist": "---", "album_name": "***"}]
+    assert find_duplicate("???", "!!!", junk) is None
+    assert find_duplicate("   ", "   ", junk) is None
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -347,9 +354,11 @@ def _normalise(value: str) -> str:
 
 def find_duplicate(artist: str, album: str, existing: list[dict]) -> dict | None:
     """Return the first existing record matching artist + album, else None."""
-    if not artist or not album:
-        return None
+    # Guard the NORMALISED key, not the raw strings: punctuation-only input
+    # ("???") is truthy but reduces to "", and two empty keys compare equal.
     key = (_normalise(artist), _normalise(album))
+    if not key[0] or not key[1]:
+        return None
     for record in existing:
         if (_normalise(record.get("artist", "")),
                 _normalise(record.get("album_name", ""))) == key:
@@ -360,7 +369,7 @@ def find_duplicate(artist: str, album: str, existing: list[dict]) -> dict | None
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_duplicates.py -v`
-Expected: PASS — 8 passed
+Expected: PASS — 9 passed
 
 - [ ] **Step 5: Commit**
 
@@ -1422,7 +1431,7 @@ Expected: PASS — 9 passed
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 54 passed (14 + 8 + 6 + 6 + 6 + 5 + 9)
+Expected: PASS — 55 passed (14 + 9 + 6 + 6 + 6 + 5 + 9)
 
 - [ ] **Step 7: Commit**
 
@@ -1664,7 +1673,7 @@ Add to `README.md` in the Railway **Variables** list (after `DATA_DIR`):
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 62 passed
+Expected: PASS — 63 passed
 
 - [ ] **Step 7: Commit**
 
@@ -2127,7 +2136,7 @@ toast, no crash, and a fully usable manual form.
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 62 passed
+Expected: PASS — 63 passed
 
 - [ ] **Step 8: Commit**
 
