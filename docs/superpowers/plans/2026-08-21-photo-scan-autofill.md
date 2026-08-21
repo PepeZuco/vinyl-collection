@@ -99,39 +99,46 @@ mocking — the right place to prove the test setup works.
   `(kind, spotify_id)` where `kind` is `"album"` or `"track"`. Raises
   `ValueError` for anything else.
 
-- [ ] **Step 0: Prepare the Python environment**
+- [ ] **Step 0: Confirm the Python environment**
 
-This machine has no `pip` and no `venv` module — `python3 -m venv` fails with
-"You may need to use sudo". Nothing is installed yet, so set that up first:
+**Already done by the controller — verify, don't redo.** `.venv/` exists at
+the repo root with every dependency installed. Confirm with:
 
 ```bash
-sudo apt install python3-venv python3-pip
-python3 -m venv .venv
-source .venv/bin/activate
+.venv/bin/python -c "import flask, anthropic, requests, pytest; print('ok')"
 ```
 
-`.venv/` is already in `.gitignore`. Every later `python -m pytest` in this
-plan assumes this virtualenv is active.
+Use `.venv/bin/python -m pytest` (or activate the venv) for every test
+command in this plan.
 
-The system Python here is 3.14. If `flask==3.0.3` (which predates 3.14) fails
-to install or import, bump Flask to the latest 3.x rather than downgrading
-Python — no code in this plan depends on Flask internals.
+For reproducibility, this is how that venv was created. Ubuntu 26.04 ships
+Python 3.14 with no `pip`, no `ensurepip`, and no `venv` module, and PEP 668
+blocks `--user` installs. This needs no `sudo`:
+
+```bash
+curl -sSo /tmp/pip.pyz https://bootstrap.pypa.io/pip/pip.pyz
+python3 /tmp/pip.pyz install --target /tmp/bootstrap virtualenv
+PYTHONPATH=/tmp/bootstrap python3 -m virtualenv .venv
+.venv/bin/pip install -r requirements.txt
+```
 
 - [ ] **Step 1: Add dependencies and pytest configuration**
 
 Append to `requirements.txt` (keep the existing three lines):
 
 ```
-anthropic==0.75.0
-requests==2.32.3
-pytest==8.3.3
+anthropic==1.0.0
+requests==2.34.2
+pytest==9.1.1
 ```
 
-Then install: `pip install -r requirements.txt`
+These are the versions actually installed and verified in `.venv`.
 
-If `anthropic==0.75.0` does not resolve, use the latest `0.x` release —
-this plan uses only `client.messages.create`, stable across 0.x. Do **not**
-silently jump to a `1.x` release; it is a breaking major version.
+**On `anthropic` 1.x:** 1.0.0 is the current major version, and its
+`messages.create` surface is unchanged from 0.x for everything this plan
+uses. `output_config` was verified present in the installed SDK's signature.
+The 1.x breaking changes (httpx2, awaited async `.with_raw_response`,
+removed Text Completions) touch nothing here.
 
 Create `pytest.ini` at the repo root:
 
@@ -141,11 +148,12 @@ pythonpath = .
 testpaths = tests
 ```
 
-`pythonpath = .` is **required**, not cosmetic. Under pytest's default
-`prepend` import mode, a test file with no `__init__.py` gets its own
-directory (`tests/`) inserted into `sys.path` — not the repo root. Without
-this line every `import scan` and `import app` in the suite fails with
-`ModuleNotFoundError`. (Needs pytest ≥ 7.0; the pin above satisfies that.)
+`pythonpath = .` is **required**, not cosmetic — verified empirically on
+this machine. Under pytest's default `prepend` import mode, a test file with
+no `__init__.py` gets its own directory (`tests/`) inserted into `sys.path`,
+not the repo root, so a bare `pytest` fails every `import scan` with
+`ModuleNotFoundError`. (`python -m pytest` happens to mask this by adding
+CWD to `sys.path` — don't rely on that.)
 
 - [ ] **Step 2: Write the failing test**
 
