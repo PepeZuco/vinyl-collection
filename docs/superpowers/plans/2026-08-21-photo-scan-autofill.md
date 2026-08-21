@@ -444,6 +444,21 @@ Create `tests/fixtures/mb_artist_withers.json`:
 }
 ```
 
+This fixture exercises only the `payload.get("country")` branch. Add a
+second one, `tests/fixtures/mb_artist_country_fallback.json`, so the
+`area.iso-3166-1-codes` fallback is covered too — country is one of the two
+fields this task exists to supply, and a silent regression there corrupts
+records:
+
+```json
+{
+  "id": "bbbbbbbb-0000-0000-0000-000000000002",
+  "name": "Fallback Artist",
+  "country": null,
+  "area": {"name": "United Kingdom", "iso-3166-1-codes": ["GB"]}
+}
+```
+
 - [ ] **Step 2: Create the fixture loader**
 
 Create `tests/conftest.py`:
@@ -525,6 +540,29 @@ def test_no_match_returns_empty_list():
 def test_network_error_returns_empty_list():
     with patch.object(scan.requests, "get", side_effect=scan.requests.RequestException):
         assert scan.lookup_musicbrainz("Bill Withers", "Menagerie") == []
+
+
+def test_country_falls_back_to_area_iso_code():
+    """country is null -> the ISO code must come from area.iso-3166-1-codes."""
+    responses = [
+        _response(load_fixture("mb_release_group_withers")),
+        _response(load_fixture("mb_artist_country_fallback")),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Fallback Artist", "Live at Carnegie Hall")
+
+    assert candidates[0]["country"] == "GB"
+
+
+def test_country_is_none_when_both_sources_absent():
+    responses = [
+        _response(load_fixture("mb_release_group_withers")),
+        _response({"id": "x", "name": "Nowhere Artist"}),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Nowhere Artist", "Live at Carnegie Hall")
+
+    assert candidates[0]["country"] is None
 
 
 def test_sends_identifying_user_agent():
@@ -642,7 +680,7 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_musicbrainz.py -v`
-Expected: PASS — 6 passed
+Expected: PASS — 8 passed
 
 - [ ] **Step 7: Verify against the live API**
 
@@ -1431,7 +1469,7 @@ Expected: PASS — 9 passed
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 55 passed (14 + 9 + 6 + 6 + 6 + 5 + 9)
+Expected: PASS — 57 passed (14 + 9 + 8 + 6 + 6 + 5 + 9)
 
 - [ ] **Step 7: Commit**
 
@@ -1673,7 +1711,7 @@ Add to `README.md` in the Railway **Variables** list (after `DATA_DIR`):
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 63 passed
+Expected: PASS — 65 passed
 
 - [ ] **Step 7: Commit**
 
@@ -2136,7 +2174,7 @@ toast, no crash, and a fully usable manual form.
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 63 passed
+Expected: PASS — 65 passed
 
 - [ ] **Step 8: Commit**
 
