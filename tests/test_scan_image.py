@@ -87,7 +87,10 @@ def test_prompt_forbids_inferring_year_and_country():
         scan.extract_from_image(DATA_URI, GENRES)
 
     system = client.messages.create.call_args.kwargs["system"].lower()
-    assert "never infer or recall the release year" in system
+    # Assert the whole prohibition in one phrase, so inverting EITHER half
+    # (year or country) breaks the test. Checking only "year in system and
+    # country in system" would pass a rule reworded to demand them.
+    assert "never infer or recall the release year or the country" in system
     assert "pressing" in system   # the clause that closes the "but it's printed" loophole
 
 
