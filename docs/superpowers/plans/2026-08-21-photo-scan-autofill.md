@@ -1084,7 +1084,7 @@ def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_image.py -v`
-Expected: PASS — 6 passed
+Expected: PASS — 9 passed
 
 - [ ] **Step 5: Commit**
 
@@ -1217,7 +1217,7 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_genre.py -v`
-Expected: PASS — 5 passed
+Expected: PASS — 6 passed
 
 - [ ] **Step 5: Commit**
 
@@ -1478,7 +1478,7 @@ Expected: PASS — 9 passed
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 57 passed (14 + 9 + 8 + 6 + 6 + 5 + 9)
+Expected: PASS — 61 passed (14 + 9 + 8 + 6 + 9 + 6 + 9)
 
 - [ ] **Step 7: Commit**
 
@@ -1720,7 +1720,7 @@ Add to `README.md` in the Railway **Variables** list (after `DATA_DIR`):
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 65 passed
+Expected: PASS — 69 passed
 
 - [ ] **Step 7: Commit**
 
@@ -2183,7 +2183,7 @@ toast, no crash, and a fully usable manual form.
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 65 passed
+Expected: PASS — 69 passed
 
 - [ ] **Step 8: Commit**
 
