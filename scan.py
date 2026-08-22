@@ -312,3 +312,76 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
     # output, don't trust it blindly — only ever return a genre that is
     # actually in the caller's vocabulary.
     return genre if genre in genres else None
+
+
+SPOTIFY_API = "https://api.spotify.com/v1"
+SPOTIFY_TIMEOUT = 5.0
+
+_spotify_token: str | None = None
+_spotify_token_expiry: float = 0.0
+
+
+def _spotify_access_token(force_refresh: bool = False) -> str:
+    """Fetch (and cache) a client-credentials bearer token."""
+    global _spotify_token, _spotify_token_expiry
+    if not force_refresh and _spotify_token and time.time() < _spotify_token_expiry:
+        return _spotify_token
+
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise RuntimeError("SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET are not set")
+
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode("ascii")
+    response = requests.post(
+        "https://accounts.spotify.com/api/token",
+        data={"grant_type": "client_credentials"},
+        headers={"Authorization": f"Basic {basic}",
+                 "Content-Type": "application/x-www-form-urlencoded"},
+        timeout=SPOTIFY_TIMEOUT,
+    )
+    payload = response.json()
+    token = payload.get("access_token")
+    if not token:
+        raise RuntimeError("Spotify rejected the client credentials")
+    _spotify_token = token
+    _spotify_token_expiry = time.time() + payload.get("expires_in", 3600) - 60
+    return token
+
+
+def _spotify_get(path: str) -> dict:
+    """GET a Spotify endpoint, refreshing the token once on a 401."""
+    for attempt in range(2):
+        token = _spotify_access_token(force_refresh=attempt == 1)
+        response = requests.get(
+            f"{SPOTIFY_API}{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=SPOTIFY_TIMEOUT,
+        )
+        if response.status_code == 401 and attempt == 0:
+            continue
+        if response.status_code != 200:
+            raise RuntimeError(f"Spotify returned {response.status_code} for {path}")
+        return response.json()
+    raise RuntimeError("Spotify authentication failed")
+
+
+def extract_from_spotify(url: str) -> dict:
+    """Resolve a Spotify album or track link to artist, album and cover URL.
+
+    Deliberately does NOT return a year: Spotify's ``release_date`` belongs to
+    that specific album entry, so a remaster reports the remaster date. The
+    year always comes from MusicBrainz.
+    """
+    kind, spotify_id = parse_spotify_url(url)
+    payload = _spotify_get(f"/{kind}s/{spotify_id}")
+    album = payload.get("album") if kind == "track" else payload
+    if not album:
+        raise RuntimeError("Spotify returned no album for that link")
+
+    images = album.get("images") or []
+    return {
+        "artist": ", ".join(a["name"] for a in album.get("artists", []) if a.get("name")),
+        "album_name": album.get("name") or "",
+        "image_url": images[0]["url"] if images else None,
+    }
