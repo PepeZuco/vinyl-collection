@@ -1159,8 +1159,11 @@ select option{background:var(--surface);color:var(--text)}
             <button type="button" class="cover-sheet-row" id="coverSheetCamera" onclick="openCamera()">
               <i class="ti ti-camera"></i> Take photo
             </button>
-            <div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:8px;cursor:default">
-              <span style="display:flex;align-items:center;gap:10px">
+            <!-- Spotify brand rules require 12px clear space around the 24px mark
+                 (half its height) on every side. The gaps below are that exclusion
+                 zone, not arbitrary spacing — do not "harmonise" them down. -->
+            <div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:12px;cursor:default">
+              <span style="display:flex;align-items:center;gap:12px">
                 <img src="/static/spotify-logo.png" alt="Spotify" class="spotify-mark">
                 Paste Spotify link
               </span>

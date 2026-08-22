@@ -1949,8 +1949,10 @@ Adds the third row to the action sheet.
 Append inside `#coverSheet`, after the camera row:
 
 ```html
-<div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:8px;cursor:default">
-  <span style="display:flex;align-items:center;gap:10px">
+<!-- The 12px gaps are Spotify's required exclusion zone (half the 24px
+     mark's height), not arbitrary spacing. Do not harmonise them to 8px. -->
+<div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:12px;cursor:default">
+  <span style="display:flex;align-items:center;gap:12px">
     <img src="/static/spotify-logo.png" alt="Spotify" class="spotify-mark">
     Paste Spotify link
   </span>
