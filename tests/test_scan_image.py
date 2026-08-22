@@ -139,3 +139,21 @@ def test_invalid_json_raises_runtime_error():
     with patch.object(scan, "_anthropic_client", return_value=client):
         with pytest.raises(RuntimeError):
             scan.extract_from_image(DATA_URI, GENRES)
+
+
+def test_max_tokens_leaves_room_for_adaptive_thinking():
+    """Sonnet 5 thinks adaptively when `thinking` is omitted, and those tokens
+    come out of max_tokens. At 1024 a busy sleeve could spend the whole budget
+    thinking and return no text block at all, which surfaced as an opaque 502.
+    max_tokens is a ceiling, not a spend, so a generous one costs nothing.
+    """
+    client = Mock()
+    client.messages.create.return_value = _claude_response(
+        {"artist": "X", "album_name": "Y", "genre": None,
+         "label": None, "catalog_number": None}
+    )
+
+    with patch.object(scan, "_anthropic_client", return_value=client):
+        scan.extract_from_image(DATA_URI, GENRES)
+
+    assert client.messages.create.call_args.kwargs["max_tokens"] >= 16000

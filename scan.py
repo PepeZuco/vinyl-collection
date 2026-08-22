@@ -1,20 +1,34 @@
 """Record identification: sleeve photos and Spotify links to record fields."""
 import base64
 import json
+import logging
 import os
 import re
 import threading
 import time
 import unicodedata
+import urllib.parse
 
 import anthropic
 import requests
+
+logger = logging.getLogger(__name__)
 
 _SPOTIFY_URL_RE = re.compile(
     r"^https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?(album|track)/([A-Za-z0-9]+)",
     re.IGNORECASE,
 )
 _SPOTIFY_URI_RE = re.compile(r"^spotify:(album|track):([A-Za-z0-9]+)$", re.IGNORECASE)
+
+# The mobile share sheet emits spotify.link (and, historically, spotify.app.link)
+# short codes rather than an open.spotify.com URL. Those need a network hop to
+# resolve, which is why they are handled by _resolve_short_link and NOT by
+# parse_spotify_url — that function stays pure so it can be unit-tested and
+# reasoned about without a network.
+_SHORT_LINK_HOSTS = frozenset({"spotify.link", "www.spotify.link", "spotify.app.link"})
+_SPOTIFY_WEB_HOSTS = frozenset({"open.spotify.com"})
+_MAX_SHORT_LINK_HOPS = 5
+SHORT_LINK_TIMEOUT = 4.0
 
 
 def parse_spotify_url(url: str) -> tuple[str, str]:
@@ -30,6 +44,50 @@ def parse_spotify_url(url: str) -> tuple[str, str]:
         if match:
             return match.group(1).lower(), match.group(2)
     raise ValueError(f"Not a Spotify album or track link: {url!r}")
+
+
+def _hostname(url: str) -> str:
+    try:
+        return (urllib.parse.urlparse(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _resolve_short_link(url: str) -> str:
+    """Expand a ``spotify.link`` share-sheet code into its open.spotify.com URL.
+
+    Never raises. On any failure — a non-short-link input, a timeout, a
+    non-redirect response, a hop pointing off Spotify, or too many hops — the
+    input is returned unchanged, so the caller's parse_spotify_url produces the
+    usual ValueError and the route answers 400 as before.
+    """
+    original = url
+    candidate = (url or "").strip()
+    if _hostname(candidate) not in _SHORT_LINK_HOSTS:
+        return original
+
+    try:
+        for _ in range(_MAX_SHORT_LINK_HOPS):
+            response = requests.get(
+                candidate, allow_redirects=False, timeout=SHORT_LINK_TIMEOUT
+            )
+            location = response.headers.get("Location") or ""
+            if not 300 <= response.status_code < 400 or not location:
+                break
+            candidate = urllib.parse.urljoin(candidate, location)
+            # Vet every hop BEFORE issuing the next request: a share link must
+            # stay inside Spotify, so an open redirect can never make this
+            # function fetch an arbitrary host.
+            host = _hostname(candidate)
+            if host in _SHORT_LINK_HOSTS:
+                continue
+            if host in _SPOTIFY_WEB_HOSTS:
+                return candidate
+            logger.warning("Spotify short link redirected off Spotify to %r", host)
+            return original
+    except requests.RequestException:
+        logger.warning("Could not resolve Spotify short link", exc_info=True)
+    return original
 
 
 _LEADING_ARTICLES = ("the ", "an ", "a ", "os ", "as ", "o ", "um ", "uma ")
@@ -93,6 +151,9 @@ def _mb_get(path: str, params: dict) -> dict | None:
         response.raise_for_status()
         return response.json()
     except requests.RequestException:
+        # lookup_musicbrainz never raises; without this line the degradation
+        # (no year, no country) is silent and untraceable in production.
+        logger.warning("MusicBrainz request failed for %s", path, exc_info=True)
         return None
 
 
@@ -145,6 +206,9 @@ def _download_image(url: str) -> str | None:
     try:
         response = requests.get(url, timeout=COVER_TIMEOUT)
     except requests.RequestException:
+        # fetch_cover never raises; log so a persistently unreachable art
+        # source is visible instead of just producing coverless candidates.
+        logger.warning("Cover image download failed", exc_info=True)
         return None
     if response.status_code != 200 or not response.content:
         return None
@@ -162,6 +226,9 @@ def _itunes_artwork_url(artist: str, album: str) -> str | None:
         )
         results = response.json().get("results") or []
     except (requests.RequestException, ValueError):
+        logger.warning(
+            "iTunes artwork lookup failed for %r / %r", artist, album, exc_info=True
+        )
         return None
     if not results:
         return None
@@ -245,7 +312,11 @@ def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
 
     response = client.messages.create(
         model=VISION_MODEL,
-        max_tokens=1024,
+        # Sonnet 5 runs adaptive thinking whenever `thinking` is omitted, and
+        # thinking tokens come out of max_tokens. A tight ceiling can be spent
+        # entirely on thinking, leaving no text block to parse. 16000 is the
+        # documented default for non-streaming requests: a ceiling, not a spend.
+        max_tokens=16000,
         system=_SLEEVE_SYSTEM,
         output_config={"effort": "low",
                        "format": {"type": "json_schema",
@@ -298,8 +369,12 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
             max_tokens=256,
             system="Classify the record into exactly one of the supplied "
                    "genres. Return null if none fit.",
+            # No "effort" here: output_config.effort errors on Haiku 4.5 (and
+            # Sonnet 4.5). It is only valid from Opus 4.5 / the 4.6+ family
+            # upwards, so adding it back would 400 every genre call — and the
+            # except below would swallow it. Structured outputs
+            # (output_config.format) are fine on every model.
             output_config={
-                "effort": "low",
                 "format": {"type": "json_schema", "schema": _genre_schema(genres)},
             },
             messages=[{"role": "user", "content": f"Artist: {artist}\nAlbum: {album}"}],
@@ -307,6 +382,12 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
         text = next(b.text for b in response.content if b.type == "text")
         genre = json.loads(text).get("genre")
     except Exception:
+        # classify_genre never raises — the scan degrades to an empty genre
+        # field. Log it: an always-failing call (a rejected parameter, a bad
+        # key) is otherwise indistinguishable from "no genre fits".
+        logger.warning(
+            "Genre classification failed for %r / %r", artist, album, exc_info=True
+        )
         return None
     # Second line of defence: even though the schema constrains the model's
     # output, don't trust it blindly — only ever return a genre that is
@@ -373,7 +454,10 @@ def extract_from_spotify(url: str) -> dict:
     that specific album entry, so a remaster reports the remaster date. The
     year always comes from MusicBrainz.
     """
-    kind, spotify_id = parse_spotify_url(url)
+    # Resolve share-sheet short links first; a non-short link passes straight
+    # through, and an unresolvable one falls back to the original so
+    # parse_spotify_url still raises the ValueError the route turns into a 400.
+    kind, spotify_id = parse_spotify_url(_resolve_short_link(url))
     payload = _spotify_get(f"/{kind}s/{spotify_id}")
     album = payload.get("album") if kind == "track" else payload
     if not album:
