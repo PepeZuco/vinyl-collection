@@ -442,6 +442,7 @@ select option{background:var(--surface);color:var(--text)}
 /* spinner */
 .spinner{display:flex;align-items:center;justify-content:center;padding:64px 20px}
 .spinner-disc{width:40px;height:40px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite}
+.scan-spinner{width:12px;height:12px;flex-shrink:0;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* toast */
@@ -1162,6 +1163,14 @@ select option{background:var(--surface);color:var(--text)}
           <input type="file" accept="image/*" id="coverInput" style="display:none">
           <input type="file" accept="image/*" capture="environment" id="coverCaptureInput" style="display:none">
 
+          <!-- A scan is a vision call, up to four rate-limited MusicBrainz
+               lookups and up to three cover fetches — far longer than a toast
+               lives, so its progress has to stay on screen for the duration. -->
+          <div id="scanStatus" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)">
+            <span class="scan-spinner"></span>
+            <span>scanning… this can take up to a minute</span>
+          </div>
+
           <div class="cover-sheet hidden" id="coverSheet">
             <button type="button" class="cover-sheet-row" id="coverSheetFile" onclick="pickCoverFile()">
               <i class="ti ti-folder"></i> Choose file
@@ -1206,6 +1215,15 @@ select option{background:var(--surface);color:var(--text)}
                 not this one? (<span id="scanAltCount">0</span>)
               </a>
               <div id="scanAltList" class="cover-sheet hidden" style="margin-top:6px"></div>
+            </div>
+            <!-- The web-search fallback for whatever the vision call and
+                 MusicBrainz between them could not pin down. -->
+            <div class="form-group" id="scanSearchRow" style="display:none;margin-top:4px;grid-column:1/-1">
+              <label>Search the web for this cover</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input id="scanSearchText" readonly onclick="this.select()" style="flex:1;min-width:0">
+                <button type="button" class="btn btn-sm" id="scanSearchCopyBtn" onclick="copyScanSearch()"><i class="ti ti-copy"></i> copy</button>
+              </div>
             </div>
             <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
             <div class="form-group">
@@ -2218,6 +2236,9 @@ function toggleMultiArtist() {
   const multi = document.getElementById('fMultiArtist').checked;
   if (!multi) {
     document.getElementById('fArtist').value = formArtists.filter(Boolean).join('; ');
+    // That joined list came out of the user's artist rows, so the field is
+    // theirs now — a later scan must not clear it.
+    delete scanWrote['fArtist'];
   }
   document.getElementById('fArtist').style.display = multi ? 'none' : '';
   document.getElementById('fArtistsList').style.display = multi ? '' : 'none';
@@ -2254,6 +2275,7 @@ function openAdd(){
   document.getElementById('formTitle').textContent='add record';
   scanCandidates = [];
   scanWrote = {};
+  setScanSearch('');
   document.getElementById('scanAlternates').style.display = 'none';
   document.getElementById('scanAltList').classList.add('hidden');
   document.getElementById('scanDupWarning').style.display = 'none';
@@ -2293,6 +2315,7 @@ function openEdit(id){
   document.getElementById('formTitle').textContent='edit record';
   scanCandidates = [];
   scanWrote = {};
+  setScanSearch('');
   document.getElementById('scanAlternates').style.display = 'none';
   document.getElementById('scanAltList').classList.add('hidden');
   document.getElementById('scanDupWarning').style.display = 'none';
@@ -2440,9 +2463,11 @@ async function resizeImage(file, maxEdge=1000){
     bmp = await createImageBitmap(file, {imageOrientation:'from-image'});
   }catch(e){
     bmp = await new Promise((res, rej)=>{
+      const url = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = ()=>res(img); img.onerror = rej;
-      img.src = URL.createObjectURL(file);
+      img.onload = ()=>{ URL.revokeObjectURL(url); res(img); };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error('image decode failed')); };
+      img.src = url;
     });
   }
   const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
@@ -2466,7 +2491,16 @@ async function handleCoverFile(e){
   if(!file) return;
   e.target.value = '';
   const myToken = scanToken;
-  const dataUri = await resizeImage(file);
+  let dataUri;
+  try{
+    dataUri = await resizeImage(file);
+  }catch(err){
+    // Neither createImageBitmap nor the <img> fallback could read it — a .heic
+    // straight off an iPhone sails through accept="image/*" on desktop Chrome.
+    // Without this the rejection is silent and the user just clicks again.
+    if(myToken === scanToken) toast('could not read that image — try a jpg or png');
+    return;
+  }
   // Decoding a phone photo takes long enough for the form to be closed and a
   // different record opened; applying the cover now would stamp it onto that
   // record. No ++ here — runScan takes its own token when the scan starts.
@@ -2488,6 +2522,15 @@ let scanToken = 0;
 // update_record persists blanks without complaint.
 let scanWrote = {};
 
+// Editing a field by hand makes the value the user's, so a later scan must no
+// longer treat it as its own to clear. Wired as a loop over the ids rather than
+// oninput attributes so a field added here later cannot be forgotten; fGenre is
+// a <select>, where 'change' is the event that always fires.
+['fArtist','fAlbum','fGenre','fYear','fCountry'].forEach(id=>{
+  const el = document.getElementById(id);
+  ['input','change'].forEach(type=>el.addEventListener(type, ()=>{ delete scanWrote[id]; }));
+});
+
 // Returns whether it actually filled the field, so the caller can tell the
 // user the truth about what the scan managed to read.
 function setScanField(id, value){
@@ -2500,7 +2543,12 @@ function setScanField(id, value){
     const before = el.value;
     el.value = value;
     if(el.value){ scanWrote[id] = true; return true; }
-    el.value = before;
+    // The value was rejected, so the field still shows the PREVIOUS album's.
+    // Blank it if a scan put it there — showing album A's genre on album B is
+    // worse than showing none — but keep what the user typed or openEdit
+    // loaded. Either way it is no longer scan-owned.
+    el.value = scanWrote[id] ? '' : before;
+    delete scanWrote[id];
   } else if(scanWrote[id]){
     el.value = '';
     delete scanWrote[id];
@@ -2510,6 +2558,11 @@ function setScanField(id, value){
 
 function setScanBusy(busy){
   scanInFlight = busy;
+  // Not a toast: a scan outlives the 2.5s a toast gets, and a form that looks
+  // idle invites the user to start typing into fields the scan is about to
+  // overwrite. setScanBusy is the one place that knows the whole in-flight
+  // window, error and abandoned-scan paths included.
+  document.getElementById('scanStatus').style.display = busy ? 'flex' : 'none';
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
    'coverSheetFile','coverSheetCamera'].forEach(id=>{
     const el = document.getElementById(id);
@@ -2525,7 +2578,6 @@ async function runScan(body){
   const myToken = ++scanToken;
   setScanBusy(true);
   showSpotifyError('');
-  toast('scanning…');
   try{
     let res, data;
     try{
@@ -2598,10 +2650,49 @@ function applyScanResult(data){
     warning.style.display = 'none';
   }
 
+  // The copy string is the fallback for exactly the scans that read the least,
+  // so it stays put on a poor result — that is when it is all the user has. Only
+  // a scan that read neither artist nor album has nothing worth searching for:
+  // its string is the bare "vinyl cover" suffix.
+  setScanSearch((data.artist || data.album_name) ? data.search_string : '');
+
   closeCoverSheet();
   toast(filled.some(Boolean)
     ? 'fields filled — check before saving'
     : 'nothing readable found — type it in by hand');
+}
+
+function setScanSearch(text){
+  const btn = document.getElementById('scanSearchCopyBtn');
+  clearTimeout(scanCopyTimer);
+  btn.innerHTML = '<i class="ti ti-copy"></i> copy';
+  document.getElementById('scanSearchText').value = text || '';
+  document.getElementById('scanSearchRow').style.display = text ? 'block' : 'none';
+}
+
+let scanCopyTimer;
+async function copyScanSearch(){
+  const el = document.getElementById('scanSearchText');
+  const btn = document.getElementById('scanSearchCopyBtn');
+  el.select();
+  let ok = false;
+  try{
+    // navigator.clipboard is undefined outside a secure context, and rejects
+    // inside one when the document has lost focus.
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(el.value);
+      ok = true;
+    }
+  }catch(e){ /* fall through to the execCommand path */ }
+  if(!ok){ try{ ok = document.execCommand('copy'); }catch(e){ ok = false; } }
+  if(ok){
+    btn.innerHTML = '<i class="ti ti-check"></i> copied';
+    clearTimeout(scanCopyTimer);
+    scanCopyTimer = setTimeout(()=>{ btn.innerHTML = '<i class="ti ti-copy"></i> copy'; }, 1600);
+  } else {
+    // The text is selected either way, so there is always a way out.
+    toast('copy failed — the text is selected, press ctrl+c');
+  }
 }
 
 function applyCandidate(c){
