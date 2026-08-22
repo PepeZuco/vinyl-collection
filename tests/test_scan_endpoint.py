@@ -96,3 +96,17 @@ def test_bad_spotify_url_returns_400(client):
         response = client.post("/api/scan", json={"spotify_url": "https://example.com"})
 
     assert response.status_code == 400
+
+
+def test_unexpected_scan_error_returns_json_not_500_page(client):
+    """A violated never-raise contract must still degrade to a JSON error."""
+    extracted = {"artist": "A", "album_name": "B", "genre": None,
+                 "label": None, "catalog_number": None}
+    with patch.object(app_module.scan, "extract_from_image", return_value=extracted), \
+         patch.object(app_module.scan, "lookup_musicbrainz",
+                      side_effect=TypeError("contract violated")):
+        response = client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"})
+
+    assert response.status_code == 502
+    assert response.is_json
+    assert "error" in response.get_json()

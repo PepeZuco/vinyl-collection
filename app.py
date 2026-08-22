@@ -210,6 +210,11 @@ def scan_record():
     ).all()
     genres = sorted({r.genre for r in rows if r.genre})
 
+    # The whole pipeline runs inside one try/except: lookup_musicbrainz,
+    # fetch_cover and find_duplicate are documented never to raise, but that
+    # contract isn't airtight (e.g. a 200 with an unexpected JSON shape can
+    # still blow up a caller). The route doesn't trust it absolutely — any
+    # escape here must still degrade to a JSON error, never a 500 HTML page.
     try:
         if image:
             source = "photo"
@@ -227,6 +232,17 @@ def scan_record():
                 "label": None,
                 "catalog_number": None,
             }
+
+        artist = fields.get("artist") or ""
+        album = fields.get("album_name") or ""
+
+        candidates = scan.lookup_musicbrainz(artist, album)
+        for candidate in candidates:
+            candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
+
+        existing = [{"id": r.id, "artist": r.artist or "",
+                     "album_name": r.album_name or ""} for r in rows]
+        duplicate = scan.find_duplicate(artist, album, existing)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except RuntimeError as e:
@@ -236,17 +252,7 @@ def scan_record():
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 
-    artist = fields.get("artist") or ""
-    album = fields.get("album_name") or ""
-
-    candidates = scan.lookup_musicbrainz(artist, album)
-    for candidate in candidates:
-        candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
-
     year = candidates[0]["year"] if candidates else ""
-    existing = [{"id": r.id, "artist": r.artist or "",
-                 "album_name": r.album_name or ""} for r in rows]
-    duplicate = scan.find_duplicate(artist, album, existing)
 
     return jsonify({
         "source": source,
