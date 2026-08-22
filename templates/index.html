@@ -2297,7 +2297,7 @@ function openEdit(id){
   document.getElementById('formOverlay').classList.remove('hidden');
 }
 
-function closeForm(){document.getElementById('formOverlay').classList.add('hidden');}
+function closeForm(){document.getElementById('formOverlay').classList.add('hidden');closeCoverSheet();}
 
 async function submitForm(){
   const body={
@@ -2345,16 +2345,22 @@ function fallbackCapture(){ closeCoverSheet(); document.getElementById('coverCap
 
 async function openCamera(){
   closeCoverSheet();
+  if(camStream) return; // a request is already in flight or live
   // navigator.mediaDevices is undefined (not an error) outside a secure context.
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
+  let stream;
   try{
     // `ideal`, never `exact` — `exact` throws on desktops with no rear camera.
-    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
   }catch(err){ fallbackCapture(); return; }
+  if(camStream){ stream.getTracks().forEach(t=>t.stop()); return; } // lost a race; don't leak
+  camStream = stream;
   const video = document.getElementById('camVideo');
   video.srcObject = camStream;
-  document.getElementById('cameraOverlay').classList.remove('hidden');
+  // Unhide only after playback actually starts, so the capture button can't
+  // be tapped while videoWidth/videoHeight are still 0 (see captureFrame guard).
   try{ await video.play(); }catch(e){}
+  document.getElementById('cameraOverlay').classList.remove('hidden');
 }
 
 function closeCamera(){
@@ -2366,6 +2372,7 @@ function closeCamera(){
 
 function captureFrame(){
   const video = document.getElementById('camVideo');
+  if(!video.videoWidth || !video.videoHeight){ toast('camera still starting — try again'); return; }
   const scale = Math.min(1, 1000/Math.max(video.videoWidth, video.videoHeight));
   const cv = document.createElement('canvas');
   cv.width = Math.round(video.videoWidth*scale);
