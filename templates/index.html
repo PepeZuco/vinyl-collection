@@ -1140,6 +1140,9 @@ select option{background:var(--surface);color:var(--text)}
       <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
+      <div id="scanDupWarning" style="display:none;margin-bottom:12px;padding:10px;
+           border:1px solid var(--danger);border-radius:var(--radius);font-size:13px">
+      </div>
       <div class="form-layout">
         <div class="form-cover-col">
           <div class="cover-drop" id="coverDrop" onclick="openCoverSheet()">
@@ -1170,7 +1173,7 @@ select option{background:var(--surface);color:var(--text)}
               <span style="display:flex;gap:6px">
                 <input type="text" id="spotifyUrlInput" placeholder="https://open.spotify.com/album/…"
                        style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSpotifyUrl()}">
-                <button type="button" class="btn btn-sm" onclick="submitSpotifyUrl()">
+                <button type="button" class="btn btn-sm" id="spotifySubmitBtn" onclick="submitSpotifyUrl()">
                   <i class="ti ti-arrow-right"></i>
                 </button>
               </span>
@@ -1191,6 +1194,12 @@ select option{background:var(--surface);color:var(--text)}
               <button type="button" class="btn btn-sm" id="fAddArtist" style="margin-top:6px;display:none" onclick="addArtistRow()"><i class="ti ti-plus"></i> add artist</button>
             </div>
             <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
+            <div id="scanAlternates" style="display:none;margin-top:4px">
+              <a href="#" style="font-size:12px;color:var(--accent)" onclick="event.preventDefault();toggleAlternates()">
+                not this one? (<span id="scanAltCount">0</span>)
+              </a>
+              <div id="scanAltList" class="cover-sheet hidden" style="margin-top:6px"></div>
+            </div>
             <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
             <div class="form-group">
               <label>Genre</label>
@@ -2236,6 +2245,11 @@ function deleteNote(idx) {
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';
   document.getElementById('formTitle').textContent='add record';
+  scanCandidates = [];
+  document.getElementById('scanAlternates').style.display = 'none';
+  document.getElementById('scanDupWarning').style.display = 'none';
+  document.getElementById('spotifyUrlInput').value = '';
+  showSpotifyError('');
   ['fArtist','fAlbum','fYear','fWhere','fBuyer','fCountry'].forEach(id=>document.getElementById(id).value='');
   formArtists=[];
   document.getElementById('fMultiArtist').checked=false;
@@ -2268,6 +2282,11 @@ function openEdit(id){
   const r=records.find(x=>x.id===id);if(!r)return;
   editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';
   document.getElementById('formTitle').textContent='edit record';
+  scanCandidates = [];
+  document.getElementById('scanAlternates').style.display = 'none';
+  document.getElementById('scanDupWarning').style.display = 'none';
+  document.getElementById('spotifyUrlInput').value = '';
+  showSpotifyError('');
   if (isMultiArtist(r)) {
     formArtists = artistList(r);
     document.getElementById('fMultiArtist').checked = true;
@@ -2442,8 +2461,97 @@ async function handleCoverFile(e){
 document.getElementById('coverInput').addEventListener('change', handleCoverFile);
 document.getElementById('coverCaptureInput').addEventListener('change', handleCoverFile);
 
-// Defined in Task 11; stubbed here so this task runs standalone.
-function scanFromImage(dataUri){}
+// ── scan: autofill from photo or Spotify link ──────────────────────────────
+let scanCandidates = [];
+let scanInFlight = false;
+
+function setScanBusy(busy){
+  scanInFlight = busy;
+  const input = document.getElementById('spotifyUrlInput');
+  const btn = document.getElementById('spotifySubmitBtn');
+  if(input) input.disabled = busy;
+  if(btn) btn.disabled = busy;
+}
+
+async function runScan(body){
+  // Three triggers reach here — paste-autosubmit, Enter, and the arrow button.
+  // Without this guard, paste-then-Enter fires two concurrent /api/scan calls,
+  // and every call costs real API credits.
+  if(scanInFlight) return;
+  setScanBusy(true);
+  showSpotifyError('');
+  toast('scanning…');
+  try{
+    let res, data;
+    try{
+      res = await fetch('/api/scan', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      data = await res.json();
+    }catch(e){
+      toast('scan failed — fill the form manually');
+      return;
+    }
+    if(!res.ok){
+      const message = (data && data.error) || 'scan failed';
+      if(body.spotify_url) showSpotifyError(message); else toast(message);
+      return;
+    }
+    applyScanResult(data);
+  } finally {
+    setScanBusy(false);
+  }
+}
+
+function scanFromImage(dataUri){ runScan({image:dataUri}); }
+function scanFromSpotify(url){ runScan({spotify_url:url}); }
+
+function applyScanResult(data){
+  if(data.artist) document.getElementById('fArtist').value = data.artist;
+  if(data.album_name) document.getElementById('fAlbum').value = data.album_name;
+  if(data.genre){ populateGenreSelect(data.genre); document.getElementById('fGenre').value = data.genre; }
+
+  scanCandidates = data.candidates || [];
+  if(scanCandidates.length) applyCandidate(scanCandidates[0]);
+
+  const alternates = document.getElementById('scanAlternates');
+  if(scanCandidates.length > 1){
+    document.getElementById('scanAltCount').textContent = scanCandidates.length;
+    alternates.style.display = 'block';
+    document.getElementById('scanAltList').innerHTML = scanCandidates.map((c,i)=>
+      `<button type="button" class="cover-sheet-row" onclick="pickCandidate(${i})">
+         ${esc(c.album_name||'')} — ${esc(c.year||'?')} · ${esc(c.country||'?')}
+       </button>`).join('');
+  } else {
+    alternates.style.display = 'none';
+  }
+
+  const warning = document.getElementById('scanDupWarning');
+  if(data.duplicate_of){
+    warning.innerHTML = `⚠ You already have <strong>${esc(data.duplicate_of.artist)} —
+      ${esc(data.duplicate_of.album_name)}</strong> in the collection.`;
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
+
+  closeCoverSheet();
+  toast('fields filled — check before saving');
+}
+
+function applyCandidate(c){
+  if(c.year) document.getElementById('fYear').value = c.year;
+  if(c.country) document.getElementById('fCountry').value = countryLabelFromCode(c.country);
+  if(c.cover_data) applyCover(c.cover_data);
+}
+
+function pickCandidate(i){
+  applyCandidate(scanCandidates[i]);
+  toggleAlternates();
+}
+
+function toggleAlternates(){
+  document.getElementById('scanAltList').classList.toggle('hidden');
+}
 
 function submitSpotifyUrl(){
   const input = document.getElementById('spotifyUrlInput');
@@ -2465,9 +2573,6 @@ function showSpotifyError(message){
   el.textContent = message;
   el.style.display = message ? 'block' : 'none';
 }
-
-// Defined in Task 11; stubbed here so this task runs standalone.
-function scanFromSpotify(url){}
 
 // ── login ──────────────────────────────────────────────────────────────────
 function openLogin(){document.getElementById('loginOverlay').classList.remove('hidden');document.getElementById('pwInput').value='';document.getElementById('loginErr').textContent='';}
