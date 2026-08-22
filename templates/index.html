@@ -2392,6 +2392,15 @@ async function submitForm(){
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
   const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok){
+    // The body here is {error:...}, not a record. Splicing that into `records`
+    // draws a blank card where the album was, and closeForm below would throw
+    // away the edits the user just made — while the toast claimed it saved.
+    let message='save failed';
+    try{ const err=await res.json(); message=err.error||message; }catch(e){}
+    toast(res.status===401 ? 'session expired — unlock and save again' : message);
+    return;
+  }
   const rec=await res.json();
   if(editingId){records=records.map(x=>x.id===editingId?rec:x);toast('changes saved');}
   else{records.push(rec);toast('record added');}
@@ -2751,12 +2760,25 @@ async function doLogout(){await fetch('/api/auth/logout',{method:'POST'});setAut
 // ── import / export ────────────────────────────────────────────────────────
 document.getElementById('importInput').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
-  const fd=new FormData();fd.append('file',file);
-  const r=await fetch('/api/import',{method:'POST',body:fd});
-  const d=await r.json();
-  if(d.imported!=null){await loadRecords();toast(`imported ${d.imported} records`);}
-  else toast('import failed: '+(d.error||'unknown'));
+  // Cleared up front, not at the end: every failure path below used to skip
+  // this, and an input still holding the file fires no change event when the
+  // user picks it again, so the retry looked just as dead as the first try.
   e.target.value='';
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch('/api/import',{method:'POST',body:fd});
+    // A file over MAX_UPLOAD_MB is refused before it ever reaches the handler,
+    // and that refusal is an HTML error page — r.json() throws on it.
+    if(r.status===413){
+      toast(`that file is too big for the server to accept — raise MAX_UPLOAD_MB`);
+      return;
+    }
+    const d=await r.json();
+    if(d.imported!=null){await loadRecords();toast(`imported ${d.imported} records`);}
+    else toast('import failed: '+(d.error||'unknown'));
+  }catch(err){
+    toast('import failed — the server rejected the file');
+  }
 });
 document.getElementById('exportBtn').addEventListener('click',()=>{window.location.href='/api/export';});
 

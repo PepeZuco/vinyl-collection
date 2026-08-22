@@ -14,7 +14,26 @@ app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 _default_sqlite_path = os.path.join(os.environ.get("DATA_DIR", "."), "vinyl.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", f"sqlite:///{_default_sqlite_path}")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "128")) * 1024 * 1024  # covers ride along as base64, so exports run large
+def _upload_ceiling_bytes():
+    """Upload ceiling in bytes, from MAX_UPLOAD_MB.
+
+    Covers ride along in the CSV as base64, so a collection export runs far
+    larger than the record count suggests and the old fixed 32MB cap rejected
+    it. A malformed value falls back to the default instead of raising: this
+    runs at import time, so a typo in the Railway variable would otherwise be
+    a boot loop rather than a legible error.
+
+    Note the ceiling is not free capacity. The import reads the whole body,
+    decodes it, and builds every row in memory before committing, costing
+    roughly 8x the file size in RSS (a 120MB CSV peaks near 950MB). Raise this
+    past ~64MB only if the process has the memory to match.
+    """
+    try:
+        return max(1, int(os.environ.get("MAX_UPLOAD_MB", "128"))) * 1024 * 1024
+    except ValueError:
+        return 128 * 1024 * 1024
+
+app.config["MAX_CONTENT_LENGTH"] = _upload_ceiling_bytes()
 
 EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD", "vinyl123")
 
