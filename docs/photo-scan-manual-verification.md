@@ -113,6 +113,16 @@ a field **you** touched:
 9. Scan a sleeve, tick **multiple artists**, fill in the rows, untick it again
    (which rebuilds the artist field from your rows). A later scan that reads no
    artist must not wipe that rebuilt value.
+10. Open a record that **already has a cover you chose** and paste a Spotify
+    link just to fill the genre. **The cover must not change.** (On the add
+    form the opposite is intended: a photo you just took may be replaced by
+    cleaner artwork.)
+11. With **multiple artists** ticked, run a scan. The artist rows are what gets
+    saved, so the scan must not claim it filled an artist it cannot show you.
+12. Scan a record from a country **outside the dropdown list** (the picker has
+    75; MusicBrainz knows them all) — Ghana or Iceland, say. The code should
+    appear as-is rather than the field coming back empty, and it must still be
+    there after you save and reopen.
 
 ---
 
