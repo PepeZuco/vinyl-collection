@@ -14,7 +14,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 _default_sqlite_path = os.path.join(os.environ.get("DATA_DIR", "."), "vinyl.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", f"sqlite:///{_default_sqlite_path}")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "128")) * 1024 * 1024  # covers ride along as base64, so exports run large
 
 EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD", "vinyl123")
 
