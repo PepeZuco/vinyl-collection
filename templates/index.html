@@ -246,6 +246,11 @@ select option{background:var(--surface);color:var(--text)}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.cover-sheet{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.cover-sheet.hidden{display:none}
+.cover-sheet-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;text-align:left}
+.cover-sheet-row:last-child{border-bottom:none}
+.cover-sheet-row:hover{background:var(--card)}
 
 /* detail — split layout: cover left, info right */
 .detail-layout{display:grid;grid-template-columns:260px 1fr;gap:20px}
@@ -1136,13 +1141,23 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-body">
       <div class="form-layout">
         <div class="form-cover-col">
-          <div class="cover-drop">
-            <input type="file" accept="image/*" id="coverInput">
+          <div class="cover-drop" id="coverDrop" onclick="openCoverSheet()">
             <div id="coverDropInner">
               <i class="ti ti-photo" style="font-size:24px;opacity:.2;display:block;margin-bottom:4px"></i>
-              <span style="font-size:12px;color:var(--muted)">click to upload album cover</span>
+              <span style="font-size:12px;color:var(--muted)">click to add album cover</span>
             </div>
             <img id="coverPreview" class="cover-preview" style="display:none">
+          </div>
+          <input type="file" accept="image/*" id="coverInput" style="display:none">
+          <input type="file" accept="image/*" capture="environment" id="coverCaptureInput" style="display:none">
+
+          <div class="cover-sheet hidden" id="coverSheet">
+            <button type="button" class="cover-sheet-row" onclick="pickCoverFile()">
+              <i class="ti ti-folder"></i> Choose file
+            </button>
+            <button type="button" class="cover-sheet-row" id="coverSheetCamera" onclick="openCamera()">
+              <i class="ti ti-camera"></i> Take photo
+            </button>
           </div>
         </div>
         <div class="form-info-col">
@@ -1218,6 +1233,24 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-foot">
       <button class="btn" onclick="closeForm()">cancel</button>
       <button class="btn btn-primary" id="formSaveBtn">save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Camera capture modal -->
+<div class="overlay hidden" id="cameraOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">take photo</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeCamera()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="text-align:center">
+      <video id="camVideo" playsinline autoplay muted
+             style="width:100%;border-radius:var(--radius);background:#000"></video>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeCamera()">cancel</button>
+      <button class="btn btn-primary" onclick="captureFrame()">capture</button>
     </div>
   </div>
 </div>
@@ -2294,18 +2327,98 @@ async function submitForm(){
   closeForm();render();
 }
 
-// ── cover upload ───────────────────────────────────────────────────────────
-document.getElementById('coverInput').addEventListener('change',e=>{
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    coverDataUri=ev.target.result;
-    document.getElementById('coverPreview').src=coverDataUri;
-    document.getElementById('coverPreview').style.display='block';
-    document.getElementById('coverDropInner').style.display='none';
-  };
-  reader.readAsDataURL(file);e.target.value='';
-});
+// ── cover: action sheet, camera, resize ────────────────────────────────────
+let camStream = null;
+
+function openCoverSheet(){
+  const sheet = document.getElementById('coverSheet');
+  sheet.classList.toggle('hidden');
+  // Hide the camera row when no camera path can work at all.
+  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    || 'capture' in document.createElement('input');
+  document.getElementById('coverSheetCamera').style.display = hasCamera ? '' : 'none';
+}
+function closeCoverSheet(){ document.getElementById('coverSheet').classList.add('hidden'); }
+
+function pickCoverFile(){ closeCoverSheet(); document.getElementById('coverInput').click(); }
+function fallbackCapture(){ closeCoverSheet(); document.getElementById('coverCaptureInput').click(); }
+
+async function openCamera(){
+  closeCoverSheet();
+  // navigator.mediaDevices is undefined (not an error) outside a secure context.
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
+  try{
+    // `ideal`, never `exact` — `exact` throws on desktops with no rear camera.
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+  }catch(err){ fallbackCapture(); return; }
+  const video = document.getElementById('camVideo');
+  video.srcObject = camStream;
+  document.getElementById('cameraOverlay').classList.remove('hidden');
+  try{ await video.play(); }catch(e){}
+}
+
+function closeCamera(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+  const video = document.getElementById('camVideo');
+  video.srcObject = null;
+  document.getElementById('cameraOverlay').classList.add('hidden');
+}
+
+function captureFrame(){
+  const video = document.getElementById('camVideo');
+  const scale = Math.min(1, 1000/Math.max(video.videoWidth, video.videoHeight));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(video.videoWidth*scale);
+  cv.height = Math.round(video.videoHeight*scale);
+  cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
+  const dataUri = cv.toDataURL('image/jpeg', .85);
+  closeCamera();
+  applyCover(dataUri);
+  scanFromImage(dataUri);
+}
+
+async function resizeImage(file, maxEdge=1000){
+  let bmp;
+  try{
+    // imageOrientation:'from-image' applies the EXIF rotation flag; without it
+    // portrait phone photos land sideways.
+    bmp = await createImageBitmap(file, {imageOrientation:'from-image'});
+  }catch(e){
+    bmp = await new Promise((res, rej)=>{
+      const img = new Image();
+      img.onload = ()=>res(img); img.onerror = rej;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+  const scale = Math.min(1, maxEdge/Math.max(w0, h0));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w0*scale); cv.height = Math.round(h0*scale);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', .85);
+}
+
+function applyCover(dataUri){
+  coverDataUri = dataUri;
+  const preview = document.getElementById('coverPreview');
+  preview.src = dataUri;
+  preview.style.display = 'block';
+  document.getElementById('coverDropInner').style.display = 'none';
+}
+
+async function handleCoverFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  e.target.value = '';
+  const dataUri = await resizeImage(file);
+  applyCover(dataUri);
+  scanFromImage(dataUri);
+}
+document.getElementById('coverInput').addEventListener('change', handleCoverFile);
+document.getElementById('coverCaptureInput').addEventListener('change', handleCoverFile);
+
+// Defined in Task 11; stubbed here so this task runs standalone.
+function scanFromImage(dataUri){}
 
 // ── login ──────────────────────────────────────────────────────────────────
 function openLogin(){document.getElementById('loginOverlay').classList.remove('hidden');document.getElementById('pwInput').value='';document.getElementById('loginErr').textContent='';}
