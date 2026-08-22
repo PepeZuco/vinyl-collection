@@ -79,6 +79,13 @@ select option{background:var(--surface);color:var(--text)}
 .btn-danger{color:var(--danger);border-color:var(--border)}
 .btn-danger:hover{border-color:var(--danger)}
 .btn-icon{width:34px;padding:0;display:flex;align-items:center;justify-content:center;font-size:15px}
+/* disabled state — .btn and .cover-sheet-row hard-set colour and cursor, which
+   overrides the UA's disabled styling, so a control busy on a multi-second scan
+   still looked live. Opacity keeps this readable in both themes. */
+.btn:disabled,.cover-sheet-row:disabled,#spotifyUrlInput:disabled{opacity:.45;cursor:not-allowed}
+.btn:disabled:hover{border-color:var(--border);color:var(--muted)}
+.btn-primary:disabled:hover{background:transparent}
+.cover-sheet-row:disabled:hover{background:none}
 
 /* theme toggle */
 .theme-btn{font-size:16px;padding:0 10px}
@@ -246,6 +253,12 @@ select option{background:var(--surface);color:var(--text)}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.cover-sheet{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.cover-sheet.hidden{display:none}
+.cover-sheet-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;text-align:left}
+.cover-sheet-row:last-child{border-bottom:none}
+.cover-sheet-row:hover{background:var(--card)}
+.spotify-mark{width:24px;height:24px;flex-shrink:0;display:block}
 
 /* detail — split layout: cover left, info right */
 .detail-layout{display:grid;grid-template-columns:260px 1fr;gap:20px}
@@ -429,6 +442,7 @@ select option{background:var(--surface);color:var(--text)}
 /* spinner */
 .spinner{display:flex;align-items:center;justify-content:center;padding:64px 20px}
 .spinner-disc{width:40px;height:40px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite}
+.scan-spinner{width:12px;height:12px;flex-shrink:0;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* toast */
@@ -1134,15 +1148,53 @@ select option{background:var(--surface);color:var(--text)}
       <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
+      <div id="scanDupWarning" style="display:none;margin-bottom:12px;padding:10px;
+           border:1px solid var(--danger);border-radius:var(--radius);font-size:13px">
+      </div>
       <div class="form-layout">
         <div class="form-cover-col">
-          <div class="cover-drop">
-            <input type="file" accept="image/*" id="coverInput">
+          <div class="cover-drop" id="coverDrop" onclick="openCoverSheet()">
             <div id="coverDropInner">
               <i class="ti ti-photo" style="font-size:24px;opacity:.2;display:block;margin-bottom:4px"></i>
-              <span style="font-size:12px;color:var(--muted)">click to upload album cover</span>
+              <span style="font-size:12px;color:var(--muted)">click to add album cover</span>
             </div>
             <img id="coverPreview" class="cover-preview" style="display:none">
+          </div>
+          <input type="file" accept="image/*" id="coverInput" style="display:none">
+          <input type="file" accept="image/*" capture="environment" id="coverCaptureInput" style="display:none">
+
+          <!-- A scan is a vision call, up to four rate-limited MusicBrainz
+               lookups and up to three cover fetches — far longer than a toast
+               lives, so its progress has to stay on screen for the duration. -->
+          <div id="scanStatus" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)">
+            <span class="scan-spinner"></span>
+            <span>scanning… this can take up to a minute</span>
+          </div>
+
+          <div class="cover-sheet hidden" id="coverSheet">
+            <button type="button" class="cover-sheet-row" id="coverSheetFile" onclick="pickCoverFile()">
+              <i class="ti ti-folder"></i> Choose file
+            </button>
+            <button type="button" class="cover-sheet-row" id="coverSheetCamera" onclick="openCamera()">
+              <i class="ti ti-camera"></i> Take photo
+            </button>
+            <!-- Spotify brand rules require 12px clear space around the 24px mark
+                 (half its height) on every side. The gaps below are that exclusion
+                 zone, not arbitrary spacing — do not "harmonise" them down. -->
+            <div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:12px;cursor:default">
+              <span style="display:flex;align-items:center;gap:12px">
+                <img src="/static/spotify-logo.png" alt="Spotify" class="spotify-mark">
+                Paste Spotify link
+              </span>
+              <span style="display:flex;gap:6px">
+                <input type="text" id="spotifyUrlInput" placeholder="https://open.spotify.com/album/…"
+                       style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSpotifyUrl()}">
+                <button type="button" class="btn btn-sm" id="spotifySubmitBtn" onclick="submitSpotifyUrl()">
+                  <i class="ti ti-arrow-right"></i>
+                </button>
+              </span>
+              <span id="spotifyUrlErr" style="font-size:12px;color:var(--danger);display:none"></span>
+            </div>
           </div>
         </div>
         <div class="form-info-col">
@@ -1158,6 +1210,21 @@ select option{background:var(--surface);color:var(--text)}
               <button type="button" class="btn btn-sm" id="fAddArtist" style="margin-top:6px;display:none" onclick="addArtistRow()"><i class="ti ti-plus"></i> add artist</button>
             </div>
             <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
+            <div id="scanAlternates" style="display:none;margin-top:4px;grid-column:1/-1">
+              <a href="#" style="font-size:12px;color:var(--accent)" onclick="event.preventDefault();toggleAlternates()">
+                not this one? (<span id="scanAltCount">0</span>)
+              </a>
+              <div id="scanAltList" class="cover-sheet hidden" style="margin-top:6px"></div>
+            </div>
+            <!-- The web-search fallback for whatever the vision call and
+                 MusicBrainz between them could not pin down. -->
+            <div class="form-group" id="scanSearchRow" style="display:none;margin-top:4px;grid-column:1/-1">
+              <label>Search the web for this cover</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input id="scanSearchText" readonly onclick="this.select()" style="flex:1;min-width:0">
+                <button type="button" class="btn btn-sm" id="scanSearchCopyBtn" onclick="copyScanSearch()"><i class="ti ti-copy"></i> copy</button>
+              </div>
+            </div>
             <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
             <div class="form-group">
               <label>Genre</label>
@@ -1218,6 +1285,24 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-foot">
       <button class="btn" onclick="closeForm()">cancel</button>
       <button class="btn btn-primary" id="formSaveBtn">save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Camera capture modal -->
+<div class="overlay hidden" id="cameraOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">take photo</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeCamera()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="text-align:center">
+      <video id="camVideo" playsinline autoplay muted
+             style="width:100%;border-radius:var(--radius);background:#000"></video>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeCamera()">cancel</button>
+      <button class="btn btn-primary" onclick="captureFrame()">capture</button>
     </div>
   </div>
 </div>
@@ -1286,6 +1371,10 @@ let editingId = null;
 let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
+// Whether the cover on screen came from the record rather than this session.
+// A scan may fill an empty cover or replace the photo just taken, but must not
+// overwrite artwork the user already chose for an existing record.
+let coverFromRecord = false;
 let confirmDeleteId = null;
 let currentDetailId = null;
 
@@ -1996,13 +2085,17 @@ function populateCountryList() {
 function countryLabelFromCode(code) {
   if (!code) return '';
   const found = COUNTRIES.find(([c]) => c === code.toUpperCase());
-  return found ? `${found[1]} (${found[0]})` : '';
+  // MusicBrainz knows every ISO code; the picker lists 75. Showing the bare
+  // code beats reporting the country as unread and then blanking it.
+  return found ? `${found[1]} (${found[0]})` : code.toUpperCase();
 }
 
 function countryCodeFromInput(value) {
   if (!value) return '';
   const m = value.match(/\(([A-Za-z]{2})\)\s*$/);
   if (m) return m[1].toUpperCase();
+  // A bare code, as countryLabelFromCode renders anything off the picker list.
+  if (/^[A-Za-z]{2}$/.test(value.trim())) return value.trim().toUpperCase();
   // fallback: exact name match without the "(XX)" suffix typed
   const found = COUNTRIES.find(([,name]) => name.toLowerCase() === value.trim().toLowerCase());
   return found ? found[0] : '';
@@ -2151,6 +2244,9 @@ function toggleMultiArtist() {
   const multi = document.getElementById('fMultiArtist').checked;
   if (!multi) {
     document.getElementById('fArtist').value = formArtists.filter(Boolean).join('; ');
+    // That joined list came out of the user's artist rows, so the field is
+    // theirs now — a later scan must not clear it.
+    delete scanWrote['fArtist'];
   }
   document.getElementById('fArtist').style.display = multi ? 'none' : '';
   document.getElementById('fArtistsList').style.display = multi ? '' : 'none';
@@ -2183,8 +2279,17 @@ function deleteNote(idx) {
 }
 
 function openAdd(){
-  editingId=null;myRating=0;wifeRating=0;coverDataUri='';
+  editingId=null;myRating=0;wifeRating=0;coverDataUri='';coverFromRecord=false;
   document.getElementById('formTitle').textContent='add record';
+  scanCandidates = [];
+  scanWrote = {};
+  scanBase = null;
+  setScanSearch('');
+  document.getElementById('scanAlternates').style.display = 'none';
+  document.getElementById('scanAltList').classList.add('hidden');
+  document.getElementById('scanDupWarning').style.display = 'none';
+  document.getElementById('spotifyUrlInput').value = '';
+  showSpotifyError('');
   ['fArtist','fAlbum','fYear','fWhere','fBuyer','fCountry'].forEach(id=>document.getElementById(id).value='');
   formArtists=[];
   document.getElementById('fMultiArtist').checked=false;
@@ -2215,8 +2320,17 @@ function openAdd(){
 function openEdit(id){
   closeDetail();
   const r=records.find(x=>x.id===id);if(!r)return;
-  editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';
+  editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';coverFromRecord=!!r.cover_data;
   document.getElementById('formTitle').textContent='edit record';
+  scanCandidates = [];
+  scanWrote = {};
+  scanBase = null;
+  setScanSearch('');
+  document.getElementById('scanAlternates').style.display = 'none';
+  document.getElementById('scanAltList').classList.add('hidden');
+  document.getElementById('scanDupWarning').style.display = 'none';
+  document.getElementById('spotifyUrlInput').value = '';
+  showSpotifyError('');
   if (isMultiArtist(r)) {
     formArtists = artistList(r);
     document.getElementById('fMultiArtist').checked = true;
@@ -2264,7 +2378,7 @@ function openEdit(id){
   document.getElementById('formOverlay').classList.remove('hidden');
 }
 
-function closeForm(){document.getElementById('formOverlay').classList.add('hidden');}
+function closeForm(){document.getElementById('formOverlay').classList.add('hidden');closeCoverSheet();scanToken++;setScanBusy(false);}
 
 async function submitForm(){
   const body={
@@ -2288,24 +2402,396 @@ async function submitForm(){
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
   const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok){
+    // The body here is {error:...}, not a record. Splicing that into `records`
+    // draws a blank card where the album was, and closeForm below would throw
+    // away the edits the user just made — while the toast claimed it saved.
+    let message='save failed';
+    try{ const err=await res.json(); message=err.error||message; }catch(e){}
+    toast(res.status===401 ? 'session expired — unlock and save again' : message);
+    return;
+  }
   const rec=await res.json();
   if(editingId){records=records.map(x=>x.id===editingId?rec:x);toast('changes saved');}
   else{records.push(rec);toast('record added');}
   closeForm();render();
 }
 
-// ── cover upload ───────────────────────────────────────────────────────────
-document.getElementById('coverInput').addEventListener('change',e=>{
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    coverDataUri=ev.target.result;
-    document.getElementById('coverPreview').src=coverDataUri;
-    document.getElementById('coverPreview').style.display='block';
-    document.getElementById('coverDropInner').style.display='none';
-  };
-  reader.readAsDataURL(file);e.target.value='';
+// ── cover: action sheet, camera, resize ────────────────────────────────────
+let camStream = null;
+
+function openCoverSheet(){
+  const sheet = document.getElementById('coverSheet');
+  sheet.classList.toggle('hidden');
+  // Hide the camera row when no camera path can work at all.
+  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    || 'capture' in document.createElement('input');
+  document.getElementById('coverSheetCamera').style.display = hasCamera ? '' : 'none';
+}
+function closeCoverSheet(){ document.getElementById('coverSheet').classList.add('hidden'); }
+
+function pickCoverFile(){ closeCoverSheet(); document.getElementById('coverInput').click(); }
+function fallbackCapture(){ closeCoverSheet(); document.getElementById('coverCaptureInput').click(); }
+
+async function openCamera(){
+  closeCoverSheet();
+  if(camStream) return; // a request is already in flight or live
+  // navigator.mediaDevices is undefined (not an error) outside a secure context.
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
+  let stream;
+  try{
+    // `ideal`, never `exact` — `exact` throws on desktops with no rear camera.
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+  }catch(err){ fallbackCapture(); return; }
+  if(camStream){ stream.getTracks().forEach(t=>t.stop()); return; } // lost a race; don't leak
+  camStream = stream;
+  const video = document.getElementById('camVideo');
+  video.srcObject = camStream;
+  // Unhide only after playback actually starts, so the capture button can't
+  // be tapped while videoWidth/videoHeight are still 0 (see captureFrame guard).
+  try{ await video.play(); }catch(e){}
+  document.getElementById('cameraOverlay').classList.remove('hidden');
+}
+
+function closeCamera(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+  const video = document.getElementById('camVideo');
+  video.srcObject = null;
+  document.getElementById('cameraOverlay').classList.add('hidden');
+}
+
+function captureFrame(){
+  const video = document.getElementById('camVideo');
+  if(!video.videoWidth || !video.videoHeight){ toast('camera still starting — try again'); return; }
+  const scale = Math.min(1, 1000/Math.max(video.videoWidth, video.videoHeight));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(video.videoWidth*scale);
+  cv.height = Math.round(video.videoHeight*scale);
+  cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
+  const dataUri = cv.toDataURL('image/jpeg', .85);
+  closeCamera();
+  applyCover(dataUri);
+  scanFromImage(dataUri);
+}
+
+async function resizeImage(file, maxEdge=1000){
+  let bmp;
+  try{
+    // imageOrientation:'from-image' applies the EXIF rotation flag; without it
+    // portrait phone photos land sideways.
+    bmp = await createImageBitmap(file, {imageOrientation:'from-image'});
+  }catch(e){
+    bmp = await new Promise((res, rej)=>{
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = ()=>{ URL.revokeObjectURL(url); res(img); };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error('image decode failed')); };
+      img.src = url;
+    });
+  }
+  const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+  const scale = Math.min(1, maxEdge/Math.max(w0, h0));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w0*scale); cv.height = Math.round(h0*scale);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', .85);
+}
+
+function applyCover(dataUri){
+  coverDataUri = dataUri;
+  coverFromRecord = false;
+  const preview = document.getElementById('coverPreview');
+  preview.src = dataUri;
+  preview.style.display = 'block';
+  document.getElementById('coverDropInner').style.display = 'none';
+}
+
+async function handleCoverFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  e.target.value = '';
+  const myToken = scanToken;
+  let dataUri;
+  try{
+    dataUri = await resizeImage(file);
+  }catch(err){
+    // Neither createImageBitmap nor the <img> fallback could read it — a .heic
+    // straight off an iPhone sails through accept="image/*" on desktop Chrome.
+    // Without this the rejection is silent and the user just clicks again.
+    if(myToken === scanToken) toast('could not read that image — try a jpg or png');
+    return;
+  }
+  // Decoding a phone photo takes long enough for the form to be closed and a
+  // different record opened; applying the cover now would stamp it onto that
+  // record. No ++ here — runScan takes its own token when the scan starts.
+  if(myToken !== scanToken) return;
+  applyCover(dataUri);
+  scanFromImage(dataUri);
+}
+document.getElementById('coverInput').addEventListener('change', handleCoverFile);
+document.getElementById('coverCaptureInput').addEventListener('change', handleCoverFile);
+
+// ── scan: autofill from photo or Spotify link ──────────────────────────────
+let scanCandidates = [];
+let scanInFlight = false;
+let scanToken = 0;
+// Fields a scan has written during THIS form session. A later scan may clear a
+// field an earlier scan filled — that value came from a scan and is now stale —
+// but must never clear a value the user typed or that openEdit loaded from the
+// record. On the edit path that would silently wipe the record's identity, and
+// update_record persists blanks without complaint.
+let scanWrote = {};
+// Artist/album the current alternates belong to, for rebuilding the search
+// string when the user picks a different one.
+let scanBase = null;
+
+// Editing a field by hand makes the value the user's, so a later scan must no
+// longer treat it as its own to clear. Wired as a loop over the ids rather than
+// oninput attributes so a field added here later cannot be forgotten; fGenre is
+// a <select>, where 'change' is the event that always fires.
+['fArtist','fAlbum','fGenre','fYear','fCountry'].forEach(id=>{
+  const el = document.getElementById(id);
+  // Guarded like setScanBusy does: this runs at top level, so a renamed id
+  // would throw here and take every later definition — init() included — with it.
+  if(!el) return;
+  ['input','change'].forEach(type=>el.addEventListener(type, ()=>{
+    // Not an unconditional delete: 'change' fires on blur whenever the value
+    // differs from what it was at focus, so a field the user typed into and a
+    // scan then overwrote fires one on the way out — dropping ownership of a
+    // value the scan wrote. Only a value that no longer matches is really theirs.
+    if(scanWrote[id] !== el.value) delete scanWrote[id];
+  }));
 });
+
+// Returns whether it actually filled the field, so the caller can tell the
+// user the truth about what the scan managed to read.
+function setScanField(id, value){
+  const el = document.getElementById(id);
+  if(value){
+    // A <select> blanks itself when handed a value with no matching option —
+    // a genre added on another device is in the server's enum but not in this
+    // page's list. That must not count as scan-written, or it would clear the
+    // very field it failed to fill.
+    const before = el.value;
+    el.value = value;
+    // Store what was actually written (the browser may normalise it), so the
+    // listener above can tell a real user edit from a spurious change event.
+    if(el.value){ scanWrote[id] = el.value; return true; }
+    // The value was rejected, so the field still shows the PREVIOUS album's.
+    // Blank it if a scan put it there — showing album A's genre on album B is
+    // worse than showing none — but keep what the user typed or openEdit
+    // loaded. Either way it is no longer scan-owned.
+    el.value = (id in scanWrote) ? '' : before;
+    delete scanWrote[id];
+  } else if(id in scanWrote){
+    el.value = '';
+    delete scanWrote[id];
+  }
+  return false;
+}
+
+function setScanBusy(busy){
+  scanInFlight = busy;
+  // Not a toast: a scan outlives the 2.5s a toast gets, and a form that looks
+  // idle invites the user to start typing into fields the scan is about to
+  // overwrite. setScanBusy is the one place that knows the whole in-flight
+  // window, error and abandoned-scan paths included.
+  document.getElementById('scanStatus').style.display = busy ? 'flex' : 'none';
+  ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
+   'coverSheetFile','coverSheetCamera'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.disabled = busy;
+  });
+}
+
+async function runScan(body){
+  // Three triggers reach here — paste-autosubmit, Enter, and the arrow button.
+  // Without this guard, paste-then-Enter fires two concurrent /api/scan calls,
+  // and every call costs real API credits.
+  if(scanInFlight) return;
+  const myToken = ++scanToken;
+  setScanBusy(true);
+  showSpotifyError('');
+  try{
+    let res, data;
+    try{
+      res = await fetch('/api/scan', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      data = await res.json();
+    }catch(e){
+      // The fields still hold the last scan's values, but the search string is
+      // this scan's only output — leaving it would point at the wrong album.
+      if(myToken === scanToken) setScanSearch('');
+      toast('scan failed — fill the form manually');
+      return;
+    }
+    if(!res.ok){
+      const message = (data && data.error) || 'scan failed';
+      if(myToken === scanToken) setScanSearch('');
+      if(body.spotify_url) showSpotifyError(message); else toast(message);
+      return;
+    }
+    // Discard a scan whose form was closed or replaced while it was in flight,
+    // or it will overwrite whatever record is open now.
+    if(myToken !== scanToken) return;
+    applyScanResult(data);
+  } finally {
+    // A scan whose form was closed or replaced must not re-enable the controls
+    // of the session that replaced it; closeForm released its busy state.
+    if(myToken === scanToken) setScanBusy(false);
+  }
+}
+
+function scanFromImage(dataUri){ runScan({image:dataUri}); }
+function scanFromSpotify(url){ runScan({spotify_url:url}); }
+
+function applyScanResult(data){
+  // populateGenreSelect rebuilds the whole <select>, dropping the selection
+  // unless it is handed back; without this the edit form's genre would reset
+  // to "select genre" even though no scan ever wrote it.
+  const genreSel = document.getElementById('fGenre');
+  const prevGenre = genreSel.value;
+  populateGenreSelect();
+  genreSel.value = prevGenre;
+  // Array literal, not ||, so every field is still written; we only want to
+  // know afterwards whether anything landed.
+  // With multiple artists ticked, fArtist is hidden and submitForm builds the
+  // artist from formArtists instead. Writing it would be invisible and would
+  // never be saved, so it must not be written or counted as filled.
+  const multiArtist = document.getElementById('fMultiArtist').checked;
+  const filled = [
+    multiArtist ? false : setScanField('fArtist', data.artist),
+    setScanField('fAlbum', data.album_name),
+    setScanField('fGenre', data.genre),
+  ];
+  document.getElementById('scanAltList').classList.add('hidden');
+
+  scanCandidates = data.candidates || [];
+  // Always go through applyCandidate, even with no candidates, so a previous
+  // scan's year/country get cleared instead of riding along with a new album.
+  filled.push(applyCandidate(scanCandidates[0] || {}));
+
+  const alternates = document.getElementById('scanAlternates');
+  if(scanCandidates.length > 1){
+    document.getElementById('scanAltCount').textContent = scanCandidates.length;
+    alternates.style.display = 'block';
+    document.getElementById('scanAltList').innerHTML = scanCandidates.map((c,i)=>
+      `<button type="button" class="cover-sheet-row" onclick="pickCandidate(${i})">
+         ${esc(c.album_name||'')} — ${esc(c.year||'?')} · ${esc(c.country||'?')}
+       </button>`).join('');
+  } else {
+    alternates.style.display = 'none';
+  }
+
+  const warning = document.getElementById('scanDupWarning');
+  if(data.duplicate_of){
+    warning.innerHTML = `⚠ You already have <strong>${esc(data.duplicate_of.artist)} —
+      ${esc(data.duplicate_of.album_name)}</strong> in the collection.`;
+    warning.style.display = 'block';
+  } else {
+    warning.style.display = 'none';
+  }
+
+  // The copy string is the fallback for exactly the scans that read the least,
+  // so it stays put on a poor result — that is when it is all the user has. Only
+  // a scan that read neither artist nor album has nothing worth searching for:
+  // its string is the bare "vinyl cover" suffix.
+  scanBase = {artist: data.artist || '', album: data.album_name || ''};
+  setScanSearch((data.artist || data.album_name) ? data.search_string : '');
+
+  closeCoverSheet();
+  toast(filled.some(Boolean)
+    ? 'fields filled — check before saving'
+    : 'nothing readable found — type it in by hand');
+}
+
+function setScanSearch(text){
+  const btn = document.getElementById('scanSearchCopyBtn');
+  clearTimeout(scanCopyTimer);
+  btn.innerHTML = '<i class="ti ti-copy"></i> copy';
+  document.getElementById('scanSearchText').value = text || '';
+  document.getElementById('scanSearchRow').style.display = text ? 'block' : 'none';
+}
+
+let scanCopyTimer;
+async function copyScanSearch(){
+  const el = document.getElementById('scanSearchText');
+  const btn = document.getElementById('scanSearchCopyBtn');
+  el.select();
+  let ok = false;
+  try{
+    // navigator.clipboard is undefined outside a secure context, and rejects
+    // inside one when the document has lost focus.
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(el.value);
+      ok = true;
+    }
+  }catch(e){ /* fall through to the execCommand path */ }
+  if(!ok){ try{ ok = document.execCommand('copy'); }catch(e){ ok = false; } }
+  if(ok){
+    btn.innerHTML = '<i class="ti ti-check"></i> copied';
+    clearTimeout(scanCopyTimer);
+    scanCopyTimer = setTimeout(()=>{ btn.innerHTML = '<i class="ti ti-copy"></i> copy'; }, 1600);
+  } else {
+    // The text is selected either way, so there is always a way out.
+    toast('copy failed — the text is selected, press ctrl+c');
+  }
+}
+
+function applyCandidate(c){
+  const filled = [
+    setScanField('fYear', c.year),
+    setScanField('fCountry', c.country ? countryLabelFromCode(c.country) : ''),
+  ];
+  // The cover is deliberately exempt from the clear rule: a wrong cover is
+  // immediately visible, and clearing it would destroy the photo just taken —
+  // which on the photo path is the scan input itself. Overwriting is a
+  // different matter: pasting a Spotify link into an existing record just to
+  // fill its genre must not swap out the sleeve the user photographed.
+  if(c.cover_data && !coverFromRecord) applyCover(c.cover_data);
+  return filled.some(Boolean);
+}
+
+function pickCandidate(i){
+  const c = scanCandidates[i] || {};
+  applyCandidate(c);
+  // The year is part of the search string, and picking an alternate is exactly
+  // the moment the first guess's year was wrong.
+  setScanSearch(scanSearchString(c.year));
+  toggleAlternates();
+}
+
+// Mirrors the server's search_string so a locally-chosen year stays in step.
+function scanSearchString(year){
+  if(!scanBase || (!scanBase.artist && !scanBase.album)) return '';
+  return [scanBase.artist, scanBase.album, year || '', 'vinyl cover']
+    .filter(Boolean).join(' ');
+}
+
+function toggleAlternates(){
+  document.getElementById('scanAltList').classList.toggle('hidden');
+}
+
+function submitSpotifyUrl(){
+  const input = document.getElementById('spotifyUrlInput');
+  const url = input.value.trim();
+  if(!url) return;
+  scanFromSpotify(url);
+}
+
+// Pasting a share link is the whole gesture — submit without a second tap.
+document.getElementById('spotifyUrlInput').addEventListener('paste', e=>{
+  const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+  if(/open\.spotify\.com|^spotify:/.test(text.trim())){
+    setTimeout(()=>scanFromSpotify(text.trim()), 0);
+  }
+});
+
+function showSpotifyError(message){
+  const el = document.getElementById('spotifyUrlErr');
+  el.textContent = message;
+  el.style.display = message ? 'block' : 'none';
+}
 
 // ── login ──────────────────────────────────────────────────────────────────
 function openLogin(){document.getElementById('loginOverlay').classList.remove('hidden');document.getElementById('pwInput').value='';document.getElementById('loginErr').textContent='';}
@@ -2321,12 +2807,25 @@ async function doLogout(){await fetch('/api/auth/logout',{method:'POST'});setAut
 // ── import / export ────────────────────────────────────────────────────────
 document.getElementById('importInput').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
-  const fd=new FormData();fd.append('file',file);
-  const r=await fetch('/api/import',{method:'POST',body:fd});
-  const d=await r.json();
-  if(d.imported!=null){await loadRecords();toast(`imported ${d.imported} records`);}
-  else toast('import failed: '+(d.error||'unknown'));
+  // Cleared up front, not at the end: every failure path below used to skip
+  // this, and an input still holding the file fires no change event when the
+  // user picks it again, so the retry looked just as dead as the first try.
   e.target.value='';
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch('/api/import',{method:'POST',body:fd});
+    // A file over MAX_UPLOAD_MB is refused before it ever reaches the handler,
+    // and that refusal is an HTML error page — r.json() throws on it.
+    if(r.status===413){
+      toast(`that file is too big for the server to accept — raise MAX_UPLOAD_MB`);
+      return;
+    }
+    const d=await r.json();
+    if(d.imported!=null){await loadRecords();toast(`imported ${d.imported} records`);}
+    else toast('import failed: '+(d.error||'unknown'));
+  }catch(err){
+    toast('import failed — the server rejected the file');
+  }
 });
 document.getElementById('exportBtn').addEventListener('click',()=>{window.location.href='/api/export';});
 

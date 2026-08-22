@@ -1,0 +1,23 @@
+{
+  "release-groups": [
+    {
+      "id": "8f1318d9-8a6f-3c4c-a6de-bcdabc7123e4",
+      "score": 100,
+      "title": "Live at Carnegie Hall",
+      "first-release-date": "1973",
+      "artist-credit": [
+        {"artist": {"id": "fd1a2d9d-9bb6-44de-83a3-41560658aba9",
+                    "name": "Bill Withers"}}
+      ]
+    },
+    {
+      "id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "score": 72,
+      "title": "Para Sempre",
+      "artist-credit": [
+        {"artist": {"id": "fd1a2d9d-9bb6-44de-83a3-41560658aba9",
+                    "name": "Bill Withers"}}
+      ]
+    }
+  ]
+}

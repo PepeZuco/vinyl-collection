@@ -6,13 +6,34 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 from functools import wraps
 
+import scan
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 
 _default_sqlite_path = os.path.join(os.environ.get("DATA_DIR", "."), "vinyl.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", f"sqlite:///{_default_sqlite_path}")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB
+def _upload_ceiling_bytes():
+    """Upload ceiling in bytes, from MAX_UPLOAD_MB.
+
+    Covers ride along in the CSV as base64, so a collection export runs far
+    larger than the record count suggests and the old fixed 32MB cap rejected
+    it. A malformed value falls back to the default instead of raising: this
+    runs at import time, so a typo in the Railway variable would otherwise be
+    a boot loop rather than a legible error.
+
+    Note the ceiling is not free capacity. The import reads the whole body,
+    decodes it, and builds every row in memory before committing, costing
+    roughly 8x the file size in RSS (a 120MB CSV peaks near 950MB). Raise this
+    past ~64MB only if the process has the memory to match.
+    """
+    try:
+        return max(1, int(os.environ.get("MAX_UPLOAD_MB", "128"))) * 1024 * 1024
+    except ValueError:
+        return 128 * 1024 * 1024
+
+app.config["MAX_CONTENT_LENGTH"] = _upload_ceiling_bytes()
 
 EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD", "vinyl123")
 
@@ -190,6 +211,79 @@ def delete_record(rid):
     db.session.commit()
     return jsonify({"ok": True})
 
+# ── scan (photo / Spotify autofill) ───────────────────────────────────────────
+
+@app.route("/api/scan", methods=["POST"])
+@require_auth
+def scan_record():
+    d = request.get_json(silent=True) or {}
+    image = d.get("image")
+    spotify_url = d.get("spotify_url")
+    if bool(image) == bool(spotify_url):
+        return jsonify({"error": "Provide exactly one of image or spotify_url"}), 400
+
+    # Load only the four columns needed. Record.query.all() would pull every
+    # cover_data blob — ~31MB across the collection — on every scan.
+    rows = db.session.query(
+        Record.id, Record.artist, Record.album_name, Record.genre
+    ).all()
+    genres = sorted({r.genre for r in rows if r.genre})
+
+    # The whole pipeline runs inside one try/except: lookup_musicbrainz,
+    # fetch_cover and find_duplicate are documented never to raise, but that
+    # contract isn't airtight (e.g. a 200 with an unexpected JSON shape can
+    # still blow up a caller). The route doesn't trust it absolutely — any
+    # escape here must still degrade to a JSON error, never a 500 HTML page.
+    try:
+        if image:
+            source = "photo"
+            fields = scan.extract_from_image(image, genres)
+            spotify_image = None
+        else:
+            source = "spotify"
+            resolved = scan.extract_from_spotify(spotify_url)
+            spotify_image = resolved.get("image_url")
+            fields = {
+                "artist": resolved["artist"],
+                "album_name": resolved["album_name"],
+                "genre": scan.classify_genre(
+                    resolved["artist"], resolved["album_name"], genres),
+                "label": None,
+                "catalog_number": None,
+            }
+
+        artist = fields.get("artist") or ""
+        album = fields.get("album_name") or ""
+
+        candidates = scan.lookup_musicbrainz(artist, album)
+        for candidate in candidates:
+            candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
+
+        existing = [{"id": r.id, "artist": r.artist or "",
+                     "album_name": r.album_name or ""} for r in rows]
+        duplicate = scan.find_duplicate(artist, album, existing)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except RuntimeError as e:
+        message = str(e)
+        status = 503 if "not set" in message else 502
+        return jsonify({"error": message}), status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+    year = candidates[0]["year"] if candidates else ""
+
+    return jsonify({
+        "source": source,
+        "artist": artist,
+        "album_name": album,
+        "genre": fields.get("genre") or "",
+        "candidates": candidates,
+        "duplicate_of": {"id": duplicate["id"], "artist": duplicate["artist"],
+                         "album_name": duplicate["album_name"]} if duplicate else None,
+        "search_string": " ".join(p for p in [artist, album, year, "vinyl cover"] if p),
+    })
+
 # ── CSV import / export ───────────────────────────────────────────────────────
 
 @app.route("/api/export")
@@ -214,39 +308,67 @@ def export_csv():
     return app.response_class(generate(), mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=vinyl_collection.csv"})
 
-def import_records_from_csv_text(text):
-    reader = csv.DictReader(io.StringIO(text))
+# Rows are inserted in batches so a large restore never holds the whole
+# collection on the heap at once. Covers are base64 data URIs, so a few hundred
+# rows is already tens of MB — this is the knob that bounds it.
+_IMPORT_BATCH_ROWS = 500
+
+
+def _record_mapping(row):
+    """Turn one CSV row into a Record column mapping."""
+    cover = row.get("cover_image_base64","") or row.get("cover_data","")
+    if cover and not cover.startswith("data:"):
+        cover = "data:image/jpeg;base64," + cover
+    cleaned_dates = row.get("cleaned_dates","")
+    if not cleaned_dates and row.get("last_cleaned",""):
+        cleaned_dates = json.dumps([row["last_cleaned"]])
+    return {
+        "artist":      row.get("artist",""),
+        "album_name":  row.get("album_name",""),
+        "year":        row.get("year",""),
+        "genre":       row.get("genre",""),
+        "bought_date": row.get("bought_date",""),
+        "bought_where":row.get("bought_where",""),
+        "bought_by":   row.get("bought_by",""),
+        "my_rating":   float(row.get("my_rating") or 0),
+        "wife_rating": float(row.get("wife_rating") or 0),
+        "have_it":     row.get("have_it","").lower() in ("true","1","yes"),
+        "play_count":  int(row.get("play_count") or 0),
+        "play_dates":  row.get("play_dates",""),
+        "cleaned_dates": cleaned_dates,
+        "cover_data":  cover,
+        "notes":       row.get("notes",""),
+        "country":     (row.get("country","") or "").strip().upper()[:2],
+    }
+
+
+def import_records_from_csv_rows(rows):
+    """Replace the whole collection from an iterable of CSV row dicts.
+
+    Inserted in batches to bound memory, but still ONE transaction: the delete
+    and every batch commit together at the end. A failure part-way therefore
+    rolls back to the existing collection rather than leaving it half-replaced
+    — this wipes the table first, so a partial import would be data loss.
+    """
     Record.query.delete()
     count = 0
-    for row in reader:
-        cover = row.get("cover_image_base64","") or row.get("cover_data","")
-        if cover and not cover.startswith("data:"):
-            cover = "data:image/jpeg;base64," + cover
-        cleaned_dates = row.get("cleaned_dates","")
-        if not cleaned_dates and row.get("last_cleaned",""):
-            cleaned_dates = json.dumps([row["last_cleaned"]])
-        r = Record(
-            artist      = row.get("artist",""),
-            album_name  = row.get("album_name",""),
-            year        = row.get("year",""),
-            genre       = row.get("genre",""),
-            bought_date = row.get("bought_date",""),
-            bought_where= row.get("bought_where",""),
-            bought_by   = row.get("bought_by",""),
-            my_rating   = float(row.get("my_rating") or 0),
-            wife_rating = float(row.get("wife_rating") or 0),
-            have_it     = row.get("have_it","").lower() in ("true","1","yes"),
-            play_count  = int(row.get("play_count") or 0),
-            play_dates  = row.get("play_dates",""),
-            cleaned_dates = cleaned_dates,
-            cover_data  = cover,
-            notes       = row.get("notes",""),
-            country     = (row.get("country","") or "").strip().upper()[:2],
-        )
-        db.session.add(r)
+    batch = []
+    for row in rows:
+        batch.append(_record_mapping(row))
         count += 1
+        if len(batch) >= _IMPORT_BATCH_ROWS:
+            db.session.execute(db.insert(Record), batch)
+            batch.clear()
+    if batch:
+        db.session.execute(db.insert(Record), batch)
     db.session.commit()
     return count
+
+
+def import_records_from_csv_text(text):
+    """Import from a CSV already held in memory. Prefer the streaming path."""
+    return import_records_from_csv_rows(csv.DictReader(io.StringIO(text)))
+
 
 @app.route("/api/import", methods=["POST"])
 @require_auth
@@ -255,8 +377,13 @@ def import_csv():
     if not file:
         return jsonify({"error": "No file"}), 400
     try:
-        text = file.read().decode("utf-8", errors="replace")
-        count = import_records_from_csv_text(text)
+        # Read the upload as a stream. Werkzeug spools anything large to a temp
+        # file, so this stays off the heap; file.read().decode() used to make
+        # three full-size copies of the CSV before parsing even began, which is
+        # most of why a 120MB import peaked near 950MB of RSS.
+        stream = io.TextIOWrapper(file.stream, encoding="utf-8",
+                                  errors="replace", newline="")
+        count = import_records_from_csv_rows(csv.DictReader(stream))
         return jsonify({"imported": count})
     except Exception as e:
         db.session.rollback()

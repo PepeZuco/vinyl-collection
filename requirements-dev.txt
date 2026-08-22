@@ -1,0 +1,6 @@
+# Test-only dependencies. Kept out of requirements.txt so Nixpacks doesn't
+# install them into the Railway image on every deploy.
+-r requirements.txt
+
+pytest==9.1.1
+jsonschema==4.26.0

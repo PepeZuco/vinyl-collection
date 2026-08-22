@@ -99,39 +99,50 @@ mocking — the right place to prove the test setup works.
   `(kind, spotify_id)` where `kind` is `"album"` or `"track"`. Raises
   `ValueError` for anything else.
 
-- [ ] **Step 0: Prepare the Python environment**
+- [ ] **Step 0: Confirm the Python environment**
 
-This machine has no `pip` and no `venv` module — `python3 -m venv` fails with
-"You may need to use sudo". Nothing is installed yet, so set that up first:
+**Already done by the controller — verify, don't redo.** `.venv/` exists at
+the repo root with every dependency installed. Confirm with:
 
 ```bash
-sudo apt install python3-venv python3-pip
-python3 -m venv .venv
-source .venv/bin/activate
+.venv/bin/python -c "import flask, anthropic, requests, pytest; print('ok')"
 ```
 
-`.venv/` is already in `.gitignore`. Every later `python -m pytest` in this
-plan assumes this virtualenv is active.
+Use `.venv/bin/python -m pytest` (or activate the venv) for every test
+command in this plan.
 
-The system Python here is 3.14. If `flask==3.0.3` (which predates 3.14) fails
-to install or import, bump Flask to the latest 3.x rather than downgrading
-Python — no code in this plan depends on Flask internals.
+For reproducibility, this is how that venv was created. Ubuntu 26.04 ships
+Python 3.14 with no `pip`, no `ensurepip`, and no `venv` module, and PEP 668
+blocks `--user` installs. This needs no `sudo`:
+
+```bash
+curl -sSo /tmp/pip.pyz https://bootstrap.pypa.io/pip/pip.pyz
+python3 /tmp/pip.pyz install --target /tmp/bootstrap virtualenv
+PYTHONPATH=/tmp/bootstrap python3 -m virtualenv .venv
+.venv/bin/pip install -r requirements.txt
+```
 
 - [ ] **Step 1: Add dependencies and pytest configuration**
 
 Append to `requirements.txt` (keep the existing three lines):
 
 ```
-anthropic==0.75.0
-requests==2.32.3
-pytest==8.3.3
+anthropic==1.0.0
+requests==2.34.2
+pytest==9.1.1
+jsonschema==4.26.0
 ```
 
-Then install: `pip install -r requirements.txt`
+These are the versions actually installed and verified in `.venv`. `jsonschema`
+is test-only: it validates that the structured-output schemas this feature
+builds actually behave as intended (see Task 5), which plain unit tests with a
+mocked client cannot check.
 
-If `anthropic==0.75.0` does not resolve, use the latest `0.x` release —
-this plan uses only `client.messages.create`, stable across 0.x. Do **not**
-silently jump to a `1.x` release; it is a breaking major version.
+**On `anthropic` 1.x:** 1.0.0 is the current major version, and its
+`messages.create` surface is unchanged from 0.x for everything this plan
+uses. `output_config` was verified present in the installed SDK's signature.
+The 1.x breaking changes (httpx2, awaited async `.with_raw_response`,
+removed Text Completions) touch nothing here.
 
 Create `pytest.ini` at the repo root:
 
@@ -141,11 +152,12 @@ pythonpath = .
 testpaths = tests
 ```
 
-`pythonpath = .` is **required**, not cosmetic. Under pytest's default
-`prepend` import mode, a test file with no `__init__.py` gets its own
-directory (`tests/`) inserted into `sys.path` — not the repo root. Without
-this line every `import scan` and `import app` in the suite fails with
-`ModuleNotFoundError`. (Needs pytest ≥ 7.0; the pin above satisfies that.)
+`pythonpath = .` is **required**, not cosmetic — verified empirically on
+this machine. Under pytest's default `prepend` import mode, a test file with
+no `__init__.py` gets its own directory (`tests/`) inserted into `sys.path`,
+not the repo root, so a bare `pytest` fails every `import scan` with
+`ModuleNotFoundError`. (`python -m pytest` happens to mask this by adding
+CWD to `sys.path` — don't rely on that.)
 
 - [ ] **Step 2: Write the failing test**
 
@@ -308,6 +320,13 @@ def test_album_must_also_match():
 def test_empty_inputs_return_none():
     assert find_duplicate("", "", EXISTING) is None
     assert find_duplicate("Adele", "30", []) is None
+
+
+def test_junk_normalising_to_empty_key_returns_none():
+    """Punctuation-only input reduces to an empty key; it must never match."""
+    junk = [{"id": 99, "artist": "---", "album_name": "***"}]
+    assert find_duplicate("???", "!!!", junk) is None
+    assert find_duplicate("   ", "   ", junk) is None
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -339,9 +358,11 @@ def _normalise(value: str) -> str:
 
 def find_duplicate(artist: str, album: str, existing: list[dict]) -> dict | None:
     """Return the first existing record matching artist + album, else None."""
-    if not artist or not album:
-        return None
+    # Guard the NORMALISED key, not the raw strings: punctuation-only input
+    # ("???") is truthy but reduces to "", and two empty keys compare equal.
     key = (_normalise(artist), _normalise(album))
+    if not key[0] or not key[1]:
+        return None
     for record in existing:
         if (_normalise(record.get("artist", "")),
                 _normalise(record.get("album_name", ""))) == key:
@@ -352,7 +373,7 @@ def find_duplicate(artist: str, album: str, existing: list[dict]) -> dict | None
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_duplicates.py -v`
-Expected: PASS — 8 passed
+Expected: PASS — 9 passed
 
 - [ ] **Step 5: Commit**
 
@@ -424,6 +445,21 @@ Create `tests/fixtures/mb_artist_withers.json`:
   "name": "Bill Withers",
   "country": "US",
   "area": {"name": "United States", "iso-3166-1-codes": ["US"]}
+}
+```
+
+This fixture exercises only the `payload.get("country")` branch. Add a
+second one, `tests/fixtures/mb_artist_country_fallback.json`, so the
+`area.iso-3166-1-codes` fallback is covered too — country is one of the two
+fields this task exists to supply, and a silent regression there corrupts
+records:
+
+```json
+{
+  "id": "bbbbbbbb-0000-0000-0000-000000000002",
+  "name": "Fallback Artist",
+  "country": null,
+  "area": {"name": "United Kingdom", "iso-3166-1-codes": ["GB"]}
 }
 ```
 
@@ -508,6 +544,29 @@ def test_no_match_returns_empty_list():
 def test_network_error_returns_empty_list():
     with patch.object(scan.requests, "get", side_effect=scan.requests.RequestException):
         assert scan.lookup_musicbrainz("Bill Withers", "Menagerie") == []
+
+
+def test_country_falls_back_to_area_iso_code():
+    """country is null -> the ISO code must come from area.iso-3166-1-codes."""
+    responses = [
+        _response(load_fixture("mb_release_group_withers")),
+        _response(load_fixture("mb_artist_country_fallback")),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Fallback Artist", "Live at Carnegie Hall")
+
+    assert candidates[0]["country"] == "GB"
+
+
+def test_country_is_none_when_both_sources_absent():
+    responses = [
+        _response(load_fixture("mb_release_group_withers")),
+        _response({"id": "x", "name": "Nowhere Artist"}),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Nowhere Artist", "Live at Carnegie Hall")
+
+    assert candidates[0]["country"] is None
 
 
 def test_sends_identifying_user_agent():
@@ -625,7 +684,7 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_musicbrainz.py -v`
-Expected: PASS — 6 passed
+Expected: PASS — 8 passed
 
 - [ ] **Step 7: Verify against the live API**
 
@@ -978,7 +1037,11 @@ def _sleeve_schema(genres: list[str]) -> dict:
         "properties": {
             "artist": nullable_string,
             "album_name": nullable_string,
-            "genre": {"type": ["string", "null"], "enum": genres},
+            # anyOf, NOT {"type": ["string","null"], "enum": genres} — `type` and
+            # `enum` are ANDed, so null fails the enum and becomes unreachable,
+            # forcing the model to invent a genre it was told to omit.
+            "genre": {"anyOf": [{"type": "string", "enum": genres},
+                                {"type": "null"}]},
             "label": nullable_string,
             "catalog_number": nullable_string,
         },
@@ -1021,7 +1084,7 @@ def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_image.py -v`
-Expected: PASS — 6 passed
+Expected: PASS — 9 passed
 
 - [ ] **Step 5: Commit**
 
@@ -1136,7 +1199,8 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
                 "effort": "low",
                 "format": {"type": "json_schema", "schema": {
                     "type": "object",
-                    "properties": {"genre": {"type": ["string", "null"], "enum": genres}},
+                    "properties": {"genre": {"anyOf": [{"type": "string", "enum": genres},
+                                                       {"type": "null"}]}},
                     "required": ["genre"],
                     "additionalProperties": False,
                 }},
@@ -1153,7 +1217,7 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `python -m pytest tests/test_scan_genre.py -v`
-Expected: PASS — 5 passed
+Expected: PASS — 6 passed
 
 - [ ] **Step 5: Commit**
 
@@ -1414,7 +1478,7 @@ Expected: PASS — 9 passed
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 54 passed (14 + 8 + 6 + 6 + 6 + 5 + 9)
+Expected: PASS — 61 passed (14 + 9 + 8 + 6 + 9 + 6 + 9)
 
 - [ ] **Step 7: Commit**
 
@@ -1656,7 +1720,7 @@ Add to `README.md` in the Railway **Variables** list (after `DATA_DIR`):
 - [ ] **Step 6: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 62 passed
+Expected: PASS — 69 passed
 
 - [ ] **Step 7: Commit**
 
@@ -1885,8 +1949,10 @@ Adds the third row to the action sheet.
 Append inside `#coverSheet`, after the camera row:
 
 ```html
-<div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:8px;cursor:default">
-  <span style="display:flex;align-items:center;gap:10px">
+<!-- The 12px gaps are Spotify's required exclusion zone (half the 24px
+     mark's height), not arbitrary spacing. Do not harmonise them to 8px. -->
+<div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:12px;cursor:default">
+  <span style="display:flex;align-items:center;gap:12px">
     <img src="/static/spotify-logo.png" alt="Spotify" class="spotify-mark">
     Paste Spotify link
   </span>
@@ -1996,6 +2062,19 @@ And directly inside the top of the form's `modal-body`:
 </div>
 ```
 
+- [ ] **Step 1b: Give the Spotify submit button an id**
+
+`setScanBusy` in the next step disables the submit button while a scan runs,
+but Task 10's button has no id. Add one to the existing arrow button in the
+Spotify row:
+
+```html
+<button type="button" class="btn btn-sm" id="spotifySubmitBtn" onclick="submitSpotifyUrl()">
+```
+
+Change nothing else about that row — its `gap:12px` values are Spotify's
+required exclusion zone.
+
 - [ ] **Step 2: Replace both stubs with the real implementation**
 
 Delete the two stub functions (`function scanFromImage(dataUri){}` and
@@ -2004,25 +2083,43 @@ Delete the two stub functions (`function scanFromImage(dataUri){}` and
 ```js
 // ── scan: autofill from photo or Spotify link ──────────────────────────────
 let scanCandidates = [];
+let scanInFlight = false;
+
+function setScanBusy(busy){
+  scanInFlight = busy;
+  const input = document.getElementById('spotifyUrlInput');
+  const btn = document.getElementById('spotifySubmitBtn');
+  if(input) input.disabled = busy;
+  if(btn) btn.disabled = busy;
+}
 
 async function runScan(body){
+  // Three triggers reach here — paste-autosubmit, Enter, and the arrow button.
+  // Without this guard, paste-then-Enter fires two concurrent /api/scan calls,
+  // and every call costs real API credits.
+  if(scanInFlight) return;
+  setScanBusy(true);
   showSpotifyError('');
   toast('scanning…');
-  let res, data;
   try{
-    res = await fetch('/api/scan', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-    data = await res.json();
-  }catch(e){
-    toast('scan failed — fill the form manually');
-    return;
+    let res, data;
+    try{
+      res = await fetch('/api/scan', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      data = await res.json();
+    }catch(e){
+      toast('scan failed — fill the form manually');
+      return;
+    }
+    if(!res.ok){
+      const message = (data && data.error) || 'scan failed';
+      if(body.spotify_url) showSpotifyError(message); else toast(message);
+      return;
+    }
+    applyScanResult(data);
+  } finally {
+    setScanBusy(false);
   }
-  if(!res.ok){
-    const message = (data && data.error) || 'scan failed';
-    if(body.spotify_url) showSpotifyError(message); else toast(message);
-    return;
-  }
-  applyScanResult(data);
 }
 
 function scanFromImage(dataUri){ runScan({image:dataUri}); }
@@ -2079,8 +2176,9 @@ function toggleAlternates(){
 
 - [ ] **Step 3: Reset scan state when the form opens**
 
-Find `openForm` / the add-record entry point and add these lines alongside
-the existing field resets:
+The add-record entry point is `openAdd()` at `templates/index.html:2185`
+(the edit path is `openEdit`, further down). Add these lines to `openAdd`
+alongside the existing field resets:
 
 ```js
 scanCandidates = [];
@@ -2118,7 +2216,7 @@ toast, no crash, and a fully usable manual form.
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest tests/ -v`
-Expected: PASS — 62 passed
+Expected: PASS — 69 passed
 
 - [ ] **Step 8: Commit**
 

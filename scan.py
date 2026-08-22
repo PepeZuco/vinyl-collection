@@ -1,0 +1,471 @@
+"""Record identification: sleeve photos and Spotify links to record fields."""
+import base64
+import json
+import logging
+import os
+import re
+import threading
+import time
+import unicodedata
+import urllib.parse
+
+import anthropic
+import requests
+
+logger = logging.getLogger(__name__)
+
+_SPOTIFY_URL_RE = re.compile(
+    r"^https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?(album|track)/([A-Za-z0-9]+)",
+    re.IGNORECASE,
+)
+_SPOTIFY_URI_RE = re.compile(r"^spotify:(album|track):([A-Za-z0-9]+)$", re.IGNORECASE)
+
+# The mobile share sheet emits spotify.link (and, historically, spotify.app.link)
+# short codes rather than an open.spotify.com URL. Those need a network hop to
+# resolve, which is why they are handled by _resolve_short_link and NOT by
+# parse_spotify_url — that function stays pure so it can be unit-tested and
+# reasoned about without a network.
+_SHORT_LINK_HOSTS = frozenset({"spotify.link", "www.spotify.link", "spotify.app.link"})
+_SPOTIFY_WEB_HOSTS = frozenset({"open.spotify.com"})
+_MAX_SHORT_LINK_HOPS = 5
+SHORT_LINK_TIMEOUT = 4.0
+
+
+def parse_spotify_url(url: str) -> tuple[str, str]:
+    """Resolve a Spotify album or track link to (kind, spotify_id).
+
+    Accepts web URLs (with or without an ``intl-xx`` segment or ``?si=``
+    query) and ``spotify:`` URIs. Raises ValueError for playlists, artists,
+    and anything unrecognised.
+    """
+    candidate = (url or "").strip()
+    for pattern in (_SPOTIFY_URL_RE, _SPOTIFY_URI_RE):
+        match = pattern.match(candidate)
+        if match:
+            return match.group(1).lower(), match.group(2)
+    raise ValueError(f"Not a Spotify album or track link: {url!r}")
+
+
+def _hostname(url: str) -> str:
+    try:
+        return (urllib.parse.urlparse(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _resolve_short_link(url: str) -> str:
+    """Expand a ``spotify.link`` share-sheet code into its open.spotify.com URL.
+
+    Never raises. On any failure — a non-short-link input, a timeout, a
+    non-redirect response, a hop pointing off Spotify, or too many hops — the
+    input is returned unchanged, so the caller's parse_spotify_url produces the
+    usual ValueError and the route answers 400 as before.
+    """
+    original = url
+    candidate = (url or "").strip()
+    if _hostname(candidate) not in _SHORT_LINK_HOSTS:
+        return original
+
+    try:
+        for _ in range(_MAX_SHORT_LINK_HOPS):
+            response = requests.get(
+                candidate, allow_redirects=False, timeout=SHORT_LINK_TIMEOUT
+            )
+            location = response.headers.get("Location") or ""
+            if not 300 <= response.status_code < 400 or not location:
+                break
+            candidate = urllib.parse.urljoin(candidate, location)
+            # Vet every hop BEFORE issuing the next request: a share link must
+            # stay inside Spotify, so an open redirect can never make this
+            # function fetch an arbitrary host.
+            host = _hostname(candidate)
+            if host in _SHORT_LINK_HOSTS:
+                continue
+            if host in _SPOTIFY_WEB_HOSTS:
+                return candidate
+            logger.warning("Spotify short link redirected off Spotify to %r", host)
+            return original
+    except requests.RequestException:
+        logger.warning("Could not resolve Spotify short link", exc_info=True)
+    return original
+
+
+_LEADING_ARTICLES = ("the ", "an ", "a ", "os ", "as ", "o ", "um ", "uma ")
+
+
+def _normalise(value: str) -> str:
+    """Casefold, strip accents and punctuation, drop a leading article."""
+    text = unicodedata.normalize("NFKD", (value or "").casefold())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"[^a-z0-9 ]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    for article in _LEADING_ARTICLES:
+        if text.startswith(article):
+            return text[len(article):]
+    return text
+
+
+def find_duplicate(artist: str, album: str, existing: list[dict]) -> dict | None:
+    """Return the first existing record matching artist + album, else None."""
+    key = (_normalise(artist), _normalise(album))
+    if not key[0] or not key[1]:
+        return None
+    for record in existing:
+        if (_normalise(record.get("artist", "")),
+                _normalise(record.get("album_name", ""))) == key:
+            return record
+    return None
+
+
+MB_BASE = "https://musicbrainz.org/ws/2"
+MB_TIMEOUT = 2.0
+
+_mb_lock = threading.Lock()
+_mb_last_call = 0.0
+
+
+def _musicbrainz_headers() -> dict:
+    contact = os.environ.get("MUSICBRAINZ_CONTACT", "unknown@example.com")
+    return {"User-Agent": f"VinylCollection/1.0 ( {contact} )"}
+
+
+def _throttle_musicbrainz() -> None:
+    """Block until at least 1s has passed since the previous MusicBrainz call."""
+    global _mb_last_call
+    with _mb_lock:
+        wait = 1.0 - (time.monotonic() - _mb_last_call)
+        if wait > 0:
+            time.sleep(wait)
+        _mb_last_call = time.monotonic()
+
+
+def _mb_get(path: str, params: dict) -> dict | None:
+    _throttle_musicbrainz()
+    try:
+        response = requests.get(
+            f"{MB_BASE}{path}",
+            params={**params, "fmt": "json"},
+            headers=_musicbrainz_headers(),
+            timeout=MB_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException:
+        # lookup_musicbrainz never raises; without this line the degradation
+        # (no year, no country) is silent and untraceable in production.
+        logger.warning("MusicBrainz request failed for %s", path, exc_info=True)
+        return None
+
+
+def _artist_country(artist_mbid: str, cache: dict) -> str | None:
+    if artist_mbid in cache:
+        return cache[artist_mbid]
+    payload = _mb_get(f"/artist/{artist_mbid}", {}) or {}
+    country = payload.get("country")
+    if not country:
+        codes = (payload.get("area") or {}).get("iso-3166-1-codes") or []
+        country = codes[0] if codes else None
+    cache[artist_mbid] = country
+    return country
+
+
+def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
+    """Return up to 3 release-group candidates with year and artist country."""
+    if not artist:
+        return []
+    query = f'artist:"{artist}"'
+    if album:
+        query += f' AND releasegroup:"{album}"'
+
+    payload = _mb_get("/release-group/", {"query": query, "limit": 5})
+    if not payload:
+        return []
+
+    candidates = []
+    country_cache: dict = {}
+    for group in payload.get("release-groups", [])[:3]:
+        credit = (group.get("artist-credit") or [{}])[0].get("artist") or {}
+        released = group.get("first-release-date") or ""
+        candidates.append({
+            "mbid": group.get("id"),
+            "year": released[:4] if len(released) >= 4 else None,
+            "country": _artist_country(credit.get("id"), country_cache)
+                       if credit.get("id") else None,
+            "label": None,
+            "artist": credit.get("name") or artist,
+            "album_name": group.get("title") or album,
+        })
+    return candidates
+
+
+COVER_TIMEOUT = 4.0
+
+
+def _download_image(url: str) -> str | None:
+    """Download an image URL and return it as a base64 data URI."""
+    try:
+        response = requests.get(url, timeout=COVER_TIMEOUT)
+    except requests.RequestException:
+        # fetch_cover never raises; log so a persistently unreachable art
+        # source is visible instead of just producing coverless candidates.
+        logger.warning("Cover image download failed", exc_info=True)
+        return None
+    if response.status_code != 200 or not response.content:
+        return None
+    media_type = response.headers.get("Content-Type", "image/jpeg").split(";")[0]
+    encoded = base64.b64encode(response.content).decode("ascii")
+    return f"data:{media_type};base64,{encoded}"
+
+
+def _itunes_artwork_url(artist: str, album: str) -> str | None:
+    try:
+        response = requests.get(
+            "https://itunes.apple.com/search",
+            params={"term": f"{artist} {album}", "entity": "album", "limit": 1},
+            timeout=COVER_TIMEOUT,
+        )
+        results = response.json().get("results") or []
+    except (requests.RequestException, ValueError):
+        logger.warning(
+            "iTunes artwork lookup failed for %r / %r", artist, album, exc_info=True
+        )
+        return None
+    if not results:
+        return None
+    art = results[0].get("artworkUrl100")
+    return art.replace("100x100bb", "600x600bb") if art else None
+
+
+def fetch_cover(candidate: dict, spotify_image_url: str | None = None) -> str | None:
+    """Return cover art as a base64 data URI, or None if every source misses."""
+    mbid = candidate.get("mbid")
+    if mbid:
+        cover = _download_image(
+            f"https://coverartarchive.org/release-group/{mbid}/front-500"
+        )
+        if cover:
+            return cover
+
+    itunes_url = _itunes_artwork_url(
+        candidate.get("artist", ""), candidate.get("album_name", "")
+    )
+    if itunes_url:
+        cover = _download_image(itunes_url)
+        if cover:
+            return cover
+
+    if spotify_image_url:
+        return _download_image(spotify_image_url)
+    return None
+
+
+VISION_MODEL = "claude-sonnet-5"
+GENRE_MODEL = "claude-haiku-4-5"
+
+_SLEEVE_SYSTEM = (
+    "You read record sleeves. Report only what is printed on the image.\n"
+    "Rules:\n"
+    "1. If a field is not legible, return null. Never guess.\n"
+    "2. Never infer or recall the release year or the country. Those are "
+    "looked up from a music database afterwards. Reporting a year printed "
+    "on the sleeve would give a pressing date, which is wrong here."
+)
+
+
+def _anthropic_client():
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    return anthropic.Anthropic(api_key=key)
+
+
+def _sleeve_schema(genres: list[str]) -> dict:
+    nullable_string = {"type": ["string", "null"]}
+    return {
+        "type": "object",
+        "properties": {
+            "artist": nullable_string,
+            "album_name": nullable_string,
+            # anyOf, NOT {"type": ["string","null"], "enum": genres}: `type` and
+            # `enum` are ANDed, so null would fail the enum and be unreachable,
+            # forcing the model to invent a genre it was told to omit.
+            "genre": {"anyOf": [{"type": "string", "enum": genres},
+                                {"type": "null"}]},
+            "label": nullable_string,
+            "catalog_number": nullable_string,
+        },
+        "required": ["artist", "album_name", "genre", "label", "catalog_number"],
+        "additionalProperties": False,
+    }
+
+
+def _media_type_and_data(data_uri: str) -> tuple[str, str]:
+    header, _, payload = data_uri.partition(",")
+    media_type = header.split(":")[1].split(";")[0] if ":" in header else "image/jpeg"
+    return media_type, payload
+
+
+def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
+    """Read artist, album, genre, label and catalog number off a sleeve photo."""
+    client = _anthropic_client()
+    media_type, data = _media_type_and_data(image_data_uri)
+
+    response = client.messages.create(
+        model=VISION_MODEL,
+        # Sonnet 5 runs adaptive thinking whenever `thinking` is omitted, and
+        # thinking tokens come out of max_tokens. A tight ceiling can be spent
+        # entirely on thinking, leaving no text block to parse. 16000 is the
+        # documented default for non-streaming requests: a ceiling, not a spend.
+        max_tokens=16000,
+        system=_SLEEVE_SYSTEM,
+        output_config={"effort": "low",
+                       "format": {"type": "json_schema",
+                                  "schema": _sleeve_schema(genres)}},
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": media_type, "data": data}},
+                {"type": "text", "text": "Read this record sleeve."},
+            ],
+        }],
+    )
+    # output_config.format guarantees valid JSON only when the call succeeds;
+    # truncation or an unexpected response shape must not escape as an opaque
+    # StopIteration or JSONDecodeError.
+    try:
+        text = next(b.text for b in response.content if b.type == "text")
+        return json.loads(text)
+    except (StopIteration, ValueError) as e:
+        raise RuntimeError(f"Could not parse sleeve extraction response: {e}") from e
+
+
+def _genre_schema(genres: list[str]) -> dict:
+    """JSON schema for classify_genre's single-field response.
+
+    anyOf, NOT {"type": ["string","null"], "enum": genres}: `type` and `enum`
+    are ANDed, so null would fail the enum and be unreachable, forcing the
+    model to invent a genre it was told to omit.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "genre": {"anyOf": [{"type": "string", "enum": genres},
+                                 {"type": "null"}]},
+        },
+        "required": ["genre"],
+        "additionalProperties": False,
+    }
+
+
+def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
+    """Pick the best-fitting genre from the collection's own vocabulary."""
+    if not genres:
+        return None
+    try:
+        client = _anthropic_client()
+        response = client.messages.create(
+            model=GENRE_MODEL,
+            max_tokens=256,
+            system="Classify the record into exactly one of the supplied "
+                   "genres. Return null if none fit.",
+            # No "effort" here: output_config.effort errors on Haiku 4.5 (and
+            # Sonnet 4.5). It is only valid from Opus 4.5 / the 4.6+ family
+            # upwards, so adding it back would 400 every genre call — and the
+            # except below would swallow it. Structured outputs
+            # (output_config.format) are fine on every model.
+            output_config={
+                "format": {"type": "json_schema", "schema": _genre_schema(genres)},
+            },
+            messages=[{"role": "user", "content": f"Artist: {artist}\nAlbum: {album}"}],
+        )
+        text = next(b.text for b in response.content if b.type == "text")
+        genre = json.loads(text).get("genre")
+    except Exception:
+        # classify_genre never raises — the scan degrades to an empty genre
+        # field. Log it: an always-failing call (a rejected parameter, a bad
+        # key) is otherwise indistinguishable from "no genre fits".
+        logger.warning(
+            "Genre classification failed for %r / %r", artist, album, exc_info=True
+        )
+        return None
+    # Second line of defence: even though the schema constrains the model's
+    # output, don't trust it blindly — only ever return a genre that is
+    # actually in the caller's vocabulary.
+    return genre if genre in genres else None
+
+
+SPOTIFY_API = "https://api.spotify.com/v1"
+SPOTIFY_TIMEOUT = 5.0
+
+_spotify_token: str | None = None
+_spotify_token_expiry: float = 0.0
+
+
+def _spotify_access_token(force_refresh: bool = False) -> str:
+    """Fetch (and cache) a client-credentials bearer token."""
+    global _spotify_token, _spotify_token_expiry
+    if not force_refresh and _spotify_token and time.time() < _spotify_token_expiry:
+        return _spotify_token
+
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise RuntimeError("SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET are not set")
+
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode("ascii")
+    response = requests.post(
+        "https://accounts.spotify.com/api/token",
+        data={"grant_type": "client_credentials"},
+        headers={"Authorization": f"Basic {basic}",
+                 "Content-Type": "application/x-www-form-urlencoded"},
+        timeout=SPOTIFY_TIMEOUT,
+    )
+    payload = response.json()
+    token = payload.get("access_token")
+    if not token:
+        raise RuntimeError("Spotify rejected the client credentials")
+    _spotify_token = token
+    _spotify_token_expiry = time.time() + payload.get("expires_in", 3600) - 60
+    return token
+
+
+def _spotify_get(path: str) -> dict:
+    """GET a Spotify endpoint, refreshing the token once on a 401."""
+    for attempt in range(2):
+        token = _spotify_access_token(force_refresh=attempt == 1)
+        response = requests.get(
+            f"{SPOTIFY_API}{path}",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=SPOTIFY_TIMEOUT,
+        )
+        if response.status_code == 401 and attempt == 0:
+            continue
+        if response.status_code != 200:
+            raise RuntimeError(f"Spotify returned {response.status_code} for {path}")
+        return response.json()
+    raise RuntimeError("Spotify authentication failed")
+
+
+def extract_from_spotify(url: str) -> dict:
+    """Resolve a Spotify album or track link to artist, album and cover URL.
+
+    Deliberately does NOT return a year: Spotify's ``release_date`` belongs to
+    that specific album entry, so a remaster reports the remaster date. The
+    year always comes from MusicBrainz.
+    """
+    # Resolve share-sheet short links first; a non-short link passes straight
+    # through, and an unresolvable one falls back to the original so
+    # parse_spotify_url still raises the ValueError the route turns into a 400.
+    kind, spotify_id = parse_spotify_url(_resolve_short_link(url))
+    payload = _spotify_get(f"/{kind}s/{spotify_id}")
+    album = payload.get("album") if kind == "track" else payload
+    if not album:
+        raise RuntimeError("Spotify returned no album for that link")
+
+    images = album.get("images") or []
+    return {
+        "artist": ", ".join(a["name"] for a in album.get("artists", []) if a.get("name")),
+        "album_name": album.get("name") or "",
+        "image_url": images[0]["url"] if images else None,
+    }
