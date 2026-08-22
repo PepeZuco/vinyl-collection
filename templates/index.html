@@ -1194,7 +1194,7 @@ select option{background:var(--surface);color:var(--text)}
               <button type="button" class="btn btn-sm" id="fAddArtist" style="margin-top:6px;display:none" onclick="addArtistRow()"><i class="ti ti-plus"></i> add artist</button>
             </div>
             <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
-            <div id="scanAlternates" style="display:none;margin-top:4px">
+            <div id="scanAlternates" style="display:none;margin-top:4px;grid-column:1/-1">
               <a href="#" style="font-size:12px;color:var(--accent)" onclick="event.preventDefault();toggleAlternates()">
                 not this one? (<span id="scanAltCount">0</span>)
               </a>
@@ -2247,6 +2247,7 @@ function openAdd(){
   document.getElementById('formTitle').textContent='add record';
   scanCandidates = [];
   document.getElementById('scanAlternates').style.display = 'none';
+  document.getElementById('scanAltList').classList.add('hidden');
   document.getElementById('scanDupWarning').style.display = 'none';
   document.getElementById('spotifyUrlInput').value = '';
   showSpotifyError('');
@@ -2284,6 +2285,7 @@ function openEdit(id){
   document.getElementById('formTitle').textContent='edit record';
   scanCandidates = [];
   document.getElementById('scanAlternates').style.display = 'none';
+  document.getElementById('scanAltList').classList.add('hidden');
   document.getElementById('scanDupWarning').style.display = 'none';
   document.getElementById('spotifyUrlInput').value = '';
   showSpotifyError('');
@@ -2334,7 +2336,7 @@ function openEdit(id){
   document.getElementById('formOverlay').classList.remove('hidden');
 }
 
-function closeForm(){document.getElementById('formOverlay').classList.add('hidden');closeCoverSheet();}
+function closeForm(){document.getElementById('formOverlay').classList.add('hidden');closeCoverSheet();scanToken++;}
 
 async function submitForm(){
   const body={
@@ -2464,13 +2466,16 @@ document.getElementById('coverCaptureInput').addEventListener('change', handleCo
 // ── scan: autofill from photo or Spotify link ──────────────────────────────
 let scanCandidates = [];
 let scanInFlight = false;
+let scanToken = 0;
 
 function setScanBusy(busy){
   scanInFlight = busy;
-  const input = document.getElementById('spotifyUrlInput');
-  const btn = document.getElementById('spotifySubmitBtn');
-  if(input) input.disabled = busy;
-  if(btn) btn.disabled = busy;
+  ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.disabled = busy;
+  });
+  const camRow = document.getElementById('coverSheetCamera');
+  if(camRow) camRow.disabled = busy;
 }
 
 async function runScan(body){
@@ -2478,6 +2483,7 @@ async function runScan(body){
   // Without this guard, paste-then-Enter fires two concurrent /api/scan calls,
   // and every call costs real API credits.
   if(scanInFlight) return;
+  const myToken = ++scanToken;
   setScanBusy(true);
   showSpotifyError('');
   toast('scanning…');
@@ -2496,6 +2502,9 @@ async function runScan(body){
       if(body.spotify_url) showSpotifyError(message); else toast(message);
       return;
     }
+    // Discard a scan whose form was closed or replaced while it was in flight,
+    // or it will overwrite whatever record is open now.
+    if(myToken !== scanToken) return;
     applyScanResult(data);
   } finally {
     setScanBusy(false);
@@ -2506,9 +2515,11 @@ function scanFromImage(dataUri){ runScan({image:dataUri}); }
 function scanFromSpotify(url){ runScan({spotify_url:url}); }
 
 function applyScanResult(data){
-  if(data.artist) document.getElementById('fArtist').value = data.artist;
-  if(data.album_name) document.getElementById('fAlbum').value = data.album_name;
-  if(data.genre){ populateGenreSelect(data.genre); document.getElementById('fGenre').value = data.genre; }
+  document.getElementById('fArtist').value = data.artist || '';
+  document.getElementById('fAlbum').value = data.album_name || '';
+  populateGenreSelect(data.genre || '');
+  document.getElementById('fGenre').value = data.genre || '';
+  document.getElementById('scanAltList').classList.add('hidden');
 
   scanCandidates = data.candidates || [];
   if(scanCandidates.length) applyCandidate(scanCandidates[0]);
