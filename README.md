@@ -31,6 +31,10 @@ python seed_db.py
    - `SECRET_KEY` — string aleatória para assinar a sessão.
    - `EDIT_PASSWORD` — senha para habilitar edição/import.
    - `DATA_DIR` — `/data`
+   - `MAX_UPLOAD_MB` — opcional, padrão `128`. Teto do upload em MB. As capas
+     viajam no CSV em base64, então o export de uma coleção razoável já passa do
+     limite antigo de 32MB e o import volta 413 antes mesmo de chegar no
+     servidor. Se isso acontecer, aumente este valor.
    - `ANTHROPIC_API_KEY` — chave da API da Anthropic (console.anthropic.com).
      Não é a assinatura do Claude.ai; é cobrança separada por uso. Sem ela, o
      scan por foto continua visível no formulário, mas cada tentativa volta com
