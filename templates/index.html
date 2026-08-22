@@ -251,6 +251,7 @@ select option{background:var(--surface);color:var(--text)}
 .cover-sheet-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;text-align:left}
 .cover-sheet-row:last-child{border-bottom:none}
 .cover-sheet-row:hover{background:var(--card)}
+.spotify-mark{width:24px;height:24px;flex-shrink:0;display:block}
 
 /* detail — split layout: cover left, info right */
 .detail-layout{display:grid;grid-template-columns:260px 1fr;gap:20px}
@@ -1158,6 +1159,20 @@ select option{background:var(--surface);color:var(--text)}
             <button type="button" class="cover-sheet-row" id="coverSheetCamera" onclick="openCamera()">
               <i class="ti ti-camera"></i> Take photo
             </button>
+            <div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:8px;cursor:default">
+              <span style="display:flex;align-items:center;gap:10px">
+                <img src="/static/spotify-logo.png" alt="Spotify" class="spotify-mark">
+                Paste Spotify link
+              </span>
+              <span style="display:flex;gap:6px">
+                <input type="text" id="spotifyUrlInput" placeholder="https://open.spotify.com/album/…"
+                       style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSpotifyUrl()}">
+                <button type="button" class="btn btn-sm" onclick="submitSpotifyUrl()">
+                  <i class="ti ti-arrow-right"></i>
+                </button>
+              </span>
+              <span id="spotifyUrlErr" style="font-size:12px;color:var(--danger);display:none"></span>
+            </div>
           </div>
         </div>
         <div class="form-info-col">
@@ -2426,6 +2441,30 @@ document.getElementById('coverCaptureInput').addEventListener('change', handleCo
 
 // Defined in Task 11; stubbed here so this task runs standalone.
 function scanFromImage(dataUri){}
+
+function submitSpotifyUrl(){
+  const input = document.getElementById('spotifyUrlInput');
+  const url = input.value.trim();
+  if(!url) return;
+  scanFromSpotify(url);
+}
+
+// Pasting a share link is the whole gesture — submit without a second tap.
+document.getElementById('spotifyUrlInput').addEventListener('paste', e=>{
+  const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+  if(/open\.spotify\.com|^spotify:/.test(text.trim())){
+    setTimeout(()=>scanFromSpotify(text.trim()), 0);
+  }
+});
+
+function showSpotifyError(message){
+  const el = document.getElementById('spotifyUrlErr');
+  el.textContent = message;
+  el.style.display = message ? 'block' : 'none';
+}
+
+// Defined in Task 11; stubbed here so this task runs standalone.
+function scanFromSpotify(url){}
 
 // ── login ──────────────────────────────────────────────────────────────────
 function openLogin(){document.getElementById('loginOverlay').classList.remove('hidden');document.getElementById('pwInput').value='';document.getElementById('loginErr').textContent='';}
