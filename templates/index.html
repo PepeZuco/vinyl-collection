@@ -1371,6 +1371,10 @@ let editingId = null;
 let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
+// Whether the cover on screen came from the record rather than this session.
+// A scan may fill an empty cover or replace the photo just taken, but must not
+// overwrite artwork the user already chose for an existing record.
+let coverFromRecord = false;
 let confirmDeleteId = null;
 let currentDetailId = null;
 
@@ -2081,13 +2085,17 @@ function populateCountryList() {
 function countryLabelFromCode(code) {
   if (!code) return '';
   const found = COUNTRIES.find(([c]) => c === code.toUpperCase());
-  return found ? `${found[1]} (${found[0]})` : '';
+  // MusicBrainz knows every ISO code; the picker lists 75. Showing the bare
+  // code beats reporting the country as unread and then blanking it.
+  return found ? `${found[1]} (${found[0]})` : code.toUpperCase();
 }
 
 function countryCodeFromInput(value) {
   if (!value) return '';
   const m = value.match(/\(([A-Za-z]{2})\)\s*$/);
   if (m) return m[1].toUpperCase();
+  // A bare code, as countryLabelFromCode renders anything off the picker list.
+  if (/^[A-Za-z]{2}$/.test(value.trim())) return value.trim().toUpperCase();
   // fallback: exact name match without the "(XX)" suffix typed
   const found = COUNTRIES.find(([,name]) => name.toLowerCase() === value.trim().toLowerCase());
   return found ? found[0] : '';
@@ -2271,10 +2279,11 @@ function deleteNote(idx) {
 }
 
 function openAdd(){
-  editingId=null;myRating=0;wifeRating=0;coverDataUri='';
+  editingId=null;myRating=0;wifeRating=0;coverDataUri='';coverFromRecord=false;
   document.getElementById('formTitle').textContent='add record';
   scanCandidates = [];
   scanWrote = {};
+  scanBase = null;
   setScanSearch('');
   document.getElementById('scanAlternates').style.display = 'none';
   document.getElementById('scanAltList').classList.add('hidden');
@@ -2311,10 +2320,11 @@ function openAdd(){
 function openEdit(id){
   closeDetail();
   const r=records.find(x=>x.id===id);if(!r)return;
-  editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';
+  editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';coverFromRecord=!!r.cover_data;
   document.getElementById('formTitle').textContent='edit record';
   scanCandidates = [];
   scanWrote = {};
+  scanBase = null;
   setScanSearch('');
   document.getElementById('scanAlternates').style.display = 'none';
   document.getElementById('scanAltList').classList.add('hidden');
@@ -2489,6 +2499,7 @@ async function resizeImage(file, maxEdge=1000){
 
 function applyCover(dataUri){
   coverDataUri = dataUri;
+  coverFromRecord = false;
   const preview = document.getElementById('coverPreview');
   preview.src = dataUri;
   preview.style.display = 'block';
@@ -2530,6 +2541,9 @@ let scanToken = 0;
 // record. On the edit path that would silently wipe the record's identity, and
 // update_record persists blanks without complaint.
 let scanWrote = {};
+// Artist/album the current alternates belong to, for rebuilding the search
+// string when the user picks a different one.
+let scanBase = null;
 
 // Editing a field by hand makes the value the user's, so a later scan must no
 // longer treat it as its own to clear. Wired as a loop over the ids rather than
@@ -2537,7 +2551,16 @@ let scanWrote = {};
 // a <select>, where 'change' is the event that always fires.
 ['fArtist','fAlbum','fGenre','fYear','fCountry'].forEach(id=>{
   const el = document.getElementById(id);
-  ['input','change'].forEach(type=>el.addEventListener(type, ()=>{ delete scanWrote[id]; }));
+  // Guarded like setScanBusy does: this runs at top level, so a renamed id
+  // would throw here and take every later definition — init() included — with it.
+  if(!el) return;
+  ['input','change'].forEach(type=>el.addEventListener(type, ()=>{
+    // Not an unconditional delete: 'change' fires on blur whenever the value
+    // differs from what it was at focus, so a field the user typed into and a
+    // scan then overwrote fires one on the way out — dropping ownership of a
+    // value the scan wrote. Only a value that no longer matches is really theirs.
+    if(scanWrote[id] !== el.value) delete scanWrote[id];
+  }));
 });
 
 // Returns whether it actually filled the field, so the caller can tell the
@@ -2551,14 +2574,16 @@ function setScanField(id, value){
     // very field it failed to fill.
     const before = el.value;
     el.value = value;
-    if(el.value){ scanWrote[id] = true; return true; }
+    // Store what was actually written (the browser may normalise it), so the
+    // listener above can tell a real user edit from a spurious change event.
+    if(el.value){ scanWrote[id] = el.value; return true; }
     // The value was rejected, so the field still shows the PREVIOUS album's.
     // Blank it if a scan put it there — showing album A's genre on album B is
     // worse than showing none — but keep what the user typed or openEdit
     // loaded. Either way it is no longer scan-owned.
-    el.value = scanWrote[id] ? '' : before;
+    el.value = (id in scanWrote) ? '' : before;
     delete scanWrote[id];
-  } else if(scanWrote[id]){
+  } else if(id in scanWrote){
     el.value = '';
     delete scanWrote[id];
   }
@@ -2594,11 +2619,15 @@ async function runScan(body){
         headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
       data = await res.json();
     }catch(e){
+      // The fields still hold the last scan's values, but the search string is
+      // this scan's only output — leaving it would point at the wrong album.
+      if(myToken === scanToken) setScanSearch('');
       toast('scan failed — fill the form manually');
       return;
     }
     if(!res.ok){
       const message = (data && data.error) || 'scan failed';
+      if(myToken === scanToken) setScanSearch('');
       if(body.spotify_url) showSpotifyError(message); else toast(message);
       return;
     }
@@ -2626,8 +2655,12 @@ function applyScanResult(data){
   genreSel.value = prevGenre;
   // Array literal, not ||, so every field is still written; we only want to
   // know afterwards whether anything landed.
+  // With multiple artists ticked, fArtist is hidden and submitForm builds the
+  // artist from formArtists instead. Writing it would be invisible and would
+  // never be saved, so it must not be written or counted as filled.
+  const multiArtist = document.getElementById('fMultiArtist').checked;
   const filled = [
-    setScanField('fArtist', data.artist),
+    multiArtist ? false : setScanField('fArtist', data.artist),
     setScanField('fAlbum', data.album_name),
     setScanField('fGenre', data.genre),
   ];
@@ -2663,6 +2696,7 @@ function applyScanResult(data){
   // so it stays put on a poor result — that is when it is all the user has. Only
   // a scan that read neither artist nor album has nothing worth searching for:
   // its string is the bare "vinyl cover" suffix.
+  scanBase = {artist: data.artist || '', album: data.album_name || ''};
   setScanSearch((data.artist || data.album_name) ? data.search_string : '');
 
   closeCoverSheet();
@@ -2711,14 +2745,27 @@ function applyCandidate(c){
   ];
   // The cover is deliberately exempt from the clear rule: a wrong cover is
   // immediately visible, and clearing it would destroy the photo just taken —
-  // which on the photo path is the scan input itself.
-  if(c.cover_data) applyCover(c.cover_data);
+  // which on the photo path is the scan input itself. Overwriting is a
+  // different matter: pasting a Spotify link into an existing record just to
+  // fill its genre must not swap out the sleeve the user photographed.
+  if(c.cover_data && !coverFromRecord) applyCover(c.cover_data);
   return filled.some(Boolean);
 }
 
 function pickCandidate(i){
-  applyCandidate(scanCandidates[i]);
+  const c = scanCandidates[i] || {};
+  applyCandidate(c);
+  // The year is part of the search string, and picking an alternate is exactly
+  // the moment the first guess's year was wrong.
+  setScanSearch(scanSearchString(c.year));
   toggleAlternates();
+}
+
+// Mirrors the server's search_string so a locally-chosen year stays in step.
+function scanSearchString(year){
+  if(!scanBase || (!scanBase.artist && !scanBase.album)) return '';
+  return [scanBase.artist, scanBase.album, year || '', 'vinyl cover']
+    .filter(Boolean).join(' ');
 }
 
 function toggleAlternates(){
