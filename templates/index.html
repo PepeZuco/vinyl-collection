@@ -2488,6 +2488,8 @@ let scanToken = 0;
 // update_record persists blanks without complaint.
 let scanWrote = {};
 
+// Returns whether it actually filled the field, so the caller can tell the
+// user the truth about what the scan managed to read.
 function setScanField(id, value){
   const el = document.getElementById(id);
   if(value){
@@ -2497,11 +2499,13 @@ function setScanField(id, value){
     // very field it failed to fill.
     const before = el.value;
     el.value = value;
-    if(el.value) scanWrote[id] = true; else el.value = before;
+    if(el.value){ scanWrote[id] = true; return true; }
+    el.value = before;
   } else if(scanWrote[id]){
     el.value = '';
     delete scanWrote[id];
   }
+  return false;
 }
 
 function setScanBusy(busy){
@@ -2559,15 +2563,19 @@ function applyScanResult(data){
   const prevGenre = genreSel.value;
   populateGenreSelect();
   genreSel.value = prevGenre;
-  setScanField('fArtist', data.artist);
-  setScanField('fAlbum', data.album_name);
-  setScanField('fGenre', data.genre);
+  // Array literal, not ||, so every field is still written; we only want to
+  // know afterwards whether anything landed.
+  const filled = [
+    setScanField('fArtist', data.artist),
+    setScanField('fAlbum', data.album_name),
+    setScanField('fGenre', data.genre),
+  ];
   document.getElementById('scanAltList').classList.add('hidden');
 
   scanCandidates = data.candidates || [];
   // Always go through applyCandidate, even with no candidates, so a previous
   // scan's year/country get cleared instead of riding along with a new album.
-  applyCandidate(scanCandidates[0] || {});
+  filled.push(applyCandidate(scanCandidates[0] || {}));
 
   const alternates = document.getElementById('scanAlternates');
   if(scanCandidates.length > 1){
@@ -2591,16 +2599,21 @@ function applyScanResult(data){
   }
 
   closeCoverSheet();
-  toast('fields filled — check before saving');
+  toast(filled.some(Boolean)
+    ? 'fields filled — check before saving'
+    : 'nothing readable found — type it in by hand');
 }
 
 function applyCandidate(c){
-  setScanField('fYear', c.year);
-  setScanField('fCountry', c.country ? countryLabelFromCode(c.country) : '');
+  const filled = [
+    setScanField('fYear', c.year),
+    setScanField('fCountry', c.country ? countryLabelFromCode(c.country) : ''),
+  ];
   // The cover is deliberately exempt from the clear rule: a wrong cover is
   // immediately visible, and clearing it would destroy the photo just taken —
   // which on the photo path is the scan input itself.
   if(c.cover_data) applyCover(c.cover_data);
+  return filled.some(Boolean);
 }
 
 function pickCandidate(i){
