@@ -219,7 +219,11 @@ def _sleeve_schema(genres: list[str]) -> dict:
         "properties": {
             "artist": nullable_string,
             "album_name": nullable_string,
-            "genre": {"type": ["string", "null"], "enum": genres},
+            # anyOf, NOT {"type": ["string","null"], "enum": genres}: `type` and
+            # `enum` are ANDed, so null would fail the enum and be unreachable,
+            # forcing the model to invent a genre it was told to omit.
+            "genre": {"anyOf": [{"type": "string", "enum": genres},
+                                {"type": "null"}]},
             "label": nullable_string,
             "catalog_number": nullable_string,
         },
@@ -255,5 +259,11 @@ def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
             ],
         }],
     )
-    text = next(b.text for b in response.content if b.type == "text")
-    return json.loads(text)
+    # output_config.format guarantees valid JSON only when the call succeeds;
+    # truncation or an unexpected response shape must not escape as an opaque
+    # StopIteration or JSONDecodeError.
+    try:
+        text = next(b.text for b in response.content if b.type == "text")
+        return json.loads(text)
+    except (StopIteration, ValueError) as e:
+        raise RuntimeError(f"Could not parse sleeve extraction response: {e}") from e
