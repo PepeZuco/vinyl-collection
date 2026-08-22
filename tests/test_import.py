@@ -90,3 +90,47 @@ def test_upload_ceiling_survives_a_malformed_variable(vinyl_app, monkeypatch, ra
     """
     monkeypatch.setenv("MAX_UPLOAD_MB", raw)
     assert vinyl_app._upload_ceiling_bytes() == expected_mb * 1024 * 1024
+
+
+def _rows(n, prefix="Row"):
+    return [{"artist": f"{prefix} {i}", "album_name": f"Album {i}"} for i in range(n)]
+
+
+def test_import_replaces_the_collection(vinyl_app):
+    """The streaming path round-trips, including across a batch boundary."""
+    app_module = vinyl_app
+    n = vinyl_app._IMPORT_BATCH_ROWS + 7   # force more than one batch
+    with app_module.app.app_context():
+        app_module.import_records_from_csv_rows(iter(_rows(n)))
+        assert app_module.Record.query.count() == n
+
+        # A second import replaces rather than appends.
+        app_module.import_records_from_csv_rows(iter(_rows(3, prefix="Second")))
+        assert app_module.Record.query.count() == 3
+        assert app_module.Record.query.first().artist == "Second 0"
+
+
+def test_a_failed_import_leaves_the_existing_collection_intact(vinyl_app):
+    """Import wipes the table first, so a partial import would be data loss.
+
+    Batching the inserts must not turn one transaction into many: if a row
+    part-way through blows up, the delete has to roll back with it.
+    """
+    app_module = vinyl_app
+    with app_module.app.app_context():
+        app_module.import_records_from_csv_rows(iter(_rows(4, prefix="Original")))
+        assert app_module.Record.query.count() == 4
+
+        def exploding_rows():
+            # Enough rows to cross a batch boundary and actually hit the DB
+            # before the failure, so a per-batch commit would be caught.
+            for row in _rows(vinyl_app._IMPORT_BATCH_ROWS + 2, prefix="New"):
+                yield row
+            raise ValueError("truncated CSV")
+
+        with pytest.raises(ValueError):
+            app_module.import_records_from_csv_rows(exploding_rows())
+        app_module.db.session.rollback()
+
+        assert app_module.Record.query.count() == 4, "the old collection was destroyed"
+        assert app_module.Record.query.first().artist == "Original 0"

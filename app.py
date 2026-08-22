@@ -308,39 +308,67 @@ def export_csv():
     return app.response_class(generate(), mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=vinyl_collection.csv"})
 
-def import_records_from_csv_text(text):
-    reader = csv.DictReader(io.StringIO(text))
+# Rows are inserted in batches so a large restore never holds the whole
+# collection on the heap at once. Covers are base64 data URIs, so a few hundred
+# rows is already tens of MB — this is the knob that bounds it.
+_IMPORT_BATCH_ROWS = 500
+
+
+def _record_mapping(row):
+    """Turn one CSV row into a Record column mapping."""
+    cover = row.get("cover_image_base64","") or row.get("cover_data","")
+    if cover and not cover.startswith("data:"):
+        cover = "data:image/jpeg;base64," + cover
+    cleaned_dates = row.get("cleaned_dates","")
+    if not cleaned_dates and row.get("last_cleaned",""):
+        cleaned_dates = json.dumps([row["last_cleaned"]])
+    return {
+        "artist":      row.get("artist",""),
+        "album_name":  row.get("album_name",""),
+        "year":        row.get("year",""),
+        "genre":       row.get("genre",""),
+        "bought_date": row.get("bought_date",""),
+        "bought_where":row.get("bought_where",""),
+        "bought_by":   row.get("bought_by",""),
+        "my_rating":   float(row.get("my_rating") or 0),
+        "wife_rating": float(row.get("wife_rating") or 0),
+        "have_it":     row.get("have_it","").lower() in ("true","1","yes"),
+        "play_count":  int(row.get("play_count") or 0),
+        "play_dates":  row.get("play_dates",""),
+        "cleaned_dates": cleaned_dates,
+        "cover_data":  cover,
+        "notes":       row.get("notes",""),
+        "country":     (row.get("country","") or "").strip().upper()[:2],
+    }
+
+
+def import_records_from_csv_rows(rows):
+    """Replace the whole collection from an iterable of CSV row dicts.
+
+    Inserted in batches to bound memory, but still ONE transaction: the delete
+    and every batch commit together at the end. A failure part-way therefore
+    rolls back to the existing collection rather than leaving it half-replaced
+    — this wipes the table first, so a partial import would be data loss.
+    """
     Record.query.delete()
     count = 0
-    for row in reader:
-        cover = row.get("cover_image_base64","") or row.get("cover_data","")
-        if cover and not cover.startswith("data:"):
-            cover = "data:image/jpeg;base64," + cover
-        cleaned_dates = row.get("cleaned_dates","")
-        if not cleaned_dates and row.get("last_cleaned",""):
-            cleaned_dates = json.dumps([row["last_cleaned"]])
-        r = Record(
-            artist      = row.get("artist",""),
-            album_name  = row.get("album_name",""),
-            year        = row.get("year",""),
-            genre       = row.get("genre",""),
-            bought_date = row.get("bought_date",""),
-            bought_where= row.get("bought_where",""),
-            bought_by   = row.get("bought_by",""),
-            my_rating   = float(row.get("my_rating") or 0),
-            wife_rating = float(row.get("wife_rating") or 0),
-            have_it     = row.get("have_it","").lower() in ("true","1","yes"),
-            play_count  = int(row.get("play_count") or 0),
-            play_dates  = row.get("play_dates",""),
-            cleaned_dates = cleaned_dates,
-            cover_data  = cover,
-            notes       = row.get("notes",""),
-            country     = (row.get("country","") or "").strip().upper()[:2],
-        )
-        db.session.add(r)
+    batch = []
+    for row in rows:
+        batch.append(_record_mapping(row))
         count += 1
+        if len(batch) >= _IMPORT_BATCH_ROWS:
+            db.session.execute(db.insert(Record), batch)
+            batch.clear()
+    if batch:
+        db.session.execute(db.insert(Record), batch)
     db.session.commit()
     return count
+
+
+def import_records_from_csv_text(text):
+    """Import from a CSV already held in memory. Prefer the streaming path."""
+    return import_records_from_csv_rows(csv.DictReader(io.StringIO(text)))
+
 
 @app.route("/api/import", methods=["POST"])
 @require_auth
@@ -349,8 +377,13 @@ def import_csv():
     if not file:
         return jsonify({"error": "No file"}), 400
     try:
-        text = file.read().decode("utf-8", errors="replace")
-        count = import_records_from_csv_text(text)
+        # Read the upload as a stream. Werkzeug spools anything large to a temp
+        # file, so this stays off the heap; file.read().decode() used to make
+        # three full-size copies of the CSV before parsing even began, which is
+        # most of why a 120MB import peaked near 950MB of RSS.
+        stream = io.TextIOWrapper(file.stream, encoding="utf-8",
+                                  errors="replace", newline="")
+        count = import_records_from_csv_rows(csv.DictReader(stream))
         return jsonify({"imported": count})
     except Exception as e:
         db.session.rollback()
