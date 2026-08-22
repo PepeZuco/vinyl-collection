@@ -2062,6 +2062,19 @@ And directly inside the top of the form's `modal-body`:
 </div>
 ```
 
+- [ ] **Step 1b: Give the Spotify submit button an id**
+
+`setScanBusy` in the next step disables the submit button while a scan runs,
+but Task 10's button has no id. Add one to the existing arrow button in the
+Spotify row:
+
+```html
+<button type="button" class="btn btn-sm" id="spotifySubmitBtn" onclick="submitSpotifyUrl()">
+```
+
+Change nothing else about that row — its `gap:12px` values are Spotify's
+required exclusion zone.
+
 - [ ] **Step 2: Replace both stubs with the real implementation**
 
 Delete the two stub functions (`function scanFromImage(dataUri){}` and
@@ -2070,25 +2083,43 @@ Delete the two stub functions (`function scanFromImage(dataUri){}` and
 ```js
 // ── scan: autofill from photo or Spotify link ──────────────────────────────
 let scanCandidates = [];
+let scanInFlight = false;
+
+function setScanBusy(busy){
+  scanInFlight = busy;
+  const input = document.getElementById('spotifyUrlInput');
+  const btn = document.getElementById('spotifySubmitBtn');
+  if(input) input.disabled = busy;
+  if(btn) btn.disabled = busy;
+}
 
 async function runScan(body){
+  // Three triggers reach here — paste-autosubmit, Enter, and the arrow button.
+  // Without this guard, paste-then-Enter fires two concurrent /api/scan calls,
+  // and every call costs real API credits.
+  if(scanInFlight) return;
+  setScanBusy(true);
   showSpotifyError('');
   toast('scanning…');
-  let res, data;
   try{
-    res = await fetch('/api/scan', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-    data = await res.json();
-  }catch(e){
-    toast('scan failed — fill the form manually');
-    return;
+    let res, data;
+    try{
+      res = await fetch('/api/scan', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      data = await res.json();
+    }catch(e){
+      toast('scan failed — fill the form manually');
+      return;
+    }
+    if(!res.ok){
+      const message = (data && data.error) || 'scan failed';
+      if(body.spotify_url) showSpotifyError(message); else toast(message);
+      return;
+    }
+    applyScanResult(data);
+  } finally {
+    setScanBusy(false);
   }
-  if(!res.ok){
-    const message = (data && data.error) || 'scan failed';
-    if(body.spotify_url) showSpotifyError(message); else toast(message);
-    return;
-  }
-  applyScanResult(data);
 }
 
 function scanFromImage(dataUri){ runScan({image:dataUri}); }
