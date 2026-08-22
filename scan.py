@@ -267,3 +267,48 @@ def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
         return json.loads(text)
     except (StopIteration, ValueError) as e:
         raise RuntimeError(f"Could not parse sleeve extraction response: {e}") from e
+
+
+def _genre_schema(genres: list[str]) -> dict:
+    """JSON schema for classify_genre's single-field response.
+
+    anyOf, NOT {"type": ["string","null"], "enum": genres}: `type` and `enum`
+    are ANDed, so null would fail the enum and be unreachable, forcing the
+    model to invent a genre it was told to omit.
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "genre": {"anyOf": [{"type": "string", "enum": genres},
+                                 {"type": "null"}]},
+        },
+        "required": ["genre"],
+        "additionalProperties": False,
+    }
+
+
+def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
+    """Pick the best-fitting genre from the collection's own vocabulary."""
+    if not genres:
+        return None
+    try:
+        client = _anthropic_client()
+        response = client.messages.create(
+            model=GENRE_MODEL,
+            max_tokens=256,
+            system="Classify the record into exactly one of the supplied "
+                   "genres. Return null if none fit.",
+            output_config={
+                "effort": "low",
+                "format": {"type": "json_schema", "schema": _genre_schema(genres)},
+            },
+            messages=[{"role": "user", "content": f"Artist: {artist}\nAlbum: {album}"}],
+        )
+        text = next(b.text for b in response.content if b.type == "text")
+        genre = json.loads(text).get("genre")
+    except Exception:
+        return None
+    # Second line of defence: even though the schema constrains the model's
+    # output, don't trust it blindly — only ever return a genre that is
+    # actually in the caller's vocabulary.
+    return genre if genre in genres else None
