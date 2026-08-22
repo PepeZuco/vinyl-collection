@@ -1,6 +1,6 @@
 # Photo-scan autofill — manual verification
 
-Everything in this feature that a test can reach is covered by the 70 automated
+Everything in this feature that a test can reach is covered by the 90 automated
 tests. What follows is what they **cannot** reach: real cameras, real browser
 permission prompts, real network calls, and how the layout behaves on a phone.
 Work through it once on a desktop browser and once on a real phone.
@@ -76,6 +76,10 @@ Also try:
 - An album where the first guess is wrong → the **"not this one? (n)"** link
   should appear and offer alternates with year and country.
 - An album you **already own** → the duplicate warning must name the record.
+- A file the browser **cannot decode** — a `.heic` straight off an iPhone is the
+  easy one, and it sails through the file picker on desktop Chrome. You should
+  get *"could not read that image — try a jpg or png"*. A silent no-op here is a
+  bug: it just looks like the click didn't register.
 
 ---
 
@@ -96,6 +100,19 @@ Then the subtler one:
    update, **genre keeps the record's existing value**.
 6. On the **add** form, scan album A, then scan album B → none of album A's
    year, country or genre may survive into album B.
+
+And the two that the last round of fixes was about — a scan must never take back
+a field **you** touched:
+
+7. Scan a sleeve, then **correct the artist by hand** (the scan reads "Sade",
+   you make it "Sade Adu"). Now scan a *second*, unreadable photo. Your
+   correction must **still be there** — the second scan may clear what the first
+   scan filled, never what you typed over it.
+8. Same again with **genre**: let the scan fill it, pick a different genre from
+   the dropdown yourself, then run a scan that reads no genre. Your choice stays.
+9. Scan a sleeve, tick **multiple artists**, fill in the rows, untick it again
+   (which rebuilds the artist field from your rows). A later scan that reads no
+   artist must not wipe that rebuilt value.
 
 ---
 
@@ -118,11 +135,15 @@ Then the subtler one:
 
 ## 5. Busy state and races
 
-1. Start a scan and, while *"scanning…"* is showing, try **Choose file**,
-   **Take photo**, and the Spotify field. All should look visibly greyed out
-   and do nothing.
+1. Start a scan. A small spinner and *"scanning… this can take up to a minute"*
+   must appear under the cover and **stay** for the whole scan — a scan runs far
+   longer than a toast lives, so if it vanishes after a couple of seconds the
+   indicator is wrong. While it shows, try **Choose file**, **Take photo**, and
+   the Spotify field: all should look visibly greyed out and do nothing.
 2. Start a scan → **close the form** → open **add record** again. Every scan
-   control must be usable immediately, not stuck greyed out.
+   control must be usable immediately, not stuck greyed out, and the spinner
+   must be **gone**. Let a scan fail too (see §8) — the spinner must clear on
+   the error path as well, not hang there forever.
 3. Start a scan on record A → close the form → open a **different** record →
    let the first scan finish. **Nothing** from record A may appear in it.
 4. On a slow connection, pick a **large** photo, then close the form and open a
@@ -131,7 +152,29 @@ Then the subtler one:
 
 ---
 
-## 6. Layout
+## 6. The search-string copy button
+
+This is the fallback for the scans that read the least — when the app can't pin
+the record down, it hands you the search terms so you can go look yourself.
+
+1. Scan a sleeve → a **search the web for this cover** row appears with text
+   like *"Bill Withers Live at Carnegie Hall 1973 vinyl cover"*.
+2. Hit **copy** → the button flips to *"copied"* for a moment, and pasting
+   elsewhere gives you that string.
+3. The row must sit on its **own full-width row**, not squeezed into one column.
+4. Scan a **completely unreadable** photo → the row should **not** appear; there
+   would be nothing to search for.
+5. Open a different record → the row must be **gone**, not showing the previous
+   record's search string.
+6. Check it in **both themes**.
+
+> If you're testing over plain `http://` on the LAN, the clipboard API is
+> unavailable there too. The button falls back to the older copy path, and if
+> even that fails it leaves the text selected and says so — that's intended.
+
+---
+
+## 7. Layout
 
 - Narrow the desktop browser to about **360px** wide. The form must not scroll
   sideways, and the *"not this one?"* link must sit on its **own full-width
@@ -141,7 +184,7 @@ Then the subtler one:
 
 ---
 
-## 7. Graceful degradation
+## 8. Graceful degradation
 
 With `ANTHROPIC_API_KEY` **unset** (easiest to check locally):
 
