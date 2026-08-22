@@ -22,20 +22,36 @@ def vinyl_app(tmp_path_factory):
     """A fresh app bound to a throwaway sqlite file.
 
     Import wipes the table (`Record.query.delete()`), so this must never point
-    at the real instance/vinyl.db.
+    at a real collection. Setting DATA_DIR is NOT enough on its own: app.py
+    reads `os.environ.get("DATABASE_URL", f"sqlite:///{DATA_DIR}/vinyl.db")`,
+    so a DATABASE_URL in the environment wins outright and the padding rows
+    land in whatever it names. Railway injects exactly that variable, and
+    `railway run pytest` is a normal thing to type. So DATABASE_URL is removed
+    for the duration and the resolved URI is checked before anything touches
+    the database.
     """
-    previous = os.environ.get("DATA_DIR")
-    os.environ["DATA_DIR"] = str(tmp_path_factory.mktemp("data"))
+    data_dir = tmp_path_factory.mktemp("data")
+    previous = {name: os.environ.get(name) for name in ("DATA_DIR", "DATABASE_URL")}
+    os.environ["DATA_DIR"] = str(data_dir)
+    os.environ.pop("DATABASE_URL", None)
     try:
         module = importlib.reload(importlib.import_module("app"))
+        uri = module.app.config["SQLALCHEMY_DATABASE_URI"]
+        # Refuse to run rather than delete someone's records.
+        assert uri == f"sqlite:///{data_dir}/vinyl.db", (
+            f"test database escaped the tmp dir, refusing to wipe it: {uri}")
         with module.app.app_context():
             module.db.create_all()
         yield module
     finally:
-        if previous is None:
-            os.environ.pop("DATA_DIR", None)
-        else:
-            os.environ["DATA_DIR"] = previous
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        # importlib.reload rebinds sys.modules["app"] in place, so without this
+        # every later test module keeps the throwaway database.
+        importlib.reload(importlib.import_module("app"))
 
 
 @pytest.fixture
@@ -56,3 +72,21 @@ def test_import_accepts_a_csv_larger_than_32_mib(client):
 
     assert resp.status_code == 200, f"upload of {len(payload)} bytes rejected with {resp.status_code}"
     assert resp.get_json()["imported"] == rows
+
+
+@pytest.mark.parametrize("raw,expected_mb", [
+    ("64", 64),
+    ("", 128),        # unset-but-present, e.g. an empty Railway variable
+    ("128MB", 128),   # the unit typo people actually make
+    ("abc", 128),
+    ("0", 1),         # a ceiling of zero would reject every upload
+])
+def test_upload_ceiling_survives_a_malformed_variable(vinyl_app, monkeypatch, raw, expected_mb):
+    """A bad MAX_UPLOAD_MB must not raise.
+
+    _upload_ceiling_bytes() runs at import time, so a typo in the deployed
+    variable would take the whole app down on boot rather than showing up as a
+    legible error.
+    """
+    monkeypatch.setenv("MAX_UPLOAD_MB", raw)
+    assert vinyl_app._upload_ceiling_bytes() == expected_mb * 1024 * 1024
