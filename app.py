@@ -6,6 +6,8 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 from functools import wraps
 
+import scan
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 
@@ -189,6 +191,73 @@ def delete_record(rid):
     db.session.delete(r)
     db.session.commit()
     return jsonify({"ok": True})
+
+# ── scan (photo / Spotify autofill) ───────────────────────────────────────────
+
+@app.route("/api/scan", methods=["POST"])
+@require_auth
+def scan_record():
+    d = request.get_json(silent=True) or {}
+    image = d.get("image")
+    spotify_url = d.get("spotify_url")
+    if bool(image) == bool(spotify_url):
+        return jsonify({"error": "Provide exactly one of image or spotify_url"}), 400
+
+    # Load only the four columns needed. Record.query.all() would pull every
+    # cover_data blob — ~31MB across the collection — on every scan.
+    rows = db.session.query(
+        Record.id, Record.artist, Record.album_name, Record.genre
+    ).all()
+    genres = sorted({r.genre for r in rows if r.genre})
+
+    try:
+        if image:
+            source = "photo"
+            fields = scan.extract_from_image(image, genres)
+            spotify_image = None
+        else:
+            source = "spotify"
+            resolved = scan.extract_from_spotify(spotify_url)
+            spotify_image = resolved.get("image_url")
+            fields = {
+                "artist": resolved["artist"],
+                "album_name": resolved["album_name"],
+                "genre": scan.classify_genre(
+                    resolved["artist"], resolved["album_name"], genres),
+                "label": None,
+                "catalog_number": None,
+            }
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except RuntimeError as e:
+        message = str(e)
+        status = 503 if "not set" in message else 502
+        return jsonify({"error": message}), status
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+    artist = fields.get("artist") or ""
+    album = fields.get("album_name") or ""
+
+    candidates = scan.lookup_musicbrainz(artist, album)
+    for candidate in candidates:
+        candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
+
+    year = candidates[0]["year"] if candidates else ""
+    existing = [{"id": r.id, "artist": r.artist or "",
+                 "album_name": r.album_name or ""} for r in rows]
+    duplicate = scan.find_duplicate(artist, album, existing)
+
+    return jsonify({
+        "source": source,
+        "artist": artist,
+        "album_name": album,
+        "genre": fields.get("genre") or "",
+        "candidates": candidates,
+        "duplicate_of": {"id": duplicate["id"], "artist": duplicate["artist"],
+                         "album_name": duplicate["album_name"]} if duplicate else None,
+        "search_string": " ".join(p for p in [artist, album, year, "vinyl cover"] if p),
+    })
 
 # ── CSV import / export ───────────────────────────────────────────────────────
 
