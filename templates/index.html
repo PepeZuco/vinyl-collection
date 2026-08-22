@@ -19,14 +19,14 @@ html,body{touch-action:pan-x pan-y}
 
 [data-theme="dark"]{
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
-  --text:#e8e8e0;--muted:#555;--accent:#F5C518;--danger:#c0392b;
+  --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#F5C518;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
   --bg:#f4f2ee;--surface:#ffffff;--card:#ffffff;--border:#ddd9d0;
-  --text:#1a1a18;--muted:#999;--accent:#a07820;--danger:#c0392b;
+  --text:#1a1a18;--muted:#999;--label:#6b6b63;--accent:#a07820;--danger:#c0392b;
   --card-hover:#fafaf8;--search-bg:#ffffff;
   --sh-gray:rgba(0,0,0,0.18);
   --toggle-icon:'☾'
@@ -409,30 +409,89 @@ select option{background:var(--surface);color:var(--text)}
 
 /* form */
 .form-group{margin-bottom:12px}
-.form-group label{font-size:10px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em}
-.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-size:13px;outline:none;font-family:var(--font);transition:background .2s,color .2s}
-.form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+/* Captions carry --label, not --muted: at this size --muted is ~2.5:1 on the
+   modal surface in dark mode, which is unreadable rather than merely subtle. */
+.form-group label{font-size:11px;font-weight:600;color:var(--label);display:flex;align-items:center;gap:5px;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.form-group label i{font-size:13px;opacity:.9}
+.form-group label .hint{text-transform:none;letter-spacing:0;font-weight:400;opacity:.6;font-size:10.5px}
+.form-group input,.form-group select,.form-group textarea{width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:9px 10px;font-size:13.5px;outline:none;font-family:var(--font);transition:background .2s,color .2s,border-color .12s}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
 .form-group select option{background:var(--surface)}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.rating-row{display:flex;gap:3px}
-.rstar{font-size:20px;cursor:pointer;color:var(--border);transition:color .1s;line-height:1}
-[data-theme="light"] .rstar{color:#ddd}
-.rstar.on{color:var(--accent)}
-.cover-drop{border:1px dashed var(--border);border-radius:var(--radius-sm);padding:18px;text-align:center;cursor:pointer;position:relative;transition:border-color .12s}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* input with a leading icon — the icon sits inside the box, so the padding on
+   .has-icon has to clear it */
+.field{position:relative;display:flex;align-items:center}
+.field > i{position:absolute;left:10px;font-size:15px;color:var(--label);pointer-events:none;z-index:1}
+.form-group .field input,.form-group .field select{padding-left:32px}
+
+/* grouped section card */
+.form-section{border:1px solid var(--border);border-radius:9px;background:var(--bg);overflow:hidden;margin-bottom:12px}
+.form-section > header{display:flex;align-items:center;gap:7px;padding:9px 13px;background:var(--card);border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--label)}
+.form-section > header i{font-size:13px;color:var(--accent)}
+.form-section > header .count{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500;opacity:.6}
+.form-section .sec-body{padding:13px}
+.form-section .form-group:last-child{margin-bottom:0}
+
+/* ratings — segmented bars in each person's colour, mirroring .dm-rate in the
+   detail drawer so a record reads the same in both views */
+.rating-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.rating-row .who{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;width:58px;flex-shrink:0;display:flex;align-items:center;gap:5px}
+.rating-row.pepe .who{color:#F5C518}
+.rating-row.jenni .who{color:#D4608A}
+.rating-row .segs{display:flex;gap:4px;flex:1}
+.rating-row .segs button{flex:1;height:14px;padding:0;border:none;border-radius:3px;background:var(--border);cursor:pointer;transition:background .12s,box-shadow .12s}
+.rating-row.pepe .segs button.on{background:#F5C518;box-shadow:0 0 6px rgba(245,197,24,.5)}
+.rating-row.jenni .segs button.on{background:#D4608A;box-shadow:0 0 6px rgba(212,96,138,.5)}
+.rating-row .rv{font-size:12px;font-weight:700;width:30px;text-align:right;font-variant-numeric:tabular-nums;flex-shrink:0}
+.rating-row.pepe .rv{color:#F5C518}
+.rating-row.jenni .rv{color:#D4608A}
+.rating-row .clear{background:none;border:none;color:var(--label);cursor:pointer;font-size:13px;padding:2px;display:flex;flex-shrink:0}
+.rating-row .clear:hover{color:var(--danger)}
+
+/* buyer — the collection only has Pepe / both / Jenni, so it is a choice, not
+   free text. Values written back match what the rest of the app parses. */
+.buyer-seg{display:flex;gap:6px}
+.buyer-seg button{flex:1;height:36px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--label);font-size:12.5px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .12s}
+.buyer-seg button i{font-size:14px}
+.buyer-seg button:hover{border-color:var(--label)}
+.buyer-seg button.on[data-buyer="pepe"]{border-color:#F5C518;color:#F5C518;background:rgba(245,197,24,.12)}
+.buyer-seg button.on[data-buyer="both"]{border-color:#d0a070;color:#c98f56;background:rgba(208,160,112,.12)}
+[data-theme="dark"] .buyer-seg button.on[data-buyer="both"]{color:#e0a878}
+.buyer-seg button.on[data-buyer="jenni"]{border-color:#D4608A;color:#D4608A;background:rgba(212,96,138,.12)}
+
+/* owned / wishlist — replaces a checkbox whose label was a negation
+   ("uncheck = wishlist"); green and purple are the app's existing owned and
+   wishlist colours */
+.own-switch{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--card)}
+.own-switch button{flex:1;height:42px;border:none;background:none;color:var(--label);font-size:12.5px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .12s}
+.own-switch button i{font-size:16px}
+.own-switch button.on[data-own="yes"]{background:rgba(95,191,122,.14);color:#5FBF7A;box-shadow:inset 0 -2px 0 #5FBF7A}
+.own-switch button.on[data-own="no"]{background:rgba(155,127,212,.14);color:#9B7FD4;box-shadow:inset 0 -2px 0 #9B7FD4}
+
+/* scan / Spotify — promoted out of the cover action sheet, where they were
+   only reachable by knowing to click the cover first */
+.scan-actions{display:flex;gap:6px;margin-top:8px}
+.scan-actions button{flex:1;height:34px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .12s}
+.scan-actions button.scan-ai{border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.scan-actions button.scan-sp{border-color:rgba(30,215,96,.4);color:#1DB954;background:rgba(30,215,96,.07)}
+.scan-actions button:disabled{opacity:.45;cursor:not-allowed}
+
+.cover-drop{border:1px dashed var(--border);border-radius:9px;padding:18px;text-align:center;cursor:pointer;position:relative;transition:border-color .12s;background:var(--card)}
 .cover-drop:hover{border-color:var(--accent)}
 .cover-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .cover-preview{width:100%;max-height:130px;object-fit:cover;border-radius:var(--radius-sm);margin-top:8px;display:block}
 .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
-.check-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent)}
-.form-group .check-row label{font-size:13px;text-transform:none;letter-spacing:0;margin-bottom:0;display:inline;color:var(--text)}
+.check-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent)}
+.form-group .check-row label{font-size:12.5px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:0;display:inline;color:var(--label)}
 
 /* form — split layout: cover left, fields right (mirrors detail-layout) */
-.form-layout{display:grid;grid-template-columns:340px 1fr;gap:24px}
+.form-layout{display:grid;grid-template-columns:330px 1fr;gap:20px;align-items:start}
 @media(max-width:760px){.form-layout{grid-template-columns:1fr}}
 .form-cover-col{display:flex;flex-direction:column}
 .form-info-col{display:flex;flex-direction:column;min-width:0}
-.form-cover-col .cover-drop{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px}
-.form-cover-col .cover-preview{max-height:none;flex:1;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:var(--radius-sm)}
+.form-cover-col .cover-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px}
+.form-cover-col .cover-preview{max-height:none;flex:1;width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:8px}
 .form-cover-col .cover-drop{position:relative;overflow:hidden}
 
 /* empty */
@@ -733,7 +792,7 @@ select option{background:var(--surface);color:var(--text)}
 .notes-add-row input[type=date]:focus{border-color:var(--accent)}
 .notes-list{display:flex;flex-direction:column;gap:8px}
 .note-entry{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;position:relative}
-.note-entry-date{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:600}
+.note-entry-date{font-size:10px;color:var(--label);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:700}
 .note-entry-body{font-size:12px;line-height:1.6;color:var(--text)}
 .note-entry-body p{margin-bottom:4px}
 .note-delete{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1}
@@ -743,14 +802,52 @@ select option{background:var(--surface);color:var(--text)}
 .playdates-section{display:flex;flex-direction:column;gap:8px}
 .playdates-list{display:flex;flex-wrap:wrap;gap:8px}
 .playdates-list:empty{display:none}
-.playdate-row{display:flex;align-items:center;gap:4px;background:var(--card);
-  border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 4px 4px 8px}
+/* one pill per date: a wrapping row of chips reads as a set of events, where
+   the old full-width stacked rows read as a form to fill in */
+.playdate-row{display:inline-flex;align-items:center;gap:6px;background:var(--card);
+  border:1px solid var(--border);border-radius:999px;padding:4px 6px 4px 11px}
+.playdate-row .dot{width:6px;height:6px;border-radius:50%;background:#5FBF7A;flex-shrink:0}
+.playdate-row.cleaned .dot{background:#4AA3C4}
 .playdate-row input[type=date]{background:transparent;color:var(--text);border:none;
-  font-size:13px;outline:none;font-family:var(--font);padding:2px 0;width:130px}
-.playdate-delete{background:transparent;border:none;color:var(--muted);cursor:pointer;
-  font-size:13px;padding:3px 4px;border-radius:3px;line-height:1;display:flex}
+  font-size:12.5px;outline:none;font-family:var(--font);padding:2px 0;width:118px;
+  font-variant-numeric:tabular-nums}
+.playdate-delete{background:transparent;border:none;color:var(--label);cursor:pointer;
+  font-size:13px;padding:3px;border-radius:50%;line-height:1;display:flex}
 .playdate-delete:hover{color:var(--danger)}
-.playdates-empty{font-size:12px;color:var(--muted);padding:2px 0}
+.playdates-empty{font-size:12px;color:var(--label);padding:2px 0}
+.playdate-add{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;
+  border-radius:999px;border:1px dashed var(--border);background:none;color:var(--label);
+  font-size:12px;font-family:var(--font);font-weight:600;cursor:pointer;transition:all .12s}
+.playdate-add:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── form on a phone ───────────────────────────────────────────────────────
+   The form had no mobile rules at all: it rendered as the desktop's floating
+   92vh box, so `save` sat below the fold behind the whole scroll. Full screen,
+   pinned actions, and 16px inputs — under 16px iOS zooms the page on focus. */
+@media(max-width:760px){
+  #formOverlay{padding:0;align-items:stretch}
+  #formOverlay .modal.modal-wide{
+    max-width:none;width:100%;height:100%;max-height:100%;
+    border-radius:0;border:none;display:flex;flex-direction:column;overflow:hidden;
+  }
+  #formOverlay .modal-head{flex-shrink:0}
+  #formOverlay .modal-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px}
+  #formOverlay .modal-foot{flex-shrink:0;padding:11px 14px;gap:8px}
+  #formOverlay .modal-foot .btn{flex:1;height:46px;font-size:14px;font-weight:700;justify-content:center}
+  #formOverlay .modal-foot .btn-primary{background:var(--accent);border-color:var(--accent);color:#111}
+  #formOverlay .form-group input,#formOverlay .form-group select,
+  #formOverlay .form-group textarea,#formOverlay .playdate-row input[type=date],
+  #formOverlay .artist-row input[type=text]{font-size:16px}
+  #formOverlay .form-group .field input,#formOverlay .form-group .field select{padding-left:34px}
+  #formOverlay .buyer-seg button,#formOverlay .own-switch button{height:46px;font-size:13px}
+  #formOverlay .scan-actions button{height:42px;font-size:13px}
+  #formOverlay .notes-add-row{grid-template-columns:1fr}
+  #formOverlay .notes-add-row .btn{width:100%;justify-content:center}
+  #formOverlay .rating-row .segs button{height:20px}
+  #formOverlay .playdate-add{height:38px}
+  #formOverlay .playdate-row{padding:6px 8px 6px 13px}
+  #formOverlay .playdate-delete{padding:5px}
+}
 
 /* ── multi-artist editor in form ───────────────────────────────────────────── */
 .artists-list{display:flex;flex-direction:column;gap:6px}
@@ -1152,21 +1249,34 @@ select option{background:var(--surface);color:var(--text)}
            border:1px solid var(--danger);border-radius:var(--radius);font-size:13px">
       </div>
       <div class="form-layout">
+
+        <!-- left: how the record got here — cover, scan, status, purchase -->
         <div class="form-cover-col">
           <div class="cover-drop" id="coverDrop" onclick="openCoverSheet()">
             <div id="coverDropInner">
-              <i class="ti ti-photo" style="font-size:24px;opacity:.2;display:block;margin-bottom:4px"></i>
-              <span style="font-size:12px;color:var(--muted)">click to add album cover</span>
+              <i class="ti ti-photo" style="font-size:26px;opacity:.3;display:block;margin-bottom:6px"></i>
+              <span style="font-size:12px;color:var(--label)">click to add album cover</span>
             </div>
             <img id="coverPreview" class="cover-preview" style="display:none">
           </div>
           <input type="file" accept="image/*" id="coverInput" style="display:none">
           <input type="file" accept="image/*" capture="environment" id="coverCaptureInput" style="display:none">
 
+          <!-- Scanning used to be reachable only by knowing to click the cover
+               first. These are the same action sheet, just visible. -->
+          <div class="scan-actions">
+            <button type="button" class="scan-ai" id="scanPhotoBtn" onclick="openScanSheet(false)">
+              <i class="ti ti-sparkles"></i> Scan photo
+            </button>
+            <button type="button" class="scan-sp" id="scanSpotifyBtn" onclick="openScanSheet(true)">
+              <i class="ti ti-brand-spotify"></i> Spotify
+            </button>
+          </div>
+
           <!-- A scan is a vision call, up to four rate-limited MusicBrainz
                lookups and up to three cover fetches — far longer than a toast
                lives, so its progress has to stay on screen for the duration. -->
-          <div id="scanStatus" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--muted)">
+          <div id="scanStatus" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--label)">
             <span class="scan-spinner"></span>
             <span>scanning… this can take up to a minute</span>
           </div>
@@ -1196,89 +1306,148 @@ select option{background:var(--surface);color:var(--text)}
               <span id="spotifyUrlErr" style="font-size:12px;color:var(--danger);display:none"></span>
             </div>
           </div>
+
+          <div class="form-group" style="margin-top:16px">
+            <label><i class="ti ti-status-change"></i> Status</label>
+            <!-- was a checkbox labelled "in my collection (uncheck = wishlist)":
+                 a negation, and an unticked box read the same whether the record
+                 was wanted or the field was simply never touched -->
+            <div class="own-switch" id="ownSwitch">
+              <button type="button" data-own="yes" onclick="setHaveIt(true)"><i class="ti ti-disc"></i> In collection</button>
+              <button type="button" data-own="no" onclick="setHaveIt(false)"><i class="ti ti-shopping-cart"></i> Wishlist</button>
+            </div>
+            <input type="checkbox" id="fHaveIt" checked hidden style="display:none">
+          </div>
+
+          <div class="form-section" style="margin-bottom:0">
+            <header><i class="ti ti-shopping-bag"></i> The purchase</header>
+            <div class="sec-body">
+              <div class="form-group">
+                <label><i class="ti ti-calendar-event"></i> Bought on</label>
+                <div class="field"><i class="ti ti-calendar-event"></i><input id="fDate" type="date"></div>
+              </div>
+              <div class="form-group">
+                <label><i class="ti ti-map-pin"></i> Bought at</label>
+                <div class="field"><i class="ti ti-map-pin"></i><input id="fWhere" list="whereList" placeholder="store / city" autocomplete="off"></div>
+                <datalist id="whereList"></datalist>
+              </div>
+              <div class="form-group">
+                <label><i class="ti ti-users"></i> Bought by</label>
+                <div class="buyer-seg" id="buyerSeg">
+                  <button type="button" data-buyer="pepe"  onclick="setBuyer('pepe')"><i class="ti ti-user"></i> Pepe</button>
+                  <button type="button" data-buyer="both"  onclick="setBuyer('both')"><i class="ti ti-users"></i> Both</button>
+                  <button type="button" data-buyer="jenni" onclick="setBuyer('jenni')"><i class="ti ti-user"></i> Jenni</button>
+                </div>
+                <input id="fBuyer" hidden style="display:none">
+              </div>
+            </div>
+          </div>
         </div>
+
+        <!-- right: the record itself, then what the two of you make of it -->
         <div class="form-info-col">
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Artist</label>
-              <input id="fArtist" placeholder="artist name">
-              <div class="check-row" style="margin-top:6px">
-                <input type="checkbox" id="fMultiArtist" onchange="toggleMultiArtist()">
-                <label for="fMultiArtist">multiple artists (e.g. compilation)</label>
+          <div class="form-section">
+            <header><i class="ti ti-disc"></i> The record</header>
+            <div class="sec-body">
+              <div class="form-grid">
+                <div class="form-group" id="fArtistGroup">
+                  <label><i class="ti ti-microphone-2"></i> Artist</label>
+                  <div class="field"><i class="ti ti-microphone-2"></i><input id="fArtist" placeholder="artist name"></div>
+                </div>
+                <div class="form-group">
+                  <label><i class="ti ti-vinyl"></i> Album name</label>
+                  <div class="field"><i class="ti ti-vinyl"></i><input id="fAlbum" placeholder="album title"></div>
+                </div>
+                <div class="form-group" id="fArtistsBlock" style="display:none;grid-column:1/-1">
+                  <label><i class="ti ti-users-group"></i> Artists</label>
+                  <div class="artists-list" id="fArtistsList"></div>
+                  <button type="button" class="btn btn-sm" id="fAddArtist" style="margin-top:6px" onclick="addArtistRow()"><i class="ti ti-plus"></i> add artist</button>
+                </div>
+                <div id="scanAlternates" style="display:none;margin-top:4px;grid-column:1/-1">
+                  <a href="#" style="font-size:12px;color:var(--accent)" onclick="event.preventDefault();toggleAlternates()">
+                    not this one? (<span id="scanAltCount">0</span>)
+                  </a>
+                  <div id="scanAltList" class="cover-sheet hidden" style="margin-top:6px"></div>
+                </div>
+                <!-- The web-search fallback for whatever the vision call and
+                     MusicBrainz between them could not pin down. -->
+                <div class="form-group" id="scanSearchRow" style="display:none;margin-top:4px;grid-column:1/-1">
+                  <label><i class="ti ti-world-search"></i> Search the web for this cover</label>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <input id="scanSearchText" readonly onclick="this.select()" style="flex:1;min-width:0">
+                    <button type="button" class="btn btn-sm" id="scanSearchCopyBtn" onclick="copyScanSearch()"><i class="ti ti-copy"></i> copy</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label><i class="ti ti-calendar"></i> Year</label>
+                  <div class="field"><i class="ti ti-calendar"></i><input id="fYear" type="number" placeholder="1975"></div>
+                </div>
+                <div class="form-group">
+                  <label><i class="ti ti-tag"></i> Genre</label>
+                  <div class="field"><i class="ti ti-tag"></i>
+                    <select id="fGenre"><option value="">select genre</option></select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label><i class="ti ti-world"></i> Country</label>
+                  <div class="field"><i class="ti ti-world"></i><input id="fCountry" list="countryList" placeholder="type to search…" autocomplete="off"></div>
+                  <datalist id="countryList"></datalist>
+                </div>
+                <div class="form-group">
+                  <label><i class="ti ti-player-play"></i> Play count</label>
+                  <div class="field"><i class="ti ti-player-play"></i><input id="fPlays" type="number" min="0" value="0"></div>
+                </div>
+                <div class="form-group" style="grid-column:1/-1;margin-bottom:0">
+                  <div class="check-row">
+                    <input type="checkbox" id="fMultiArtist" onchange="toggleMultiArtist()">
+                    <label for="fMultiArtist">multiple artists (e.g. compilation)</label>
+                  </div>
+                </div>
               </div>
-              <div class="artists-list" id="fArtistsList" style="display:none"></div>
-              <button type="button" class="btn btn-sm" id="fAddArtist" style="margin-top:6px;display:none" onclick="addArtistRow()"><i class="ti ti-plus"></i> add artist</button>
-            </div>
-            <div class="form-group"><label>Album name</label><input id="fAlbum" placeholder="album title"></div>
-            <div id="scanAlternates" style="display:none;margin-top:4px;grid-column:1/-1">
-              <a href="#" style="font-size:12px;color:var(--accent)" onclick="event.preventDefault();toggleAlternates()">
-                not this one? (<span id="scanAltCount">0</span>)
-              </a>
-              <div id="scanAltList" class="cover-sheet hidden" style="margin-top:6px"></div>
-            </div>
-            <!-- The web-search fallback for whatever the vision call and
-                 MusicBrainz between them could not pin down. -->
-            <div class="form-group" id="scanSearchRow" style="display:none;margin-top:4px;grid-column:1/-1">
-              <label>Search the web for this cover</label>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input id="scanSearchText" readonly onclick="this.select()" style="flex:1;min-width:0">
-                <button type="button" class="btn btn-sm" id="scanSearchCopyBtn" onclick="copyScanSearch()"><i class="ti ti-copy"></i> copy</button>
-              </div>
-            </div>
-            <div class="form-group"><label>Year</label><input id="fYear" type="number" placeholder="1975"></div>
-            <div class="form-group">
-              <label>Genre</label>
-              <select id="fGenre">
-                <option value="">select genre</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Bought date</label><input id="fDate" type="date"></div>
-            <div class="form-group"><label>Bought at</label><input id="fWhere" placeholder="store / city"></div>
-            <div class="form-group"><label>Bought by</label><input id="fBuyer" placeholder="name"></div>
-            <div class="form-group"><label>Play count</label><input id="fPlays" type="number" min="0" value="0"></div>
-            <div class="form-group">
-              <label>Country</label>
-              <input id="fCountry" list="countryList" placeholder="type to search…" autocomplete="off">
-              <datalist id="countryList"></datalist>
             </div>
           </div>
-          <div class="form-group">
-            <label>Pepe rating (out of 5)</label>
-            <div class="rating-row" id="myRatingRow"></div>
-          </div>
-          <div class="form-group">
-            <label>Jenni rating (out of 5)</label>
-            <div class="rating-row" id="wifeRatingRow"></div>
-          </div>
-          <div class="check-row">
-            <input type="checkbox" id="fHaveIt" checked>
-            <label for="fHaveIt">in my collection (uncheck = wishlist)</label>
+
+          <div class="form-section" style="margin-bottom:0">
+            <header><i class="ti ti-star"></i> Ratings</header>
+            <div class="sec-body" style="display:flex;flex-direction:column;gap:8px">
+              <div class="rating-row pepe" id="myRatingRow"></div>
+              <div class="rating-row jenni" id="wifeRatingRow"></div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="form-group" style="margin-top:14px">
-        <label>Played on <span style="font-weight:400;opacity:.5">(dates this record was played)</span></label>
-        <div class="playdates-section">
-          <div class="playdates-list" id="fPlayDatesList"></div>
-          <button type="button" class="btn btn-sm" id="fAddPlayDate" style="align-self:start" onclick="addPlayDate()"><i class="ti ti-plus"></i> add play date</button>
-        </div>
-      </div>
-      <div class="form-group" style="margin-top:14px">
-        <label>Cleaned on <span style="font-weight:400;opacity:.5">(dates this record was cleaned)</span></label>
-        <div class="playdates-section">
-          <div class="playdates-list" id="fCleanedDatesList"></div>
-          <button type="button" class="btn btn-sm" id="fAddCleanedDate" style="align-self:start" onclick="addCleanedDate()"><i class="ti ti-plus"></i> add cleaning date</button>
-        </div>
-      </div>
-      <div class="form-group" style="margin-top:14px">
-        <label>Notes <span style="font-weight:400;opacity:.5">(markdown)</span></label>
-        <div class="notes-section">
-          <div class="notes-add-row">
-            <input type="date" id="fNoteDate">
-            <textarea id="fNoteText" placeholder="Add a note…"></textarea>
-            <button type="button" class="btn btn-primary btn-sm" style="height:34px;align-self:start" onclick="addNote()"><i class="ti ti-plus"></i> add</button>
+
+      <div class="form-section" style="margin-top:16px">
+        <header><i class="ti ti-player-play"></i> Played on <span class="count" id="playDatesCount"></span></header>
+        <div class="sec-body">
+          <div class="playdates-section">
+            <div class="playdates-list" id="fPlayDatesList"></div>
+            <button type="button" class="playdate-add" id="fAddPlayDate" style="align-self:start" onclick="addPlayDate()"><i class="ti ti-plus"></i> add play date</button>
           </div>
-          <div class="notes-list" id="fNotesList"></div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <header><i class="ti ti-sparkles"></i> Cleaned on <span class="count" id="cleanedDatesCount"></span></header>
+        <div class="sec-body">
+          <div class="playdates-section">
+            <div class="playdates-list" id="fCleanedDatesList"></div>
+            <button type="button" class="playdate-add" id="fAddCleanedDate" style="align-self:start" onclick="addCleanedDate()"><i class="ti ti-plus"></i> add cleaning date</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section" style="margin-bottom:0">
+        <header><i class="ti ti-note"></i> Notes <span class="count">markdown</span></header>
+        <div class="sec-body">
+          <div class="notes-section">
+            <div class="notes-add-row">
+              <div class="field"><i class="ti ti-calendar"></i><input type="date" id="fNoteDate"></div>
+              <textarea id="fNoteText" placeholder="Add a note…"></textarea>
+              <button type="button" class="btn btn-primary btn-sm" style="height:34px;align-self:start" onclick="addNote()"><i class="ti ti-plus"></i> add</button>
+            </div>
+            <div class="notes-list" id="fNotesList"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -2047,26 +2216,104 @@ async function doDelete(id){
 }
 
 // ── form modal ─────────────────────────────────────────────────────────────
+// Both rows were identical gold stars, which said nothing about whose score it
+// was. They are now the same coloured bars the detail drawer draws.
+const RATING_ROWS = [
+  { id:'myRatingRow',   who:'Pepe',  get:()=>myRating,   set:v=>{myRating=v} },
+  { id:'wifeRatingRow', who:'Jenni', get:()=>wifeRating, set:v=>{wifeRating=v} },
+];
+
 function buildRatingRows(){
-  ['myRatingRow','wifeRatingRow'].forEach((rowId,idx)=>{
-    const row=document.getElementById(rowId);
-    for(let i=1;i<=5;i++){
-      const s=document.createElement('span');
-      s.className='rstar';s.textContent='★';s.dataset.idx=idx;s.dataset.val=i;
-      s.addEventListener('click',()=>{if(idx===0){myRating=i}else{wifeRating=i};updateRatingUI();});
-      s.addEventListener('mouseenter',()=>highlightStars(rowId,i));
-      s.addEventListener('mouseleave',()=>updateRatingUI());
-      row.appendChild(s);
-    }
+  RATING_ROWS.forEach(({id,who,set})=>{
+    const row=document.getElementById(id);
+    row.innerHTML =
+      `<span class="who"><i class="ti ti-user-filled"></i> ${who}</span>`
+      + '<span class="segs">'
+      + [1,2,3,4,5].map(i=>`<button type="button" data-val="${i}" title="${i} out of 5"></button>`).join('')
+      + '</span><span class="rv"></span>'
+      + '<button type="button" class="clear" title="clear rating"><i class="ti ti-x"></i></button>';
+    row.querySelectorAll('.segs button').forEach(b=>{
+      const val=Number(b.dataset.val);
+      b.addEventListener('click',()=>{set(val);updateRatingUI();});
+      b.addEventListener('mouseenter',()=>highlightSegs(id,val));
+      b.addEventListener('mouseleave',()=>updateRatingUI());
+    });
+    row.querySelector('.clear').addEventListener('click',()=>{set(0);updateRatingUI();});
   });
 }
 
-function highlightStars(rowId,n){
-  document.querySelectorAll(`#${rowId} .rstar`).forEach(s=>s.classList.toggle('on',Number(s.dataset.val)<=n));
+function highlightSegs(rowId,n){
+  document.querySelectorAll(`#${rowId} .segs button`)
+    .forEach(b=>b.classList.toggle('on',Number(b.dataset.val)<=n));
 }
+
 function updateRatingUI(){
-  document.querySelectorAll('#myRatingRow .rstar').forEach(s=>s.classList.toggle('on',Number(s.dataset.val)<=myRating));
-  document.querySelectorAll('#wifeRatingRow .rstar').forEach(s=>s.classList.toggle('on',Number(s.dataset.val)<=wifeRating));
+  RATING_ROWS.forEach(({id,get})=>{
+    const value=get();
+    highlightSegs(id,value);
+    document.querySelector(`#${id} .rv`).textContent = value ? `${value}/5` : '—';
+  });
+}
+
+// ── bought by ───────────────────────────────────────────────────────────────
+// The collection holds exactly three buyers, so this is a choice rather than a
+// text field. The strings written back are the ones the rest of the app parses
+// (buyerColor and the stats page both match on 'pepe' / 'jenni' substrings).
+const BUYER_VALUES = { pepe:'Pepe', both:'Pepe e Jenni', jenni:'Jenni' };
+
+// Accents are stripped first: one row reads 'Pepê e Jenni', which a bare
+// includes('pepe') misses, leaving that record uncounted for Pepe.
+function buyerKind(value){
+  const v = (value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const pepe  = v.includes('pepe');
+  const jenni = v.includes('jenni') || v.includes('jenifer') || v.includes('jennifer');
+  if (pepe && jenni) return 'both';
+  if (pepe) return 'pepe';
+  if (jenni) return 'jenni';
+  return '';
+}
+
+function setBuyer(kind){
+  const current = buyerKind(document.getElementById('fBuyer').value);
+  // Tapping the active choice clears it — otherwise a buyer set by accident
+  // could never be unset, which the old free-text field allowed.
+  const next = current === kind ? '' : kind;
+  document.getElementById('fBuyer').value = next ? BUYER_VALUES[next] : '';
+  renderBuyerSeg();
+}
+
+function renderBuyerSeg(){
+  const kind = buyerKind(document.getElementById('fBuyer').value);
+  document.querySelectorAll('#buyerSeg button')
+    .forEach(b=>b.classList.toggle('on', b.dataset.buyer === kind));
+}
+
+// ── owned / wishlist ────────────────────────────────────────────────────────
+function setHaveIt(value){
+  document.getElementById('fHaveIt').checked = value;
+  renderOwnSwitch();
+}
+
+function renderOwnSwitch(){
+  const owned = document.getElementById('fHaveIt').checked;
+  document.querySelectorAll('#ownSwitch button')
+    .forEach(b=>b.classList.toggle('on', (b.dataset.own === 'yes') === owned));
+}
+
+// ── bought at ───────────────────────────────────────────────────────────────
+// Two thirds of the records were bought at somewhere already in the list.
+function populateWhereList(){
+  const places = [...new Set(records.map(r=>r.bought_where).filter(Boolean))].sort();
+  document.getElementById('whereList').innerHTML =
+    places.map(p=>`<option value="${esc(p)}">`).join('');
+}
+
+// Both scan entry points open the same action sheet; openCoverSheet toggles, so
+// a second click on the other button would close it instead of switching.
+function openScanSheet(focusSpotify){
+  const sheet = document.getElementById('coverSheet');
+  if (sheet.classList.contains('hidden')) openCoverSheet();
+  if (focusSpotify) document.getElementById('spotifyUrlInput').focus();
 }
 
 function populateGenreSelect(current='') {
@@ -2149,6 +2396,8 @@ function renderNotesForm() {
 // chars, so this stays compatible with the ISO timestamps logged by the +/- buttons
 function renderPlayDatesForm() {
   const list = document.getElementById('fPlayDatesList');
+  document.getElementById('playDatesCount').textContent =
+    formPlayDates.length ? `${formPlayDates.length} logged` : '';
   if (!formPlayDates.length) {
     list.innerHTML = '<div class="playdates-empty">no play dates logged yet</div>';
     return;
@@ -2157,8 +2406,9 @@ function renderPlayDatesForm() {
   const rows = formPlayDates.map((d, i) => ({ d, i })).sort((a, b) => a.d.localeCompare(b.d));
   list.innerHTML = rows.map(({ d, i }) => `
     <div class="playdate-row">
+      <span class="dot"></span>
       <input type="date" value="${esc(d)}" onchange="updatePlayDate(${i}, this.value)">
-      <button type="button" class="playdate-delete" title="remove this play" onclick="deletePlayDate(${i})"><i class="ti ti-trash"></i></button>
+      <button type="button" class="playdate-delete" title="remove this play" onclick="deletePlayDate(${i})"><i class="ti ti-x"></i></button>
     </div>`).join('');
 }
 
@@ -2188,15 +2438,18 @@ function deletePlayDate(idx) {
 // same shape and behavior as the play-date editor above, minus the play-count bump
 function renderCleanedDatesForm() {
   const list = document.getElementById('fCleanedDatesList');
+  document.getElementById('cleanedDatesCount').textContent =
+    formCleanedDates.length ? `${formCleanedDates.length} logged` : '';
   if (!formCleanedDates.length) {
     list.innerHTML = '<div class="playdates-empty">no cleaning dates logged yet</div>';
     return;
   }
   const rows = formCleanedDates.map((d, i) => ({ d, i })).sort((a, b) => a.d.localeCompare(b.d));
   list.innerHTML = rows.map(({ d, i }) => `
-    <div class="playdate-row">
+    <div class="playdate-row cleaned">
+      <span class="dot"></span>
       <input type="date" value="${esc(d)}" onchange="updateCleanedDate(${i}, this.value)">
-      <button type="button" class="playdate-delete" title="remove this cleaning" onclick="deleteCleanedDate(${i})"><i class="ti ti-trash"></i></button>
+      <button type="button" class="playdate-delete" title="remove this cleaning" onclick="deleteCleanedDate(${i})"><i class="ti ti-x"></i></button>
     </div>`).join('');
 }
 
@@ -2248,9 +2501,10 @@ function toggleMultiArtist() {
     // theirs now — a later scan must not clear it.
     delete scanWrote['fArtist'];
   }
-  document.getElementById('fArtist').style.display = multi ? 'none' : '';
-  document.getElementById('fArtistsList').style.display = multi ? '' : 'none';
-  document.getElementById('fAddArtist').style.display = multi ? '' : 'none';
+  // The single-artist input sits inside an icon wrapper now; hiding the input
+  // alone would leave its label and icon behind.
+  document.getElementById('fArtistGroup').style.display = multi ? 'none' : '';
+  document.getElementById('fArtistsBlock').style.display = multi ? '' : 'none';
   if (multi && formArtists.length === 0) {
     const existing = document.getElementById('fArtist').value.trim();
     formArtists = existing ? [existing] : [''];
@@ -2293,13 +2547,14 @@ function openAdd(){
   ['fArtist','fAlbum','fYear','fWhere','fBuyer','fCountry'].forEach(id=>document.getElementById(id).value='');
   formArtists=[];
   document.getElementById('fMultiArtist').checked=false;
-  document.getElementById('fArtist').style.display='';
-  document.getElementById('fArtistsList').style.display='none';
-  document.getElementById('fAddArtist').style.display='none';
+  document.getElementById('fArtistGroup').style.display='';
+  document.getElementById('fArtistsBlock').style.display='none';
   renderArtistsForm();
+  renderBuyerSeg();
   document.getElementById('fDate').value='';
   document.getElementById('fPlays').value='0';
   document.getElementById('fHaveIt').checked=true;
+  renderOwnSwitch();
   formNotes=[];
   formPlayDates=[];
   renderPlayDatesForm();
@@ -2310,6 +2565,7 @@ function openAdd(){
   renderNotesForm();
   populateGenreSelect();
   populateCountryList();
+  populateWhereList();
   document.getElementById('coverPreview').style.display='none';
   document.getElementById('coverDropInner').style.display='';
   updateRatingUI();
@@ -2335,16 +2591,14 @@ function openEdit(id){
     formArtists = artistList(r);
     document.getElementById('fMultiArtist').checked = true;
     document.getElementById('fArtist').value = '';
-    document.getElementById('fArtist').style.display = 'none';
-    document.getElementById('fArtistsList').style.display = '';
-    document.getElementById('fAddArtist').style.display = '';
+    document.getElementById('fArtistGroup').style.display = 'none';
+    document.getElementById('fArtistsBlock').style.display = '';
   } else {
     formArtists = [];
     document.getElementById('fMultiArtist').checked = false;
     document.getElementById('fArtist').value = r.artist||'';
-    document.getElementById('fArtist').style.display = '';
-    document.getElementById('fArtistsList').style.display = 'none';
-    document.getElementById('fAddArtist').style.display = 'none';
+    document.getElementById('fArtistGroup').style.display = '';
+    document.getElementById('fArtistsBlock').style.display = 'none';
   }
   renderArtistsForm();
   document.getElementById('fAlbum').value=r.album_name||'';
@@ -2352,11 +2606,14 @@ function openEdit(id){
   document.getElementById('fDate').value=r.bought_date||'';
   populateGenreSelect(r.genre||'');
   populateCountryList();
+  populateWhereList();
   document.getElementById('fCountry').value=countryLabelFromCode(r.country||'');
   document.getElementById('fWhere').value=r.bought_where||'';
   document.getElementById('fBuyer').value=r.bought_by||'';
+  renderBuyerSeg();
   document.getElementById('fPlays').value=r.play_count||0;
   document.getElementById('fHaveIt').checked=!!r.have_it;
+  renderOwnSwitch();
   formNotes=parseNotes(r.notes, r.bought_date||today());
   formPlayDates=parsePlayDates(r.play_dates).map(d => String(d).slice(0,10)).filter(Boolean);
   renderPlayDatesForm();
