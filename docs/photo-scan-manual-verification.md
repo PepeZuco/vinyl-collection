@@ -41,7 +41,10 @@ Set these on Railway (see README):
    painted. You should get the toast *"camera still starting — try again"* and
    nothing should be written to the cover. (Without this guard the app would
    silently save a blank image.)
-6. Capture properly → the photo lands in the cover preview and the scan starts.
+6. Capture properly → the photo lands in the cover preview and **nothing else
+   happens**. No scan starts, no spinner, no API call. A **scan this cover**
+   button appears under the photo; that button is now the only way to start a
+   scan.
 7. **Check the camera indicator light goes dark** once the overlay closes, and
    again after you cancel. A light still on means a stream was leaked.
 8. Cancel out of the camera, reopen it, cancel again — a few times. The light
@@ -162,35 +165,40 @@ a field **you** touched:
 
 ---
 
-## 6. The search-string copy button
+## 6. The Google Images fallback
 
 This is the fallback for the scans that read the least — when the app can't pin
-the record down, it hands you the search terms so you can go look yourself.
+the record down, it sends you somewhere you can go look yourself.
 
-1. Scan a sleeve → a **search the web for this cover** row appears with text
-   like *"Bill Withers Live at Carnegie Hall 1973 vinyl cover"*.
-2. Hit **copy** → the button flips to *"copied"* for a moment, and pasting
-   elsewhere gives you that string.
-3. The row must sit on its **own full-width row**, not squeezed into one column.
-4. Scan a **completely unreadable** photo → the row should **not** appear; there
-   would be nothing to search for.
-5. Open a different record → the row must be **gone**, not showing the previous
-   record's search string.
-6. Check it in **both themes**.
+1. Scan a sleeve → on the results screen, **none of these fit — search Google
+   Images** sits along the bottom.
+2. Tap it → a **new tab** opens on Google Images, already searching something
+   like *"Bill Withers Live at Carnegie Hall 1973 vinyl cover"*. The app must
+   still be sitting there behind it, form intact.
+3. Do this on the **phone** too. It is a real link rather than a scripted
+   `window.open` precisely so Safari's popup blocker leaves it alone — if
+   nothing opens, tell me which browser.
+4. Pick an alternate release first, then use the link: the **year in the query
+   must be that release's year**, not the first guess's.
+5. Scan a **completely unreadable** photo → the link should **not** appear;
+   there would be nothing to search for.
+6. Check the results screen in **both themes**.
 
-> If you're testing over plain `http://` on the LAN, the clipboard API is
-> unavailable there too. The button falls back to the older copy path, and if
-> even that fails it leaves the text selected and says so — that's intended.
+> Note the round trip is manual by design: Google shows you the sleeve, you
+> save the image, and you add it as a cover yourself. The app cannot reach into
+> a Google tab.
 
 ---
 
 ## 7. Layout
 
 - Narrow the desktop browser to about **360px** wide. The form must not scroll
-  sideways, and the *"not this one?"* link must sit on its **own full-width
-  row** — Year and Genre should stay paired side by side, not knocked out of
+  sideways — Year and Genre should stay paired side by side, not knocked out of
   alignment.
-- Check the form in **both themes**.
+- At that width the results screen must drop to **two columns** of covers, and
+  its bottom bar must stack so the Google link is a full-width target rather
+  than a corner.
+- Check the form and the results screen in **both themes**.
 
 ---
 
@@ -204,3 +212,77 @@ With `ANTHROPIC_API_KEY` **unset** (easiest to check locally):
 
 Same with the Spotify credentials unset: the paste row stays visible (it can't
 know the server's credentials) and returns a clear error when used.
+
+---
+
+## 9. Nothing scans until you say so
+
+The whole point of the change: adding a cover is adding a cover, not spending a
+vision call and four MusicBrainz lookups.
+
+1. Open **add record**, attach a photo by **file picker**. No scan. The **scan
+   this cover** button and the line *"nothing is sent until you tap"* appear
+   under it.
+2. Same with the **camera** path, and same with the OS photo picker fallback.
+3. With **no** cover attached, the scan button must not be on screen at all.
+4. Remove nothing, just close the form and reopen it → the button is gone again
+   with the cover.
+5. Tap **scan this cover** → now the busy state appears and the button, the
+   file inputs and the Spotify row all go disabled until it finishes.
+6. Open an **existing record** that already has artwork → the button is there
+   too, and scanning re-reads that artwork. That is intended.
+
+---
+
+## 10. The scan results screen
+
+1. Scan a sleeve → a full screen of **candidate covers** opens, not a collapsed
+   *"not this one?"* link. On the phone that is two columns; on the desktop,
+   three.
+2. The strip at the top shows the photo you took and what was read from it.
+3. The first card carries a **best match** badge, and only the first.
+4. Tap a card → you land back on the form with artist, album, genre, year and
+   country filled, and **that card's artwork as the cover** — your photo is
+   replaced. Check this especially with a badly-lit photo: the API artwork
+   should win every time.
+5. Pick a candidate MusicBrainz has **no artwork** for (the card shows a disc
+   and *"no artwork found"*) → your photo must stay put rather than the cover
+   going blank.
+6. **back to the form** and **skip — I'll type it in** both return you to the
+   form with whatever was read still filled in, and no candidate applied.
+7. Scan something already in the collection → the matching card carries
+   **already in your collection**, and the warning banner is on the form too.
+8. Scan a Brazilian pressing MusicBrainz has never heard of → the empty state
+   explains itself and offers the Google link.
+9. Paste a **Spotify link** instead of a photo → the same screen opens, but the
+   heading reads *"read from the Spotify link"* and there is no photo thumbnail.
+
+---
+
+## 11. Wishlist, and the cover at its real size
+
+**Wishlist:**
+
+1. Open **add record** → **Wishlist**. The whole **the purchase** block
+   disappears; a purple note explains why. Play count, **played on** and
+   **cleaned on** stay on screen but go grey and stop responding — including to
+   the keyboard, so tab through them and confirm you cannot land in one.
+2. The save button reads **add to wishlist**.
+3. Type a shop into **bought at**, switch to Wishlist, switch back → what you
+   typed is **still there**. Switching must not destroy anything.
+4. Save a wishlist record, then reopen it: **bought on / at / by are empty**.
+   This is deliberate — a record you do not own must not carry a purchase, or
+   it turns up in the purchase stats. Play history is left alone.
+5. Edit an **existing owned** record and flip it to Wishlist → the same thing
+   happens, and the button still says **save**, not *add to wishlist*.
+6. Flip it back to **In collection** → the purchase fields return.
+
+**The cover:**
+
+1. Attach a **portrait** photo, and a **wide** one. Neither may be cropped —
+   the box takes the picture's proportions instead of forcing it into a fixed
+   height. Compare against the sleeve in your hand: the top and bottom must
+   both be there.
+2. Attach a very **tall** photo → it stops growing at 60% of the screen height
+   rather than pushing the rest of the form out of reach.
+3. Check on the phone as well as the desktop.
