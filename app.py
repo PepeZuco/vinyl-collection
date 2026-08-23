@@ -39,24 +39,39 @@ EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD", "vinyl123")
 
 db = SQLAlchemy(app)
 
+# Every dated field on a record — bought_date, play_dates, cleaned_dates and a
+# note's date — holds the same two shapes, and the app only ever reads them, never
+# computes on them, so they stay opaque strings here:
+#
+#   'YYYY-MM-DD'            recorded before times were kept. Ordered as midnight,
+#                           but never shown with a clock — the collection does not
+#                           know when in the day it happened.
+#   'YYYY-MM-DDTHH:MM:SS'   a LOCAL wall clock, no zone suffix. What is written
+#                           now, so the collection keeps the order things happened
+#                           in. Deliberately not UTC: everything downstream reads
+#                           the first 10 characters as the calendar day, and a UTC
+#                           stamp files an evening event on the following day.
+#
+# static/grouping.js momentOf() is the one reader of these, and also converts the
+# UTC stamps the play buttons wrote before this.
 class Record(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
     artist      = db.Column(db.String(200))
     album_name  = db.Column(db.String(200))
     year        = db.Column(db.String(10))
     genre       = db.Column(db.String(100))
-    bought_date = db.Column(db.String(50))
+    bought_date = db.Column(db.String(50))  # a stamp — see the note above
     bought_where= db.Column(db.String(200))
     bought_by   = db.Column(db.String(100))
     my_rating   = db.Column(db.Float, default=0)
     wife_rating = db.Column(db.Float, default=0)
     have_it     = db.Column(db.Boolean, default=True)
     play_count  = db.Column(db.Integer, default=0)
-    play_dates  = db.Column(db.Text)      # JSON array of ISO datetime strings, one per play
+    play_dates  = db.Column(db.Text)      # JSON array of stamps, one per play
     last_cleaned= db.Column(db.String(50))  # deprecated: superseded by cleaned_dates, kept for migration only
-    cleaned_dates = db.Column(db.Text)    # JSON array of ISO date strings, one per cleaning
+    cleaned_dates = db.Column(db.Text)    # JSON array of stamps, one per cleaning
     cover_data  = db.Column(db.Text)      # base64 data URI
-    notes       = db.Column(db.Text)      # markdown notes
+    notes       = db.Column(db.Text)      # JSON array of {date: stamp, text: markdown}
     country     = db.Column(db.String(2)) # ISO 3166-1 alpha-2 country code, e.g. "BR", "US"
 
     def to_dict(self):

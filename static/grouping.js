@@ -22,31 +22,40 @@ const VinylGrouping = (function () {
     return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   }
 
-  /* One logged play, read onto the local wall clock.
+  /* Any dated field — bought, played, cleaned, a note — read onto the local
+   * wall clock.
    *
-   * Plays are logged so the collection remembers the ORDER they were played in,
-   * which means every entry has to reduce to one comparable moment. Three
-   * shapes live in the column:
+   * Every one of them is recorded so the collection remembers the ORDER things
+   * happened in, which means each has to reduce to one comparable moment. Three
+   * shapes live in the columns:
    *
-   *   2026-08-14                  logged before times were recorded. Ordered as
-   *                               midnight, but reported with no clock — it is
-   *                               not a claim the record played at 00:00.
+   *   2026-08-14                  written before times were recorded. Ordered
+   *                               as midnight, but reported with no clock — it
+   *                               is not a claim the thing happened at 00:00.
    *   2026-08-14T21:12:44         a local wall clock, what is written now.
-   *   2026-08-14T21:12:44.115Z    UTC, what the +/- buttons wrote before this.
-   *                               Shifted onto the local clock, which is also
-   *                               what stops an evening play filing itself on
-   *                               the next day in the calendar.
+   *   2026-08-14T21:12:44.115Z    UTC, what the play +/- buttons wrote before
+   *                               this. Shifted onto the local clock, which is
+   *                               also what stops an evening play filing itself
+   *                               on the next day in the calendar.
    *
    * Returns { day, time, at }: `at` is the sortable local stamp, `day` the
    * calendar day to file it under, `time` the clock to show — '' when the entry
    * never carried one. Anything unparseable comes back as all-empty rather than
    * throwing, so one bad row never takes the collection down with it. */
-  function playMoment(raw) {
+  function momentOf(raw) {
     const none = { day: '', time: '', at: '' };
     const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/
       .exec(String(raw == null ? '' : raw).trim());
     if (!m) return none;
     const [, y, mo, d, hh, mm, ss, zone] = m;
+
+    // The pattern only checks shape, so 2026-13-40 and 2026-02-30 both match
+    // it. Round-tripping through Date rejects both, along with anything else
+    // the calendar could not actually hold — a stamp that is not a real moment
+    // must not sort as one, nor render "99:99" as a time played.
+    const probe = new Date(+y, +mo - 1, +d);
+    if (probe.getMonth() !== +mo - 1 || probe.getDate() !== +d) return none;
+    if (hh !== undefined && (+hh > 23 || +mm > 59 || +(ss || 0) > 59)) return none;
 
     if (hh === undefined) {
       const day = y + '-' + mo + '-' + d;
@@ -81,7 +90,7 @@ const VinylGrouping = (function () {
     try { dates = JSON.parse(r.play_dates || '[]'); }
     catch { return ''; }
     if (!Array.isArray(dates)) return '';
-    const given = dates.map(d => playMoment(d).at).filter(Boolean);
+    const given = dates.map(d => momentOf(d).at).filter(Boolean);
     return given.length ? given.reduce((a, b) => (a > b ? a : b)) : '';
   }
 
@@ -104,8 +113,9 @@ const VinylGrouping = (function () {
   function bucketOf(r, groupBy, countryName) {
     switch (groupBy) {
       case 'bought_date': {
-        if (!r.bought_date) return { id: 'nodate', label: 'No date', rank: '', unknown: true };
-        const [year, month] = String(r.bought_date).split('-');
+        const bought = momentOf(r.bought_date).day;
+        if (!bought) return { id: 'nodate', label: 'No date', rank: '', unknown: true };
+        const [year, month] = bought.split('-');
         return { id: year + '-' + month, label: MONTHS[Number(month) - 1] + ' ' + year,
                  rank: year + '-' + month, unknown: false };
       }
@@ -201,7 +211,7 @@ const VinylGrouping = (function () {
     return [...crates.values()];
   }
 
-  return { avgRating, playMoment, lastPlayed, bucketOf, compareByGroup, buildGroups };
+  return { avgRating, momentOf, lastPlayed, bucketOf, compareByGroup, buildGroups };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylGrouping;

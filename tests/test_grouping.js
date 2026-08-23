@@ -1,10 +1,15 @@
 // Tests for the pure crate-grouping logic behind the collection's group view.
 // Run by tests/test_grouping.py so `pytest` stays the single command.
 
+// Pinned before anything constructs a Date: half of what momentOf does is
+// move a UTC stamp onto the local clock, which says nothing without an offset
+// to move it by. Sao Paulo is UTC-3 and the collection's own timezone.
+process.env.TZ = 'America/Sao_Paulo';
+
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { bucketOf, buildGroups, avgRating, lastPlayed, compareByGroup } = require('../static/grouping.js');
+const { bucketOf, buildGroups, avgRating, momentOf, lastPlayed, compareByGroup } = require('../static/grouping.js');
 
 // A record only needs the fields the bucket rule reads, so each test builds the
 // smallest one that exercises its rule.
@@ -221,11 +226,67 @@ test('sorting a list by compareByGroup makes each crate contiguous', () => {
                          ['Jazz', 'Rock', 'Unknown genre']);
 });
 
+// ── momentOf ────────────────────────────────────────────────────────────────
+
+test('a moment recorded with a local time keeps that exact clock', () => {
+  assert.deepStrictEqual(momentOf('2026-08-14T21:12:44'),
+    { day: '2026-08-14', time: '21:12', at: '2026-08-14T21:12:44' });
+});
+
+test('a date recorded before times were kept orders as midnight but shows no clock', () => {
+  // "assume 00" for ordering — without claiming the record played at midnight
+  assert.deepStrictEqual(momentOf('2026-08-14'),
+    { day: '2026-08-14', time: '', at: '2026-08-14T00:00:00' });
+});
+
+test('a UTC stamp is read onto the local clock, day included', () => {
+  // What the +/- buttons wrote before this: 00:12 UTC is the previous evening
+  // here, and filing it under the 24th would put the play on a day it did not
+  // happen — the whole reason the calendar slid evening plays forward.
+  assert.deepStrictEqual(momentOf('2026-08-24T00:12:44.115Z'),
+    { day: '2026-08-23', time: '21:12', at: '2026-08-23T21:12:44' });
+});
+
+test('an explicit offset is honored, in either punctuation', () => {
+  // +HHMM has to survive too: ISO parsing only guarantees the +HH:MM form
+  assert.strictEqual(momentOf('2026-08-14T21:12:44+02:00').at, '2026-08-14T16:12:44');
+  assert.strictEqual(momentOf('2026-08-14T21:12:44+0200').at, '2026-08-14T16:12:44');
+});
+
+test('a minute-precision stamp fills in seconds so stamps stay comparable', () => {
+  assert.strictEqual(momentOf('2026-08-14T21:12').at, '2026-08-14T21:12:00');
+});
+
+test('momentOf reads anything unparseable as no moment rather than throwing', () => {
+  const none = { day: '', time: '', at: '' };
+  [null, undefined, '', 'nonsense', '2026-08-1', '2026-13-40T99:99:99', 42].forEach(bad =>
+    assert.deepStrictEqual(momentOf(bad), none, String(bad)));
+});
+
+test('normalized stamps sort into the order the records were played', () => {
+  // The point of recording the time at all. Mixed shapes and all.
+  const logged = ['2026-08-23T21:12:44', '2026-08-23', '2026-08-24T00:40:00.000Z',
+                  '2026-08-23T09:05:00'];
+  assert.deepStrictEqual(logged.slice().sort((a, b) => momentOf(a).at.localeCompare(momentOf(b).at)),
+    ['2026-08-23', '2026-08-23T09:05:00', '2026-08-23T21:12:44', '2026-08-24T00:40:00.000Z']);
+});
+
+test('a bought date carrying a time still crates under its own month', () => {
+  assert.strictEqual(bucketOf({ bought_date: '2026-08-14T21:12:00' }, 'bought_date').label,
+                     'August 2026');
+  assert.strictEqual(bucketOf({ bought_date: '' }, 'bought_date').label, 'No date');
+});
+
 // ── lastPlayed ──────────────────────────────────────────────────────────────
 
 test('lastPlayed returns the most recent play regardless of stored order', () => {
-  assert.strictEqual(lastPlayed({ play_dates: '["2026-08-14","2024-01-09"]' }), '2026-08-14');
-  assert.strictEqual(lastPlayed({ play_dates: '["2024-01-09","2026-08-14"]' }), '2026-08-14');
+  assert.strictEqual(lastPlayed({ play_dates: '["2026-08-14","2024-01-09"]' }), '2026-08-14T00:00:00');
+  assert.strictEqual(lastPlayed({ play_dates: '["2024-01-09","2026-08-14"]' }), '2026-08-14T00:00:00');
+});
+
+test('lastPlayed separates two plays on the same day by their time', () => {
+  assert.strictEqual(lastPlayed({ play_dates: '["2026-08-14T21:12:44","2026-08-14T09:05:00"]' }),
+                     '2026-08-14T21:12:44');
 });
 
 test('lastPlayed reads a play count of none as no date at all', () => {
@@ -237,7 +298,13 @@ test('lastPlayed treats unusable play_dates as never played rather than throwing
   // A truncated write, or the column holding something that is not an array
   assert.strictEqual(lastPlayed({ play_dates: '["2026-08-1' }), '');
   assert.strictEqual(lastPlayed({ play_dates: '{"when":"2026-08-14"}' }), '');
-  assert.strictEqual(lastPlayed({ play_dates: '[null, "2026-08-14"]' }), '2026-08-14');
+  assert.strictEqual(lastPlayed({ play_dates: '[null, "2026-08-14"]' }), '2026-08-14T00:00:00');
+});
+
+test('a record last played late in the evening crates under that evening', () => {
+  // The UTC stamp says September 1st; locally the record played on August 31st
+  assert.strictEqual(bucketOf({ play_dates: '["2026-09-01T01:30:00.000Z"]' }, 'last_played').label,
+                     'August 2026');
 });
 
 // ── avgRating ───────────────────────────────────────────────────────────────

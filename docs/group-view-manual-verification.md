@@ -64,7 +64,7 @@ Tick the ones that pass; anything that fails, tell me what you saw.
 20. Both themes: crate headers, the count, and the country flags read cleanly in
     light and dark.
 21. Narrow the window until the toolbar wraps. Two dropdowns plus the genre
-    filter and buyer toggle should wrap tidily, not overflow.
+    filter should wrap tidily, not overflow.
 
 ## 2. Phone (this is the part with no coverage at all)
 
