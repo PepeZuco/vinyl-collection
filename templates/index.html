@@ -853,26 +853,62 @@ select option{background:var(--surface);color:var(--text)}
 .menu-item:hover{background:var(--card)}
 .menu-item i{font-size:15px;color:var(--muted);width:16px;text-align:center;flex-shrink:0}
 
-/* list view */
-.list-view-wrap{overflow-x:auto}
-.list-view{min-width:640px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.list-row{display:grid;grid-template-columns:44px 2fr 100px 64px 100px 100px 64px;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
-.list-row:last-child{border-bottom:none}
-.list-row:hover{background:var(--card-hover)}
-.list-row.list-head{cursor:default;background:var(--surface)}
-.list-row.list-head:hover{background:var(--surface)}
-.list-row.list-head span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
-.list-cover-wrap{width:36px;height:36px;border-radius:3px;overflow:hidden;flex-shrink:0;background:#111;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:14px}
-.list-cover-wrap img{width:100%;height:100%;object-fit:cover}
-[data-theme="light"] .list-cover-wrap{background:#eee;color:#ccc}
-.list-main{min-width:0}
-.list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.list-artist{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .multi-artist-badge{font-size:10px;opacity:.6;margin-right:4px}
-.list-genre,.list-year{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.list-bars{display:flex;gap:2px}
-.list-bars .score-sq{height:6px}
-.list-plays{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+/* group view — crates divided by whatever "sort by" is set to */
+.crate-bar{display:flex;align-items:center;gap:12px;margin:-6px 0 12px;font-size:12px;color:var(--muted)}
+.crate-bar .spacer{flex:1}
+.crate-toggle-all{background:none;border:none;color:var(--muted);font-family:var(--font-mono);
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;cursor:pointer;padding:3px 2px}
+.crate-toggle-all:hover{color:var(--text)}
+.crate{margin-bottom:6px}
+/* sticky so the crate you are inside stays named while you scroll it; nothing
+   else is fixed at the top of the page, so top:0 needs no offset */
+.crate-head{position:sticky;top:0;z-index:5;width:100%;display:flex;align-items:center;gap:10px;
+  padding:9px 2px;background:var(--bg);border:none;border-bottom:1px solid var(--border);
+  color:var(--text);font-family:var(--font);cursor:pointer;text-align:left;transition:color .12s}
+.crate-head:hover{color:var(--accent)}
+.crate-head .crate-chev{display:flex;color:var(--muted);transition:transform .18s}
+.crate-head:hover .crate-chev{color:var(--accent)}
+.crate.collapsed .crate-chev{transform:rotate(-90deg)}
+.crate-label{font-size:13px;font-weight:700;letter-spacing:-.01em}
+.crate-count{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:auto;
+  font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.crate-body{padding:14px 0 20px}
+.crate.collapsed .crate-body{display:none}
+
+/* the mobile face of the same choice — hidden on desktop, where the corner
+   toggle already covers it */
+.crate-section{display:none}
+.crate-switch{width:100%;min-height:46px;display:flex;align-items:center;gap:10px;padding:0 12px;
+  border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--label);
+  font-family:var(--font);font-size:13px;text-align:left;cursor:pointer;transition:all .12s}
+.crate-switch i{font-size:17px;flex-shrink:0}
+.crate-switch b{font-weight:700}
+.crate-switch.on{border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--text)}
+.crate-switch.on b{color:var(--accent)}
+.crate-track{margin-left:auto;width:38px;height:22px;border-radius:999px;flex-shrink:0;
+  background:var(--border);position:relative;transition:background .15s}
+.crate-switch.on .crate-track{background:var(--accent)}
+.crate-knob{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+  background:var(--label);transition:left .15s,background .15s}
+.crate-switch.on .crate-knob{left:19px;background:#141414}
+[data-theme="light"] .crate-switch.on .crate-knob{background:#fff}
+.crate-hint{font-size:11.5px;color:var(--muted);margin:7px 2px 0;line-height:1.45}
+
+/* Later in the file than the shared .filter-sheet-section rules on purpose:
+   same specificity, so source order is what lets these win on mobile. */
+@media(max-width:760px){
+  .crate-section{display:block}
+  /* at two columns a hairline header gets lost between rows of covers, and it
+     has to be a real tap target */
+  .crate-head{min-height:44px;padding:0 12px;margin:0 -6px;background:var(--surface);
+    border:1px solid var(--border);border-radius:6px}
+  .crate-count{background:var(--card);border:1px solid var(--border);border-radius:999px;padding:2px 8px}
+  .crate{margin-bottom:10px}
+  .crate-body{padding:12px 0 16px}
+}
 .notes-preview p,.detail-notes-body p{margin-bottom:6px}
 .notes-preview h1,.notes-preview h2,.notes-preview h3,
 .detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
@@ -1258,6 +1294,18 @@ select option{background:var(--surface);color:var(--text)}
             <button class="sort-dir-btn desc" id="sortDirBtn" title="toggle sort direction"><i class="ti ti-arrow-down"></i></button>
           </div>
         </div>
+        <!-- mobile only — on desktop the same choice is the corner view toggle.
+             As a switch it can name the field it is about to group by, which the
+             icon cannot. -->
+        <div class="filter-sheet-section crate-section">
+          <div class="filter-sheet-label">Crates</div>
+          <button class="crate-switch" id="crateSwitch" onclick="setViewMode(viewMode === 'group' ? 'grid' : 'group')">
+            <i class="ti ti-layout-list"></i>
+            <span>Group by <b id="crateSwitchField">date added</b></span>
+            <span class="crate-track"><span class="crate-knob"></span></span>
+          </button>
+          <p class="crate-hint">Change the sort above and this follows it.</p>
+        </div>
         <div class="filter-sheet-section">
           <div class="filter-sheet-label">Genres</div>
           <div class="genre-dropdown" id="genreDropdown">
@@ -1293,7 +1341,7 @@ select option{background:var(--surface);color:var(--text)}
     </button>
     <div class="view-toggle" id="viewToggle">
       <button class="view-btn active" id="viewGridBtn" data-view="grid" title="grid view"><i class="ti ti-layout-grid"></i></button>
-      <button class="view-btn" id="viewListBtn" data-view="list" title="list view"><i class="ti ti-list"></i></button>
+      <button class="view-btn" id="viewGroupBtn" data-view="group" title="group view"><i class="ti ti-layout-list"></i></button>
     </div>
     </div>
     <div class="filter-chips" id="filterChips"></div>
@@ -1665,6 +1713,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="/static/topojson-client.min.js"></script>
+<script src="/static/grouping.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 let records = [];
@@ -1755,10 +1804,8 @@ async function loadRecords() {
 }
 
 // avg uses only ratings that exist — if only one person rated, uses that score alone
-function avgRating(r) {
-  const scores = [Number(r.my_rating)||0, Number(r.wife_rating)||0].filter(x => x > 0);
-  return scores.length ? scores.reduce((a,b)=>a+b,0) / scores.length : 0;
-}
+// lives in static/grouping.js so the crate rules that depend on it are testable
+const avgRating = VinylGrouping.avgRating;
 
 // ── multi-artist records ────────────────────────────────────────────────────
 // artist field stores multiple names as "Name A; Name B" — semicolon was chosen
@@ -1854,54 +1901,98 @@ function render() {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
     return;
   }
-  c.innerHTML = viewMode === 'list'
-    ? `<div class="list-view-wrap"><div class="list-view">${listHeadHTML()}${recs.map(r => listRowHTML(r)).join('')}</div></div>`
+  c.innerHTML = viewMode === 'group'
+    ? cratesHTML(recs)
     : `<div class="grid">${recs.map(r => cardHTML(r)).join('')}</div>`;
   c.querySelectorAll('[data-id]').forEach(el =>
     el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
   );
+  c.querySelectorAll('[data-crate]').forEach(el =>
+    el.addEventListener('click', () => toggleCrate(el.dataset.crate))
+  );
   observeCardsForGlow();
 }
 
-// ── grid / list view toggle ─────────────────────────────────────────────────
-let viewMode = localStorage.getItem('vinyl-view') === 'list' ? 'list' : 'grid';
+// ── grid / group view toggle ────────────────────────────────────────────────
+// 'list' is the retired third mode; anything that is not 'group' falls back to
+// the grid, so a browser holding the old value lands somewhere sensible.
+let viewMode = localStorage.getItem('vinyl-view') === 'group' ? 'group' : 'grid';
+
+// Collapsed crates are keyed by the sort field they belong to, so shutting every
+// artist does not also shut your decades — and "collapse all" survives a reload
+// as a mode you stay in rather than something you redo each visit.
+let collapsedCrates = loadCollapsedCrates();
+
+function loadCollapsedCrates() {
+  try {
+    const stored = JSON.parse(localStorage.getItem('vinyl-crates-collapsed') || '{}');
+    return stored && typeof stored === 'object' ? stored : {};
+  } catch { return {}; }   // unparseable is the same as nothing collapsed
+}
+
+function collapsedFor(sortField) {
+  return new Set(collapsedCrates[sortField] || []);
+}
+
+function saveCollapsedCrates(sortField, ids) {
+  if (ids.size) collapsedCrates[sortField] = [...ids];
+  else delete collapsedCrates[sortField];
+  try { localStorage.setItem('vinyl-crates-collapsed', JSON.stringify(collapsedCrates)); }
+  catch { /* private browsing — collapsing still works for this session */ }
+}
 
 function setViewMode(mode) {
   viewMode = mode;
   localStorage.setItem('vinyl-view', mode);
   document.getElementById('viewGridBtn').classList.toggle('active', mode === 'grid');
-  document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
+  document.getElementById('viewGroupBtn').classList.toggle('active', mode === 'group');
+  syncCrateSwitch();
   render();
 }
 
-function listHeadHTML() {
-  return `<div class="list-row list-head">
-    <span></span><span>Album</span><span>Genre</span><span>Year</span><span>Pepe</span><span>Jenni</span><span>Plays</span>
-  </div>`;
+// the mobile switch spells out the field it is about to group by; the desktop
+// icon cannot, which is why the two faces of this toggle differ
+function syncCrateSwitch() {
+  const sw = document.getElementById('crateSwitch');
+  if (!sw) return;
+  const opt = SORT_OPTIONS.find(o => o.value === sortBy) || SORT_OPTIONS[0];
+  sw.classList.toggle('on', viewMode === 'group');
+  document.getElementById('crateSwitchField').textContent = opt.label.toLowerCase();
 }
 
-function listRowHTML(r) {
-  const cover = r.cover_data
-    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
-    : `<i class="ti ti-disc"></i>`;
-  const myR  = Number(r.my_rating)  || 0;
-  const herR = Number(r.wife_rating) || 0;
-  const pepeFilled  = Math.round(myR);
-  const jenniFilled = Math.round(herR);
-  const pepeBars  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled  ? ' pepe-on'  : ''}"></div>`).join('');
-  const jenniBars = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on' : ''}"></div>`).join('');
-  return `<div class="list-row" data-id="${r.id}">
-    <div class="list-cover-wrap">${cover}</div>
-    <div class="list-main">
-      <div class="list-album">${esc(r.album_name)||'untitled'}</div>
-      <div class="list-artist">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
-    </div>
-    <span class="list-genre">${esc(r.genre)||'—'}</span>
-    <span class="list-year">${esc(r.year)||'—'}</span>
-    <div class="list-bars">${pepeBars}</div>
-    <div class="list-bars">${jenniBars}</div>
-    <span class="list-plays"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i>${r.play_count||0}</span>
+function toggleCrate(id) {
+  const shut = collapsedFor(sortBy);
+  if (shut.has(id)) shut.delete(id); else shut.add(id);
+  saveCollapsedCrates(sortBy, shut);
+  render();
+}
+
+function toggleAllCrates() {
+  const crates = VinylGrouping.buildGroups(filtered(), sortBy);
+  const shut = collapsedFor(sortBy);
+  saveCollapsedCrates(sortBy, shut.size >= crates.length ? new Set() : new Set(crates.map(c => c.id)));
+  render();
+}
+
+function cratesHTML(recs) {
+  const crates = VinylGrouping.buildGroups(recs, sortBy);
+  const shut = collapsedFor(sortBy);
+  const bar = `<div class="crate-bar">
+    <span>${crates.length} ${crates.length === 1 ? 'crate' : 'crates'}</span>
+    <span class="spacer"></span>
+    <button class="crate-toggle-all" onclick="toggleAllCrates()">${shut.size >= crates.length ? 'expand all' : 'collapse all'}</button>
   </div>`;
+  return bar + crates.map(crate => {
+    const isShut = shut.has(crate.id);
+    return `<section class="crate${isShut ? ' collapsed' : ''}">
+      <button class="crate-head" data-crate="${esc(crate.id)}" aria-expanded="${!isShut}">
+        <span class="crate-chev"><i class="ti ti-chevron-down"></i></span>
+        <span class="crate-label">${esc(crate.label)}</span>
+        <span class="crate-count">${crate.records.length} ${crate.records.length === 1 ? 'record' : 'records'}</span>
+      </button>
+      <div class="crate-body"><div class="grid">${crate.records.map(r => cardHTML(r)).join('')}</div></div>
+    </section>`;
+  }).join('');
 }
 
 // ── smart filter chips — only shown once a filter is restricted from default ─
@@ -3358,9 +3449,10 @@ function bindEvents(){
   document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
   document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
   document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
-  document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
+  document.getElementById('viewGroupBtn').addEventListener('click', () => setViewMode('group'));
   document.getElementById('viewGridBtn').classList.toggle('active', viewMode === 'grid');
-  document.getElementById('viewListBtn').classList.toggle('active', viewMode === 'list');
+  document.getElementById('viewGroupBtn').classList.toggle('active', viewMode === 'group');
+  syncCrateSwitch();
   document.getElementById('morePanel').addEventListener('click', e => {
     if (e.target.closest('.menu-item')) document.getElementById('morePanel').classList.add('hidden');
   });
@@ -3681,6 +3773,7 @@ document.addEventListener('click', e => {
     sortBy = item.dataset.sort;
     buildSortList();
     syncSortTrigger();
+    syncCrateSwitch();   // crates follow the sort field, so the switch relabels
     render();
     document.getElementById('sortPanel')?.classList.add('hidden');
     const ch = document.getElementById('sortChevron');
