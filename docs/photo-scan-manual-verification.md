@@ -256,17 +256,23 @@ spend it on.
 
 ### The thinking face
 
-It is a 30-frame strip stepped by hand, not an animated GIF — a GIF would twitch
-at rest and could never be played on demand.
+It is a 30-frame strip stepped by hand, not an animated GIF — a GIF would spin
+before you tapped and keep spinning after the answer came back.
 
 1. At rest it is **completely still**, both greyed out and live. Any motion
    before you tap is a bug.
-2. Tap **analyse** → it runs **one pass, about a second**, then stops. It must
-   not loop for the length of the scan; the *"scanning…"* spinner is what tracks
-   the actual request, which can take up to a minute.
-3. It must be a clean cutout in **both themes** — no dark square or grey halo
+2. Tap **analyse** → it spins, and **keeps spinning for the whole scan**. On a
+   slow one that is a good many laps; it must not stop after a second while the
+   request is still out.
+3. When the results land it **finishes the lap it is on** and stops on the rest
+   frame — it must not freeze mid-gesture. A scan that comes back almost
+   instantly still gets one whole lap rather than a flinch.
+4. It stops on **every** ending, not just a good one: a scan that **errors**
+   (see §8), and a scan you walk away from by **closing the form** mid-flight —
+   reopen **add record** and the face must be still.
+5. It must be a clean cutout in **both themes** — no dark square or grey halo
    behind the face on the light theme.
-4. With **reduced motion** turned on at the OS level, it stays still on tap and
+6. With **reduced motion** turned on at the OS level, it stays still on tap and
    the scan still runs.
 
 ---

@@ -22,17 +22,66 @@ const VinylGrouping = (function () {
     return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   }
 
-  /* The most recent play, or '' when the column holds nothing usable. A
-   * truncated write or a column holding something that is not an array both
-   * read as never played rather than throwing — the collection still renders
-   * when one row's JSON is bad. ISO strings compare lexicographically, so the
-   * max is the latest without parsing any dates. */
+  /* One logged play, read onto the local wall clock.
+   *
+   * Plays are logged so the collection remembers the ORDER they were played in,
+   * which means every entry has to reduce to one comparable moment. Three
+   * shapes live in the column:
+   *
+   *   2026-08-14                  logged before times were recorded. Ordered as
+   *                               midnight, but reported with no clock — it is
+   *                               not a claim the record played at 00:00.
+   *   2026-08-14T21:12:44         a local wall clock, what is written now.
+   *   2026-08-14T21:12:44.115Z    UTC, what the +/- buttons wrote before this.
+   *                               Shifted onto the local clock, which is also
+   *                               what stops an evening play filing itself on
+   *                               the next day in the calendar.
+   *
+   * Returns { day, time, at }: `at` is the sortable local stamp, `day` the
+   * calendar day to file it under, `time` the clock to show — '' when the entry
+   * never carried one. Anything unparseable comes back as all-empty rather than
+   * throwing, so one bad row never takes the collection down with it. */
+  function playMoment(raw) {
+    const none = { day: '', time: '', at: '' };
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/
+      .exec(String(raw == null ? '' : raw).trim());
+    if (!m) return none;
+    const [, y, mo, d, hh, mm, ss, zone] = m;
+
+    if (hh === undefined) {
+      const day = y + '-' + mo + '-' + d;
+      return { day, time: '', at: day + 'T00:00:00' };
+    }
+    if (!zone) return stamp(y, mo, d, hh, mm, ss || '00');
+
+    // Offset-bearing: hand it to Date, then read the local components back.
+    // +HHMM is normalized to +HH:MM first — ISO parsing only guarantees the
+    // colon form, and Safari rejects the other.
+    const at = new Date(y + '-' + mo + '-' + d + 'T' + hh + ':' + mm + ':' + (ss || '00') +
+                        (zone === 'Z' ? 'Z' : zone.replace(/^([+-]\d{2})(\d{2})$/, '$1:$2')));
+    if (isNaN(at.getTime())) return none;
+    const pad = n => String(n).padStart(2, '0');
+    return stamp(at.getFullYear(), pad(at.getMonth() + 1), pad(at.getDate()),
+                 pad(at.getHours()), pad(at.getMinutes()), pad(at.getSeconds()));
+  }
+
+  function stamp(y, mo, d, hh, mm, ss) {
+    const day = y + '-' + mo + '-' + d;
+    const time = hh + ':' + mm;
+    return { day, time, at: day + 'T' + time + ':' + ss };
+  }
+
+  /* The most recent play as a local stamp, or '' when the column holds nothing
+   * usable. A truncated write or a column holding something that is not an
+   * array both read as never played rather than throwing — the collection still
+   * renders when one row's JSON is bad. Normalized stamps compare
+   * lexicographically, so the max is the latest without parsing any dates. */
   function lastPlayed(r) {
     let dates;
     try { dates = JSON.parse(r.play_dates || '[]'); }
     catch { return ''; }
     if (!Array.isArray(dates)) return '';
-    const given = dates.filter(d => typeof d === 'string' && d);
+    const given = dates.map(d => playMoment(d).at).filter(Boolean);
     return given.length ? given.reduce((a, b) => (a > b ? a : b)) : '';
   }
 
@@ -152,7 +201,7 @@ const VinylGrouping = (function () {
     return [...crates.values()];
   }
 
-  return { avgRating, lastPlayed, bucketOf, compareByGroup, buildGroups };
+  return { avgRating, playMoment, lastPlayed, bucketOf, compareByGroup, buildGroups };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylGrouping;
