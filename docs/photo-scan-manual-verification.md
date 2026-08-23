@@ -329,3 +329,37 @@ before you tapped and keep spinning after the answer came back.
 2. Attach a very **tall** photo → it stops growing at 60% of the screen height
    rather than pushing the rest of the form out of reach.
 3. Check on the phone as well as the desktop.
+
+---
+
+## What a scan costs
+
+The form quotes a price before it spends anything. The numbers come from the
+app's own ledger of every Claude call (`/api/scan/usage`) — Anthropic publishes
+no balance or remaining-credits endpoint, so there is nothing to read a
+"credits left" figure from, and this is spend, not a balance. It also only
+counts what *this app* spends; anything else on the same API key is invisible
+to it.
+
+Automated tests cover the arithmetic and the wording. What they cannot reach is
+whether the estimate matches a real photo, so:
+
+- [ ] Open **add record**. The hint under *Analyse* reads
+      `add a cover or a spotify link first · 0¢ this month` on a fresh
+      collection.
+- [ ] Open the cover sheet. Its top line quotes both ways in:
+      `photo ≈ 0.6¢ · spotify ≈ 0.04¢ · 0¢ spent this month`.
+- [ ] Hand in a **photo**. The hint becomes
+      `nothing is sent until you tap analyse · this one ≈ … · … this month`.
+- [ ] Hand in a **Spotify link** instead. The quote drops to the much cheaper
+      Spotify figure — that call is Haiku, not vision.
+- [ ] Tap *Analyse*. When it finishes, the month total has gone up by roughly
+      the quoted amount.
+- [ ] Scan two or three real sleeves. The photo estimate should settle near
+      what your own photos actually cost — it averages the last 20 scans, so
+      the seeded 0.6¢ is only ever the opening guess.
+- [ ] Scan a sleeve **with a phone photo straight from the camera**. Big images
+      cost more; if the estimate lands far above 1¢, that is the honest number
+      and worth knowing.
+- [ ] Log out and reload. The hint falls back to its old wording with no price
+      — the readout is auth-gated and must fail quietly, not error.

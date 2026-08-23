@@ -260,16 +260,17 @@ def scan_record():
     ).all()
     genres = sorted({r.genre for r in rows if r.genre})
 
-    # The whole pipeline runs inside one try/except: lookup_musicbrainz,
-    # fetch_cover and find_duplicate are documented never to raise, but that
-    # contract isn't airtight (e.g. a 200 with an unexpected JSON shape can
-    # still blow up a caller). The route doesn't trust it absolutely — any
-    # escape here must still degrade to a JSON error, never a 500 HTML page.
     source = "photo" if image else "spotify"
     # Filled by the Claude calls below and banked in the finally, so a scan
     # that dies after the API answered still records what it spent — the call
     # was billed the moment it returned, and nothing downstream refunds it.
     spent = []
+
+    # The whole pipeline runs inside one try/except: lookup_musicbrainz,
+    # fetch_cover and find_duplicate are documented never to raise, but that
+    # contract isn't airtight (e.g. a 200 with an unexpected JSON shape can
+    # still blow up a caller). The route doesn't trust it absolutely — any
+    # escape here must still degrade to a JSON error, never a 500 HTML page.
     try:
         if image:
             fields = scan.extract_from_image(image, genres, usage_out=spent)

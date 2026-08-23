@@ -258,6 +258,12 @@ select option{background:var(--surface);color:var(--text)}
 .cover-sheet-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;text-align:left}
 .cover-sheet-row:last-child{border-bottom:none}
 .cover-sheet-row:hover{background:var(--card)}
+/* The price of the two ways in, at the top of the sheet that offers them.
+   :empty rather than a hidden class — the line is blank until the readout
+   loads, and an empty bordered strip reads as a broken row. */
+.cover-sheet-spend{padding:8px 12px;border-bottom:1px solid var(--border);
+  font-size:11px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.cover-sheet-spend:empty{display:none}
 .spotify-mark{width:24px;height:24px;flex-shrink:0;display:block}
 
 /* detail — split layout: cover left, info right */
@@ -1417,6 +1423,7 @@ select option{background:var(--surface);color:var(--text)}
           </div>
 
           <div class="cover-sheet hidden" id="coverSheet">
+            <div class="cover-sheet-spend" id="coverSheetSpend"></div>
             <button type="button" class="cover-sheet-row" id="coverSheetFile" onclick="pickCoverFile()">
               <i class="ti ti-folder"></i> Choose file
             </button>
@@ -1684,6 +1691,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="/static/topojson-client.min.js"></script>
 <script src="/static/grouping.js"></script>
+<script src="/static/spend.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 let records = [];
@@ -2915,6 +2923,7 @@ function openAdd(){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   document.getElementById('formOverlay').classList.remove('hidden');
+  refreshScanUsage();
   resetFormScroll();
 }
 
@@ -2977,6 +2986,7 @@ function openEdit(id){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   document.getElementById('formOverlay').classList.remove('hidden');
+  refreshScanUsage();
   resetFormScroll();
 }
 
@@ -3140,6 +3150,31 @@ function clearCover(){
   updateScanControls();
 }
 
+// ── what scanning costs ────────────────────────────────────────────────────
+// Anthropic exposes no balance or remaining-credits endpoint, so there is no
+// "credits left" to read. The server keeps a ledger of every call instead, and
+// this is what it has spent — plus what the next scan is likely to cost,
+// averaged over the scans already made.
+//
+// null until the first successful fetch, which is what the hint reads to know
+// it should keep saying exactly what it used to.
+let scanUsage = null;
+
+async function refreshScanUsage(){
+  try{
+    const res = await fetch('/api/scan/usage');
+    if(!res.ok) return;              // not authed, or the endpoint is down —
+    scanUsage = await res.json();    // the hint simply stays priceless
+  }catch(e){ return; }
+  renderScanUsage();
+}
+
+function renderScanUsage(){
+  document.getElementById('coverSheetSpend').textContent =
+    VinylSpend.sheetSpendText(scanUsage);
+  updateScanControls();
+}
+
 // Whether analyse has anything to work on. A cover counts however it got on
 // screen — openEdit loading the record's own artwork included, which is what
 // makes re-analysing an existing record possible.
@@ -3154,9 +3189,13 @@ function updateScanControls(){
   // scanInFlight is the other reason to be dead: runScan already refuses a
   // second concurrent call, but a button that still looks live invites the tap.
   document.getElementById('analyseBtn').disabled = !armed || scanInFlight;
-  document.getElementById('scanHint').textContent = armed
-    ? 'nothing is sent until you tap analyse'
-    : 'add a cover or a spotify link first';
+  // The quoted price has to be for the scan the button would actually run, so
+  // the source is picked the same way runPendingScan picks it: link wins.
+  document.getElementById('scanHint').textContent = VinylSpend.scanHintText({
+    armed,
+    source: pendingSpotifyUrl ? 'spotify' : 'photo',
+    usage: scanUsage,
+  });
   document.getElementById('scanRepickBtn')
     .classList.toggle('on', scanCandidates.length > 1);
 }
@@ -3373,6 +3412,9 @@ async function runScan(body){
     // A scan whose form was closed or replaced must not re-enable the controls
     // of the session that replaced it; closeForm released its busy state.
     if(myToken === scanToken) setScanBusy(false);
+    // Unconditional: the money was spent whatever became of the result, and an
+    // abandoned scan still has to show up in the month's total.
+    refreshScanUsage();
   }
 }
 
