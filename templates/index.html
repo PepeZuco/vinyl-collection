@@ -2806,6 +2806,15 @@ function deleteNote(idx) {
   renderNotesForm();
 }
 
+// The form overlay is only hidden, never torn down, so the browser keeps the
+// scroll offset from the last record edited. Reopening mid-form is disorienting
+// — every open should land on the first section. Both the modal (desktop) and
+// its body (mobile) can be the scroller, so reset whichever is scrolled.
+function resetFormScroll(){
+  const overlay=document.getElementById('formOverlay');
+  overlay.querySelectorAll('.modal,.modal-body').forEach(el=>{el.scrollTop=0;});
+}
+
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';
   document.getElementById('formTitle').textContent='add record';
@@ -2846,6 +2855,7 @@ function openAdd(){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   document.getElementById('formOverlay').classList.remove('hidden');
+  resetFormScroll();
 }
 
 function openEdit(id){
@@ -2903,6 +2913,7 @@ function openEdit(id){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   document.getElementById('formOverlay').classList.remove('hidden');
+  resetFormScroll();
 }
 
 function closeForm(){
