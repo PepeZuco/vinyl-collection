@@ -1,9 +1,16 @@
-# Group view — manual verification
+# Crates — manual verification
 
-The bucket rules are covered by `tests/test_grouping.js` (21 tests, run through
-`pytest` via `tests/test_grouping.py`), and the render path was driven headlessly
-against the real page. What follows is what neither can reach: how it *looks*,
-and how it behaves on a real phone.
+Grouping is now its own control, independent of sorting. `Group by` decides what
+the crates are; `Sort by` decides how records run inside them.
+
+The bucket and ordering rules are covered by `tests/test_grouping.js` (47 tests,
+run through `pytest` via `tests/test_grouping.py`), and the whole pipeline was
+driven over the real 259-record collection — every crate set totals 259, and
+flattening the crates reproduces the sorted list in all of them. The
+`localStorage` migration was exercised against the real `loadGroupBy` source.
+
+What follows is what none of that reaches: how it *looks*, and how it behaves on
+a real phone.
 
 Tick the ones that pass; anything that fails, tell me what you saw.
 
@@ -11,58 +18,85 @@ Tick the ones that pass; anything that fails, tell me what you saw.
 
 ## 1. Desktop
 
-1. Top-right corner shows **two** buttons: grid and group. The old list button
-   is gone.
-2. Click **group**. The collection divides into crates, headed by the field in
-   **Sort by** — with the default sort, calendar months like *August 2026*.
-3. Each header shows a record count on the right, and the counts add up to the
+1. The toolbar has **two** dropdowns side by side: **Crates** on the left,
+   **Sort by** (with its direction arrow) on the right. The old grid/group
+   toggle in the top-right corner is **gone**.
+2. The Crates dropdown opens to nine entries: *No crates*, then Month added,
+   Genre, Country, Decade, Album initial, Rating, Plays, Last played. There is
+   a divider under *No crates*.
+3. Pick **No crates**. Plain grid, no headers — this is what the old grid button
+   used to do.
+4. Pick **Genre**. Twelve crates, running *Blues → Classical → … → Rock →
+   Soul & Funk*, with **Unknown genre** last.
+5. Each header shows a record count on the right, and the counts add up to the
    record count in the page header.
-4. Cards inside crates look exactly like grid cards: hover lift, quick-edit
+6. Cards inside crates look exactly like grid cards: hover lift, quick-edit
    pencil (when logged in), play-count +/−, rating squares, country flag.
-5. Scroll a long crate. Its header **sticks** to the top of the window and is
-   replaced by the next crate's header as you pass into it.
-6. Click a header. The crate collapses, the chevron rotates, the header stays.
-7. Reload the page. The crate you collapsed is **still** collapsed.
-8. Change **Sort by** to *Artist*. Crates become one per artist, and nothing is
-   collapsed — the collapse from step 6 belongs to *Date added* only.
-9. Go back to *Date added*. Your collapsed crate is still there.
-10. Hit **collapse all**, then reload. Everything is still shut and the button
+7. Now change **Sort by** to *Year* without touching Crates. The crates stay put
+   as genres; only the order of the cards inside them changes.
+8. Pick **Country**. Headers show a **flag** followed by the country name —
+   *Brazil*, *United States*, *United Kingdom* — with **Unknown country** (137
+   records) last.
+9. Flip the sort direction arrow. The crates reverse *and* the cards in them do,
+   but **Unknown country stays at the bottom** rather than jumping to the top.
+   This is the one ordering rule worth staring at.
+10. Scroll a long crate. Its header **sticks** to the top of the window and is
+    replaced by the next crate's header as you pass into it.
+11. Click a header. The crate collapses, the chevron rotates, the header stays.
+12. Reload the page. The crate you collapsed is **still** collapsed, and you are
+    **still grouped by country** — the choice persists.
+13. Switch to **Genre**. Nothing is collapsed — the collapse from step 11 belongs
+    to *Country* only. Switch back to Country; it is still there.
+14. Hit **collapse all**, then reload. Everything is still shut and the button
     reads *expand all*.
-11. Flip the sort direction arrow. Crates reverse along with the cards in them.
-12. Sort by *Year* → decades. *Total rating* → star bands. *Plays* → play bands
-    ending in *Never played*.
-13. Type something in search that matches nothing. You get the normal empty
+15. **Decade** → 2020s…1950s, *Year unknown* last. **Rating** → star bands,
+    *Unrated* last. **Plays** → play bands; note *Never played* is a real band
+    here and **does** flip with the arrow. **Last played** → calendar months,
+    *Never played* (149 records) last.
+16. **Album initial** → 25 crates, `#` first (digits and symbols share it).
+17. Type something in search that matches nothing. You get the normal empty
     state, not an empty crate.
-14. Search something that matches a little. Crates that lost all their records
+18. Search something that matches a little. Crates that lost all their records
     disappear rather than showing "0 records".
-15. Open a record from inside a crate, then use the **←/→** arrows in the detail
+19. Open a record from inside a crate, then use the **←/→** arrows in the detail
     drawer. It walks records in the order they appear on screen, crossing from
     one crate into the next.
-16. Switch back to **grid**. Ordinary grid, no headers. Reload — still grid.
-17. Both themes: crate headers and the count read cleanly in light and dark.
+20. Both themes: crate headers, the count, and the country flags read cleanly in
+    light and dark.
+21. Narrow the window until the toolbar wraps. Two dropdowns plus the genre
+    filter and buyer toggle should wrap tidily, not overflow.
 
 ## 2. Phone (this is the part with no coverage at all)
 
-1. The top-right grid/group toggle is **not** visible — it's desktop-only.
-2. Tap the **filters** button. The sheet now has a **Crates** section directly
-   under *Sort by*.
-3. The switch reads **Group by date added** — naming whatever the sort field
-   currently is.
-4. Change *Sort by* to *Year* without leaving the sheet. The switch relabels
-   itself to **Group by year** immediately.
-5. Turn the switch on. Tap **Show records**. The collection is in crates.
-6. Headers are a filled rounded row, tall enough to tap comfortably, with the
+1. Tap the **filters** button. The sheet's first section is **Crates**, above
+   *Sort by*. The old on/off switch and its "Change the sort above and this
+   follows it" hint are gone.
+2. It is a full-width dropdown reading whatever you are grouped by.
+3. Pick **Genre**, tap **Show records**. The collection is in genre crates.
+4. Headers are a filled rounded row, tall enough to tap comfortably, with the
    count in a pill on the right.
-7. Cards sit **two per row** inside each crate.
-8. Scroll. Headers stick to the top and don't collide with anything.
-9. Tap a header to collapse. Tap it again to expand.
-10. Reopen the sheet — the switch is still on and still names the sort field.
-11. Turn the switch off. Back to a plain two-column grid.
-12. Rotate to landscape, or try a tablet width: crates still read correctly at
+5. Cards sit **two per row** inside each crate.
+6. Scroll. Headers stick to the top and don't collide with anything.
+7. Tap a header to collapse. Tap it again to expand.
+8. Reopen the sheet — it still reads *Genre*.
+9. Pick **Country**. Flags render at the right size in the header at phone
+   widths, and the name isn't clipped.
+10. Pick **No crates**. Back to a plain two-column grid.
+11. Rotate to landscape, or try a tablet width: crates still read correctly at
     three and four columns.
 
-## 3. Upgrading from the old list view
+## 3. Upgrading from the old toggle
 
-Already checked headlessly — a browser holding the retired `'list'` in
-`localStorage['vinyl-view']` opens in grid, with no errors. Worth one glance on
-your own machine if you had list view selected, but nothing is expected here.
+Checked against the real `loadGroupBy` source, all paths passing:
+
+| what the browser was holding | opens as |
+|---|---|
+| nothing (fresh visit) | grouped by **Month added** |
+| `vinyl-view: 'group'` | grouped by **Month added**, old key cleared |
+| `vinyl-view: 'grid'` | **No crates** |
+| `vinyl-view: 'list'` (retired) | **No crates** |
+| `vinyl-group: 'genre'` | grouped by **Genre** |
+| `vinyl-group:` garbage | grouped by **Month added** |
+
+Nothing expected here, but worth one glance on your own machine if you had the
+old group view selected.

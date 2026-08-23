@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { bucketOf, buildGroups, avgRating, lastPlayed } = require('../static/grouping.js');
+const { bucketOf, buildGroups, avgRating, lastPlayed, compareByGroup } = require('../static/grouping.js');
 
 // A record only needs the fields the bucket rule reads, so each test builds the
 // smallest one that exercises its rule.
@@ -114,6 +114,113 @@ test('a record with no plays falls into the Never played bucket', () => {
   assert.strictEqual(bucketOf(rec({ play_dates: '[]' }), 'last_played').label, 'Never played');
 });
 
+// ── bucketOf: genre ─────────────────────────────────────────────────────────
+
+test('genre buckets one crate per genre', () => {
+  assert.strictEqual(bucketOf(rec({ genre: 'Soul & Funk' }), 'genre').label, 'Soul & Funk');
+});
+
+test('genre bucket ids ignore case so casing variants do not split a crate', () => {
+  assert.strictEqual(bucketOf(rec({ genre: 'Jazz' }), 'genre').id,
+                     bucketOf(rec({ genre: 'jazz' }), 'genre').id);
+});
+
+test('a record with no genre falls into the Unknown genre bucket', () => {
+  assert.strictEqual(bucketOf(rec({ genre: '' }), 'genre').label, 'Unknown genre');
+  assert.strictEqual(bucketOf(rec({ genre: '  ' }), 'genre').label, 'Unknown genre');
+});
+
+test('the unknown genre bucket is marked unknown so it can be pinned last', () => {
+  assert.strictEqual(bucketOf(rec({ genre: '' }), 'genre').unknown, true);
+  assert.strictEqual(bucketOf(rec({ genre: 'Jazz' }), 'genre').unknown, false);
+});
+
+// ── bucketOf: country ───────────────────────────────────────────────────────
+
+test('country buckets by ISO code and carries the code so the page can draw a flag', () => {
+  const b = bucketOf(rec({ country: 'BR' }), 'country');
+  assert.strictEqual(b.id, 'BR');
+  assert.strictEqual(b.code, 'BR');
+});
+
+test('country bucket ids uppercase the code so casing variants do not split a crate', () => {
+  assert.strictEqual(bucketOf(rec({ country: 'br' }), 'country').id,
+                     bucketOf(rec({ country: 'BR' }), 'country').id);
+});
+
+test('a record with no country falls into the Unknown country bucket', () => {
+  const b = bucketOf(rec({ country: '' }), 'country');
+  assert.strictEqual(b.label, 'Unknown country');
+  assert.strictEqual(b.unknown, true);
+  assert.strictEqual(b.code, undefined);
+});
+
+test('country crates rank by resolved name, so GB sorts under United Kingdom', () => {
+  // The page passes countryLabelFromCode in; ranking on the raw code would put
+  // GB between DE and JP instead of last.
+  const names = { DE: 'Germany', JP: 'Japan', GB: 'United Kingdom' };
+  const rankOf = code => bucketOf(rec({ country: code }), 'country', c => names[c]).rank;
+  assert.ok(rankOf('DE') < rankOf('JP'));
+  assert.ok(rankOf('JP') < rankOf('GB'));
+});
+
+// ── compareByGroup: the order the crates themselves come out in ─────────────
+
+test('genre crates run A to Z ascending', () => {
+  const jazz = rec({ genre: 'Jazz' }), rock = rec({ genre: 'Rock' });
+  assert.ok(compareByGroup(jazz, rock, 'genre', 'asc') < 0);
+});
+
+test('the direction arrow reverses the crates, not just the records in them', () => {
+  const jazz = rec({ genre: 'Jazz' }), rock = rec({ genre: 'Rock' });
+  assert.ok(compareByGroup(jazz, rock, 'genre', 'desc') > 0);
+});
+
+test('records of the same crate compare equal so the sort field can break the tie', () => {
+  const a = rec({ genre: 'Jazz', year: 1959 }), b = rec({ genre: 'Jazz', year: 1971 });
+  assert.strictEqual(compareByGroup(a, b, 'genre', 'asc'), 0);
+});
+
+test('unknown crates pin last ascending', () => {
+  const known = rec({ genre: 'Rock' }), unknown = rec({ genre: '' });
+  assert.ok(compareByGroup(known, unknown, 'genre', 'asc') < 0);
+});
+
+test('unknown crates pin last descending too, rather than flipping to the top', () => {
+  // 137 of the collection has no country — an Unknown crate that leads the page
+  // whenever the arrow points down would bury everything else.
+  const known = rec({ country: 'BR' }), unknown = rec({ country: '' });
+  assert.ok(compareByGroup(known, unknown, 'country', 'desc') < 0);
+});
+
+test('grouping by none leaves every record in one crate so the sort field alone decides', () => {
+  const a = rec({ genre: 'Jazz' }), b = rec({ genre: 'Rock' });
+  assert.strictEqual(compareByGroup(a, b, 'none', 'asc'), 0);
+});
+
+test('decade crates run oldest first ascending', () => {
+  assert.ok(compareByGroup(rec({ year: 1971 }), rec({ year: 1994 }), 'year', 'asc') < 0);
+});
+
+test('rating crates run lowest first ascending, so descending leads with 5 stars', () => {
+  const three = rec({ my_rating: 3, wife_rating: 3 }), five = rec({ my_rating: 5, wife_rating: 5 });
+  assert.ok(compareByGroup(three, five, 'avg_rating', 'asc') < 0);
+  assert.ok(compareByGroup(three, five, 'avg_rating', 'desc') > 0);
+});
+
+test('sorting a list by compareByGroup makes each crate contiguous', () => {
+  // This is the property buildGroups depends on, and through it the detail
+  // drawer's prev/next: crates fall out of one flat sort, never a regroup.
+  const list = [
+    rec({ id: 1, genre: 'Rock' }), rec({ id: 2, genre: 'Jazz' }),
+    rec({ id: 3, genre: '' }),     rec({ id: 4, genre: 'Rock' }),
+    rec({ id: 5, genre: 'Jazz' }),
+  ];
+  const sorted = list.slice().sort((a, b) => compareByGroup(a, b, 'genre', 'asc'));
+  assert.deepStrictEqual(buildGroups(sorted, 'genre').map(g => g.label),
+                         ['Jazz', 'Rock', 'Unknown genre']);
+});
+
 // ── lastPlayed ──────────────────────────────────────────────────────────────
 
 test('lastPlayed returns the most recent play regardless of stored order', () => {
@@ -183,6 +290,18 @@ test('records that share a bucket but are not adjacent join the same crate', () 
   const groups = buildGroups(list, 'album_name');
   assert.deepStrictEqual(groups.map(g => g.label), ['#', 'A']);
   assert.deepStrictEqual(groups[0].records.map(r => r.id), [1, 3]);
+});
+
+test('buildGroups carries the country code onto the crate so the header can draw a flag', () => {
+  const groups = buildGroups([rec({ country: 'BR' })], 'country', c => 'Brazil');
+  assert.strictEqual(groups[0].code, 'BR');
+  assert.strictEqual(groups[0].label, 'Brazil');
+});
+
+test('a crate with no country carries no code, so no flag is drawn for it', () => {
+  const groups = buildGroups([rec({ country: '' })], 'country');
+  assert.strictEqual(groups[0].code, undefined);
+  assert.strictEqual(groups[0].label, 'Unknown country');
 });
 
 test('buildGroups of an empty list is an empty list of crates', () => {
