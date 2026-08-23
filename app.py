@@ -1,11 +1,13 @@
-import os, io, base64, csv, json
+import os, io, base64, csv, json, uuid
 csv.field_size_limit(10 * 1024 * 1024)
 from flask import Flask, request, jsonify, send_file, session, render_template
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from functools import wraps
 
+import pricing
 import scan
 
 app = Flask(__name__)
@@ -94,6 +96,20 @@ class Record(db.Model):
             "notes": self.notes or "",
             "country": self.country or "",
         }
+
+# One row per Claude API call a scan made. Anthropic publishes no balance or
+# remaining-credits endpoint, so what this app spends is only knowable if this
+# app writes it down — hence a ledger rather than a lookup.
+class ScanSpend(db.Model):
+    id            = db.Column(db.Integer, primary_key=True)
+    scan_id       = db.Column(db.String(32))  # groups the calls of one scan
+    at            = db.Column(db.String(50))  # a stamp — see the note above
+    source        = db.Column(db.String(10))  # 'photo' | 'spotify'
+    model         = db.Column(db.String(60))
+    input_tokens  = db.Column(db.Integer, default=0)
+    output_tokens = db.Column(db.Integer, default=0)
+    cost_usd      = db.Column(db.Float, default=0.0)
+
 
 with app.app_context():
     db.create_all()
@@ -249,20 +265,24 @@ def scan_record():
     # contract isn't airtight (e.g. a 200 with an unexpected JSON shape can
     # still blow up a caller). The route doesn't trust it absolutely — any
     # escape here must still degrade to a JSON error, never a 500 HTML page.
+    source = "photo" if image else "spotify"
+    # Filled by the Claude calls below and banked in the finally, so a scan
+    # that dies after the API answered still records what it spent — the call
+    # was billed the moment it returned, and nothing downstream refunds it.
+    spent = []
     try:
         if image:
-            source = "photo"
-            fields = scan.extract_from_image(image, genres)
+            fields = scan.extract_from_image(image, genres, usage_out=spent)
             spotify_image = None
         else:
-            source = "spotify"
             resolved = scan.extract_from_spotify(spotify_url)
             spotify_image = resolved.get("image_url")
             fields = {
                 "artist": resolved["artist"],
                 "album_name": resolved["album_name"],
                 "genre": scan.classify_genre(
-                    resolved["artist"], resolved["album_name"], genres),
+                    resolved["artist"], resolved["album_name"], genres,
+                    usage_out=spent),
                 "label": None,
                 "catalog_number": None,
             }
@@ -285,6 +305,8 @@ def scan_record():
         return jsonify({"error": message}), status
     except Exception as e:
         return jsonify({"error": str(e)}), 502
+    finally:
+        _record_scan_spend(source, spent)
 
     year = candidates[0]["year"] if candidates else ""
 
@@ -297,6 +319,89 @@ def scan_record():
         "duplicate_of": {"id": duplicate["id"], "artist": duplicate["artist"],
                          "album_name": duplicate["album_name"]} if duplicate else None,
         "search_string": " ".join(p for p in [artist, album, year, "vinyl cover"] if p),
+    })
+
+# ── scan spend ────────────────────────────────────────────────────────────────
+
+# What one scan costs before any has been measured. Both are replaced by the
+# running average as soon as the ledger has a scan of that source in it, so
+# these only ever show on a fresh collection.
+SEED_ESTIMATE_USD = {"photo": 0.006, "spotify": 0.0004}
+
+# How many past scans the estimate averages. Short enough that switching model
+# or photo size shows up in the number within a few scans.
+ESTIMATE_WINDOW = 20
+
+
+def _record_scan_spend(source, spent):
+    """Write one ledger row per API call the scan made.
+
+    Never raises: this runs in the scan route's finally, and a bookkeeping
+    failure must not turn a scan the user already paid for into an error.
+    """
+    if not spent:
+        return
+    scan_id = uuid.uuid4().hex
+    at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        db.session.execute(db.insert(ScanSpend), [{
+            "scan_id": scan_id,
+            "at": at,
+            "source": source,
+            "model": call["model"],
+            "input_tokens": call["input_tokens"],
+            "output_tokens": call["output_tokens"],
+            "cost_usd": pricing.cost_usd(
+                call["model"], call["input_tokens"], call["output_tokens"]),
+        } for call in spent])
+        db.session.commit()
+    except Exception:
+        app.logger.warning("Could not record scan spend", exc_info=True)
+        db.session.rollback()
+
+
+def _scan_estimate(source):
+    """Mean cost of the last ESTIMATE_WINDOW scans from this source.
+
+    Grouped by scan_id, not by row: a scan is one or more API calls, and the
+    form is quoting the price of a scan.
+    """
+    recent = (db.session.query(func.sum(ScanSpend.cost_usd))
+              .filter(ScanSpend.source == source)
+              .group_by(ScanSpend.scan_id)
+              .order_by(func.max(ScanSpend.id).desc())
+              .limit(ESTIMATE_WINDOW).all())
+    if not recent:
+        return SEED_ESTIMATE_USD[source]
+    return sum(total for (total,) in recent) / len(recent)
+
+
+def _spend_over(query):
+    """(dollars, scans) for a ScanSpend query — scans counted, not calls."""
+    cost, scans = query.with_entities(
+        func.coalesce(func.sum(ScanSpend.cost_usd), 0.0),
+        func.count(func.distinct(ScanSpend.scan_id)),
+    ).one()
+    return float(cost or 0.0), int(scans or 0)
+
+
+@app.route("/api/scan/usage")
+@require_auth
+def scan_usage():
+    """What scanning has cost. There is no credits balance to read — Anthropic
+    publishes no such endpoint — so this reports spend from our own ledger."""
+    month = datetime.now().strftime("%Y-%m")
+    month_usd, month_scans = _spend_over(
+        ScanSpend.query.filter(ScanSpend.at.startswith(month)))
+    total_usd, total_scans = _spend_over(ScanSpend.query)
+    return jsonify({
+        "month": month,
+        "month_usd": month_usd,
+        "month_scans": month_scans,
+        "total_usd": total_usd,
+        "total_scans": total_scans,
+        "estimate": {"photo": _scan_estimate("photo"),
+                     "spotify": _scan_estimate("spotify")},
     })
 
 # ── CSV import / export ───────────────────────────────────────────────────────

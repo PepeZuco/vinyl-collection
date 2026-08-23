@@ -304,7 +304,10 @@ select option{background:var(--surface);color:var(--text)}
 .dm-mcell label{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--muted);display:flex;align-items:center;gap:5px;margin-bottom:3px}
 .dm-mcell label i{font-size:12px;color:var(--accent)}
+.dm-mcell label i.ti-droplet{color:#4AA3C4}
 .dm-mcell span{font-size:13px;font-weight:600}
+/* how many times in total, next to the date of the latest one */
+.dm-mcell span .sub{font-size:11px;font-weight:600;color:var(--muted);margin-left:5px}
 .dm-history{margin-top:14px}
 .dm-history h4{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--muted);margin-bottom:8px}
@@ -862,9 +865,12 @@ select option{background:var(--surface);color:var(--text)}
 .crate-head .crate-chev{display:flex;color:var(--muted);transition:transform .18s}
 .crate-head:hover .crate-chev{color:var(--accent)}
 .crate.collapsed .crate-chev{transform:rotate(-90deg)}
-.crate-label{font-size:13px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:7px;min-width:0}
+/* --crate-hue is set per crate only when grouping by genre, so the crate name
+   carries the same hue as the cards inside it; unset everywhere else */
+.crate-label{font-size:13px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:7px;min-width:0;color:var(--crate-hue,inherit)}
 .crate-label .flag-wrap{flex-shrink:0}
-.crate-count{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:auto;
+/* --label, not --muted: #555 on the dark background is barely legible */
+.crate-count{font-family:var(--font-mono);font-size:11px;color:var(--label);margin-left:auto;
   font-variant-numeric:tabular-nums;letter-spacing:.04em}
 .crate-body{padding:14px 0 20px}
 .crate.collapsed .crate-body{display:none}
@@ -2039,8 +2045,11 @@ function cratesHTML(recs) {
   </div>`;
   return bar + crates.map(crate => {
     const isShut = shut.has(crate.id);
+    // genre crates wear their own hue; the unknown-genre crate takes the same
+    // neutral the cards without a genre use
+    const hue = groupBy === 'genre' ? genreColor(crate.unknown ? '' : crate.label) : null;
     return `<section class="crate${isShut ? ' collapsed' : ''}">
-      <button class="crate-head" data-crate="${esc(crate.id)}" aria-expanded="${!isShut}">
+      <button class="crate-head" data-crate="${esc(crate.id)}" aria-expanded="${!isShut}"${hue ? ` style="--crate-hue:${hue}"` : ''}>
         <span class="crate-chev"><i class="ti ti-chevron-down"></i></span>
         <span class="crate-label">${crate.code ? flagImgHTML(crate.code, 18) : ''}${esc(crate.label)}</span>
         <span class="crate-count">${crate.records.length} ${crate.records.length === 1 ? 'record' : 'records'}</span>
@@ -2323,10 +2332,28 @@ function dmHistoryGroupHTML(group) {
 }
 
 // 'YYYY-MM-DD' or 'YYYY-MM-DD · HH:MM' — no bare 'T' stamp reaches the screen
+function stampLabel(v) {
+  const m = momentOf(v);
+  const day = m.day || String(v || '').slice(0, 10);
+  return m.time ? `${day} · ${m.time}` : day;
+}
+
 function boughtLabel(r) {
   const m = momentOf(r.bought_date);
   if (!m.day) return esc(r.bought_date || '—');
   return esc(m.time ? `${m.day} · ${m.time}` : m.day);
+}
+
+// The history timeline carries every cleaning, but it takes reading to answer
+// "when was this last cleaned?" — the question the record actually gets asked.
+// This is that one line: the newest stamp, plus the total when there is more
+// than one, so the timeline is still what you open for the full list.
+function lastCleanedLabel(r) {
+  const dates = parseCleanedDates(r.cleaned_dates).filter(Boolean);
+  if (!dates.length) return '—';
+  const latest = dates.reduce((a, b) => momentAt(b) > momentAt(a) ? b : a);
+  return esc(stampLabel(latest))
+    + (dates.length > 1 ? `<span class="sub">${dates.length}×</span>` : '');
 }
 
 function dmInfoHTML(r) {
@@ -2355,6 +2382,7 @@ function dmInfoHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-calendar"></i>Bought</label><span>${boughtLabel(r)}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-map-pin"></i>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
+      <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${lastCleanedLabel(r)}</span></div>
     </div>
     ${historyGroups.length ? `<div class="dm-history"><h4>History</h4>${historyGroups.map(dmHistoryGroupHTML).join('')}</div>` : ''}`;
 }

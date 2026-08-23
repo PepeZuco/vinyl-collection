@@ -279,6 +279,26 @@ def _anthropic_client():
     return anthropic.Anthropic(api_key=key)
 
 
+def _record_usage(usage_out, model: str, response) -> None:
+    """Append one call's token counts to a caller-supplied ledger.
+
+    Never raises and never blocks the scan: accounting must not be able to
+    fail a request the user already paid for. A response whose usage is absent
+    or not countable is skipped rather than recorded as zero, so a missing row
+    means "not measured" instead of "cost nothing".
+    """
+    if usage_out is None:
+        return
+    usage = getattr(response, "usage", None)
+    input_tokens = getattr(usage, "input_tokens", None)
+    output_tokens = getattr(usage, "output_tokens", None)
+    if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
+        logger.warning("No countable usage on the %s response", model)
+        return
+    usage_out.append({"model": model, "input_tokens": input_tokens,
+                      "output_tokens": output_tokens})
+
+
 def _sleeve_schema(genres: list[str]) -> dict:
     nullable_string = {"type": ["string", "null"]}
     return {
@@ -305,8 +325,12 @@ def _media_type_and_data(data_uri: str) -> tuple[str, str]:
     return media_type, payload
 
 
-def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
-    """Read artist, album, genre, label and catalog number off a sleeve photo."""
+def extract_from_image(image_data_uri: str, genres: list[str],
+                       usage_out: list | None = None) -> dict:
+    """Read artist, album, genre, label and catalog number off a sleeve photo.
+
+    Pass ``usage_out`` to have this call's token counts appended to it.
+    """
     client = _anthropic_client()
     media_type, data = _media_type_and_data(image_data_uri)
 
@@ -330,6 +354,10 @@ def extract_from_image(image_data_uri: str, genres: list[str]) -> dict:
             ],
         }],
     )
+    # Recorded before the response is parsed, not after: the call was billed
+    # the moment it came back, and a parse failure below must not lose the row.
+    _record_usage(usage_out, VISION_MODEL, response)
+
     # output_config.format guarantees valid JSON only when the call succeeds;
     # truncation or an unexpected response shape must not escape as an opaque
     # StopIteration or JSONDecodeError.
@@ -358,8 +386,12 @@ def _genre_schema(genres: list[str]) -> dict:
     }
 
 
-def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
-    """Pick the best-fitting genre from the collection's own vocabulary."""
+def classify_genre(artist: str, album: str, genres: list[str],
+                   usage_out: list | None = None) -> str | None:
+    """Pick the best-fitting genre from the collection's own vocabulary.
+
+    Pass ``usage_out`` to have this call's token counts appended to it.
+    """
     if not genres:
         return None
     try:
@@ -379,6 +411,7 @@ def classify_genre(artist: str, album: str, genres: list[str]) -> str | None:
             },
             messages=[{"role": "user", "content": f"Artist: {artist}\nAlbum: {album}"}],
         )
+        _record_usage(usage_out, GENRE_MODEL, response)
         text = next(b.text for b in response.content if b.type == "text")
         genre = json.loads(text).get("genre")
     except Exception:
