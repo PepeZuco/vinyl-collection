@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { bucketOf, buildGroups, avgRating } = require('../static/grouping.js');
+const { bucketOf, buildGroups, avgRating, lastPlayed } = require('../static/grouping.js');
 
 // A record only needs the fields the bucket rule reads, so each test builds the
 // smallest one that exercises its rule.
@@ -96,6 +96,43 @@ test('plays bucket into never / 1-4 / 5-9 / 10+ bands', () => {
   assert.strictEqual(label(10), '10+ plays');
 });
 
+// ── bucketOf: last played ───────────────────────────────────────────────────
+
+test('last played buckets into the calendar month of the most recent play', () => {
+  const r = rec({ play_dates: JSON.stringify(['2026-06-02', '2026-08-14', '2026-07-30']) });
+  assert.strictEqual(bucketOf(r, 'last_played').label, 'August 2026');
+});
+
+test('two records last played in the same month share a bucket id', () => {
+  const a = bucketOf(rec({ play_dates: '["2026-08-02"]' }), 'last_played');
+  const b = bucketOf(rec({ play_dates: '["2026-08-30"]' }), 'last_played');
+  assert.strictEqual(a.id, b.id);
+});
+
+test('a record with no plays falls into the Never played bucket', () => {
+  assert.strictEqual(bucketOf(rec({ play_dates: '' }), 'last_played').label, 'Never played');
+  assert.strictEqual(bucketOf(rec({ play_dates: '[]' }), 'last_played').label, 'Never played');
+});
+
+// ── lastPlayed ──────────────────────────────────────────────────────────────
+
+test('lastPlayed returns the most recent play regardless of stored order', () => {
+  assert.strictEqual(lastPlayed({ play_dates: '["2026-08-14","2024-01-09"]' }), '2026-08-14');
+  assert.strictEqual(lastPlayed({ play_dates: '["2024-01-09","2026-08-14"]' }), '2026-08-14');
+});
+
+test('lastPlayed reads a play count of none as no date at all', () => {
+  assert.strictEqual(lastPlayed({}), '');
+  assert.strictEqual(lastPlayed({ play_dates: '[]' }), '');
+});
+
+test('lastPlayed treats unusable play_dates as never played rather than throwing', () => {
+  // A truncated write, or the column holding something that is not an array
+  assert.strictEqual(lastPlayed({ play_dates: '["2026-08-1' }), '');
+  assert.strictEqual(lastPlayed({ play_dates: '{"when":"2026-08-14"}' }), '');
+  assert.strictEqual(lastPlayed({ play_dates: '[null, "2026-08-14"]' }), '2026-08-14');
+});
+
 // ── avgRating ───────────────────────────────────────────────────────────────
 
 test('avgRating averages only the ratings that were actually given', () => {
@@ -150,4 +187,17 @@ test('records that share a bucket but are not adjacent join the same crate', () 
 
 test('buildGroups of an empty list is an empty list of crates', () => {
   assert.deepStrictEqual(buildGroups([], 'year'), []);
+});
+
+test('last played crates run newest first and end with the never played', () => {
+  // The order the page sorts them in: most recent play first, no play last
+  const list = [
+    { id: 1, play_dates: '["2026-08-20"]' },
+    { id: 2, play_dates: '["2026-08-01"]' },
+    { id: 3, play_dates: '["2026-07-11"]' },
+    { id: 4, play_dates: '' },
+  ];
+  const groups = buildGroups(list, 'last_played');
+  assert.deepStrictEqual(groups.map(g => g.label), ['August 2026', 'July 2026', 'Never played']);
+  assert.deepStrictEqual(groups.map(g => g.records.length), [2, 1, 1]);
 });
