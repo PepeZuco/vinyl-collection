@@ -471,15 +471,27 @@ select option{background:var(--surface);color:var(--text)}
 
 /* scan / Spotify — promoted out of the cover action sheet, where they were
    only reachable by knowing to click the cover first */
-.scan-actions{display:flex;gap:6px;margin-top:8px}
+.scan-actions{display:flex;gap:6px;margin-top:8px;--face:18px}
 .scan-actions button{flex:1;height:34px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .12s}
 .scan-actions button.scan-ai{border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .scan-actions button.scan-sp{border-color:rgba(30,215,96,.4);color:#1DB954;background:rgba(30,215,96,.07)}
 .scan-actions button:disabled{opacity:.45;cursor:not-allowed}
 
-/* The only thing that starts a scan once a cover is on screen. It appears with
-   the cover and nowhere else, so adding a photo never spends API credits on
-   its own. */
+/* The thinking face on the analyse button. It is a 30-frame strip laid out
+   left-to-right — one PNG, 44px per frame — rather than the animated GIF it was
+   cut from, because a GIF starts the moment it loads and there is no way to
+   stop it: the button would twitch at rest and could never be "played" once on
+   demand. Stepping the strip by hand is the only way to own the timing.
+   Regenerate from source.gif by exporting all 30 frames to a horizontal
+   filmstrip with the black matte keyed to transparent. */
+.analyse-face{flex-shrink:0;width:var(--face);height:var(--face);
+  background-image:url('/static/analyse-sprite.png');background-repeat:no-repeat;
+  /* One frame fills the box; the other 29 hang off the right edge, and
+     background-position-x walks them into view. */
+  background-size:calc(var(--face) * 30) var(--face);background-position:0 0}
+
+/* Reopens the last scan's results. It appears with the alternates and nowhere
+   else. */
 .scan-cover-btn{display:none;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;margin-top:8px;
   border-radius:8px;border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);
   background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);
@@ -487,8 +499,10 @@ select option{background:var(--surface);color:var(--text)}
 .scan-cover-btn.on{display:flex}
 .scan-cover-btn:hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
 .scan-cover-btn:disabled{opacity:.45;cursor:not-allowed}
-.scan-cover-hint{display:none;font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
-.scan-cover-hint.on{display:block}
+/* Always on screen: when analyse is greyed out this line is the only thing
+   that says why, and when it is live it is the promise that nothing has been
+   sent yet. */
+.scan-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
 
 /* A record that isn't owned yet can't have been bought, played or cleaned.
    The purchase block is removed outright; the rest stays visible but inert so
@@ -950,6 +964,7 @@ select option{background:var(--surface);color:var(--text)}
   #formOverlay .artist-row input[type=text]{font-size:16px}
   #formOverlay .form-group .field input,#formOverlay .form-group .field select{padding-left:34px}
   #formOverlay .buyer-seg button,#formOverlay .own-switch button{height:46px;font-size:13px}
+  #formOverlay .scan-actions{--face:20px}
   #formOverlay .scan-actions button{height:42px;font-size:13px}
   #formOverlay .notes-add-row{grid-template-columns:1fr}
   #formOverlay .notes-add-row .btn{width:100%;justify-content:center}
@@ -1381,31 +1396,26 @@ select option{background:var(--surface);color:var(--text)}
           <input type="file" accept="image/*" id="coverInput" style="display:none">
           <input type="file" accept="image/*" capture="environment" id="coverCaptureInput" style="display:none">
 
-          <!-- Adding a cover used to fire a scan by itself, which spent a vision
-               call and up to four MusicBrainz lookups on a photo the user might
-               only have wanted as artwork. This button is now the only trigger,
-               and it exists only once there is something to scan. -->
-          <button type="button" class="scan-cover-btn" id="scanCoverBtn" onclick="scanCurrentCover()">
-            <i class="ti ti-sparkles"></i> Scan this cover
-          </button>
-          <div class="scan-cover-hint" id="scanCoverHint">nothing is sent until you tap</div>
-
           <!-- Reopens the last scan's results without paying for a new one, so
                a wrong pick costs a tap rather than another vision call. -->
           <button type="button" class="scan-cover-btn" id="scanRepickBtn" onclick="reopenScanOverlay()">
             <i class="ti ti-arrow-back-up"></i> Pick a different match
           </button>
 
-          <!-- Scanning used to be reachable only by knowing to click the cover
-               first. These are the same action sheet, just visible. -->
+          <!-- Analyse is the one thing that spends API credits, so it is dead
+               until there is something to spend them on: a cover on screen or a
+               Spotify link handed in. Adding either never scans by itself.
+               Spotify sits beside it as the way to hand a link in — a photo goes
+               in through the cover area above. -->
           <div class="scan-actions">
-            <button type="button" class="scan-ai" id="scanPhotoBtn" onclick="openScanSheet(false)">
-              <i class="ti ti-sparkles"></i> Scan photo
+            <button type="button" class="scan-ai" id="analyseBtn" onclick="runPendingScan()" disabled>
+              <span class="analyse-face" id="analyseFace"></span> Analyse
             </button>
             <button type="button" class="scan-sp" id="scanSpotifyBtn" onclick="openScanSheet(true)">
               <i class="ti ti-brand-spotify"></i> Spotify
             </button>
           </div>
+          <div class="scan-hint" id="scanHint"></div>
 
           <!-- A scan is a vision call, up to four rate-limited MusicBrainz
                lookups and up to three cover fetches — far longer than a toast
@@ -1696,6 +1706,12 @@ let editingId = null;
 let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
+// A Spotify link that has been handed in but not yet analysed. Submitting a
+// link used to scan on the spot; now it only arms the analyse button, so the
+// URL has to be parked somewhere until the user taps it. Declared up here with
+// the other form state because updateScanControls reads it, and that runs
+// before the scan section's own `let`s are evaluated.
+let pendingSpotifyUrl = '';
 let confirmDeleteId = null;
 let currentDetailId = null;
 
@@ -2565,8 +2581,9 @@ function populateWhereList(){
     places.map(p=>`<option value="${esc(p)}">`).join('');
 }
 
-// Both scan entry points open the same action sheet; openCoverSheet toggles, so
-// a second click on the other button would close it instead of switching.
+// The Spotify button and the cover area open the same action sheet;
+// openCoverSheet toggles, so a click on one while the other had opened it would
+// close the sheet instead of switching to the row the user wanted.
 function openScanSheet(focusSpotify){
   const sheet = document.getElementById('coverSheet');
   if (sheet.classList.contains('hidden')) openCoverSheet();
@@ -2799,6 +2816,7 @@ function openAdd(){
   scanDuplicateOf = null;
   lastScanData = null;
   scanPhotoUri = '';
+  pendingSpotifyUrl = '';
   document.getElementById('scanDupWarning').style.display = 'none';
   document.getElementById('spotifyUrlInput').value = '';
   showSpotifyError('');
@@ -2842,6 +2860,7 @@ function openEdit(id){
   scanDuplicateOf = null;
   lastScanData = null;
   scanPhotoUri = '';
+  pendingSpotifyUrl = '';
   document.getElementById('scanDupWarning').style.display = 'none';
   document.getElementById('spotifyUrlInput').value = '';
   showSpotifyError('');
@@ -3016,8 +3035,12 @@ async function resizeImage(file, maxEdge=1000){
   return cv.toDataURL('image/jpeg', .85);
 }
 
-function applyCover(dataUri){
+// fromUser is false when a scan result applies its own artwork. Only a photo
+// the user just handed in should steal analyse's target from a pending Spotify
+// link — a candidate's cover art arriving is not a change of mind.
+function applyCover(dataUri, fromUser = true){
   coverDataUri = dataUri;
+  if(fromUser) pendingSpotifyUrl = '';
   showCover(dataUri);
 }
 
@@ -3042,20 +3065,70 @@ function clearCover(){
   updateScanControls();
 }
 
-// The scan trigger tracks the cover: nothing on screen, nothing to scan. The
-// repick button tracks the last scan instead — it outlives the pick that
-// closed the results, so changing your mind doesn't cost another scan.
+// Whether analyse has anything to work on. A cover counts however it got on
+// screen — openEdit loading the record's own artwork included, which is what
+// makes re-analysing an existing record possible.
+function analyseArmed(){ return !!pendingSpotifyUrl || !!coverDataUri; }
+
+// The analyse button tracks whatever has been handed in: nothing submitted,
+// nothing to send, so it stays grey and the hint says why. The repick button
+// tracks the last scan instead — it outlives the pick that closed the results,
+// so changing your mind doesn't cost another scan.
 function updateScanControls(){
-  const hasCover = !!coverDataUri;
-  document.getElementById('scanCoverBtn').classList.toggle('on', hasCover);
-  document.getElementById('scanCoverHint').classList.toggle('on', hasCover);
+  const armed = analyseArmed();
+  // scanInFlight is the other reason to be dead: runScan already refuses a
+  // second concurrent call, but a button that still looks live invites the tap.
+  document.getElementById('analyseBtn').disabled = !armed || scanInFlight;
+  document.getElementById('scanHint').textContent = armed
+    ? 'nothing is sent until you tap analyse'
+    : 'add a cover or a spotify link first';
   document.getElementById('scanRepickBtn')
     .classList.toggle('on', scanCandidates.length > 1);
 }
 
-function scanCurrentCover(){
-  if(!coverDataUri) return;
-  scanFromImage(coverDataUri);
+// Whichever source was handed in last wins: applyCover clears a pending link,
+// and submitting a link overrides the cover. Anything else would make the
+// button's target depend on history the user can no longer see.
+function runPendingScan(){
+  if(scanInFlight || !analyseArmed()) return;
+  playAnalyseFace();
+  if(pendingSpotifyUrl) scanFromSpotify(pendingSpotifyUrl);
+  else scanFromImage(coverDataUri);
+}
+
+// ── the analyse button's thinking face ─────────────────────────────────────
+// 30 frames over 1010ms in one horizontal strip. The browser gives no way to
+// pause or restart an animated GIF, so the strip is walked by hand instead:
+// parked on frame 0 at rest, run once on demand, back to frame 0 at the end.
+// The source frames are 30/40ms apart in a repeating pattern; stepping at a
+// flat 1010/30 keeps the total honest and the 3ms drift is invisible.
+const ANALYSE_FRAMES = 30;
+const ANALYSE_MS = 1010;
+let analyseRaf = 0;
+
+// Positioned in --face units rather than pixels so it cannot drift out of step
+// with background-size, which is set from the same variable and grows on mobile.
+function setAnalyseFrame(frame){
+  document.getElementById('analyseFace').style.backgroundPositionX =
+    `calc(var(--face) * ${-frame})`;
+}
+
+function playAnalyseFace(){
+  // A second tap mid-run restarts the pass rather than racing two of them.
+  cancelAnimationFrame(analyseRaf);
+  analyseRaf = 0;
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const start = performance.now();
+  const step = now => {
+    const frame = Math.floor((now - start) / ANALYSE_MS * ANALYSE_FRAMES);
+    // Past the last frame the pass is done. Frame 0 is the rest pose, and the
+    // loop was cut to be seamless, so it reads as coming to a stop rather than
+    // snapping back.
+    if(frame >= ANALYSE_FRAMES){ setAnalyseFrame(0); analyseRaf = 0; return; }
+    setAnalyseFrame(frame);
+    analyseRaf = requestAnimationFrame(step);
+  };
+  analyseRaf = requestAnimationFrame(step);
 }
 
 async function handleCoverFile(e){
@@ -3149,10 +3222,15 @@ function setScanBusy(busy){
   // window, error and abandoned-scan paths included.
   document.getElementById('scanStatus').style.display = busy ? 'flex' : 'none';
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
-   'coverSheetFile','coverSheetCamera','scanCoverBtn'].forEach(id=>{
+   'coverSheetFile','coverSheetCamera'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.disabled = busy;
   });
+  // Not in the list above: analyse is disabled by two independent things, and
+  // flipping it straight from here would re-enable it after a scan that left
+  // nothing to analyse. updateScanControls owns that decision, and scanInFlight
+  // is already set by the time it reads it.
+  updateScanControls();
 }
 
 async function runScan(body){
@@ -3179,7 +3257,13 @@ async function runScan(body){
     if(!res.ok){
       const message = (data && data.error) || 'scan failed';
       if(myToken === scanToken) setScanSearch('');
-      if(body.spotify_url) showSpotifyError(message); else toast(message);
+      if(body.spotify_url){
+        // The sheet holding this error is closed by the time analyse runs — the
+        // link was handed in earlier. Reopen it, or the message lands where
+        // nobody can read it and a rejected link looks like a dead button.
+        showSpotifyError(message);
+        document.getElementById('coverSheet').classList.remove('hidden');
+      } else toast(message);
       return;
     }
     // Discard a scan whose form was closed or replaced while it was in flight,
@@ -3355,7 +3439,7 @@ function applyCandidate(c){
   // included — the photo was the scan's input, not the cover, and a sleeve
   // shot in bad light is worse than the real thing. A candidate MusicBrainz
   // has no artwork for leaves the photo alone rather than blanking it.
-  if(c.cover_data) applyCover(c.cover_data);
+  if(c.cover_data) applyCover(c.cover_data, false);
   return filled.some(Boolean);
 }
 
@@ -3376,18 +3460,46 @@ function scanSearchString(year){
     .filter(Boolean).join(' ');
 }
 
-function submitSpotifyUrl(){
-  const input = document.getElementById('spotifyUrlInput');
-  const url = input.value.trim();
-  if(!url) return;
-  scanFromSpotify(url);
+const SPOTIFY_LINK = /open\.spotify\.com|^spotify:/;
+
+// Handing in a link no longer scans — it arms analyse and stops. The server
+// would reject a bad URL anyway, but only after a round trip, and the point of
+// arming is that nothing leaves the browser until the user taps analyse.
+function armSpotifyUrl(url){
+  if(!SPOTIFY_LINK.test(url)){
+    showSpotifyError('that does not look like a spotify link');
+    return;
+  }
+  pendingSpotifyUrl = url;
+  showSpotifyError('');
+  closeCoverSheet();
+  updateScanControls();
+  toast('spotify link ready — tap analyse');
 }
 
-// Pasting a share link is the whole gesture — submit without a second tap.
+function submitSpotifyUrl(){
+  const url = document.getElementById('spotifyUrlInput').value.trim();
+  if(!url) return;
+  armSpotifyUrl(url);
+}
+
+// Pasting a share link is the whole gesture — no second tap to hand it in.
+// Deferred a tick because the value is still the pre-paste one during the event.
 document.getElementById('spotifyUrlInput').addEventListener('paste', e=>{
   const text = (e.clipboardData || window.clipboardData).getData('text') || '';
-  if(/open\.spotify\.com|^spotify:/.test(text.trim())){
-    setTimeout(()=>scanFromSpotify(text.trim()), 0);
+  if(SPOTIFY_LINK.test(text.trim())) setTimeout(()=>armSpotifyUrl(text.trim()), 0);
+});
+
+// The box and the armed link have to agree. Editing the field after handing a
+// link in — which is exactly what you do when the first one came back rejected —
+// used to leave analyse pointing at the old URL while the box showed the new
+// one. Typing releases the arming, the same way editing a field releases a
+// scan's claim on it. Runs after the paste handler's arming is queued, so a
+// paste over an old link still ends up armed with the new one.
+document.getElementById('spotifyUrlInput').addEventListener('input', e=>{
+  if(pendingSpotifyUrl && e.target.value.trim() !== pendingSpotifyUrl){
+    pendingSpotifyUrl = '';
+    updateScanControls();
   }
 });
 

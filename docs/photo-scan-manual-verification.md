@@ -131,14 +131,23 @@ a field **you** touched:
 
 ## 4. Spotify paste row
 
-1. Paste a normal album link (`https://open.spotify.com/album/...`) → fields
-   fill, cover art appears.
-2. **Remaster check:** paste a link to a *remastered* album. The year must be
-   the **original** release year, not the remaster year. (Spotify's own
-   `release_date` is the remaster date and is deliberately ignored.)
-3. Paste a **playlist** or **track** link → a clear inline error, form still
-   usable.
-4. Paste rubbish (`hello`) → inline error, no crash.
+Handing in a link no longer scans on the spot — it arms **analyse** and stops.
+See §9 for the gating itself; this section is about the link handling.
+
+1. Paste a normal album link (`https://open.spotify.com/album/...`) → the sheet
+   closes and a toast says *"spotify link ready — tap analyse"*. **Nothing is
+   sent yet.** Tap **analyse** → fields fill, cover art appears.
+2. **Remaster check:** hand in a link to a *remastered* album and analyse it.
+   The year must be the **original** release year, not the remaster year.
+   (Spotify's own `release_date` is the remaster date and is deliberately
+   ignored.)
+3. Hand in a **playlist** or **track** link → it looks like a Spotify link, so
+   it arms. Tap **analyse** → the server rejects it, and the sheet **reopens**
+   with the error next to the input. (It has to reopen: the sheet is closed by
+   the time analyse runs, so an error left inside a hidden sheet would never be
+   read.)
+4. Paste rubbish (`hello`) → inline error straight away, analyse **stays grey**,
+   no request made, no crash.
 5. Check the **Spotify logo** renders correctly in **both light and dark
    themes**, and that the spacing around it isn't cramped. The 12px gaps are
    Spotify's required clear space — if anything looks tight, say so rather than
@@ -151,12 +160,15 @@ a field **you** touched:
 1. Start a scan. A small spinner and *"scanning… this can take up to a minute"*
    must appear under the cover and **stay** for the whole scan — a scan runs far
    longer than a toast lives, so if it vanishes after a couple of seconds the
-   indicator is wrong. While it shows, try **Choose file**, **Take photo**, and
-   the Spotify field: all should look visibly greyed out and do nothing.
-2. Start a scan → **close the form** → open **add record** again. Every scan
-   control must be usable immediately, not stuck greyed out, and the spinner
-   must be **gone**. Let a scan fail too (see §8) — the spinner must clear on
-   the error path as well, not hang there forever.
+   indicator is wrong. While it shows, try **analyse**, **Choose file**, **Take
+   photo**, and the Spotify field: all should look visibly greyed out and do
+   nothing.
+2. Start a scan → **close the form** → open **add record** again. The spinner
+   must be **gone** and nothing may be stuck greyed out by the abandoned scan:
+   the file inputs and the Spotify row are usable immediately, and **analyse**
+   is grey only because the fresh form has nothing in it yet — attach a photo
+   and it must light up. Let a scan fail too (see §8) — the spinner must clear
+   on the error path as well, not hang there forever.
 3. Start a scan on record A → close the form → open a **different** record →
    let the first scan finish. **Nothing** from record A may appear in it.
 4. On a slow connection, pick a **large** photo, then close the form and open a
@@ -217,20 +229,45 @@ know the server's credentials) and returns a clear error when used.
 
 ## 9. Nothing scans until you say so
 
-The whole point of the change: adding a cover is adding a cover, not spending a
-vision call and four MusicBrainz lookups.
+The whole point of the change: adding a cover or a link is adding a cover or a
+link, not spending a vision call and four MusicBrainz lookups. **Analyse** is
+the only thing that spends anything, and it is dead until there is something to
+spend it on.
 
-1. Open **add record**, attach a photo by **file picker**. No scan. The **scan
-   this cover** button and the line *"nothing is sent until you tap"* appear
-   under it.
-2. Same with the **camera** path, and same with the OS photo picker fallback.
-3. With **no** cover attached, the scan button must not be on screen at all.
-4. Remove nothing, just close the form and reopen it → the button is gone again
-   with the cover.
-5. Tap **scan this cover** → now the busy state appears and the button, the
-   file inputs and the Spotify row all go disabled until it finishes.
-6. Open an **existing record** that already has artwork → the button is there
-   too, and scanning re-reads that artwork. That is intended.
+1. Open **add record**. **Analyse** is greyed out, and the line under it reads
+   *"add a cover or a spotify link first"*.
+2. Attach a photo by **file picker**. No scan. Analyse lights up and the line
+   becomes *"nothing is sent until you tap analyse"*.
+3. Same with the **camera** path, and same with the OS photo picker fallback.
+4. Hand in a **Spotify link** instead, on a form with no cover → same thing:
+   analyse lights up, nothing sent.
+5. Close the form and reopen it → analyse is grey again.
+6. Tap **analyse** → the busy state appears and analyse, the file inputs and the
+   Spotify row all go disabled until it finishes. Tapping it again mid-scan does
+   nothing.
+7. Open an **existing record** that already has artwork → analyse is live from
+   the start, and it re-reads that artwork. That is intended. A record with
+   **no** artwork opens with analyse grey.
+8. **Whichever you handed in last wins.** Attach a photo, then paste a link →
+   analyse reads the link. Paste a link, then attach a photo → analyse reads the
+   photo. (Artwork that arrives from a scan result does *not* count as handing
+   in a photo, so picking a candidate after a Spotify scan leaves the link in
+   place.)
+
+### The thinking face
+
+It is a 30-frame strip stepped by hand, not an animated GIF — a GIF would twitch
+at rest and could never be played on demand.
+
+1. At rest it is **completely still**, both greyed out and live. Any motion
+   before you tap is a bug.
+2. Tap **analyse** → it runs **one pass, about a second**, then stops. It must
+   not loop for the length of the scan; the *"scanning…"* spinner is what tracks
+   the actual request, which can take up to a minute.
+3. It must be a clean cutout in **both themes** — no dark square or grey halo
+   behind the face on the light theme.
+4. With **reduced motion** turned on at the OS level, it stays still on tap and
+   the scan still runs.
 
 ---
 
