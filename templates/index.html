@@ -3829,6 +3829,33 @@ function bindEvents(){
   document.querySelectorAll('.race-speed-btn').forEach(b => {
     b.addEventListener('click', () => raceSetSpeed(Number(b.dataset.speed)));
   });
+  // Delegated, so it survives rows and covers being created and removed as
+  // the race runs. A cover click both pauses and opens — pausing before a
+  // record opens is what you want anyway.
+  const racePlot = document.getElementById('racePlot');
+  racePlot.addEventListener('click', e => {
+    const cover = e.target.closest('.race-cover');
+    if (cover) { racePause(); openDetail(Number(cover.dataset.id)); return; }
+    if (e.target.closest('.race-bar')) racePause();
+  });
+  racePlot.addEventListener('mousemove', e => {
+    const tip = document.getElementById('raceTooltip');
+    const row = e.target.closest('.race-row');
+    const frame = raceFrames[raceIndex];
+    const bar = row && frame &&
+      frame.bars.find(b => b.genre === row.dataset.genre);
+    if (!bar || !e.target.closest('.race-bar')) { tip.style.opacity = 0; return; }
+    // Newest first — the tooltip answers "what is in this bar", and the most
+    // recent arrivals are what you just watched land.
+    tip.innerHTML = chartTooltipHTML(bar.label, bar.records.slice().reverse(), 12);
+    const box = tip.offsetParent.getBoundingClientRect();
+    tip.style.left = (e.clientX - box.left + 14) + 'px';
+    tip.style.top  = (e.clientY - box.top + 14) + 'px';
+    tip.style.opacity = 1;
+  });
+  racePlot.addEventListener('mouseleave', () => {
+    document.getElementById('raceTooltip').style.opacity = 0;
+  });
   document.getElementById('tabCalendar').addEventListener('click', () => {
     switchTab('calendar');
     calUpdateDateRange();
