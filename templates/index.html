@@ -4449,11 +4449,14 @@ function racePaint(i, animate) {
   const scrub = document.getElementById('raceScrub');
   if (scrub.value !== String(i)) scrub.value = String(i);
 
-  // A tooltip pinned to a bar that is sliding away describes a row no longer
-  // under the cursor, and mouseleave never fires while the pointer stays inside
-  // the plot. Advancing under playback therefore dismisses it; seeks and snaps
-  // pass animate=false, so hovering a paused chart is unaffected.
-  if (animate) document.getElementById('raceTooltip').style.opacity = 0;
+  // The tooltip describes whatever bar was under the cursor when it last
+  // moved, and any repaint — an autoplay advance, a seek, a scrub — can slide
+  // that row away or swap in a different frame's data underneath it, with no
+  // mouseleave to catch it since the pointer never left the plot. Every
+  // racePaint therefore dismisses it; racePaint only ever runs on a frame
+  // change, so a paused, unmoving hover is never touched, and the next mouse
+  // movement re-renders the tooltip against whatever frame is now current.
+  document.getElementById('raceTooltip').style.opacity = 0;
 }
 
 /* Reconcile the strip against the bar's most recent covers, keyed by record
