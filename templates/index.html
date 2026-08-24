@@ -648,6 +648,68 @@ select option{background:var(--surface);color:var(--text)}
 .history-page{display:none}
 .history-page.visible{display:block}
 
+.race-total{color:var(--label);font-size:11px;font-variant-numeric:tabular-nums;
+  text-transform:none;letter-spacing:0}
+.race-plot-wrap{position:relative}
+.race-plot{position:relative;--race-row-h:34px;--race-dur:1000ms;margin:6px 0 2px}
+.race-empty{color:var(--muted);font-size:13px;padding:20px 2px}
+
+/* Rows are absolutely positioned and moved by transform, not by reflow —
+   that is what makes an overtake animate as a swap. */
+.race-row{position:absolute;left:0;right:0;height:var(--race-row-h);
+  display:flex;align-items:center;gap:10px;
+  transition:transform var(--race-dur) cubic-bezier(.4,0,.2,1),opacity .25s}
+.race-row.gone{opacity:0;pointer-events:none}
+.race-label{width:112px;flex-shrink:0;text-align:right;font-size:12px;font-weight:600;
+  color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.race-track{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.race-bar{position:relative;height:calc(var(--race-row-h) - 8px);border-radius:2px;
+  flex-shrink:0;cursor:pointer;
+  background:color-mix(in srgb, var(--gc) 22%, transparent);
+  border-left:3px solid var(--gc);
+  transition:width var(--race-dur) cubic-bezier(.4,0,.2,1)}
+.race-bar:hover{background:color-mix(in srgb, var(--gc) 34%, transparent)}
+
+/* The strip is pinned to the bar's growing tip and clipped at the left, so a
+   new cover always lands where the eye already is and older ones dissolve
+   under the fade. No cap arithmetic, no width measurement, no resize handler.
+   Safari still needs the -webkit- twin. */
+.race-covers{position:absolute;inset:2px 3px 2px 0;display:flex;justify-content:flex-end;
+  align-items:center;gap:2px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 34px);
+  mask-image:linear-gradient(to right,transparent 0,#000 34px)}
+.race-cover{width:calc(var(--race-row-h) - 12px);height:calc(var(--race-row-h) - 12px);
+  flex-shrink:0;border-radius:2px;object-fit:cover;background:#111;cursor:pointer}
+[data-theme="light"] .race-cover{background:#eee}
+.race-count{font-size:12.5px;font-weight:700;color:var(--text);
+  font-variant-numeric:tabular-nums;min-width:26px}
+
+/* The date ticker — a scoreboard clock, deliberately oversized and greyed. */
+.race-day{text-align:right;font-family:var(--font-mono);font-size:26px;font-weight:700;
+  color:var(--muted);margin:4px 0 14px;font-variant-numeric:tabular-nums}
+
+.race-controls{display:flex;align-items:center;gap:12px;
+  border-top:1px solid var(--border);padding-top:12px}
+.race-btn{width:34px;height:34px;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:transparent;color:var(--text);font-size:15px;cursor:pointer}
+.race-btn:hover{border-color:var(--accent);color:var(--accent)}
+.race-btn.hidden{display:none}
+#raceScrub{flex:1;min-width:0;accent-color:var(--accent);cursor:pointer}
+#raceScrub:disabled{opacity:.4;cursor:default}
+.race-speeds{display:flex;gap:3px;flex-shrink:0}
+.race-speed-btn{height:26px;padding:0 8px;border:1px solid var(--border);
+  border-radius:var(--radius-sm);background:transparent;color:var(--muted);
+  font:600 11px var(--font);cursor:pointer;font-variant-numeric:tabular-nums}
+.race-speed-btn.active{border-color:var(--accent);color:var(--accent)}
+
+@media(max-width:760px){
+  .race-plot{--race-row-h:28px}
+  .race-label{width:76px;font-size:11px}
+  .race-day{font-size:19px}
+  .race-controls{gap:8px}
+}
+
 /* stats/history segment — mobile only. The bottom bar already carries four
    items plus the centre FAB, and a fifth would land underneath it, so on a
    phone History is reached from inside the Stats tab instead. */
@@ -4241,7 +4303,126 @@ function syncMobileTabbar() {
 }
 
 // ── history: the collection's growth as a bar chart race ───────────────────
-function renderHistory() {}
+const RACE_BASE_MS = 1000;    // one purchase day at 1× — ~31s end to end
+const RACE_COVER_CAP = 24;    // covers put in the DOM per bar; more than any
+                              // bar can display, so the visible result is the
+                              // same while node count stays bounded
+
+let raceFrames = [];
+let raceIndex = 0;
+let raceRows = new Map();     // genre -> its row element, kept across frames
+                              // so transforms transition instead of redrawing
+
+function renderHistory() {
+  raceFrames = VinylHistory.buildTimeline(records);
+  raceRows = new Map();
+  raceIndex = 0;
+
+  const plot = document.getElementById('racePlot');
+  const scrub = document.getElementById('raceScrub');
+  plot.innerHTML = '';
+
+  if (!raceFrames.length) {
+    plot.style.height = '';
+    plot.innerHTML = '<p class="race-empty">nothing bought yet — records need a bought date to appear here.</p>';
+    document.getElementById('raceDay').textContent = '';
+    document.getElementById('raceTotal').textContent = '';
+    scrub.max = '0';
+    scrub.disabled = true;
+    return;
+  }
+
+  // Height is fixed for the whole race at every genre that ever appears, not
+  // at the current frame's bar count — sizing it to the frame would make the
+  // box jump taller each time a genre enters and shove the controls down the
+  // page mid-playback.
+  const rows = raceFrames[raceFrames.length - 1].bars.length;
+  plot.style.height = 'calc(var(--race-row-h) * ' + rows + ')';
+  scrub.disabled = false;
+  scrub.max = String(raceFrames.length - 1);
+
+  racePaint(raceFrames.length - 1, false);
+}
+
+function racePaint(i, animate) {
+  const frame = raceFrames[i];
+  if (!frame) return;
+  raceIndex = i;
+
+  const plot = document.getElementById('racePlot');
+  const lead = frame.bars.length ? frame.bars[0].count : 1;
+
+  frame.bars.forEach(function (bar, rank) {
+    let row = raceRows.get(bar.genre);
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'race-row';
+      row.dataset.genre = bar.genre;
+      row.style.setProperty('--gc', genreColor(bar.genre));
+      row.innerHTML =
+        '<div class="race-label"></div>' +
+        '<div class="race-track">' +
+          '<div class="race-bar"><div class="race-covers"></div></div>' +
+          '<span class="race-count"></span>' +
+        '</div>';
+      row.querySelector('.race-label').textContent = bar.label;
+      plot.appendChild(row);
+      raceRows.set(bar.genre, row);
+    }
+    row.classList.remove('gone');
+    row.style.transform = 'translateY(calc(var(--race-row-h) * ' + rank + '))';
+    // Bars scale to the current leader, so the leader always fills the row and
+    // the axis rescales as the collection grows.
+    row.querySelector('.race-bar').style.width =
+      Math.max(2, (bar.count / lead) * 100) + '%';
+    row.querySelector('.race-count').textContent = bar.count;
+    raceCovers(row.querySelector('.race-covers'), bar, animate);
+  });
+
+  // Seeking backwards can land before a genre existed — its row stays in the
+  // DOM (so its covers survive) but must not be on screen.
+  const present = new Set(frame.bars.map(function (b) { return b.genre; }));
+  raceRows.forEach(function (row, genre) {
+    if (!present.has(genre)) row.classList.add('gone');
+  });
+
+  document.getElementById('raceDay').textContent = frame.day;
+  document.getElementById('raceTotal').textContent =
+    frame.total + (frame.total === 1 ? ' record' : ' records');
+  const scrub = document.getElementById('raceScrub');
+  if (scrub.value !== String(i)) scrub.value = String(i);
+}
+
+/* Reconcile the strip against the bar's most recent covers, keyed by record
+ * id. Elements are reused rather than rebuilt so each cover decodes once and
+ * survives all 31 frames — rebuilding would re-decode 112 images per frame. */
+function raceCovers(strip, bar, animate) {
+  const want = bar.records.slice(-RACE_COVER_CAP);
+  const wantIds = new Set(want.map(function (r) { return String(r.id); }));
+
+  Array.prototype.slice.call(strip.children).forEach(function (img) {
+    if (!wantIds.has(img.dataset.id)) img.remove();
+  });
+
+  want.forEach(function (r, idx) {
+    let img = strip.querySelector('[data-id="' + r.id + '"]');
+    if (!img) {
+      img = document.createElement('img');
+      img.className = 'race-cover';
+      img.dataset.id = String(r.id);
+      img.loading = 'lazy';
+      img.alt = '';
+      img.src = r.cover_data || '';
+      img.title = (r.artist || 'unknown') + ' – ' + (r.album_name || 'untitled');
+    }
+    // Only touch the DOM when the element is actually out of place: seeking
+    // backwards past the cap and forward again can re-admit a cover that must
+    // land at the front, but a plain re-append every frame churns the strip.
+    if (strip.children[idx] !== img) {
+      strip.insertBefore(img, strip.children[idx] || null);
+    }
+  });
+}
 function racePause() {}
 
 // ── statistics ─────────────────────────────────────────────────────────────
