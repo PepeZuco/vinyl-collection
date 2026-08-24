@@ -643,6 +643,22 @@ select option{background:var(--surface);color:var(--text)}
 .stats-page.visible{display:block}
 .collection-page{display:block}
 .collection-page.hidden{display:none}
+
+/* history page — the collection's growth as a bar chart race */
+.history-page{display:none}
+.history-page.visible{display:block}
+
+/* stats/history segment — mobile only. The bottom bar already carries four
+   items plus the centre FAB, and a fifth would land underneath it, so on a
+   phone History is reached from inside the Stats tab instead. */
+.stats-seg{display:none}
+@media(max-width:760px){
+  .stats-seg{display:flex;gap:5px;margin-bottom:16px}
+  .stats-seg-btn{flex:1;height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    background:transparent;color:var(--muted);font:600 12px var(--font);cursor:pointer}
+  .stats-seg-btn.active{border-color:var(--accent);color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 10%, transparent)}
+}
 /* split scoreboard: Pepe's and Jenni's ratings flank the collection-wide
    totals, which sit in the middle since they belong to neither side */
 .stats-split{display:grid;grid-template-columns:1fr auto 1fr;grid-template-areas:"pepe shared jenni";
@@ -1157,6 +1173,7 @@ select option{background:var(--surface);color:var(--text)}
     <button class="nav-tab active" id="tabCollection"><i class="ti ti-layout-grid"></i> Collection</button>
     <button class="nav-tab" id="tabCalendar"><i class="ti ti-calendar-month"></i> Calendar</button>
     <button class="nav-tab" id="tabStats"><i class="ti ti-chart-bar"></i> Statistics</button>
+    <button class="nav-tab" id="tabHistory"><i class="ti ti-timeline"></i> History</button>
   </div>
 
   <!-- calendar page -->
@@ -1187,6 +1204,10 @@ select option{background:var(--surface);color:var(--text)}
 
   <!-- stats page -->
   <div class="stats-page" id="statsPage">
+    <div class="stats-seg">
+      <button class="stats-seg-btn active" data-seg="stats" onclick="switchTab('stats')">stats</button>
+      <button class="stats-seg-btn" data-seg="history" onclick="switchTab('history')">history</button>
+    </div>
     <div class="stats-split" id="statsCards"></div>
     <div class="charts-row">
       <div class="chart-box">
@@ -1225,6 +1246,35 @@ select option{background:var(--surface);color:var(--text)}
       </div>
       <div id="worldMapWrap" style="width:100%;height:420px;position:relative">
         <div class="chart-tooltip" id="worldMapTooltip"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- history page — the collection's growth, replayed -->
+  <div class="history-page" id="historyPage">
+    <div class="stats-seg">
+      <button class="stats-seg-btn" data-seg="stats" onclick="switchTab('stats')">stats</button>
+      <button class="stats-seg-btn active" data-seg="history" onclick="switchTab('history')">history</button>
+    </div>
+    <div class="chart-box" style="margin-bottom:28px">
+      <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <span>how the collection grew</span>
+        <span class="race-total" id="raceTotal"></span>
+      </div>
+      <div class="race-plot-wrap">
+        <div class="race-plot" id="racePlot"></div>
+        <div class="chart-tooltip" id="raceTooltip"></div>
+      </div>
+      <div class="race-day" id="raceDay"></div>
+      <div class="race-controls">
+        <button class="race-btn" id="racePlayBtn" aria-label="play" aria-pressed="false"><i class="ti ti-player-play"></i></button>
+        <input type="range" id="raceScrub" min="0" max="0" step="1" value="0" aria-label="purchase day">
+        <div class="race-speeds">
+          <button class="race-speed-btn" data-speed="0.5">0.5&times;</button>
+          <button class="race-speed-btn active" data-speed="1">1&times;</button>
+          <button class="race-speed-btn" data-speed="2">2&times;</button>
+        </div>
+        <button class="race-btn hidden" id="raceReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
       </div>
     </div>
   </div>
@@ -1691,6 +1741,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="/static/topojson-client.min.js"></script>
 <script src="/static/grouping.js"></script>
+<script src="/static/history.js"></script>
 <script src="/static/spend.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
@@ -1718,7 +1769,7 @@ function applyTheme(t) {
   localStorage.setItem('vinyl-theme', t);
 }
 applyTheme(theme);
-document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); });
+document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='history') renderHistory(); });
 
 // ── genre colours ──────────────────────────────────────────────────────────
 // One hue per genre, used for the card shadow and every genre-coloured chart,
@@ -3690,6 +3741,7 @@ document.getElementById('exportBtn').addEventListener('click',()=>{window.locati
 function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
+  document.getElementById('tabHistory').addEventListener('click', () => switchTab('history'));
   document.getElementById('tabCalendar').addEventListener('click', () => {
     switchTab('calendar');
     calUpdateDateRange();
@@ -4153,16 +4205,27 @@ let chartInstances = {};
 let worldMapFeatures = null; // cached GeoJSON features for the country choropleth
 
 function switchTab(tab) {
+  const leaving = currentTab;
   currentTab = tab;
   document.getElementById('collectionPage').classList.toggle('hidden', tab !== 'collection');
   document.getElementById('statsPage').classList.toggle('visible', tab === 'stats');
   document.getElementById('calendarPage').classList.toggle('visible', tab === 'calendar');
+  document.getElementById('historyPage').classList.toggle('visible', tab === 'history');
   document.getElementById('tabCollection').classList.toggle('active', tab === 'collection');
   document.getElementById('tabStats').classList.toggle('active', tab === 'stats');
   document.getElementById('tabCalendar').classList.toggle('active', tab === 'calendar');
+  document.getElementById('tabHistory').classList.toggle('active', tab === 'history');
+  document.querySelectorAll('.stats-seg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.seg === tab);
+  });
   syncMobileTabbar();
+
+  // Leaving the tab stops the race — no timer runs behind the collection view.
+  if (leaving === 'history' && tab !== 'history') racePause();
+
   if (tab === 'stats') renderStats();
   if (tab === 'calendar') renderCalendar();
+  if (tab === 'history') renderHistory();
 }
 
 // ── mobile bottom tab bar — mirrors haveItMode + currentTab, no separate state ─
@@ -4171,8 +4234,15 @@ function syncMobileTabbar() {
   document.getElementById('mtabCollection').classList.toggle('active', onCollection && haveItMode === 'collection');
   document.getElementById('mtabWishlist').classList.toggle('active', onCollection && haveItMode === 'wishlist');
   document.getElementById('mtabCalendar').classList.toggle('active', currentTab === 'calendar');
-  document.getElementById('mtabStats').classList.toggle('active', currentTab === 'stats');
+  // History has no item of its own on the phone — it lives inside Stats, so
+  // the Stats item stays lit while you are on it.
+  document.getElementById('mtabStats').classList.toggle('active',
+    currentTab === 'stats' || currentTab === 'history');
 }
+
+// ── history: the collection's growth as a bar chart race ───────────────────
+function renderHistory() {}
+function racePause() {}
 
 // ── statistics ─────────────────────────────────────────────────────────────
 function destroyChart(id) {
