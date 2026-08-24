@@ -188,3 +188,19 @@ test('passing the leader outright does swap rows', () => {
   assert.deepStrictEqual(seesaw()[4].bars.map(b => b.label),
                          ['Blues', 'Jazz', 'Rock']);
 });
+
+/* The entrant clause on its own. Ambient sorts first alphabetically and enters
+ * last, so a name-only tie-break would seat it above two incumbents it has never
+ * outscored. Every other fixture here happens to have its entrant sorting last
+ * alphabetically too, which is why this is the only test that pins "absent from
+ * the previous frame sorts last among ties". */
+test('a late entrant sorts below incumbents it is level with, whatever its name', () => {
+  const frames = buildTimeline([
+    rec({ id: 1, genre: 'Blues',   bought_date: '2026-01-01' }),
+    rec({ id: 2, genre: 'Jazz',    bought_date: '2026-01-01' }),
+    rec({ id: 3, genre: 'Ambient', bought_date: '2026-01-02' }),
+  ]);
+  assert.deepStrictEqual(frames[1].bars.map(b => b.count), [1, 1, 1], 'all level');
+  assert.deepStrictEqual(frames[1].bars.map(b => b.label),
+                         ['Blues', 'Jazz', 'Ambient']);
+});
