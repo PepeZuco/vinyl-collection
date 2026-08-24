@@ -3804,6 +3804,10 @@ function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
   document.getElementById('tabHistory').addEventListener('click', () => switchTab('history'));
+  document.getElementById('racePlayBtn').addEventListener('click', () => {
+    racePlaying ? racePause() : racePlay();
+  });
+  document.getElementById('raceReplayBtn').addEventListener('click', raceReplay);
   document.getElementById('tabCalendar').addEventListener('click', () => {
     switchTab('calendar');
     calUpdateDateRange();
@@ -4329,6 +4333,7 @@ function renderHistory() {
     document.getElementById('raceTotal').textContent = '';
     scrub.max = '0';
     scrub.disabled = true;
+    racePause();
     return;
   }
 
@@ -4341,7 +4346,11 @@ function renderHistory() {
   scrub.disabled = false;
   scrub.max = String(raceFrames.length - 1);
 
-  racePaint(raceFrames.length - 1, false);
+  raceApplyDuration();
+  // Reduced motion opens on the finished chart instead — a statistic, not a
+  // race. Everything still works; you just start it yourself.
+  if (raceReducedMotion()) { raceSnapTo(raceFrames.length - 1); raceSyncControls(); }
+  else { raceSnapTo(0); racePlay(); }
 }
 
 function racePaint(i, animate) {
@@ -4423,7 +4432,86 @@ function raceCovers(strip, bar, animate) {
     }
   });
 }
-function racePause() {}
+let racePlaying = false;
+let raceSpeed = 1;
+let raceTimer = null;
+
+function raceReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function raceFrameMs() { return RACE_BASE_MS / raceSpeed; }
+
+/* The transition duration equals the frame interval, so each day's growth
+ * takes exactly as long as the day is on screen — that is what makes it read
+ * as one continuous race rather than a slideshow. Set inline rather than in
+ * the stylesheet because the scrubber has to override it to 0 while dragging,
+ * and an inline value cannot be beaten by a class. */
+function raceApplyDuration() {
+  document.getElementById('racePlot').style.setProperty(
+    '--race-dur', (raceReducedMotion() ? 0 : raceFrameMs()) + 'ms');
+}
+
+/* Jump to a frame without sliding there. Replaying from the end would
+ * otherwise run every bar backwards for a full second before the race
+ * restarts on top of it. Restoring the duration has to wait for a reflow,
+ * or the browser coalesces both writes and animates anyway. */
+function raceSnapTo(i) {
+  const plot = document.getElementById('racePlot');
+  plot.style.setProperty('--race-dur', '0ms');
+  racePaint(i, false);
+  void plot.offsetWidth;
+  raceApplyDuration();
+}
+
+function raceSchedule() {
+  clearTimeout(raceTimer);
+  raceTimer = setTimeout(function () {
+    if (!racePlaying) return;
+    if (raceIndex >= raceFrames.length - 1) { racePause(); return; }
+    racePaint(raceIndex + 1, true);
+    raceSchedule();
+  }, raceFrameMs());
+}
+
+function racePlay() {
+  if (!raceFrames.length) return;
+  if (raceIndex >= raceFrames.length - 1) raceSnapTo(0);
+  racePlaying = true;
+  raceApplyDuration();
+  raceSyncControls();
+  raceSchedule();
+}
+
+/* Clears the timer and nothing else. The day in flight finishes settling —
+ * pause stops the race advancing, it does not freeze a bar mid-slide. */
+function racePause() {
+  racePlaying = false;
+  clearTimeout(raceTimer);
+  raceTimer = null;
+  raceSyncControls();
+}
+
+function raceSeek(i) {
+  if (!raceFrames.length) return;
+  raceSnapTo(Math.max(0, Math.min(raceFrames.length - 1, i)));
+  raceSyncControls();
+}
+
+function raceReplay() { raceSnapTo(0); racePlay(); }
+
+function raceSyncControls() {
+  const btn = document.getElementById('racePlayBtn');
+  btn.innerHTML = racePlaying ? '<i class="ti ti-player-pause"></i>'
+                              : '<i class="ti ti-player-play"></i>';
+  btn.setAttribute('aria-pressed', racePlaying ? 'true' : 'false');
+  btn.setAttribute('aria-label', racePlaying ? 'pause' : 'play');
+  const atEnd = raceFrames.length > 0 && raceIndex >= raceFrames.length - 1;
+  document.getElementById('raceReplayBtn').classList.toggle('hidden', !atEnd || racePlaying);
+  document.querySelectorAll('.race-speed-btn').forEach(function (b) {
+    b.classList.toggle('active', Number(b.dataset.speed) === raceSpeed);
+  });
+}
 
 // ── statistics ─────────────────────────────────────────────────────────────
 function destroyChart(id) {
