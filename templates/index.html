@@ -662,9 +662,10 @@ select option{background:var(--surface);color:var(--text)}
 .race-row.gone{opacity:0;pointer-events:none}
 .race-label{width:112px;flex-shrink:0;text-align:right;font-size:12px;font-weight:600;
   color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.race-track{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.race-track{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;gap:8px}
 .race-bar{position:relative;height:calc(var(--race-row-h) - 8px);border-radius:2px;
-  flex-shrink:0;cursor:pointer;
+  cursor:pointer;
   background:color-mix(in srgb, var(--gc) 22%, transparent);
   border-left:3px solid var(--gc);
   transition:width var(--race-dur) cubic-bezier(.4,0,.2,1)}
@@ -676,8 +677,8 @@ select option{background:var(--surface);color:var(--text)}
    Safari still needs the -webkit- twin. */
 .race-covers{position:absolute;inset:2px 3px 2px 0;display:flex;justify-content:flex-end;
   align-items:center;gap:2px;overflow:hidden;
-  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 34px);
-  mask-image:linear-gradient(to right,transparent 0,#000 34px)}
+  -webkit-mask-image:linear-gradient(to right,transparent 0,#000 min(34px, 60%));
+  mask-image:linear-gradient(to right,transparent 0,#000 min(34px, 60%))}
 .race-cover{width:calc(var(--race-row-h) - 12px);height:calc(var(--race-row-h) - 12px);
   flex-shrink:0;border-radius:2px;object-fit:cover;background:#111;cursor:pointer}
 [data-theme="light"] .race-cover{background:#eee}
@@ -4356,7 +4357,7 @@ function syncMobileTabbar() {
 
 // ── history: the collection's growth as a bar chart race ───────────────────
 const RACE_BASE_MS = 1000;    // one purchase day at 1× — ~31s end to end
-const RACE_COVER_CAP = 24;    // covers put in the DOM per bar; more than any
+const RACE_COVER_CAP = 48;    // covers put in the DOM per bar; more than any
                               // bar can display, so the visible result is the
                               // same while node count stays bounded
 
@@ -4394,10 +4395,9 @@ function renderHistory() {
   scrub.disabled = false;
   scrub.max = String(raceFrames.length - 1);
 
-  raceApplyDuration();
   // Reduced motion opens on the finished chart instead — a statistic, not a
   // race. Everything still works; you just start it yourself.
-  if (raceReducedMotion()) { raceSnapTo(raceFrames.length - 1); raceSyncControls(); }
+  if (raceReducedMotion()) { raceSnapTo(raceFrames.length - 1); racePause(); }
   else { raceSnapTo(0); racePlay(); }
 }
 
@@ -4481,7 +4481,8 @@ function raceCovers(strip, bar, animate) {
       img.dataset.id = String(r.id);
       img.loading = 'lazy';
       img.alt = '';
-      img.src = r.cover_data || '';
+      if (r.cover_data) img.src = r.cover_data;
+      img.onerror = function () { this.style.visibility = 'hidden'; };
       img.title = (r.artist || 'unknown') + ' – ' + (r.album_name || 'untitled');
     }
     // Only touch the DOM when the element is actually out of place: seeking
@@ -4576,6 +4577,7 @@ function raceSyncControls() {
   btn.setAttribute('aria-label', racePlaying ? 'pause' : 'play');
   const atEnd = raceFrames.length > 0 && raceIndex >= raceFrames.length - 1;
   document.getElementById('raceReplayBtn').classList.toggle('hidden', !atEnd || racePlaying);
+  document.getElementById('racePlayBtn').classList.toggle('hidden', atEnd && !racePlaying);
   document.querySelectorAll('.race-speed-btn').forEach(function (b) {
     b.classList.toggle('active', Number(b.dataset.speed) === raceSpeed);
   });

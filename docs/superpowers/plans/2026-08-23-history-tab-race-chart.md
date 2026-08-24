@@ -815,7 +815,7 @@ Replace `function renderHistory() {}` with:
 
 ```js
 const RACE_BASE_MS = 1000;    // one purchase day at 1× — ~31s end to end
-const RACE_COVER_CAP = 24;    // covers put in the DOM per bar; more than any
+const RACE_COVER_CAP = 48;    // covers put in the DOM per bar; more than any
                               // bar can display, so the visible result is the
                               // same while node count stays bounded
 

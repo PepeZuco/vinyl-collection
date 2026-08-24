@@ -228,7 +228,7 @@ fade needs no width measurement, no cap arithmetic, and no resize handler, and
 it degrades correctly at every viewport. The count number sits **outside** the
 bar's right end, so a 1-record genre stays legible at 3 % width.
 
-`RACE_COVER_CAP = 24` most recent covers are put in the DOM per bar — more than
+`RACE_COVER_CAP = 48` most recent covers are put in the DOM per bar — more than
 any bar can display, so the visible result is identical, but node count stays
 bounded.
 

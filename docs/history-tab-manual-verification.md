@@ -38,7 +38,8 @@ opening frame exactly three bars (Easy Listening, Folk, Soul & Funk).
 
 ## Around the edges
 
-- [ ] Toggling the theme mid-race repaints in the new palette.
+- [ ] Toggling the theme mid-race re-renders the tab in the new palette — this
+      restarts the race from frame 0 and autoplays; that is expected, not a bug.
 - [ ] Leaving the tab mid-race and returning restarts cleanly, with no timer
       left running (the day must not have advanced while you were away).
 - [ ] Clicking a cover pauses and opens the right record; closing the detail
