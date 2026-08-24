@@ -681,6 +681,19 @@ select option{background:var(--surface);color:var(--text)}
 .race-cover{width:calc(var(--race-row-h) - 12px);height:calc(var(--race-row-h) - 12px);
   flex-shrink:0;border-radius:2px;object-fit:cover;background:#111;cursor:pointer}
 [data-theme="light"] .race-cover{background:#eee}
+
+/* A cover flies in at the bar's growing tip. Five arrivals — the busiest
+   genre-day in the collection — stagger over 240ms, comfortably inside a
+   1000ms frame at 1×. */
+@keyframes raceIn{
+  from{opacity:0;transform:translateX(18px) scale(1.35)}
+  to{opacity:1;transform:none}
+}
+.race-cover.new{animation:raceIn 420ms ease-out both;
+  animation-delay:calc(var(--i) * 60ms)}
+@media(prefers-reduced-motion:reduce){
+  .race-cover.new{animation:none}
+}
 .race-count{font-size:12.5px;font-weight:700;color:var(--text);
   font-variant-numeric:tabular-nums;min-width:26px}
 
@@ -4416,11 +4429,14 @@ function racePaint(i, animate) {
 function raceCovers(strip, bar, animate) {
   const want = bar.records.slice(-RACE_COVER_CAP);
   const wantIds = new Set(want.map(function (r) { return String(r.id); }));
+  const arriving = new Set(
+    animate ? bar.added.map(function (r) { return String(r.id); }) : []);
 
   Array.prototype.slice.call(strip.children).forEach(function (img) {
     if (!wantIds.has(img.dataset.id)) img.remove();
   });
 
+  let stagger = 0;
   want.forEach(function (r, idx) {
     let img = strip.querySelector('[data-id="' + r.id + '"]');
     if (!img) {
@@ -4437,6 +4453,14 @@ function raceCovers(strip, bar, animate) {
     // land at the front, but a plain re-append every frame churns the strip.
     if (strip.children[idx] !== img) {
       strip.insertBefore(img, strip.children[idx] || null);
+    }
+    // Re-adding the class only restarts the animation after the browser has
+    // seen it removed, hence the forced reflow between the two.
+    img.classList.remove('new');
+    if (arriving.has(String(r.id))) {
+      img.style.setProperty('--i', stagger++);
+      void img.offsetWidth;
+      img.classList.add('new');
     }
   });
 }
