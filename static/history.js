@@ -47,6 +47,7 @@ const VinylHistory = (function (grouping) {
     }
 
     const cumulative = new Map();   // genre -> records so far, oldest first
+    let prevRank = new Map();       // genre -> its row index in the last frame
     const frames = [];
     let total = 0;
 
@@ -74,11 +75,21 @@ const VinylHistory = (function (grouping) {
         };
       });
 
+      /* Ties are broken by who held the higher row last frame, not by name.
+       * Genres sit level for long stretches, and an alphabetical tie-break
+       * makes them trade rows every time one gains and the other catches up —
+       * a swap animation that means nothing. Holding position means a swap on
+       * screen is always a real overtake. A genre with no previous rank sorts
+       * last among equals, so an entrant slots in below the incumbents. */
       bars.sort(function (a, b) {
         if (a.count !== b.count) return b.count - a.count;
+        const ar = prevRank.has(a.genre) ? prevRank.get(a.genre) : Infinity;
+        const br = prevRank.has(b.genre) ? prevRank.get(b.genre) : Infinity;
+        if (ar !== br) return ar - br;
         return a.label < b.label ? -1 : a.label > b.label ? 1 : 0;
       });
 
+      prevRank = new Map(bars.map(function (bar, i) { return [bar.genre, i]; }));
       frames.push({ day: day, index: index, total: total, bars: bars });
     });
 

@@ -145,3 +145,46 @@ test('a record with no genre surfaces as unknown', () => {
   assert.strictEqual(frames[0].bars[0].genre, '');
   assert.strictEqual(frames[0].bars[0].label, 'unknown');
 });
+
+// ── ordering ────────────────────────────────────────────────────────────────
+
+/* Blues and Jazz enter together and stay level, then Jazz takes the lead, then
+ * Blues draws level again, then Blues genuinely overtakes. The interesting
+ * frame is the fourth: Blues sorts first alphabetically, so a naive tie-break
+ * would swap the rows there even though nothing overtook anything. */
+function seesaw() {
+  return buildTimeline([
+    rec({ id: 1, genre: 'Blues', bought_date: '2026-01-01' }),
+    rec({ id: 2, genre: 'Jazz',  bought_date: '2026-01-01' }),
+    rec({ id: 3, genre: 'Rock',  bought_date: '2026-01-02' }),
+    rec({ id: 4, genre: 'Jazz',  bought_date: '2026-01-03' }),
+    rec({ id: 5, genre: 'Blues', bought_date: '2026-01-04' }),
+    rec({ id: 6, genre: 'Blues', bought_date: '2026-01-05' }),
+  ]);
+}
+
+test('the opening frame breaks ties by name, having no previous frame', () => {
+  assert.deepStrictEqual(seesaw()[0].bars.map(b => b.label), ['Blues', 'Jazz']);
+});
+
+test('a genre entering later sorts last among equals', () => {
+  assert.deepStrictEqual(seesaw()[1].bars.map(b => b.label),
+                         ['Blues', 'Jazz', 'Rock']);
+});
+
+test('a real overtake reorders the bars', () => {
+  assert.deepStrictEqual(seesaw()[2].bars.map(b => b.label),
+                         ['Jazz', 'Blues', 'Rock']);
+});
+
+test('drawing level does not swap rows — the leader holds its place', () => {
+  const frame = seesaw()[3];
+  assert.strictEqual(frame.bars[0].count, frame.bars[1].count, 'they are level');
+  assert.deepStrictEqual(frame.bars.map(b => b.label),
+                         ['Jazz', 'Blues', 'Rock']);
+});
+
+test('passing the leader outright does swap rows', () => {
+  assert.deepStrictEqual(seesaw()[4].bars.map(b => b.label),
+                         ['Blues', 'Jazz', 'Rock']);
+});
