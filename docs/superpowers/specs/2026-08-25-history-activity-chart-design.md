@@ -30,7 +30,7 @@ Measured against the live collection (`instance/vinyl.db`), not assumed:
 | Records in scope | 112 (owned and dated) |
 | Plays | 399 |
 | Cleanings | 60, none before `2026-03-07` |
-| Notes with text | 28, across 23 records |
+| Notes with text | 38, across 33 records — 28 in JSON `notes` columns plus 10 legacy plain-string columns the app's `parseNotes()` migrates |
 | Day range | `2024-05-31` → `2026-08-21`, **813 days** |
 | Days with any event | 212 |
 | Records with 7+ plays | 21 (214 plays); the other 91 hold 185 |

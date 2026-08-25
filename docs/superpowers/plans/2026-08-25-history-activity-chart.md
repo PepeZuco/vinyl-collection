@@ -708,7 +708,7 @@ Run: `.venv/bin/python app.py`, open the app, and in the browser console:
 VinylActivity.buildActivity(records).totals
 ```
 
-Expected: `{b: 112, p: 399, c: 60, n: 28}` against the live collection.
+Expected: `{b: 112, p: 399, c: 60, n: 38}` against the live collection. (38, not 28: ten owned records carry a legacy plain-string `notes` column that the module migrates the same way the template's `parseNotes()` does.)
 
 - [ ] **Step 7: Run the whole suite and commit**
 
@@ -1420,7 +1420,7 @@ At the end of `renderActivity()`, replace `actSetVisible(21);` with:
 - [ ] **Step 4: Verify playback**
 
 Run: `.venv/bin/python app.py`, open the History tab.
-Expected: the activity chart autoplays alongside the race chart and finishes in roughly 5–6 seconds. The band fills left to right; the legend counts up and lands on `bought 112 / played 399 / cleaned 60 / noted 28`; the lane counts land on `16, 15, 14, …`; the date reads `2026-08-21` at the end; the replay button appears. Scrub, pause and speed all respond. Switch to the Collection tab mid-play and back — playback must not still be running behind it.
+Expected: the activity chart autoplays alongside the race chart and finishes in roughly 5–6 seconds. The band fills left to right; the legend counts up and lands on `bought 112 / played 399 / cleaned 60 / noted 38`; the lane counts land on `16, 15, 14, …`; the date reads `2026-08-21` at the end; the replay button appears. Scrub, pause and speed all respond. Switch to the Collection tab mid-play and back — playback must not still be running behind it.
 
 - [ ] **Step 5: Commit**
 
@@ -1760,12 +1760,12 @@ cannot be. Run this list against `.venv/bin/python app.py` after any change.
 
 Expected shape of the live collection: **112 lanes**, `2024-05-31` →
 `2026-08-21`, **813 days**, **399 plays**, **60 cleanings** (none before
-`2026-03-07`), **28 notes**. Default cut: 21 lanes holding 214 plays, the
+`2026-03-07`), **38 notes** (28 JSON + 10 legacy plain-string). Default cut: 21 lanes holding 214 plays, the
 folded band holding the other 91 records and 185 plays.
 
 ### Correctness
 
-- [ ] The legend's four totals end at `112 / 399 / 60 / 28` and match the
+- [ ] The legend's four totals end at `112 / 399 / 60 / 38` and match the
       figures on the record detail views.
 - [ ] Visible lane counts plus the folded band's count equal 399 at every
       `show` setting.
