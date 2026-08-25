@@ -22,6 +22,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#F5C518;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
+  --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
@@ -29,6 +30,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#1a1a18;--muted:#999;--label:#6b6b63;--accent:#a07820;--danger:#c0392b;
   --card-hover:#fafaf8;--search-bg:#ffffff;
   --sh-gray:rgba(0,0,0,0.18);
+  --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☾'
 }
 
@@ -709,19 +711,138 @@ select option{background:var(--surface);color:var(--text)}
   background:transparent;color:var(--text);font-size:15px;cursor:pointer}
 .race-btn:hover{border-color:var(--accent);color:var(--accent)}
 .race-btn.hidden{display:none}
-#raceScrub{flex:1;min-width:0;accent-color:var(--accent);cursor:pointer}
-#raceScrub:disabled{opacity:.4;cursor:default}
+#raceScrub,#actScrub{flex:1;min-width:0;accent-color:var(--accent);cursor:pointer}
+#raceScrub:disabled,#actScrub:disabled{opacity:.4;cursor:default}
 .race-speeds{display:flex;gap:3px;flex-shrink:0}
-.race-speed-btn{height:26px;padding:0 8px;border:1px solid var(--border);
+.race-speed-btn,.act-speed-btn{height:26px;padding:0 8px;border:1px solid var(--border);
   border-radius:var(--radius-sm);background:transparent;color:var(--muted);
   font:600 11px var(--font);cursor:pointer;font-variant-numeric:tabular-nums}
-.race-speed-btn.active{border-color:var(--accent);color:var(--accent)}
+.race-speed-btn.active,.act-speed-btn.active{border-color:var(--accent);color:var(--accent)}
 
 @media(max-width:760px){
   .race-plot{--race-row-h:28px}
   .race-label{width:76px;font-size:11px}
   .race-day{font-size:19px}
   .race-controls{gap:8px}
+}
+
+/* activity chart — the same days at two scales: a weekly band over per-record
+   lanes. Pan and reveal are two custom properties on .act-lanes, so playback
+   costs two style writes however many lanes are on screen. */
+.act-empty{color:var(--muted);font-size:13px;padding:20px 2px}
+.act-legend{display:flex;gap:13px;flex-wrap:wrap}
+.act-lg{display:inline-flex;align-items:center;gap:5px;font-size:11px;
+  color:var(--label);text-transform:none;letter-spacing:0;font-weight:400}
+.act-lg i{font-size:12px;flex-shrink:0}
+.act-lg b{font-family:var(--font-mono);font-weight:700;color:var(--text);
+  min-width:2.4ch;text-align:right;font-variant-numeric:tabular-nums}
+
+/* the band doubles as the scrubber, hence the grab cursor and touch-action */
+.act-band-wrap{position:relative;cursor:ew-resize;touch-action:none;user-select:none}
+.act-band{position:relative;height:78px;display:flex;align-items:flex-end;gap:1px;
+  border-bottom:1px solid var(--border);transition:opacity .18s}
+.act-band-wrap.dim .act-band{opacity:.22}
+.act-wk{flex:1;min-width:0;display:flex;flex-direction:column-reverse;height:100%}
+.act-seg{width:100%;flex-shrink:0;transition:height 90ms linear}
+.act-seg.b{background:var(--ev-bought)} .act-seg.p{background:var(--ev-played)}
+.act-seg.c{background:var(--ev-cleaned)} .act-seg.n{background:var(--ev-note)}
+.act-wk .act-seg + .act-seg{box-shadow:0 2px 0 0 var(--surface)}
+.act-win{position:absolute;top:-2px;bottom:0;pointer-events:none;opacity:0;
+  transition:opacity .2s;border-left:1px solid var(--accent);
+  border-right:1px solid var(--accent);
+  background:color-mix(in srgb, var(--accent) 9%, transparent)}
+.act-win.on{opacity:1}
+.act-solo{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .18s}
+.act-solo.on{opacity:1}
+.act-solo .sm{position:absolute;bottom:0;width:2px;height:100%;margin-left:-1px}
+.act-pin{position:absolute;top:-2px;bottom:0;width:1px;background:var(--accent);
+  pointer-events:none;z-index:3}
+
+.act-axis{position:relative;height:19px;margin-top:2px}
+#actLaneAxis{overflow:hidden}
+#actLaneAxis.wide .act-tick:not(.q3){display:none}
+.act-tick{position:absolute;top:0;font-family:var(--font-mono);font-size:9.5px;
+  color:var(--muted);transform:translateX(-50%);white-space:nowrap;letter-spacing:.04em}
+.act-tick.yr{color:var(--label);font-weight:700}
+
+.act-note{margin-top:10px;background:var(--card);border:1px solid var(--border);
+  border-left:2px solid var(--ev-note);padding:7px 10px;font-size:12px;
+  line-height:1.45;color:var(--text);opacity:0;transition:opacity .3s;min-height:44px}
+.act-note.on{opacity:1}
+.act-note .who{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ev-note);display:block;margin-bottom:3px}
+.act-note .txt{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.act-strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin:13px 0 9px;padding-top:11px;border-top:1px solid var(--border)}
+.act-grp{display:flex;align-items:center;gap:5px}
+.act-grp > span{font-family:var(--font-mono);font-size:9.5px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.act-pill{height:24px;padding:0 9px;border:1px solid var(--border);
+  background:transparent;color:var(--label);font-size:11px;
+  font-family:var(--font-mono);cursor:pointer;line-height:1}
+.act-pill.active{border-color:var(--accent);color:var(--accent)}
+
+.act-lanes{position:relative;--act-pan:0px;--act-rev:100%}
+.act-scroll{position:relative}
+.act-scroll.scroll{max-height:430px;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.act-row{display:grid;grid-template-columns:20px minmax(0,150px) minmax(0,1fr) 28px;
+  gap:9px;align-items:center;height:18px;transition:opacity .45s;cursor:pointer}
+.act-row.gone{opacity:.34}
+.act-row:hover{background:var(--card-hover)}
+.act-cover{width:18px;height:18px;object-fit:cover;background:var(--search-bg);
+  filter:grayscale(1) opacity(.3);transition:filter .35s}
+.act-cover.owned{filter:none}
+.act-name{font-size:11px;line-height:1.15;overflow:hidden;white-space:nowrap;
+  text-overflow:ellipsis;color:var(--label)}
+.act-name b{color:var(--text);font-weight:600}
+.act-lane{position:relative;height:18px;overflow:hidden}
+/* the baseline sits outside the track, so an unrevealed lane still reads as a
+   lane rather than as empty space */
+.act-lane::before{content:'';position:absolute;left:0;right:0;top:8px;height:1px;
+  background:var(--border)}
+.act-track{position:absolute;top:0;bottom:0;left:0;width:100%;
+  transform:translateX(var(--act-pan));
+  clip-path:inset(0 var(--act-rev) 0 0);will-change:transform}
+.act-mk{position:absolute;top:4px;height:10px;width:2px;border-radius:1px;margin-left:-1px}
+.act-mk.p{background:var(--ev-played)}
+.act-mk.c{background:var(--ev-cleaned);top:2px;height:14px}
+.act-mk.n{background:var(--ev-note);top:2px;height:14px}
+.act-mk.b{background:var(--ev-bought);top:6px;height:6px;width:6px;
+  border-radius:50%;margin-left:-3px}
+.act-quiet{position:absolute;top:8px;height:1px;
+  background:repeating-linear-gradient(90deg,var(--border) 0 3px,transparent 3px 6px)}
+.act-ct{font-family:var(--font-mono);font-size:11px;font-weight:700;text-align:right;
+  color:var(--label);font-variant-numeric:tabular-nums}
+.act-tail{margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.act-tail .act-row{height:24px;cursor:default}
+.act-tail .act-row:hover{background:transparent}
+.act-tail .act-lane{height:24px}
+.act-tail .act-lane::before{top:11px}
+.act-tail .act-mk{opacity:.4;top:6px;height:12px}
+.act-tail .act-name{font-style:italic}
+.act-head{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);
+  opacity:.8;pointer-events:none;z-index:2}
+
+.act-readout{display:flex;align-items:flex-end;justify-content:space-between;
+  gap:14px;margin-top:11px;flex-wrap:wrap}
+.act-day{font-family:var(--font-mono);font-size:26px;font-weight:700;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1}
+.act-caption{font-size:12px;color:var(--label);min-height:1.4em;text-align:right;
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+@media (max-width:640px){
+  .act-band{height:62px}
+  .act-row{grid-template-columns:16px minmax(0,88px) minmax(0,1fr) 24px;gap:7px}
+  .act-cover{width:15px;height:15px}
+  .act-day{font-size:19px}
+  .act-strip{gap:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  .act-seg{transition:none}
+  .act-row{transition:none}
+  .act-cover{transition:none}
 }
 
 /* stats/history segment — mobile only. The bottom bar already carries four
@@ -1353,6 +1474,80 @@ select option{background:var(--surface);color:var(--text)}
         <button class="race-btn hidden" id="raceReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
       </div>
     </div>
+
+      <!-- how the collection is used — the same days at two scales -->
+      <div class="chart-box" id="actBox">
+        <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span>how the collection is used</span>
+          <div class="act-legend">
+            <span class="act-lg"><i class="ti ti-shopping-bag" style="color:var(--ev-bought)"></i>bought <b id="actTotB">0</b></span>
+            <span class="act-lg"><i class="ti ti-headphones" style="color:var(--ev-played)"></i>played <b id="actTotP">0</b></span>
+            <span class="act-lg"><i class="ti ti-droplet" style="color:var(--ev-cleaned)"></i>cleaned <b id="actTotC">0</b></span>
+            <span class="act-lg"><i class="ti ti-note" style="color:var(--ev-note)"></i>noted <b id="actTotN">0</b></span>
+          </div>
+        </div>
+
+        <p class="act-empty" id="actEmpty" hidden>nothing to replay yet — records need a bought date to appear here.</p>
+
+        <div id="actBody">
+          <div class="act-band-wrap" id="actBandWrap">
+            <div class="act-band" id="actBand"></div>
+            <div class="act-win" id="actWinRect"></div>
+            <div class="act-solo" id="actSolo"></div>
+            <div class="act-pin" id="actPin"></div>
+          </div>
+          <div class="act-axis" id="actBandAxis"></div>
+          <div class="act-note" id="actNote"><span class="who"></span><span class="txt"></span></div>
+
+          <div class="act-strip">
+            <div class="act-grp"><span>zoom</span>
+              <button class="act-pill active" data-act-zoom="0">all</button>
+              <button class="act-pill" data-act-zoom="365">1 yr</button>
+              <button class="act-pill" data-act-zoom="90">90 d</button>
+              <button class="act-pill" data-act-zoom="30">30 d</button>
+            </div>
+            <div class="act-grp"><span>show</span>
+              <button class="act-pill active" data-act-show="21">top 21</button>
+              <button class="act-pill" data-act-show="50">top 50</button>
+              <button class="act-pill" data-act-show="0">all</button>
+            </div>
+            <div class="act-grp"><span>order</span>
+              <button class="act-pill active" data-act-sort="plays">most played</button>
+              <button class="act-pill" data-act-sort="recent">in rotation</button>
+              <button class="act-pill" data-act-sort="bought">bought</button>
+            </div>
+          </div>
+
+          <div class="act-lanes" id="actLanes">
+            <div class="act-scroll" id="actScroll"></div>
+            <div class="act-tail" id="actTail" hidden>
+              <div class="act-row">
+                <span></span>
+                <span class="act-name" id="actTailName"></span>
+                <span class="act-lane"><span class="act-track" id="actTailTrack"></span></span>
+                <span class="act-ct" id="actTailCt">0</span>
+              </div>
+            </div>
+            <span class="act-head" id="actHead"></span>
+          </div>
+          <div class="act-axis" id="actLaneAxis"><span class="act-track" id="actLaneAxisTrack"></span></div>
+
+          <div class="act-readout">
+            <span class="act-day" id="actDay"></span>
+            <span class="act-caption" id="actCaption"></span>
+          </div>
+          <div class="race-controls">
+            <button class="race-btn" id="actPlayBtn" aria-label="play" aria-pressed="false"><i class="ti ti-player-play"></i></button>
+            <input type="range" id="actScrub" min="0" max="0" step="1" value="0" aria-label="day">
+            <div class="race-speeds">
+              <button class="act-speed-btn" data-act-speed="0.5">0.5&times;</button>
+              <button class="act-speed-btn active" data-act-speed="1">1&times;</button>
+              <button class="act-speed-btn" data-act-speed="2">2&times;</button>
+            </div>
+            <button class="race-btn hidden" id="actReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
+          </div>
+        </div>
+      </div>
   </div>
 
   <!-- collection page -->
