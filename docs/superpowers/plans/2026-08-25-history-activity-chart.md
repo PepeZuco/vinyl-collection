@@ -337,7 +337,7 @@ and rewrite `buildActivity` as:
 - [ ] **Step 6: Run the tests**
 
 Run: `node --test tests/test_activity.js`
-Expected: PASS, 11/11.
+Expected: PASS, 10/10.
 
 - [ ] **Step 7: Run the whole suite**
 
@@ -550,7 +550,7 @@ In `static/activity.js`, replace the `return { d0: ..., span: ... };` at the end
 - [ ] **Step 4: Run the tests**
 
 Run: `node --test tests/test_activity.js`
-Expected: PASS, 21/21.
+Expected: PASS, 20/20.
 
 - [ ] **Step 5: Commit**
 
@@ -688,7 +688,7 @@ and widen the return:
 - [ ] **Step 4: Run the tests**
 
 Run: `node --test tests/test_activity.js`
-Expected: PASS, 26/26.
+Expected: PASS, 25/25.
 
 - [ ] **Step 5: Load the module in the browser**
 
