@@ -206,3 +206,56 @@ test('playedOn indexes every play by day and holds nothing else', () => {
   assert.strictEqual(a.playedOn[0], undefined);
   assert.strictEqual(a.playedOn[1], undefined);
 });
+
+// ── weeks ───────────────────────────────────────────────────────────────────
+
+test('a week holds seven days, day 6 in the first and day 7 in the second', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01',
+    play_dates: plays('2026-01-07', '2026-01-08'),   // day 6 and day 7
+  })]);
+  assert.strictEqual(a.weeks.length, 2);
+  assert.strictEqual(a.weeks[0].p, 1);
+  assert.strictEqual(a.weeks[1].p, 1);
+});
+
+test('a week total is the sum of its four series', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01',
+    play_dates: plays('2026-01-02'),
+    cleaned_dates: plays('2026-01-03'),
+    notes: JSON.stringify([{ date: '2026-01-04', text: 'n' }]),
+  })]);
+  assert.deepStrictEqual(a.weeks[0], { b: 1, p: 1, c: 1, n: 1, total: 4 });
+});
+
+// ── cumulative counts ───────────────────────────────────────────────────────
+
+test('cum runs the length of the axis and never decreases', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01', play_dates: plays('2026-01-03', '2026-01-05'),
+  })]);
+  assert.strictEqual(a.cum.p.length, a.span);
+  assert.deepStrictEqual(a.cum.p, [0, 0, 1, 1, 2]);
+  assert.deepStrictEqual(a.cum.b, [1, 1, 1, 1, 1]);
+});
+
+test('the last cumulative value equals the total for every series', () => {
+  const a = buildActivity([
+    rec({ bought_date: '2026-01-01', play_dates: plays('2026-01-02', '2026-01-03') }),
+    rec({ bought_date: '2026-01-04', cleaned_dates: plays('2026-01-05') }),
+  ]);
+  ['b', 'p', 'c', 'n'].forEach(k => {
+    assert.strictEqual(a.cum[k][a.span - 1], a.totals[k], 'series ' + k);
+  });
+  assert.deepStrictEqual(a.totals, { b: 2, p: 2, c: 1, n: 0 });
+});
+
+test('every play in the model is counted exactly once', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01', play_dates: plays('2026-01-02', '2026-01-02'),
+  })]);
+  assert.strictEqual(a.totals.p, 2);
+  assert.strictEqual(a.lanes[0].plays.length, 2);
+  assert.deepStrictEqual(a.playedOn[1].length, 2);
+});

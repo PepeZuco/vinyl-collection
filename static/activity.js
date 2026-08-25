@@ -19,6 +19,8 @@
 
 const VinylActivity = (function (grouping) {
 
+  const WEEK = 7;
+
   /* Same scope rule as the race chart: owned and dated. Every have_it record
    * in the collection carries a bought_date and every undated one is a
    * wishlist item, so this loses nothing owned. */
@@ -109,6 +111,18 @@ const VinylActivity = (function (grouping) {
     }
 
     const span = hi - lo + 1;
+    const weeks = [];
+    for (let i = 0; i < Math.ceil(span / WEEK); i++) {
+      weeks.push({ b: 0, p: 0, c: 0, n: 0, total: 0 });
+    }
+    const perDay = [];
+    for (let i = 0; i < span; i++) perDay.push({ b: 0, p: 0, c: 0, n: 0 });
+
+    function count(day, key) {
+      perDay[day][key]++;
+      weeks[(day / WEEK) | 0][key]++;
+    }
+
     const playedOn = [];
     const noteList = [];
 
@@ -118,15 +132,21 @@ const VinylActivity = (function (grouping) {
       const plays  = e.plays.map(shift);
       const cleans = e.cleans.map(shift);
 
+      count(bought, 'b');
+
       plays.forEach(function (d) {
         if (!playedOn[d]) playedOn[d] = [];
         playedOn[d].push(e.r.id);
+        count(d, 'p');
       });
+
+      cleans.forEach(function (d) { count(d, 'c'); });
 
       const noteDays = e.notes.map(function (n) {
         const day = shift(n.day);
         noteList.push({ day: day, text: n.text, id: e.r.id,
                         artist: e.r.artist || '', album: e.r.album_name || '' });
+        count(day, 'n');
         return day;
       });
 
@@ -146,6 +166,15 @@ const VinylActivity = (function (grouping) {
       };
     });
 
+    const cum = { b: [], p: [], c: [], n: [] };
+    const totals = { b: 0, p: 0, c: 0, n: 0 };
+    ['b', 'p', 'c', 'n'].forEach(function (k) {
+      let running = 0;
+      for (let i = 0; i < span; i++) { running += perDay[i][k]; cum[k][i] = running; }
+      totals[k] = running;
+    });
+    weeks.forEach(function (w) { w.total = w.b + w.p + w.c + w.n; });
+
     noteList.sort(function (a, b) { return a.day - b.day; });
 
     /* Play count desc, ties by purchase order then id. A defined order means
@@ -157,8 +186,8 @@ const VinylActivity = (function (grouping) {
       return (Number(a.id) || 0) - (Number(b.id) || 0);
     });
 
-    return { d0: dayString(lo), span: span, lanes: lanes,
-             playedOn: playedOn, notes: noteList };
+    return { d0: dayString(lo), span: span, weeks: weeks, cum: cum,
+             lanes: lanes, playedOn: playedOn, notes: noteList, totals: totals };
   }
 
   return { buildActivity: buildActivity, dayAt: dayAt };
