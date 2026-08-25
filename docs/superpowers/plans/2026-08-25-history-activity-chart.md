@@ -837,7 +837,11 @@ Immediately after the race chart's CSS block (before the `stats/history segment`
   font-family:var(--font-mono);cursor:pointer;line-height:1}
 .act-pill.active{border-color:var(--accent);color:var(--accent)}
 
-.act-lanes{position:relative;--act-pan:0px;--act-rev:100%}
+/* pan lives on the body, an ancestor of BOTH the lanes and the month rule that
+   sits below them, so the two move together; the reveal lives on the lanes
+   alone, so the rule is panned but never clipped */
+.act-body{--act-pan:0px}
+.act-lanes{position:relative;--act-rev:100%}
 .act-scroll{position:relative}
 .act-scroll.scroll{max-height:430px;overflow-y:auto;overflow-x:hidden;
   scrollbar-width:thin;scrollbar-color:var(--border) transparent}
@@ -858,11 +862,13 @@ Immediately after the race chart's CSS block (before the `stats/history segment`
   background:var(--border)}
 .act-track{position:absolute;top:0;bottom:0;left:0;width:100%;
   transform:translateX(var(--act-pan));
-  clip-path:inset(0 var(--act-rev) 0 0);will-change:transform}
+  /* the fallback is what leaves the month rule unclipped: it never inherits
+     --act-rev, because that is defined on .act-lanes, which is not its parent */
+  clip-path:inset(0 var(--act-rev,0%) 0 0);will-change:transform}
 .act-mk{position:absolute;top:4px;height:10px;width:2px;border-radius:1px;margin-left:-1px}
 .act-mk.p{background:var(--ev-played)}
 .act-mk.c{background:var(--ev-cleaned);top:2px;height:14px}
-.act-mk.n{background:var(--ev-note);top:2px;height:14px}
+.act-mk.n{background:var(--ev-note);top:0;height:18px;width:3px}
 .act-mk.b{background:var(--ev-bought);top:6px;height:6px;width:6px;
   border-radius:50%;margin-left:-3px}
 .act-quiet{position:absolute;top:8px;height:1px;
@@ -875,6 +881,7 @@ Immediately after the race chart's CSS block (before the `stats/history segment`
 .act-tail .act-lane{height:24px}
 .act-tail .act-lane::before{top:11px}
 .act-tail .act-mk{opacity:.4;top:6px;height:12px}
+.act-tail .act-mk.b{top:9px;height:6px;width:6px}
 .act-tail .act-name{font-style:italic}
 .act-head{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);
   opacity:.8;pointer-events:none;z-index:2}
@@ -919,7 +926,7 @@ In `#historyPage`, immediately after the race chart's `.chart-box` closing `</di
 
         <p class="act-empty" id="actEmpty" hidden>nothing to replay yet — records need a bought date to appear here.</p>
 
-        <div id="actBody">
+        <div class="act-body" id="actBody">
           <div class="act-band-wrap" id="actBandWrap">
             <div class="act-band" id="actBand"></div>
             <div class="act-win" id="actWinRect"></div>
@@ -1284,9 +1291,10 @@ function actPaint() {
    * the same whether 21 lanes are on screen or 112. */
   actWinStart = actWin >= actLast() ? 0
               : actClamp(actPos - actWin * ACT_ANCHOR, 0, actLast() - actWin);
-  const lanes = document.getElementById('actLanes');
-  lanes.style.setProperty('--act-pan', (-(actLaneW * actWinStart / actWin)) + 'px');
-  lanes.style.setProperty('--act-rev', (100 - actPct(actPos)).toFixed(3) + '%');
+  document.getElementById('actBody').style.setProperty(
+    '--act-pan', (-(actLaneW * actWinStart / actWin)) + 'px');
+  document.getElementById('actLanes').style.setProperty(
+    '--act-rev', (100 - actPct(actPos)).toFixed(3) + '%');
   const win = document.getElementById('actWinRect');
   win.style.left = actPct(actWinStart) + '%';
   win.style.width = (actWin / actLast() * 100) + '%';
