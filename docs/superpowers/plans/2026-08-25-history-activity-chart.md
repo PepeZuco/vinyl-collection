@@ -729,7 +729,7 @@ git commit -m "Bucket the collection's events by week and by day"
 
 **Interfaces:**
 - Consumes: nothing — this task adds no JS.
-- Produces: the DOM ids `renderActivity()` will drive: `actBox actEmpty actBody actBandWrap actBand actWin actSolo actPin actBandAxis actNote actLanes actScroll actTail actTailName actTailTrack actTailCt actHead actLaneAxis actLaneAxisTrack actDay actCaption actPlayBtn actScrub actReplayBtn`, the totals `actTotB actTotP actTotC actTotN`, and the control attributes `data-act-zoom data-act-show data-act-sort data-act-speed`.
+- Produces: the DOM ids `renderActivity()` will drive: `actBox actEmpty actBody actBandWrap actBand actWinRect actSolo actPin actBandAxis actNote actLanes actScroll actTail actTailName actTailTrack actTailCt actHead actLaneAxis actLaneAxisTrack actDay actCaption actPlayBtn actScrub actReplayBtn`, the totals `actTotB actTotP actTotC actTotN`, and the control attributes `data-act-zoom data-act-show data-act-sort data-act-speed`.
 
 - [ ] **Step 1: Add the event-colour tokens**
 
@@ -922,7 +922,7 @@ In `#historyPage`, immediately after the race chart's `.chart-box` closing `</di
         <div id="actBody">
           <div class="act-band-wrap" id="actBandWrap">
             <div class="act-band" id="actBand"></div>
-            <div class="act-win" id="actWin"></div>
+            <div class="act-win" id="actWinRect"></div>
             <div class="act-solo" id="actSolo"></div>
             <div class="act-pin" id="actPin"></div>
           </div>
@@ -1141,7 +1141,7 @@ function actApplyZoom() {
   actRows.forEach(function (o) { o.track.style.width = w; });
   document.getElementById('actTailTrack').style.width = w;
   document.getElementById('actLaneAxisTrack').style.width = w;
-  document.getElementById('actWin').classList.toggle('on', actWin < actLast());
+  document.getElementById('actWinRect').classList.toggle('on', actWin < actLast());
   document.getElementById('actLaneAxis').classList.toggle('wide', actWin > 400);
 }
 
@@ -1287,7 +1287,7 @@ function actPaint() {
   const lanes = document.getElementById('actLanes');
   lanes.style.setProperty('--act-pan', (-(actLaneW * actWinStart / actWin)) + 'px');
   lanes.style.setProperty('--act-rev', (100 - actPct(actPos)).toFixed(3) + '%');
-  const win = document.getElementById('actWin');
+  const win = document.getElementById('actWinRect');
   win.style.left = actPct(actWinStart) + '%';
   win.style.width = (actWin / actLast() * 100) + '%';
   document.getElementById('actHead').style.left =
