@@ -87,3 +87,122 @@ test('dayAt walks forward from day zero', () => {
   assert.strictEqual(dayAt('2024-02-28', 1), '2024-02-29');   // a leap day
   assert.strictEqual(dayAt('2025-12-31', 1), '2026-01-01');   // a year boundary
 });
+
+test('a zone-bearing stamp resolves onto the local day, not the UTC one', () => {
+  // 02:00 UTC is still the previous evening in Sao Paulo (UTC-3), so this
+  // record files under 31 Dec — the TZ pin at the top of this file is what
+  // makes that assertion mean something.
+  const a = buildActivity([rec({ bought_date: '2026-01-01T02:00:00.000Z' })]);
+  assert.strictEqual(a.d0, '2025-12-31');
+});
+
+// ── lanes ───────────────────────────────────────────────────────────────────
+
+test('a lane carries its events as day indices from d0', () => {
+  const a = buildActivity([rec({
+    id: 7, artist: 'Tim Maia', album_name: 'Racional',
+    bought_date: '2026-01-01',
+    play_dates: plays('2026-01-03', '2026-01-02'),
+    cleaned_dates: plays('2026-01-05'),
+    notes: JSON.stringify([{ date: '2026-01-04', text: 'first spin' }]),
+  })]);
+  assert.strictEqual(a.lanes.length, 1);
+  const lane = a.lanes[0];
+  assert.strictEqual(lane.id, 7);
+  assert.strictEqual(lane.artist, 'Tim Maia');
+  assert.strictEqual(lane.album, 'Racional');
+  assert.strictEqual(lane.bought, 0);
+  assert.deepStrictEqual(lane.plays, [1, 2]);      // sorted, not input order
+  assert.deepStrictEqual(lane.cleans, [4]);
+  assert.deepStrictEqual(lane.notes, [3]);
+});
+
+test('lastPlay is the final play, or the purchase when never played', () => {
+  const a = buildActivity([
+    rec({ id: 1, bought_date: '2026-01-01', play_dates: plays('2026-01-04') }),
+    rec({ id: 2, bought_date: '2026-01-01' }),
+  ]);
+  const by = Object.fromEntries(a.lanes.map(l => [l.id, l]));
+  assert.strictEqual(by[1].lastPlay, 3);
+  assert.strictEqual(by[2].lastPlay, 0);
+});
+
+test('an unparseable play date drops only that play, not the record', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01',
+    play_dates: plays('2026-02-30', '2026-01-03'),
+  })]);
+  assert.deepStrictEqual(a.lanes[0].plays, [2]);
+});
+
+test('a play dated before the purchase is kept where it was recorded', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-10', play_dates: plays('2026-01-05'),
+  })]);
+  assert.strictEqual(a.d0, '2026-01-05');
+  assert.strictEqual(a.lanes[0].bought, 5);
+  assert.deepStrictEqual(a.lanes[0].plays, [0]);
+});
+
+test('a malformed events column is empty, not fatal', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01', play_dates: 'not json', cleaned_dates: '{}',
+  })]);
+  assert.deepStrictEqual(a.lanes[0].plays, []);
+  assert.deepStrictEqual(a.lanes[0].cleans, []);
+});
+
+test('lanes are ordered by play count desc, ties by purchase then id', () => {
+  const a = buildActivity([
+    rec({ id: 1, bought_date: '2026-01-02', play_dates: plays('2026-01-03') }),
+    rec({ id: 2, bought_date: '2026-01-01',
+          play_dates: plays('2026-01-03', '2026-01-04') }),
+    rec({ id: 3, bought_date: '2026-01-01', play_dates: plays('2026-01-05') }),
+  ]);
+  assert.deepStrictEqual(a.lanes.map(l => l.id), [2, 3, 1]);
+});
+
+// ── notes ───────────────────────────────────────────────────────────────────
+
+test('a note with no text is not an event', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01',
+    notes: JSON.stringify([{ date: '2026-01-02', text: '   ' },
+                           { date: '2026-01-03', text: 'real' }]),
+  })]);
+  assert.deepStrictEqual(a.lanes[0].notes, [2]);
+  assert.strictEqual(a.notes.length, 1);
+  assert.strictEqual(a.notes[0].text, 'real');
+});
+
+test('a legacy string notes column migrates onto the bought date', () => {
+  const a = buildActivity([rec({
+    bought_date: '2026-01-01', notes: 'bought at the fair',
+  })]);
+  assert.deepStrictEqual(a.lanes[0].notes, [0]);
+  assert.strictEqual(a.notes[0].text, 'bought at the fair');
+});
+
+test('notes come back ascending and name their record', () => {
+  const a = buildActivity([
+    rec({ id: 4, artist: 'X', album_name: 'Y', bought_date: '2026-01-01',
+          notes: JSON.stringify([{ date: '2026-01-09', text: 'later' }]) }),
+    rec({ id: 5, bought_date: '2026-01-01',
+          notes: JSON.stringify([{ date: '2026-01-03', text: 'earlier' }]) }),
+  ]);
+  assert.deepStrictEqual(a.notes.map(n => n.text), ['earlier', 'later']);
+  assert.deepStrictEqual(a.notes[1], { day: 8, text: 'later', id: 4,
+                                       artist: 'X', album: 'Y' });
+});
+
+// ── playedOn ────────────────────────────────────────────────────────────────
+
+test('playedOn indexes every play by day and holds nothing else', () => {
+  const a = buildActivity([
+    rec({ id: 1, bought_date: '2026-01-01', play_dates: plays('2026-01-03') }),
+    rec({ id: 2, bought_date: '2026-01-01', play_dates: plays('2026-01-03') }),
+  ]);
+  assert.deepStrictEqual(a.playedOn[2], [1, 2]);
+  assert.strictEqual(a.playedOn[0], undefined);
+  assert.strictEqual(a.playedOn[1], undefined);
+});

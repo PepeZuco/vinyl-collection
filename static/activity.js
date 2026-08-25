@@ -108,7 +108,57 @@ const VinylActivity = (function (grouping) {
       for (const d of days) { if (d < lo) lo = d; if (d > hi) hi = d; }
     }
 
-    return { d0: dayString(lo), span: hi - lo + 1 };
+    const span = hi - lo + 1;
+    const playedOn = [];
+    const noteList = [];
+
+    const lanes = raw.map(function (e) {
+      const shift = function (d) { return d - lo; };
+      const bought = shift(e.bought);
+      const plays  = e.plays.map(shift);
+      const cleans = e.cleans.map(shift);
+
+      plays.forEach(function (d) {
+        if (!playedOn[d]) playedOn[d] = [];
+        playedOn[d].push(e.r.id);
+      });
+
+      const noteDays = e.notes.map(function (n) {
+        const day = shift(n.day);
+        noteList.push({ day: day, text: n.text, id: e.r.id,
+                        artist: e.r.artist || '', album: e.r.album_name || '' });
+        return day;
+      });
+
+      return {
+        id: e.r.id,
+        artist: e.r.artist || '',
+        album: e.r.album_name || '',
+        cover: e.r.cover_data || '',
+        bought: bought,
+        plays: plays,
+        cleans: cleans,
+        notes: noteDays,
+        /* Falling back to the purchase day rather than -1 means the quiet fade
+         * measures silence from the day the record arrived, so one that was
+         * never played goes quiet on schedule instead of never. */
+        lastPlay: plays.length ? plays[plays.length - 1] : bought,
+      };
+    });
+
+    noteList.sort(function (a, b) { return a.day - b.day; });
+
+    /* Play count desc, ties by purchase order then id. A defined order means
+     * "top N" is meaningful before the user has touched the sort control, and
+     * makes the ordering assertable in tests. */
+    lanes.sort(function (a, b) {
+      if (a.plays.length !== b.plays.length) return b.plays.length - a.plays.length;
+      if (a.bought !== b.bought) return a.bought - b.bought;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+
+    return { d0: dayString(lo), span: span, lanes: lanes,
+             playedOn: playedOn, notes: noteList };
   }
 
   return { buildActivity: buildActivity, dayAt: dayAt };
