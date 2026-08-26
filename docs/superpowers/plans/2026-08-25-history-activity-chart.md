@@ -1549,12 +1549,24 @@ git commit -m "Zoom the lanes while the band keeps the whole arc"
 
 - [ ] **Step 1: Bind both controls**
 
+First add the helper, beside `actApplyZoom()`:
+
+```js
+/* One pill in a group is lit at a time. Zoom, show and order all want this,
+   and so does the reset every render does — four call sites, one rule. */
+function actActivate(attr, value) {
+  document.querySelectorAll('[' + attr + ']').forEach(function (x) {
+    x.classList.toggle('active', x.getAttribute(attr) === String(value));
+  });
+}
+```
+
+Then rewrite Task 7's two existing copies to call it — the zoom click handler's inner loop becomes `actActivate('data-act-zoom', b.dataset.actZoom);` and the reset in `renderActivity()` becomes `actActivate('data-act-zoom', 0);`. Then bind the two new controls:
+
 ```js
   document.querySelectorAll('[data-act-show]').forEach(function (b) {
     b.addEventListener('click', function () {
-      document.querySelectorAll('[data-act-show]').forEach(function (x) {
-        x.classList.toggle('active', x === b);
-      });
+      actActivate('data-act-show', b.dataset.actShow);
       actSetVisible(Number(b.dataset.actShow));
       actPaint();
     });
@@ -1567,9 +1579,7 @@ git commit -m "Zoom the lanes while the band keeps the whole arc"
    * holds exactly the records that are not on screen. */
   document.querySelectorAll('[data-act-sort]').forEach(function (b) {
     b.addEventListener('click', function () {
-      document.querySelectorAll('[data-act-sort]').forEach(function (x) {
-        x.classList.toggle('active', x === b);
-      });
+      actActivate('data-act-sort', b.dataset.actSort);
       actSort = b.dataset.actSort;
       const scroll = document.getElementById('actScroll');
       actRows.sort(function (x, y) { return ACT_SORTS[actSort](x.lane, y.lane); })
@@ -1585,12 +1595,8 @@ git commit -m "Zoom the lanes while the band keeps the whole arc"
 In `renderActivity()`, beside the zoom reset from Task 7:
 
 ```js
-  document.querySelectorAll('[data-act-show]').forEach(function (x) {
-    x.classList.toggle('active', x.dataset.actShow === '21');
-  });
-  document.querySelectorAll('[data-act-sort]').forEach(function (x) {
-    x.classList.toggle('active', x.dataset.actSort === 'plays');
-  });
+  actActivate('data-act-show', 21);
+  actActivate('data-act-sort', 'plays');
 ```
 
 - [ ] **Step 3: Reset the stale row state when the visible set changes**
