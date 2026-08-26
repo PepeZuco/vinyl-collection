@@ -1604,8 +1604,17 @@ In `renderActivity()`, beside the zoom reset from Task 7:
 A row that was hidden still carries the `count`, `owned` and `gone` values it had when it was last painted, and `actPaint()` skips writes when nothing changed — so a newly revealed row would keep a stale count. At the end of `actSetVisible(n)`, before `actApplyZoom()`:
 
 ```js
-  actLive.forEach(function (o) { o.count = -1; o.owned = !o.owned; o.gone = !o.gone; });
+  actLive.forEach(function (o) { o.count = -1; o.owned = null; o.gone = null; });
 ```
+
+The sentinel has to sit **outside** each field's real domain, exactly as `-1`
+does for `count`. Flipping the booleans instead (`o.owned = !o.owned`) is
+inverted: the model and the DOM are always written together, so the stale model
+value is what the DOM currently shows. Flipping it makes the next paint's
+`own !== o.owned` guard true only when the row was already correct, and false
+in precisely the case that needed the write — leaving the row stuck. Measured
+against the live collection, that left 91 of 112 covers grey when they should
+have been full colour, and 43 rows with the wrong quiet state.
 
 - [ ] **Step 4: Verify**
 
@@ -1828,6 +1837,12 @@ folded band holding the other 91 records and 185 plays.
 - [ ] The note card holds the most recent note and clears when scrubbed before
       the first one.
 - [ ] Switching `show` or `order` leaves no lane stuck on a stale count.
+- [ ] Switching `show` or `order` leaves no lane stuck on a stale *class*
+      either — for every visible row, the cover carries `owned` iff the
+      playhead has passed its purchase day, and the row carries `gone` iff it
+      has been silent longer than the quiet threshold. Totals alone do not
+      catch this: the inverted-sentinel bug left 91 covers wrong while every
+      count was right.
 
 ### Both themes
 
