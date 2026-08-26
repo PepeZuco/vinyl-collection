@@ -1247,7 +1247,7 @@ git commit -m "Draw the activity chart's band, lanes and month rule"
 
 **Interfaces:**
 - Consumes: everything from Task 5.
-- Produces: `actPaint(seeking) actSeek(day) actPlay() actPause() actReplay() actSyncControls() actRate() actReducedMotion()`, and module state `actPlaying actRaf actLastT actSpeed`. Replaces the Task 5 stub `actPause()`.
+- Produces: `actPaint() actSetTotals(day) actCaptionFor(day) actSeek(day) actPlay() actPause() actReplay() actSyncControls() actRate() actReducedMotion()`, and module state `actPlaying actRaf actLastT actSpeed`. Replaces the Task 5 stub `actPause()`.
 
 - [ ] **Step 1: Write the frame painter**
 
