@@ -4057,6 +4057,44 @@ function bindEvents(){
       actSyncControls();
     });
   });
+  document.querySelectorAll('[data-act-zoom]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-act-zoom]').forEach(function (x) {
+        x.classList.toggle('active', x === b);
+      });
+      const d = Number(b.dataset.actZoom);
+      actWin = d > 0 ? Math.min(actLast(), d) : actLast();
+      actApplyZoom();
+      actPaint();
+    });
+  });
+  /* The band is the control, not a picture of one: drag it to scrub. The range
+   * input stays for keyboard and assistive access; both write through
+   * actSeek(). */
+  let actDragging = false;
+  const actBandWrap = document.getElementById('actBandWrap');
+  function actSeekAt(e) {
+    const r = actBandWrap.getBoundingClientRect();
+    actSeek(actClamp((e.clientX - r.left) / r.width, 0, 1) * actLast());
+    /* Sync AFTER the seek, for the same reason the scrubber seeks before it
+       pauses: actSyncControls() reads actPos, so syncing first would render
+       the position being left. A drag is user-paced, not per-frame, so the
+       querySelectorAll here costs nothing — unlike inside actSeek(). */
+    actSyncControls();
+  }
+  actBandWrap.addEventListener('pointerdown', function (e) {
+    if (!act) return;
+    actPause();
+    actDragging = true;
+    actBandWrap.setPointerCapture(e.pointerId);
+    actSeekAt(e);
+    e.preventDefault();
+  });
+  actBandWrap.addEventListener('pointermove', function (e) {
+    if (actDragging) actSeekAt(e);
+  });
+  actBandWrap.addEventListener('pointerup', function () { actDragging = false; });
+  actBandWrap.addEventListener('pointercancel', function () { actDragging = false; });
   /* Guarded: #historyPage is display:none while another tab is current, so
      every getBoundingClientRect() would return 0 and zero out actLaneW —
      silently breaking the playhead and the pan until the next render. */
@@ -4996,6 +5034,9 @@ function renderActivity() {
   const scrub = document.getElementById('actScrub');
   scrub.max = String(actLast());
   scrub.disabled = false;
+  document.querySelectorAll('[data-act-zoom]').forEach(function (x) {
+    x.classList.toggle('active', x.dataset.actZoom === '0');
+  });
   actSetVisible(21);
   /* Reduced motion opens on the finished chart instead — a statistic, not a
    * replay. Everything still works; you just start it yourself. */
