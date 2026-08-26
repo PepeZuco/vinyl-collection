@@ -4538,8 +4538,8 @@ function switchTab(tab) {
   });
   syncMobileTabbar();
 
-  // Leaving the tab stops the race — no timer runs behind the collection view.
-  if (leaving === 'history' && tab !== 'history') racePause();
+  // Leaving the tab stops both charts — no timer runs behind the collection view.
+  if (leaving === 'history' && tab !== 'history') { racePause(); actPause(); }
 
   if (tab === 'stats') renderStats();
   if (tab === 'calendar') renderCalendar();
@@ -4570,6 +4570,7 @@ let raceRows = new Map();     // genre -> its row element, kept across frames
                               // so transforms transition instead of redrawing
 
 function renderHistory() {
+  renderActivity();          // the second chart on this tab, its own clock
   raceFrames = VinylHistory.buildTimeline(records);
   raceRows = new Map();
   raceIndex = 0;
@@ -4792,6 +4793,181 @@ function raceSetSpeed(s) {
   raceSyncControls();
   if (racePlaying) raceSchedule();   // the change applies from the next frame
 }
+
+// ── history: how the collection is used ────────────────────────────────────
+const ACT_ANCHOR = 0.62;    // where the playhead rides while the window flies
+const ACT_QUIET  = 60;      // days of silence before a lane dims. 60, not 120:
+                            // at 120 the class never fires once on this
+                            // collection — its most-played records are never
+                            // untouched for four months.
+const ACT_MAX_RATE = 150;   // days per second at 1x, full span — ~5.4s end to end
+const ACT_MIN_RATE = 25;
+
+let act = null;             // the built model, or null when nothing is in scope
+let actCols = [];           // one entry per week column in the band
+let actRows = [];           // one entry per lane, every record, in DOM order
+let actLive = [];           // the subset currently displayed
+let actPos = 0;             // playhead, in days, fractional
+let actWin = 1;             // zoom window width in days
+let actWinStart = 0;
+let actShow = 21;
+let actSort = 'plays';
+let actLaneW = 0, actLaneL = 0;
+
+/* The axis is [0, span-1]. A one-day collection would make that a zero-width
+ * range and every percentage NaN, so the denominator floors at 1. */
+function actLast() { return act ? Math.max(1, act.span - 1) : 1; }
+function actPct(i) { return i / actLast() * 100; }
+function actClamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+const ACT_SORTS = {
+  plays:  function (a, b) { return b.plays.length - a.plays.length || a.bought - b.bought; },
+  recent: function (a, b) { return b.lastPlay - a.lastPlay || a.bought - b.bought; },
+  bought: function (a, b) { return a.bought - b.bought; },
+};
+
+/* Every mark is a percentage of the full span, so widening the track re-lays
+ * them all out with no JS and marks keep their 2px width. */
+function actMarksHTML(lane) {
+  let h = '<span class="act-mk b" style="left:' + actPct(lane.bought) + '%"></span>';
+  if (actLast() - lane.lastPlay > ACT_QUIET) {
+    h += '<span class="act-quiet" style="left:' + actPct(lane.lastPlay) +
+         '%;width:' + actPct(actLast() - lane.lastPlay) + '%"></span>';
+  }
+  lane.plays.forEach(function (d)  { h += '<span class="act-mk p" style="left:' + actPct(d) + '%"></span>'; });
+  lane.cleans.forEach(function (d) { h += '<span class="act-mk c" style="left:' + actPct(d) + '%"></span>'; });
+  lane.notes.forEach(function (d)  { h += '<span class="act-mk n" style="left:' + actPct(d) + '%"></span>'; });
+  return h;
+}
+
+/* One label per month; every third gets .q3 so the lane rule can thin itself
+ * out when the window is wide and the labels would collide. */
+function actTicks(host, d0) {
+  host.innerHTML = '';
+  const first = new Date(d0 + 'T00:00:00');
+  let d = new Date(first.getFullYear(), first.getMonth() + 1, 1), n = 0;
+  const end = new Date(first.getFullYear(), first.getMonth(), first.getDate() + actLast());
+  while (d <= end) {
+    const off = Math.round((d - first) / 86400000);
+    const t = document.createElement('span');
+    t.className = 'act-tick' + (d.getMonth() === 0 ? ' yr' : '') + (n % 3 === 0 ? ' q3' : '');
+    t.style.left = actPct(off) + '%';
+    if (actPct(off) < 4) { t.style.transform = 'none'; t.style.left = '0'; }
+    t.textContent = d.toLocaleDateString('en', { month: 'short' }) + ' ' +
+                    String(d.getFullYear()).slice(2);
+    host.appendChild(t);
+    d = new Date(d.getFullYear(), d.getMonth() + 1, 1); n++;
+  }
+}
+
+function actBuildBand() {
+  const band = document.getElementById('actBand');
+  band.innerHTML = '';
+  const max = act.weeks.reduce(function (m, w) { return Math.max(m, w.total); }, 1);
+  actCols = act.weeks.map(function (w) {
+    const el = document.createElement('div');
+    el.className = 'act-wk';
+    /* column-reverse, so the first child sits on the baseline */
+    ['p', 'c', 'n', 'b'].forEach(function (k) {
+      const s = document.createElement('div');
+      s.className = 'act-seg ' + k;
+      s.dataset.h = (w[k] / max * 100).toFixed(3);
+      s.style.height = '0%';
+      el.appendChild(s);
+    });
+    band.appendChild(el);
+    return { segs: Array.prototype.slice.call(el.children), rev: -1 };
+  });
+}
+
+function actBuildLanes() {
+  const scroll = document.getElementById('actScroll');
+  scroll.innerHTML = '';
+  actRows = act.lanes.map(function (lane) {
+    const el = document.createElement('div');
+    el.className = 'act-row';
+    el.innerHTML =
+      '<img class="act-cover" src="' + esc(lane.cover) + '" alt="" loading="lazy">' +
+      '<span class="act-name"><b>' + esc(lane.artist) + '</b> · ' + esc(lane.album) + '</span>' +
+      '<span class="act-lane"><span class="act-track">' + actMarksHTML(lane) + '</span></span>' +
+      '<span class="act-ct">0</span>';
+    scroll.appendChild(el);
+    return { lane: lane, el: el, cover: el.children[0], track: el.children[2].firstChild,
+             ct: el.children[3], owned: false, count: -1, gone: false };
+  });
+}
+
+/* The lane column's width, measured from a real lane rather than assumed, so
+ * the playhead and the month rule sit on the same scale the marks do. */
+function actMeasure() {
+  const lane = document.querySelector('#actLanes .act-lane');
+  if (!lane) return;
+  const a = lane.getBoundingClientRect();
+  const b = document.getElementById('actLanes').getBoundingClientRect();
+  actLaneW = a.width; actLaneL = a.left - b.left;
+  const axis = document.getElementById('actLaneAxis');
+  axis.style.marginLeft = actLaneL + 'px';
+  axis.style.width = actLaneW + 'px';
+}
+
+/* Zoom is one width: the track holds the whole span, the lane shows actWin
+ * days of it. */
+function actApplyZoom() {
+  const w = (100 * actLast() / actWin).toFixed(3) + '%';
+  actRows.forEach(function (o) { o.track.style.width = w; });
+  document.getElementById('actTailTrack').style.width = w;
+  document.getElementById('actLaneAxisTrack').style.width = w;
+  document.getElementById('actWinRect').classList.toggle('on', actWin < actLast());
+  document.getElementById('actLaneAxis').classList.toggle('wide', actWin > 400);
+}
+
+let actTailPlays = [];
+
+/* Whatever is not on screen is folded into the density band below, so nothing
+ * is ever hidden — only compressed. */
+function actSetVisible(n) {
+  actShow = n > 0 ? Math.min(n, actRows.length) : actRows.length;
+  actRows.forEach(function (o, i) {
+    o.el.style.display = i < actShow ? '' : 'none';
+  });
+  actLive = actRows.slice(0, actShow);
+  const rest = actRows.slice(actShow);
+  const tail = document.getElementById('actTail');
+  tail.hidden = !rest.length;
+  if (rest.length) {
+    document.getElementById('actTailTrack').innerHTML =
+      rest.map(function (o) { return actMarksHTML(o.lane); }).join('');
+    document.getElementById('actTailName').textContent =
+      'the other ' + rest.length + ' records';
+    actTailPlays = rest.reduce(function (all, o) { return all.concat(o.lane.plays); }, [])
+                       .sort(function (a, b) { return a - b; });
+  } else actTailPlays = [];
+  document.getElementById('actScroll').classList.toggle('scroll', actShow > 30);
+  actApplyZoom();
+  actMeasure();
+}
+
+function renderActivity() {
+  act = VinylActivity.buildActivity(records);
+  const empty = !act;
+  document.getElementById('actEmpty').hidden = !empty;
+  document.getElementById('actBody').hidden = empty;
+  if (empty) { actPause(); return; }
+
+  actPos = 0;
+  actWin = actLast();
+  actSort = 'plays';
+  actBuildBand();
+  actBuildLanes();
+  actTicks(document.getElementById('actBandAxis'), act.d0);
+  actTicks(document.getElementById('actLaneAxisTrack'), act.d0);
+  const scrub = document.getElementById('actScrub');
+  scrub.max = String(actLast());
+  scrub.disabled = false;
+  actSetVisible(21);
+}
+
+function actPause() { /* filled in by Task 6 */ }
 
 // ── statistics ─────────────────────────────────────────────────────────────
 function destroyChart(id) {
