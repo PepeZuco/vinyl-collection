@@ -1406,8 +1406,14 @@ In the `DOMContentLoaded` block where the race chart's listeners are bound (near
   });
   document.getElementById('actReplayBtn').addEventListener('click', actReplay);
   document.getElementById('actScrub').addEventListener('input', function () {
-    actPause();
+    /* Seek FIRST. actPause() syncs the transport from actPos, so pausing
+       before the seek would sync the position being left rather than the one
+       being landed on — visibly wrong the moment a drag crosses the end, and
+       wrong in the other direction on the drag back. actSeek() deliberately
+       does not sync on its own: actTick calls it every frame, and
+       actSyncControls' querySelectorAll would be per-frame DOM work. */
     actSeek(Number(this.value));
+    actPause();
   });
   document.querySelectorAll('.act-speed-btn').forEach(function (b) {
     b.addEventListener('click', function () {
