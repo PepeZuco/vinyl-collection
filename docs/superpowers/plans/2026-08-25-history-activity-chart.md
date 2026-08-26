@@ -1415,7 +1415,14 @@ In the `DOMContentLoaded` block where the race chart's listeners are bound (near
       actSyncControls();
     });
   });
-  window.addEventListener('resize', function () { actMeasure(); actPaint(); });
+  /* Guarded: #historyPage is display:none while another tab is current, so
+     every getBoundingClientRect() would return 0 and zero out actLaneW —
+     silently breaking the playhead and the pan until the next render. */
+  window.addEventListener('resize', function () {
+    if (!act || currentTab !== 'history') return;
+    actMeasure();
+    actPaint();
+  });
 ```
 
 At the end of `renderActivity()`, replace `actSetVisible(21);` with:
