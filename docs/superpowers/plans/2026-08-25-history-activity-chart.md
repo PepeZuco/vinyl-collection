@@ -815,6 +815,9 @@ Immediately after the race chart's CSS block (before the `stats/history segment`
 .act-axis{position:relative;height:19px;margin-top:2px}
 #actLaneAxis{overflow:hidden}
 #actLaneAxis.wide .act-tick:not(.q3){display:none}
+/* the band never zooms — it always shows the whole arc — so it is permanently
+   at the density the lane rule only reaches when wide, and thins to match */
+#actBandAxis .act-tick:not(.q3){display:none}
 .act-tick{position:absolute;top:0;font-family:var(--font-mono);font-size:9.5px;
   color:var(--muted);transform:translateX(-50%);white-space:nowrap;letter-spacing:.04em}
 .act-tick.yr{color:var(--label);font-weight:700}
