@@ -67,7 +67,8 @@ folded band holding the other 91 records and 185 plays.
       figures on the record detail views.
 - [ ] Visible lane counts plus the folded band's count equal 399 at every
       `show` setting.
-- [ ] The lane counts under `most played` end `16, 15, 14, 13, 13, 12, …`.
+- [ ] The lane counts under `most played` **begin** `16, 15, 14, 13, 13, 12, …`
+      — that is the top of the descending sort, not the bottom of the list.
 - [ ] The cleaned series is absent until March 2026, then appears — this is the
       data, not a bug.
 - [ ] No wishlist record appears.
@@ -80,6 +81,13 @@ folded band holding the other 91 records and 185 plays.
 - [ ] Dragging the band scrubs both panels and pauses playback.
 - [ ] At `90 d` the window follows the playhead, held at about 62% of the lane
       width, and clamps at both ends without overshooting.
+- [ ] At `90 d`, the month rule *under the lanes* pans in step with the ticks.
+      The labels must not sit still while the marks slide — the rule is a
+      sibling of the lanes and takes its pan from a shared ancestor, so a
+      regression here leaves the dates quietly lying about what you are seeing.
+- [ ] Drag the scrubber to the far right, then back to the middle. The
+      play/replay buttons must be correct at both ends — replay showing only
+      at the end. Then do the same by dragging the band itself.
 - [ ] Leaving the History tab stops playback — no frame loop runs behind the
       collection view.
 
@@ -97,8 +105,15 @@ folded band holding the other 91 records and 185 plays.
       has been silent longer than the quiet threshold. Totals alone do not
       catch this: the inverted-sentinel bug left 91 covers wrong while every
       count was right.
+- [ ] Hover a lane, click it to open the record, then close the detail view
+      with **Escape, without moving the mouse**. The band must not come back
+      dimmed and the caption must not still name that record. (Closing by
+      clicking the X moves the mouse and hides the bug.)
 
 ### Both themes
 
 - [ ] Every mark, tick, label and control is legible in dark and in light.
-- [ ] `prefers-reduced-motion` opens the chart finished instead of autoplaying.
+- [ ] At a phone width (~430px) the band's month rule shows about nine labels,
+      not one per month — they must not overlap into a smear.
+- [ ] `prefers-reduced-motion` opens the chart finished instead of autoplaying,
+      and band segments and row fades **snap** rather than transition.
