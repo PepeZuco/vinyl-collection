@@ -4037,6 +4037,28 @@ function bindEvents(){
   document.querySelectorAll('.race-speed-btn').forEach(b => {
     b.addEventListener('click', () => raceSetSpeed(Number(b.dataset.speed)));
   });
+  document.getElementById('actPlayBtn').addEventListener('click', function () {
+    actPlaying ? actPause() : actPlay();
+  });
+  document.getElementById('actReplayBtn').addEventListener('click', actReplay);
+  document.getElementById('actScrub').addEventListener('input', function () {
+    actPause();
+    actSeek(Number(this.value));
+  });
+  document.querySelectorAll('.act-speed-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      actSpeed = Number(b.dataset.actSpeed);
+      actSyncControls();
+    });
+  });
+  /* Guarded: #historyPage is display:none while another tab is current, so
+     every getBoundingClientRect() would return 0 and zero out actLaneW —
+     silently breaking the playhead and the pan until the next render. */
+  window.addEventListener('resize', function () {
+    if (!act || currentTab !== 'history') return;
+    actMeasure();
+    actPaint();
+  });
   // Delegated, so it survives rows and covers being created and removed as
   // the race runs. A cover click both pauses and opens — pausing before a
   // record opens is what you want anyway.
@@ -4969,9 +4991,148 @@ function renderActivity() {
   scrub.max = String(actLast());
   scrub.disabled = false;
   actSetVisible(21);
+  /* Reduced motion opens on the finished chart instead — a statistic, not a
+   * replay. Everything still works; you just start it yourself. */
+  if (actReducedMotion()) { actSeek(actLast()); actPause(); }
+  else { actSeek(0); actPlay(); }
 }
 
-function actPause() { /* filled in by Task 6 */ }
+function actSetTotals(day) {
+  const ids = { b: 'actTotB', p: 'actTotP', c: 'actTotC', n: 'actTotN' };
+  ['b', 'p', 'c', 'n'].forEach(function (k) {
+    const el = document.getElementById(ids[k]);
+    const v = String(act.cum[k][day]);
+    if (el.textContent !== v) el.textContent = v;
+  });
+}
+
+function actCaptionFor(day) {
+  let rec = null;
+  for (let d = day; d >= 0 && d > day - 30; d--) {
+    if (act.playedOn[d]) { rec = act.playedOn[d][0]; break; }
+  }
+  if (rec === null) return 'nothing played yet';
+  const lane = actRows.find(function (o) { return o.lane.id === rec; });
+  return lane ? '▸ ' + lane.lane.artist + ' — ' + lane.lane.album : '';
+}
+
+function actPaint() {
+  if (!act) return;
+  const day = Math.min(act.span - 1, Math.floor(actPos));
+
+  /* The band grows as the head crosses each week. Only columns whose fill
+   * actually moved are touched. */
+  for (let i = 0; i < actCols.length; i++) {
+    const rv = actClamp((actPos - i * 7) / 7, 0, 1);
+    if (Math.abs(rv - actCols[i].rev) < 0.004) continue;
+    actCols[i].rev = rv;
+    const segs = actCols[i].segs;
+    for (let j = 0; j < segs.length; j++) {
+      segs[j].style.height = (segs[j].dataset.h * rv).toFixed(3) + '%';
+    }
+  }
+  actSetTotals(day);
+  document.getElementById('actPin').style.left = actPct(actPos) + '%';
+  document.getElementById('actDay').textContent = VinylActivity.dayAt(act.d0, day);
+
+  /* Pan and reveal are one write each on the shared ancestor, so this costs
+   * the same whether 21 lanes are on screen or 112. */
+  actWinStart = actWin >= actLast() ? 0
+              : actClamp(actPos - actWin * ACT_ANCHOR, 0, actLast() - actWin);
+  document.getElementById('actBody').style.setProperty(
+    '--act-pan', (-(actLaneW * actWinStart / actWin)) + 'px');
+  document.getElementById('actLanes').style.setProperty(
+    '--act-rev', (100 - actPct(actPos)).toFixed(3) + '%');
+  const win = document.getElementById('actWinRect');
+  win.style.left = actPct(actWinStart) + '%';
+  win.style.width = (actWin / actLast() * 100) + '%';
+  document.getElementById('actHead').style.left =
+    (actLaneL + actLaneW * (actPos - actWinStart) / actWin) + 'px';
+
+  /* Per-row state is written only when it changes. */
+  for (const o of actLive) {
+    const own = actPos >= o.lane.bought;
+    if (own !== o.owned) { o.owned = own; o.cover.classList.toggle('owned', own); }
+    let n = 0, lp = o.lane.bought;
+    const plays = o.lane.plays;
+    for (let i = 0; i < plays.length && plays[i] <= day; i++) { n++; lp = plays[i]; }
+    if (n !== o.count) { o.count = n; o.ct.textContent = n; }
+    const gone = own && (actPos - lp) > ACT_QUIET;
+    if (gone !== o.gone) { o.gone = gone; o.el.classList.toggle('gone', gone); }
+  }
+  let tn = 0;
+  for (let i = 0; i < actTailPlays.length && actTailPlays[i] <= day; i++) tn++;
+  const tct = document.getElementById('actTailCt');
+  if (tct.textContent !== String(tn)) tct.textContent = tn;
+
+  const cap = document.getElementById('actCaption');
+  const text = actCaptionFor(day);
+  if (cap.textContent !== text) cap.textContent = text;
+}
+
+let actPlaying = false, actRaf = 0, actLastT = 0, actSpeed = 1;
+
+function actReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/* Tied to zoom so the visible window always takes about two and a half seconds
+ * to cross, whatever the magnification. */
+function actRate() {
+  return Math.min(ACT_MAX_RATE, Math.max(ACT_MIN_RATE, actWin / 2.5));
+}
+
+function actSeek(day) {
+  actPos = actClamp(day, 0, actLast());
+  const scrub = document.getElementById('actScrub');
+  if (Number(scrub.value) !== Math.round(actPos)) scrub.value = Math.round(actPos);
+  actPaint();
+}
+
+/* A continuous day clock, not the race chart's setTimeout frame chain: this
+ * axis is continuous calendar time, and a frame-per-event-day clock would hop
+ * unevenly and stutter the band. */
+function actTick(t) {
+  if (!actPlaying) return;
+  if (!actLastT) actLastT = t;
+  const dt = Math.min(0.12, (t - actLastT) / 1000);
+  actLastT = t;
+  actSeek(actPos + actRate() * actSpeed * dt);
+  if (actPos >= actLast()) { actPause(); return; }
+  actRaf = requestAnimationFrame(actTick);
+}
+
+function actPlay() {
+  if (!act || actPlaying) return;
+  if (actPos >= actLast()) actSeek(0);
+  actPlaying = true;
+  actLastT = 0;
+  actSyncControls();
+  actRaf = requestAnimationFrame(actTick);
+}
+
+function actPause() {
+  actPlaying = false;
+  cancelAnimationFrame(actRaf);
+  actRaf = 0;
+  actSyncControls();
+}
+
+function actReplay() { actSeek(0); actPlay(); }
+
+function actSyncControls() {
+  const btn = document.getElementById('actPlayBtn');
+  btn.innerHTML = actPlaying ? '<i class="ti ti-player-pause"></i>'
+                             : '<i class="ti ti-player-play"></i>';
+  btn.setAttribute('aria-pressed', actPlaying ? 'true' : 'false');
+  btn.setAttribute('aria-label', actPlaying ? 'pause' : 'play');
+  const atEnd = !!act && actPos >= actLast();
+  document.getElementById('actReplayBtn').classList.toggle('hidden', !atEnd || actPlaying);
+  btn.classList.toggle('hidden', atEnd && !actPlaying);
+  document.querySelectorAll('.act-speed-btn').forEach(function (b) {
+    b.classList.toggle('active', Number(b.dataset.actSpeed) === actSpeed);
+  });
+}
 
 // ── statistics ─────────────────────────────────────────────────────────────
 function destroyChart(id) {
