@@ -4059,12 +4059,34 @@ function bindEvents(){
   });
   document.querySelectorAll('[data-act-zoom]').forEach(function (b) {
     b.addEventListener('click', function () {
-      document.querySelectorAll('[data-act-zoom]').forEach(function (x) {
-        x.classList.toggle('active', x === b);
-      });
+      actActivate('data-act-zoom', b.dataset.actZoom);
       const d = Number(b.dataset.actZoom);
       actWin = d > 0 ? Math.min(actLast(), d) : actLast();
       actApplyZoom();
+      actPaint();
+    });
+  });
+  document.querySelectorAll('[data-act-show]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      actActivate('data-act-show', b.dataset.actShow);
+      actSetVisible(Number(b.dataset.actShow));
+      actPaint();
+    });
+  });
+
+  /* All three orders are computed from the whole timeline, never from the
+   * playhead, so rows do not re-rank while it plays — the race chart directly
+   * above already owns rank animation, and a row that moves cannot be
+   * followed. Re-sorting re-applies the current cut, so the folded band always
+   * holds exactly the records that are not on screen. */
+  document.querySelectorAll('[data-act-sort]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      actActivate('data-act-sort', b.dataset.actSort);
+      actSort = b.dataset.actSort;
+      const scroll = document.getElementById('actScroll');
+      actRows.sort(function (x, y) { return ACT_SORTS[actSort](x.lane, y.lane); })
+             .forEach(function (o) { scroll.appendChild(o.el); });
+      actSetVisible(actShow);
       actPaint();
     });
   });
@@ -4980,6 +5002,14 @@ function actMeasure() {
   axis.style.width = actLaneW + 'px';
 }
 
+/* One pill in a group is lit at a time. Zoom, show and order all want this,
+   and so does the reset every render does — four call sites, one rule. */
+function actActivate(attr, value) {
+  document.querySelectorAll('[' + attr + ']').forEach(function (x) {
+    x.classList.toggle('active', x.getAttribute(attr) === String(value));
+  });
+}
+
 /* Zoom is one width: the track holds the whole span, the lane shows actWin
  * days of it. */
 function actApplyZoom() {
@@ -5013,6 +5043,7 @@ function actSetVisible(n) {
                        .sort(function (a, b) { return a - b; });
   } else actTailPlays = [];
   document.getElementById('actScroll').classList.toggle('scroll', actShow > 30);
+  actLive.forEach(function (o) { o.count = -1; o.owned = !o.owned; o.gone = !o.gone; });
   actApplyZoom();
   actMeasure();
 }
@@ -5034,9 +5065,9 @@ function renderActivity() {
   const scrub = document.getElementById('actScrub');
   scrub.max = String(actLast());
   scrub.disabled = false;
-  document.querySelectorAll('[data-act-zoom]').forEach(function (x) {
-    x.classList.toggle('active', x.dataset.actZoom === '0');
-  });
+  actActivate('data-act-zoom', 0);
+  actActivate('data-act-show', 21);
+  actActivate('data-act-sort', 'plays');
   actSetVisible(21);
   /* Reduced motion opens on the finished chart instead — a statistic, not a
    * replay. Everything still works; you just start it yourself. */
