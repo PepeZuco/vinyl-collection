@@ -1652,6 +1652,7 @@ function actSolo(o) {
   const wrap = document.getElementById('actBandWrap');
   if (!o) {
     el.classList.remove('on');
+    el.innerHTML = '';
     wrap.classList.remove('dim');
     actSoloCaption = null;
     actPaint();
@@ -1694,7 +1695,14 @@ In `actBuildLanes()`, after `scroll.appendChild(el);` and before the `return`:
                     owned: false, count: -1, gone: false };
     el.addEventListener('mouseenter', function () { actSolo(entry); });
     el.addEventListener('mouseleave', function () { actSolo(null); });
-    el.addEventListener('click', function () { openDetail(lane.id); });
+    /* Tear the solo down explicitly rather than trusting a mouseleave to
+       arrive. openDetail() only unhides a fixed overlay on top of this row —
+       it does not move it — and a browser fires mouseleave only on a real
+       pointer event that changes the hit target. Click the row and close the
+       detail view with Escape, never moving the mouse, and no mouseleave ever
+       fires: the chart comes back dimmed with the caption pinned to a record
+       you are no longer pointing at. */
+    el.addEventListener('click', function () { actSolo(null); openDetail(lane.id); });
     return entry;
 ```
 
