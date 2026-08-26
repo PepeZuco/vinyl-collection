@@ -4984,8 +4984,13 @@ function actBuildLanes() {
       '<span class="act-lane"><span class="act-track">' + actMarksHTML(lane) + '</span></span>' +
       '<span class="act-ct">0</span>';
     scroll.appendChild(el);
-    return { lane: lane, el: el, cover: el.children[0], track: el.children[2].firstChild,
-             ct: el.children[3], owned: false, count: -1, gone: false };
+    const entry = { lane: lane, el: el, cover: el.children[0],
+                    track: el.children[2].firstChild, ct: el.children[3],
+                    owned: false, count: -1, gone: false };
+    el.addEventListener('mouseenter', function () { actSolo(entry); });
+    el.addEventListener('mouseleave', function () { actSolo(null); });
+    el.addEventListener('click', function () { openDetail(lane.id); });
+    return entry;
   });
 }
 
@@ -5056,6 +5061,8 @@ function renderActivity() {
   if (empty) { actPause(); return; }
 
   actPos = 0;
+  actNoteIdx = -1;
+  document.getElementById('actNote').classList.remove('on');
   actWin = actLast();
   actSort = 'plays';
   actBuildBand();
@@ -5082,6 +5089,57 @@ function actSetTotals(day) {
     const v = String(act.cum[k][day]);
     if (el.textContent !== v) el.textContent = v;
   });
+}
+
+let actSoloCaption = null;
+
+/* Pointing at a lane dims the band to just that record's events, drawn across
+ * the whole span. It answers what neither panel can alone: where does this one
+ * album sit inside the overall habit? */
+function actSolo(o) {
+  const el = document.getElementById('actSolo');
+  const wrap = document.getElementById('actBandWrap');
+  if (!o) {
+    el.classList.remove('on');
+    wrap.classList.remove('dim');
+    actSoloCaption = null;
+    actPaint();
+    return;
+  }
+  const lane = o.lane, m = [];
+  function mark(d, v) {
+    m.push('<span class="sm" style="left:' + actPct(d) + '%;background:var(--' + v + ')"></span>');
+  }
+  mark(lane.bought, 'ev-bought');
+  lane.plays.forEach(function (d)  { mark(d, 'ev-played'); });
+  lane.cleans.forEach(function (d) { mark(d, 'ev-cleaned'); });
+  lane.notes.forEach(function (d)  { mark(d, 'ev-note'); });
+  el.innerHTML = m.join('');
+  el.classList.add('on');
+  wrap.classList.add('dim');
+  actSoloCaption = lane.artist + ' — ' + lane.album + ' · ' +
+    lane.plays.length + ' plays · ' +
+    (lane.plays.length ? 'last ' + VinylActivity.dayAt(act.d0, lane.lastPlay)
+                       : 'never played');
+  actPaint();
+}
+
+let actNoteIdx = -1;
+
+/* The most recent note as of the playhead, held rather than flashed: with 28
+ * notes over a five-second run, anything timer-driven is a flicker. */
+function actPaintNote(day) {
+  let idx = -1;
+  for (let i = 0; i < act.notes.length && act.notes[i].day <= day; i++) idx = i;
+  if (idx === actNoteIdx) return;
+  actNoteIdx = idx;
+  const card = document.getElementById('actNote');
+  if (idx < 0) { card.classList.remove('on'); return; }
+  const n = act.notes[idx];
+  card.querySelector('.who').textContent =
+    n.artist + ' — ' + n.album + ' · ' + VinylActivity.dayAt(act.d0, n.day);
+  card.querySelector('.txt').textContent = n.text;
+  card.classList.add('on');
 }
 
 function actCaptionFor(day) {
@@ -5143,8 +5201,10 @@ function actPaint() {
   const tct = document.getElementById('actTailCt');
   if (tct.textContent !== String(tn)) tct.textContent = tn;
 
+  actPaintNote(day);
+
   const cap = document.getElementById('actCaption');
-  const text = actCaptionFor(day);
+  const text = actSoloCaption || actCaptionFor(day);
   if (cap.textContent !== text) cap.textContent = text;
 }
 
