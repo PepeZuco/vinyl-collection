@@ -1493,6 +1493,11 @@ In the same `DOMContentLoaded` block:
   function actSeekAt(e) {
     const r = actBandWrap.getBoundingClientRect();
     actSeek(actClamp((e.clientX - r.left) / r.width, 0, 1) * actLast());
+    /* Sync AFTER the seek, for the same reason the scrubber seeks before it
+       pauses: actSyncControls() reads actPos, so syncing first would render
+       the position being left. A drag is user-paced, not per-frame, so the
+       querySelectorAll here costs nothing — unlike inside actSeek(). */
+    actSyncControls();
   }
   actBandWrap.addEventListener('pointerdown', function (e) {
     if (!act) return;
