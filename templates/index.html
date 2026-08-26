@@ -5043,7 +5043,7 @@ function actSetVisible(n) {
                        .sort(function (a, b) { return a - b; });
   } else actTailPlays = [];
   document.getElementById('actScroll').classList.toggle('scroll', actShow > 30);
-  actLive.forEach(function (o) { o.count = -1; o.owned = !o.owned; o.gone = !o.gone; });
+  actLive.forEach(function (o) { o.count = -1; o.owned = null; o.gone = null; });
   actApplyZoom();
   actMeasure();
 }
