@@ -163,6 +163,12 @@ const VinylGrouping = (function () {
         return { id: year + '-' + month, label: MONTHS[Number(month) - 1] + ' ' + year,
                  rank: year + '-' + month, unknown: false };
       }
+      case 'condition': {
+        const condition = (r.condition || '').trim().toLowerCase();
+        if (condition === 'new')  return { id: 'new',  label: 'New',  rank: 0, unknown: false };
+        if (condition === 'used') return { id: 'used', label: 'Used', rank: 1, unknown: false };
+        return { id: 'nocondition', label: 'Unknown condition', rank: '', unknown: true };
+      }
       case 'play_count': {
         // "Never played" is a real band here, not a missing value — it flips
         // with the arrow like any other.

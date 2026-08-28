@@ -254,7 +254,7 @@ select option{background:var(--surface);color:var(--text)}
 .modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
-.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surface);z-index:2}
 .cover-sheet{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
 .cover-sheet.hidden{display:none}
 .cover-sheet-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;text-align:left}
@@ -2255,6 +2255,7 @@ const GROUP_OPTIONS = [
   { value: 'none',        label: 'No crates',     icon: 'ti-layout-grid' },
   { value: 'bought_date', label: 'Month added',   icon: 'ti-calendar-event' },
   { value: 'genre',       label: 'Genre',         icon: 'ti-music' },
+  { value: 'condition',   label: 'New / Used',    icon: 'ti-certificate' },
   { value: 'country',     label: 'Country',       icon: 'ti-world' },
   { value: 'year',        label: 'Decade',        icon: 'ti-calendar' },
   { value: 'album_name',  label: 'Album initial', icon: 'ti-abc' },

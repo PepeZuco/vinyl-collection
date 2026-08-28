@@ -140,6 +140,30 @@ test('the unknown genre bucket is marked unknown so it can be pinned last', () =
   assert.strictEqual(bucketOf(rec({ genre: 'Jazz' }), 'genre').unknown, false);
 });
 
+// ── bucketOf: condition ─────────────────────────────────────────────────────
+
+test('condition buckets into New and Used crates', () => {
+  assert.strictEqual(bucketOf(rec({ condition: 'new' }), 'condition').label, 'New');
+  assert.strictEqual(bucketOf(rec({ condition: 'used' }), 'condition').label, 'Used');
+});
+
+test('condition bucket ids ignore case', () => {
+  assert.strictEqual(bucketOf(rec({ condition: 'New' }), 'condition').id,
+                     bucketOf(rec({ condition: 'new' }), 'condition').id);
+});
+
+test('New ranks before Used', () => {
+  const newRank = bucketOf(rec({ condition: 'new' }), 'condition').rank;
+  const usedRank = bucketOf(rec({ condition: 'used' }), 'condition').rank;
+  assert.ok(newRank < usedRank);
+});
+
+test('a record with no condition falls into the Unknown condition bucket, marked unknown', () => {
+  const b = bucketOf(rec({ condition: '' }), 'condition');
+  assert.strictEqual(b.label, 'Unknown condition');
+  assert.strictEqual(b.unknown, true);
+});
+
 // ── bucketOf: country ───────────────────────────────────────────────────────
 
 test('country buckets by ISO code and carries the code so the page can draw a flag', () => {
