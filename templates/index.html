@@ -983,6 +983,34 @@ select option{background:var(--surface);color:var(--text)}
 .dice-pip{width:100%;height:100%;border-radius:50%;background:transparent}
 .dice-pip.on{background:#e8e8e0}
 
+/* view toggle: grid / list */
+.view-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;height:34px;flex-shrink:0}
+.view-btn{width:34px;height:100%;border:none;border-right:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .12s}
+.view-btn:last-child{border-right:none}
+.view-btn.active{background:rgba(245,197,24,.15);color:var(--accent)}
+@media(max-width:760px){.view-toggle{display:none}}
+
+/* list view — rows instead of cards, one crate section at a time when crates
+   are on */
+.list-view-wrap{overflow-x:auto}
+.list-view{min-width:640px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.list-row{display:grid;grid-template-columns:44px 2fr 100px 64px 100px 100px 64px;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.list-row:last-child{border-bottom:none}
+.list-row:hover{background:var(--card-hover)}
+.list-row.list-head{cursor:default;background:var(--surface)}
+.list-row.list-head:hover{background:var(--surface)}
+.list-row.list-head span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.list-cover-wrap{width:36px;height:36px;border-radius:3px;overflow:hidden;flex-shrink:0;background:#111;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:14px}
+.list-cover-wrap img{width:100%;height:100%;object-fit:cover}
+[data-theme="light"] .list-cover-wrap{background:#eee;color:#ccc}
+.list-main{min-width:0}
+.list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-artist{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-genre,.list-year{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-bars{display:flex;gap:2px}
+.list-bars .score-sq{height:6px}
+.list-plays{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;white-space:nowrap}
+
 /* mobile filter bottom sheet — desktop: transparent wrapper around the existing toolbar controls */
 .filter-sheet,.filter-sheet-body,.filter-sheet-section{display:contents}
 .filter-sheet-btn{display:none;position:relative;width:34px;height:34px;padding:0;flex-shrink:0;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--muted);font-size:15px;cursor:pointer}
@@ -1661,6 +1689,10 @@ select option{background:var(--surface);color:var(--text)}
     <button class="dice-btn" id="randomBtn" title="random record">
       <div class="dice-face" id="diceFace"></div>
     </button>
+    <div class="view-toggle" id="viewToggle">
+      <button class="view-btn active" id="viewGridBtn" data-view="grid" title="grid view"><i class="ti ti-layout-grid"></i></button>
+      <button class="view-btn" id="viewListBtn" data-view="list" title="list view"><i class="ti ti-list"></i></button>
+    </div>
     </div>
     <div class="filter-chips" id="filterChips"></div>
     <div id="recordsContainer"></div>
@@ -2292,9 +2324,7 @@ function render() {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
     return;
   }
-  c.innerHTML = groupBy !== 'none'
-    ? cratesHTML(recs)
-    : `<div class="grid">${recs.map(r => cardHTML(r)).join('')}</div>`;
+  c.innerHTML = groupBy !== 'none' ? cratesHTML(recs) : recordsHTML(recs);
   c.querySelectorAll('[data-id]').forEach(el =>
     el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
   );
@@ -2396,7 +2426,7 @@ function cratesHTML(recs) {
         <span class="crate-label">${crate.code ? flagImgHTML(crate.code, 18) : ''}${esc(crate.label)}</span>
         <span class="crate-count">${crate.records.length} ${crate.records.length === 1 ? 'record' : 'records'}</span>
       </button>
-      <div class="crate-body"><div class="grid">${crate.records.map(r => cardHTML(r)).join('')}</div></div>
+      <div class="crate-body">${recordsHTML(crate.records)}</div>
     </section>`;
   }).join('');
 }
@@ -2526,6 +2556,55 @@ function cardHTML(r) {
       </div>
       ${scoresBlock}
     </div>
+  </div>`;
+}
+
+// ── grid / list view toggle ─────────────────────────────────────────────────
+// Independent of crates: it only decides how a set of records renders, so it
+// applies the same way to the flat list and to each crate's body.
+let viewMode = localStorage.getItem('vinyl-view-mode') === 'list' ? 'list' : 'grid';
+
+function setViewMode(mode) {
+  viewMode = mode;
+  localStorage.setItem('vinyl-view-mode', mode);
+  document.getElementById('viewGridBtn').classList.toggle('active', mode === 'grid');
+  document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
+  render();
+}
+
+function recordsHTML(recs) {
+  return viewMode === 'list'
+    ? `<div class="list-view-wrap"><div class="list-view">${listHeadHTML()}${recs.map(r => listRowHTML(r)).join('')}</div></div>`
+    : `<div class="grid">${recs.map(r => cardHTML(r)).join('')}</div>`;
+}
+
+function listHeadHTML() {
+  return `<div class="list-row list-head">
+    <span></span><span>Album</span><span>Genre</span><span>Year</span><span>Pepe</span><span>Jenni</span><span>Plays</span>
+  </div>`;
+}
+
+function listRowHTML(r) {
+  const cover = r.cover_data
+    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+    : `<i class="ti ti-disc"></i>`;
+  const myR  = Number(r.my_rating)  || 0;
+  const herR = Number(r.wife_rating) || 0;
+  const pepeFilled  = Math.round(myR);
+  const jenniFilled = Math.round(herR);
+  const pepeBars  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled  ? ' pepe-on'  : ''}"></div>`).join('');
+  const jenniBars = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on' : ''}"></div>`).join('');
+  return `<div class="list-row" data-id="${r.id}">
+    <div class="list-cover-wrap">${cover}</div>
+    <div class="list-main">
+      <div class="list-album">${esc(r.album_name)||'untitled'}</div>
+      <div class="list-artist">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
+    </div>
+    <span class="list-genre">${esc(r.genre)||'—'}</span>
+    <span class="list-year">${esc(r.year)||'—'}</span>
+    <div class="list-bars">${pepeBars}</div>
+    <div class="list-bars">${jenniBars}</div>
+    <span class="list-plays"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i>${r.play_count||0}</span>
   </div>`;
 }
 
@@ -4157,6 +4236,10 @@ function bindEvents(){
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
   document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
+  document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
+  document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
+  document.getElementById('viewGridBtn').classList.toggle('active', viewMode === 'grid');
+  document.getElementById('viewListBtn').classList.toggle('active', viewMode === 'list');
   document.getElementById('morePanel').addEventListener('click', e => {
     if (e.target.closest('.menu-item')) document.getElementById('morePanel').classList.add('hidden');
   });
