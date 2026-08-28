@@ -2625,7 +2625,7 @@ function dmFormatNoteDate(dateStr) {
   return `${Number(d)} - ${DM_MONTHS_PT[Number(mo)-1]} - ${y}`;
 }
 
-// merges bought/played/cleaned/notes into one chronological (newest-first) timeline
+// merges bought/played/cleaned/notes into one chronological (oldest-first) timeline
 function dmHistoryEvents(r) {
   const events = [];
   const add = (type, date, extra) => {
@@ -2642,7 +2642,7 @@ function dmHistoryEvents(r) {
     add('note', n.date, { text: n.text });
   });
   // by day AND time, so two plays on one evening read in the order they happened
-  return events.sort((a,b) => b.at.localeCompare(a.at));
+  return events.sort((a,b) => a.at.localeCompare(b.at));
 }
 
 // collapses same-day events into one group so the date renders once, not once per event
@@ -4025,37 +4025,19 @@ function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
   document.getElementById('tabHistory').addEventListener('click', () => switchTab('history'));
-  document.getElementById('racePlayBtn').addEventListener('click', () => {
-    racePlaying ? racePause() : racePlay();
+  document.getElementById('racePlayBtn').addEventListener('click', function () {
+    histPlaying ? histPause() : histPlay();
   });
-  document.getElementById('raceReplayBtn').addEventListener('click', raceReplay);
-  const raceScrub = document.getElementById('raceScrub');
-  raceScrub.addEventListener('input', () => {
-    racePause();
-    raceSeek(Number(raceScrub.value));
+  document.getElementById('raceReplayBtn').addEventListener('click', histReplay);
+  document.getElementById('raceScrub').addEventListener('input', function () {
+    /* seek before pausing: histPause() syncs the transport from actPos, so
+       pausing first would render the position being left, not the one being
+       landed on */
+    histSeek(Number(this.value), true);
+    histPause();
   });
-  document.querySelectorAll('.race-speed-btn').forEach(b => {
-    b.addEventListener('click', () => raceSetSpeed(Number(b.dataset.speed)));
-  });
-  document.getElementById('actPlayBtn').addEventListener('click', function () {
-    actPlaying ? actPause() : actPlay();
-  });
-  document.getElementById('actReplayBtn').addEventListener('click', actReplay);
-  document.getElementById('actScrub').addEventListener('input', function () {
-    /* Seek FIRST. actPause() syncs the transport from actPos, so pausing
-       before the seek would sync the position being left rather than the one
-       being landed on — visibly wrong the moment a drag crosses the end, and
-       wrong in the other direction on the drag back. actSeek() deliberately
-       does not sync on its own: actTick calls it every frame, and
-       actSyncControls' querySelectorAll would be per-frame DOM work. */
-    actSeek(Number(this.value));
-    actPause();
-  });
-  document.querySelectorAll('.act-speed-btn').forEach(function (b) {
-    b.addEventListener('click', function () {
-      actSpeed = Number(b.dataset.actSpeed);
-      actSyncControls();
-    });
+  document.querySelectorAll('.race-speed-btn').forEach(function (b) {
+    b.addEventListener('click', function () { histSetSpeed(Number(b.dataset.speed)); });
   });
   document.querySelectorAll('[data-act-zoom]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -4092,21 +4074,21 @@ function bindEvents(){
   });
   /* The band is the control, not a picture of one: drag it to scrub. The range
    * input stays for keyboard and assistive access; both write through
-   * actSeek(). */
+   * histSeek(). */
   let actDragging = false;
   const actBandWrap = document.getElementById('actBandWrap');
   function actSeekAt(e) {
     const r = actBandWrap.getBoundingClientRect();
-    actSeek(actClamp((e.clientX - r.left) / r.width, 0, 1) * actLast());
+    histSeek(actClamp((e.clientX - r.left) / r.width, 0, 1) * actLast(), true);
     /* Sync AFTER the seek, for the same reason the scrubber seeks before it
-       pauses: actSyncControls() reads actPos, so syncing first would render
+       pauses: histSyncControls() reads actPos, so syncing first would render
        the position being left. A drag is user-paced, not per-frame, so the
-       querySelectorAll here costs nothing — unlike inside actSeek(). */
-    actSyncControls();
+       querySelectorAll here costs nothing — unlike inside histSeek(). */
+    histSyncControls();
   }
   actBandWrap.addEventListener('pointerdown', function (e) {
     if (!act) return;
-    actPause();
+    histPause();
     actDragging = true;
     actBandWrap.setPointerCapture(e.pointerId);
     actSeekAt(e);
@@ -4131,8 +4113,8 @@ function bindEvents(){
   const racePlot = document.getElementById('racePlot');
   racePlot.addEventListener('click', e => {
     const cover = e.target.closest('.race-cover');
-    if (cover) { racePause(); openDetail(Number(cover.dataset.id)); return; }
-    if (e.target.closest('.race-bar')) racePause();
+    if (cover) { histPause(); openDetail(Number(cover.dataset.id)); return; }
+    if (e.target.closest('.race-bar')) histPause();
   });
   racePlot.addEventListener('mousemove', e => {
     const tip = document.getElementById('raceTooltip');
@@ -4631,7 +4613,7 @@ function switchTab(tab) {
   syncMobileTabbar();
 
   // Leaving the tab stops both charts — no timer runs behind the collection view.
-  if (leaving === 'history' && tab !== 'history') { racePause(); actPause(); }
+  if (leaving === 'history' && tab !== 'history') histPause();
 
   if (tab === 'stats') renderStats();
   if (tab === 'calendar') renderCalendar();
@@ -4651,7 +4633,6 @@ function syncMobileTabbar() {
 }
 
 // ── history: the collection's growth as a bar chart race ───────────────────
-const RACE_BASE_MS = 1000;    // one purchase day at 1× — ~31s end to end
 const RACE_COVER_CAP = 48;    // covers put in the DOM per bar; more than any
                               // bar can display, so the visible result is the
                               // same while node count stays bounded
@@ -4662,10 +4643,12 @@ let raceRows = new Map();     // genre -> its row element, kept across frames
                               // so transforms transition instead of redrawing
 
 function renderHistory() {
-  renderActivity();          // the second chart on this tab, its own clock
+  histPause();
+  renderActivity();                          // builds `act`, the band and the lanes
   raceFrames = VinylHistory.buildTimeline(records);
   raceRows = new Map();
   raceIndex = 0;
+  histFrameShown = -2;
 
   const plot = document.getElementById('racePlot');
   const scrub = document.getElementById('raceScrub');
@@ -4676,25 +4659,24 @@ function renderHistory() {
     plot.innerHTML = '<p class="race-empty">nothing bought yet — records need a bought date to appear here.</p>';
     document.getElementById('raceDay').textContent = '';
     document.getElementById('raceTotal').textContent = '';
-    scrub.max = '0';
-    scrub.disabled = true;
-    racePause();
-    return;
+  } else {
+    // Height is fixed at every genre that ever appears, not at the current
+    // frame's bar count — sizing it to the frame would make the box jump
+    // taller each time a genre enters and shove the page around mid-playback.
+    plot.style.height = 'calc(var(--race-row-h) * ' +
+      raceFrames[raceFrames.length - 1].bars.length + ')';
   }
 
-  // Height is fixed for the whole race at every genre that ever appears, not
-  // at the current frame's bar count — sizing it to the frame would make the
-  // box jump taller each time a genre enters and shove the controls down the
-  // page mid-playback.
-  const rows = raceFrames[raceFrames.length - 1].bars.length;
-  plot.style.height = 'calc(var(--race-row-h) * ' + rows + ')';
-  scrub.disabled = false;
-  scrub.max = String(raceFrames.length - 1);
+  histClock = VinylActivity.buildClock(act);
+  raceBuildFrameMap();
+  scrub.disabled = !act;
+  scrub.max = act ? String(actLast()) : '0';
+  if (!act) { histSyncControls(); return; }
 
   // Reduced motion opens on the finished chart instead — a statistic, not a
-  // race. Everything still works; you just start it yourself.
-  if (raceReducedMotion()) { raceSnapTo(raceFrames.length - 1); racePause(); }
-  else { raceSnapTo(0); racePlay(); }
+  // replay. Everything still works; you just start it yourself.
+  if (histReducedMotion()) { histSeek(actLast(), true); histPause(); }
+  else { histSeek(0, true); histPlay(); }
 }
 
 function racePaint(i, animate) {
@@ -4797,93 +4779,175 @@ function raceCovers(strip, bar, animate) {
     }
   });
 }
-let racePlaying = false;
-let raceSpeed = 1;
-let raceTimer = null;
 
-function raceReducedMotion() {
+// ── history: one clock for both charts ─────────────────────────────────────
+const HIST_TOTAL_MS = 30000;   // the whole timeline at 1x
+const HIST_DUR_MIN  = 120;     // floor and ceiling for the race chart's bar
+const HIST_DUR_MAX  = 900;     // growth, because the gaps are wildly uneven
+
+let histClock = null;
+let histProgress = 0;          // in weight units, not days
+let histSpeed = 1;
+let histPlaying = false;
+let histRaf = 0;
+let histLastT = 0;
+let histFrameShown = -2;       // -2 so the first paint always writes
+let raceFrameOfDay = [];       // day index -> race frame index, -1 before day one
+let raceFrameDay = [];         // race frame index -> day index
+
+function histReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function raceFrameMs() { return RACE_BASE_MS / raceSpeed; }
+/* Which frame the race chart shows on each day, and which day each frame
+ * begins on. Built once per render rather than searched per frame: at 60fps
+ * for thirty seconds a search would run eighteen hundred times for an answer
+ * that never changes. */
+function raceBuildFrameMap() {
+  raceFrameOfDay = []; raceFrameDay = [];
+  if (!act || !raceFrames.length) return;
+  let f = -1;
+  for (let d = 0; d < act.span; d++) {
+    const iso = VinylActivity.dayAt(act.d0, d);
+    while (f + 1 < raceFrames.length && raceFrames[f + 1].day <= iso) {
+      f++; raceFrameDay[f] = d;
+    }
+    raceFrameOfDay[d] = f;
+  }
+}
 
-/* The transition duration equals the frame interval, so each day's growth
- * takes exactly as long as the day is on screen — that is what makes it read
- * as one continuous race rather than a slideshow. Set inline rather than in
- * the stylesheet because the scrubber has to override it to 0 while dragging,
- * and an inline value cannot be beaten by a class. */
-function raceApplyDuration() {
+/* The bars grow for exactly as long as the frame is on screen, which is what
+ * makes the race read as one continuous move rather than a slideshow. Under
+ * one clock that span is the wall-clock time until the NEXT purchase, and the
+ * gaps run from one day to three hundred and fifty-two — hence the clamp. */
+function raceApplyDuration(f) {
+  let ms = HIST_DUR_MAX;
+  if (histClock && f >= 0 && f + 1 < raceFrameDay.length) {
+    const msPerUnit = HIST_TOTAL_MS / histClock.total / histSpeed;
+    ms = actClamp(
+      (VinylActivity.progressAtDay(histClock, raceFrameDay[f + 1]) -
+       VinylActivity.progressAtDay(histClock, raceFrameDay[f])) * msPerUnit,
+      HIST_DUR_MIN, HIST_DUR_MAX);
+  }
   document.getElementById('racePlot').style.setProperty(
-    '--race-dur', (raceReducedMotion() ? 0 : raceFrameMs()) + 'ms');
+    '--race-dur', (histReducedMotion() ? 0 : ms) + 'ms');
 }
 
 /* Jump to a frame without sliding there. Replaying from the end would
- * otherwise run every bar backwards for a full second before the race
- * restarts on top of it. Restoring the duration has to wait for a reflow,
- * or the browser coalesces both writes and animates anyway. */
-function raceSnapTo(i) {
+ * otherwise run every bar backwards before the race restarts on top of it.
+ * Restoring the duration has to wait for a reflow, or the browser coalesces
+ * both writes and animates anyway. */
+function raceSnapTo(f) {
   const plot = document.getElementById('racePlot');
   plot.style.setProperty('--race-dur', '0ms');
-  racePaint(i, false);
+  racePaint(f, false);
   void plot.offsetWidth;
-  raceApplyDuration();
+  raceApplyDuration(f);
 }
 
-function raceSchedule() {
-  clearTimeout(raceTimer);
-  raceTimer = setTimeout(function () {
-    if (!racePlaying) return;
-    if (raceIndex >= raceFrames.length - 1) { racePause(); return; }
-    racePaint(raceIndex + 1, true);
-    raceSchedule();
-  }, raceFrameMs());
+/* One paint drives both charts from one day. */
+function histPaint(seeking) {
+  if (!act) return;
+  const day = Math.min(actLast(), Math.floor(actPos));
+
+  const f = raceFrames.length && raceFrameOfDay[day] !== undefined
+    ? raceFrameOfDay[day] : -1;
+  if (f !== histFrameShown) {
+    histFrameShown = f;
+    if (f >= 0) {
+      if (seeking) raceSnapTo(f);
+      else { raceApplyDuration(f); racePaint(f, true); }
+    }
+  }
+  /* The date belongs to the playhead, not to the frame. Between purchases the
+   * frame's own day can be up to fifty-six days behind. */
+  const dayEl = document.getElementById('raceDay');
+  const iso = VinylActivity.dayAt(act.d0, day);
+  if (dayEl.textContent !== iso) dayEl.textContent = iso;
+
+  actPaint();
 }
 
-function racePlay() {
-  if (!raceFrames.length) return;
-  if (raceIndex >= raceFrames.length - 1) raceSnapTo(0);
-  racePlaying = true;
-  raceApplyDuration();
-  raceSyncControls();
-  raceSchedule();
+/* Progress is the clock's own state; actPos is derived from it for drawing,
+ * never the other way round while playing. Deriving progress back from a
+ * clamped actPos deadlocks the last day: dayAtProgress legitimately returns
+ * `last` plus a fraction, actPos clamps that to `last`, and progressAtDay of
+ * `last` is that day's START — so the clock gives back exactly the fraction it
+ * just gained, every frame, and never reaches total. Playback would spin on
+ * the final day forever and the replay button would never appear. */
+function histApply(seeking) {
+  actPos = actClamp(VinylActivity.dayAtProgress(histClock, histProgress), 0, actLast());
+  /* histPaint() runs before the scrubber is set, not after: on a frame change
+   * it calls racePaint() (kept, unchanged, from the old per-frame transport),
+   * which still writes #raceScrub itself — to the race FRAME index, not the
+   * day. Written in this order, that stale write lands first and this line
+   * has the last word, so the scrubber always ends up at the playhead's day. */
+  histPaint(seeking);
+  const scrub = document.getElementById('raceScrub');
+  if (Number(scrub.value) !== Math.round(actPos)) scrub.value = Math.round(actPos);
 }
 
-/* Clears the timer and nothing else. The day in flight finishes settling —
- * pause stops the race advancing, it does not freeze a bar mid-slide. */
-function racePause() {
-  racePlaying = false;
-  clearTimeout(raceTimer);
-  raceTimer = null;
-  raceSyncControls();
+/* A seek runs the other way: the user names a day, and the clock moves to that
+ * day's start. This is the only direction in which a day sets the progress. */
+function histSeek(day, seeking) {
+  if (!act) return;
+  histProgress = VinylActivity.progressAtDay(histClock, actClamp(day, 0, actLast()));
+  histApply(seeking);
 }
 
-function raceSeek(i) {
-  if (!raceFrames.length) return;
-  raceSnapTo(Math.max(0, Math.min(raceFrames.length - 1, i)));
-  raceSyncControls();
+function histTick(t) {
+  if (!histPlaying) return;
+  if (!histLastT) histLastT = t;
+  const dt = Math.min(0.12, (t - histLastT) / 1000);
+  histLastT = t;
+  histProgress += histClock.total / (HIST_TOTAL_MS / 1000) * histSpeed * dt;
+  if (histProgress >= histClock.total) {
+    histProgress = histClock.total;
+    histApply();
+    histPause();
+    return;
+  }
+  histApply();
+  histRaf = requestAnimationFrame(histTick);
 }
 
-function raceReplay() { raceSnapTo(0); racePlay(); }
+function histPlay() {
+  if (!act || histPlaying) return;
+  if (actPos >= actLast()) histSeek(0, true);
+  histPlaying = true;
+  histLastT = 0;
+  histSyncControls();
+  histRaf = requestAnimationFrame(histTick);
+}
 
-function raceSyncControls() {
+function histPause() {
+  histPlaying = false;
+  cancelAnimationFrame(histRaf);
+  histRaf = 0;
+  histSyncControls();
+}
+
+function histReplay() { histSeek(0, true); histPlay(); }
+
+function histSyncControls() {
   const btn = document.getElementById('racePlayBtn');
-  btn.innerHTML = racePlaying ? '<i class="ti ti-player-pause"></i>'
+  btn.innerHTML = histPlaying ? '<i class="ti ti-player-pause"></i>'
                               : '<i class="ti ti-player-play"></i>';
-  btn.setAttribute('aria-pressed', racePlaying ? 'true' : 'false');
-  btn.setAttribute('aria-label', racePlaying ? 'pause' : 'play');
-  const atEnd = raceFrames.length > 0 && raceIndex >= raceFrames.length - 1;
-  document.getElementById('raceReplayBtn').classList.toggle('hidden', !atEnd || racePlaying);
-  document.getElementById('racePlayBtn').classList.toggle('hidden', atEnd && !racePlaying);
+  btn.setAttribute('aria-pressed', histPlaying ? 'true' : 'false');
+  btn.setAttribute('aria-label', histPlaying ? 'pause' : 'play');
+  const atEnd = !!act && actPos >= actLast();
+  document.getElementById('raceReplayBtn').classList.toggle('hidden', !atEnd || histPlaying);
+  btn.classList.toggle('hidden', atEnd && !histPlaying);
   document.querySelectorAll('.race-speed-btn').forEach(function (b) {
-    b.classList.toggle('active', Number(b.dataset.speed) === raceSpeed);
+    b.classList.toggle('active', Number(b.dataset.speed) === histSpeed);
   });
 }
 
-function raceSetSpeed(s) {
-  raceSpeed = s;
-  raceApplyDuration();
-  raceSyncControls();
-  if (racePlaying) raceSchedule();   // the change applies from the next frame
+function histSetSpeed(s) {
+  histSpeed = s;
+  histSyncControls();
+  /* the new rate applies from the next frame; nothing else needs restarting
+     because the clock advances by elapsed time, not by a fixed interval */
 }
 
 // ── history: how the collection is used ────────────────────────────────────
@@ -5061,13 +5125,6 @@ function actSetVisible(n) {
 }
 
 function renderActivity() {
-  /* Stop any loop still running before rebuilding. renderActivity() is called
-     on every tab open AND on the theme toggle, which can land mid-playback:
-     actPlay()'s `if (actPlaying) return` would then no-op, leaving the old
-     frame loop alive with a pre-rebuild actLastT. Its next tick computes dt
-     against a stale timestamp, clamps to the 0.12s ceiling, and jumps the
-     just-reset playhead ~18 days in one paint. */
-  actPause();
   act = VinylActivity.buildActivity(records);
   const empty = !act;
   document.getElementById('actEmpty').hidden = !empty;
@@ -5090,10 +5147,6 @@ function renderActivity() {
   actActivate('data-act-show', 21);
   actActivate('data-act-sort', 'plays');
   actSetVisible(21);
-  /* Reduced motion opens on the finished chart instead — a statistic, not a
-   * replay. Everything still works; you just start it yourself. */
-  if (actReducedMotion()) { actSeek(actLast()); actPause(); }
-  else { actSeek(0); actPlay(); }
 }
 
 function actSetTotals(day) {
@@ -5184,7 +5237,6 @@ function actPaint() {
   }
   actSetTotals(day);
   document.getElementById('actPin').style.left = actPct(actPos) + '%';
-  document.getElementById('actDay').textContent = VinylActivity.dayAt(act.d0, day);
 
   /* Pan and reveal are one write each on the shared ancestor, so this costs
    * the same whether 21 lanes are on screen or 112. */
@@ -5221,70 +5273,6 @@ function actPaint() {
   const cap = document.getElementById('actCaption');
   const text = actSoloCaption || actCaptionFor(day);
   if (cap.textContent !== text) cap.textContent = text;
-}
-
-let actPlaying = false, actRaf = 0, actLastT = 0, actSpeed = 1;
-
-function actReducedMotion() {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-/* Tied to zoom so the visible window always takes about two and a half seconds
- * to cross, whatever the magnification. */
-function actRate() {
-  return Math.min(ACT_MAX_RATE, Math.max(ACT_MIN_RATE, actWin / 2.5));
-}
-
-function actSeek(day) {
-  actPos = actClamp(day, 0, actLast());
-  const scrub = document.getElementById('actScrub');
-  if (Number(scrub.value) !== Math.round(actPos)) scrub.value = Math.round(actPos);
-  actPaint();
-}
-
-/* A continuous day clock, not the race chart's setTimeout frame chain: this
- * axis is continuous calendar time, and a frame-per-event-day clock would hop
- * unevenly and stutter the band. */
-function actTick(t) {
-  if (!actPlaying) return;
-  if (!actLastT) actLastT = t;
-  const dt = Math.min(0.12, (t - actLastT) / 1000);
-  actLastT = t;
-  actSeek(actPos + actRate() * actSpeed * dt);
-  if (actPos >= actLast()) { actPause(); return; }
-  actRaf = requestAnimationFrame(actTick);
-}
-
-function actPlay() {
-  if (!act || actPlaying) return;
-  if (actPos >= actLast()) actSeek(0);
-  actPlaying = true;
-  actLastT = 0;
-  actSyncControls();
-  actRaf = requestAnimationFrame(actTick);
-}
-
-function actPause() {
-  actPlaying = false;
-  cancelAnimationFrame(actRaf);
-  actRaf = 0;
-  actSyncControls();
-}
-
-function actReplay() { actSeek(0); actPlay(); }
-
-function actSyncControls() {
-  const btn = document.getElementById('actPlayBtn');
-  btn.innerHTML = actPlaying ? '<i class="ti ti-player-pause"></i>'
-                             : '<i class="ti ti-player-play"></i>';
-  btn.setAttribute('aria-pressed', actPlaying ? 'true' : 'false');
-  btn.setAttribute('aria-label', actPlaying ? 'pause' : 'play');
-  const atEnd = !!act && actPos >= actLast();
-  document.getElementById('actReplayBtn').classList.toggle('hidden', !atEnd || actPlaying);
-  btn.classList.toggle('hidden', atEnd && !actPlaying);
-  document.querySelectorAll('.act-speed-btn').forEach(function (b) {
-    b.classList.toggle('active', Number(b.dataset.actSpeed) === actSpeed);
-  });
 }
 
 // ── statistics ─────────────────────────────────────────────────────────────
