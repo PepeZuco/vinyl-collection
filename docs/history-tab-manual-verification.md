@@ -50,3 +50,70 @@ opening frame exactly three bars (Easy Listening, Folk, Soul & Funk).
 - [ ] With `prefers-reduced-motion: reduce`, the tab opens on the finished
       chart, paused, no covers fly, and play still works.
 - [ ] Console is clean throughout.
+
+## Activity chart — "how the collection is used"
+
+The model is unit-tested (`tests/test_activity.js`); the animation is not, and
+cannot be. Run this list against `.venv/bin/python app.py` after any change.
+
+Expected shape of the live collection: **112 lanes**, `2024-05-31` →
+`2026-08-21`, **813 days**, **399 plays**, **60 cleanings** (none before
+`2026-03-07`), **38 notes** (28 JSON + 10 legacy plain-string). Default cut: 21 lanes holding 214 plays, the
+folded band holding the other 91 records and 185 plays.
+
+### Correctness
+
+- [ ] The legend's four totals end at `112 / 399 / 60 / 38` and match the
+      figures on the record detail views.
+- [ ] Visible lane counts plus the folded band's count equal 399 at every
+      `show` setting.
+- [ ] The lane counts under `most played` **begin** `16, 15, 14, 13, 13, 12, …`
+      — that is the top of the descending sort, not the bottom of the list.
+- [ ] The cleaned series is absent until March 2026, then appears — this is the
+      data, not a bug.
+- [ ] No wishlist record appears.
+- [ ] Clicking any lane opens that record's detail view.
+
+### Motion
+
+- [ ] Opening the tab autoplays from day 0 and finishes in about 5–6 seconds.
+- [ ] The band grows smoothly week by week; nothing jumps.
+- [ ] Dragging the band scrubs both panels and pauses playback.
+- [ ] At `90 d` the window follows the playhead, held at about 62% of the lane
+      width, and clamps at both ends without overshooting.
+- [ ] At `90 d`, the month rule *under the lanes* pans in step with the ticks.
+      The labels must not sit still while the marks slide — the rule is a
+      sibling of the lanes and takes its pan from a shared ancestor, so a
+      regression here leaves the dates quietly lying about what you are seeing.
+- [ ] Drag the scrubber to the far right, then back to the middle. The
+      play/replay buttons must be correct at both ends — replay showing only
+      at the end. Then do the same by dragging the band itself.
+- [ ] Leaving the History tab stops playback — no frame loop runs behind the
+      collection view.
+
+### State
+
+- [ ] Six of the 21 default lanes are dimmed at the end of the timeline, and a
+      dimmed lane lights back up when scrubbed to a moment it was in rotation.
+- [ ] Hovering a lane dims the band to that record's events; leaving restores it.
+- [ ] The note card holds the most recent note and clears when scrubbed before
+      the first one.
+- [ ] Switching `show` or `order` leaves no lane stuck on a stale count.
+- [ ] Switching `show` or `order` leaves no lane stuck on a stale *class*
+      either — for every visible row, the cover carries `owned` iff the
+      playhead has passed its purchase day, and the row carries `gone` iff it
+      has been silent longer than the quiet threshold. Totals alone do not
+      catch this: the inverted-sentinel bug left 91 covers wrong while every
+      count was right.
+- [ ] Hover a lane, click it to open the record, then close the detail view
+      with **Escape, without moving the mouse**. The band must not come back
+      dimmed and the caption must not still name that record. (Closing by
+      clicking the X moves the mouse and hides the bug.)
+
+### Both themes
+
+- [ ] Every mark, tick, label and control is legible in dark and in light.
+- [ ] At a phone width (~430px) the band's month rule shows about nine labels,
+      not one per month — they must not overlap into a smear.
+- [ ] `prefers-reduced-motion` opens the chart finished instead of autoplaying,
+      and band segments and row fades **snap** rather than transition.

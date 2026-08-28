@@ -22,6 +22,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#F5C518;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
+  --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
@@ -29,6 +30,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#1a1a18;--muted:#999;--label:#6b6b63;--accent:#a07820;--danger:#c0392b;
   --card-hover:#fafaf8;--search-bg:#ffffff;
   --sh-gray:rgba(0,0,0,0.18);
+  --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☾'
 }
 
@@ -709,19 +711,149 @@ select option{background:var(--surface);color:var(--text)}
   background:transparent;color:var(--text);font-size:15px;cursor:pointer}
 .race-btn:hover{border-color:var(--accent);color:var(--accent)}
 .race-btn.hidden{display:none}
-#raceScrub{flex:1;min-width:0;accent-color:var(--accent);cursor:pointer}
-#raceScrub:disabled{opacity:.4;cursor:default}
+#raceScrub,#actScrub{flex:1;min-width:0;accent-color:var(--accent);cursor:pointer}
+#raceScrub:disabled,#actScrub:disabled{opacity:.4;cursor:default}
 .race-speeds{display:flex;gap:3px;flex-shrink:0}
-.race-speed-btn{height:26px;padding:0 8px;border:1px solid var(--border);
+.race-speed-btn,.act-speed-btn{height:26px;padding:0 8px;border:1px solid var(--border);
   border-radius:var(--radius-sm);background:transparent;color:var(--muted);
   font:600 11px var(--font);cursor:pointer;font-variant-numeric:tabular-nums}
-.race-speed-btn.active{border-color:var(--accent);color:var(--accent)}
+.race-speed-btn.active,.act-speed-btn.active{border-color:var(--accent);color:var(--accent)}
 
 @media(max-width:760px){
   .race-plot{--race-row-h:28px}
   .race-label{width:76px;font-size:11px}
   .race-day{font-size:19px}
   .race-controls{gap:8px}
+}
+
+/* activity chart — the same days at two scales: a weekly band over per-record
+   lanes. Pan and reveal are two custom properties on .act-lanes, so playback
+   costs two style writes however many lanes are on screen. */
+.act-empty{color:var(--muted);font-size:13px;padding:20px 2px}
+.act-legend{display:flex;gap:13px;flex-wrap:wrap}
+.act-lg{display:inline-flex;align-items:center;gap:5px;font-size:11px;
+  color:var(--label);text-transform:none;letter-spacing:0;font-weight:400}
+.act-lg i{font-size:12px;flex-shrink:0}
+.act-lg b{font-family:var(--font-mono);font-weight:700;color:var(--text);
+  min-width:2.4ch;text-align:right;font-variant-numeric:tabular-nums}
+
+/* the band doubles as the scrubber, hence the grab cursor and touch-action */
+.act-band-wrap{position:relative;cursor:ew-resize;touch-action:none;user-select:none}
+.act-band{position:relative;height:78px;display:flex;align-items:flex-end;gap:1px;
+  border-bottom:1px solid var(--border);transition:opacity .18s}
+.act-band-wrap.dim .act-band{opacity:.22}
+.act-wk{flex:1;min-width:0;display:flex;flex-direction:column-reverse;height:100%}
+.act-seg{width:100%;flex-shrink:0;transition:height 90ms linear}
+.act-seg.b{background:var(--ev-bought)} .act-seg.p{background:var(--ev-played)}
+.act-seg.c{background:var(--ev-cleaned)} .act-seg.n{background:var(--ev-note)}
+.act-wk .act-seg + .act-seg{box-shadow:0 2px 0 0 var(--surface)}
+.act-win{position:absolute;top:-2px;bottom:0;pointer-events:none;opacity:0;
+  transition:opacity .2s;border-left:1px solid var(--accent);
+  border-right:1px solid var(--accent);
+  background:color-mix(in srgb, var(--accent) 9%, transparent)}
+.act-win.on{opacity:1}
+.act-solo{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .18s}
+.act-solo.on{opacity:1}
+.act-solo .sm{position:absolute;bottom:0;width:2px;height:100%;margin-left:-1px}
+.act-pin{position:absolute;top:-2px;bottom:0;width:1px;background:var(--accent);
+  pointer-events:none;z-index:3}
+
+.act-axis{position:relative;height:19px;margin-top:2px}
+#actLaneAxis{overflow:hidden}
+#actLaneAxis.wide .act-tick:not(.q3){display:none}
+
+/* the band never zooms — it always shows the whole arc — so it is permanently
+   at the density the lane rule only reaches when wide, and thins to match */
+#actBandAxis .act-tick:not(.q3){display:none}
+.act-tick{position:absolute;top:0;font-family:var(--font-mono);font-size:9.5px;
+  color:var(--muted);transform:translateX(-50%);white-space:nowrap;letter-spacing:.04em}
+.act-tick.yr{color:var(--label);font-weight:700}
+
+.act-note{margin-top:10px;background:var(--card);border:1px solid var(--border);
+  border-left:2px solid var(--ev-note);padding:7px 10px;font-size:12px;
+  line-height:1.45;color:var(--text);opacity:0;transition:opacity .3s;min-height:44px}
+.act-note.on{opacity:1}
+.act-note .who{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ev-note);display:block;margin-bottom:3px}
+.act-note .txt{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.act-strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin:13px 0 9px;padding-top:11px;border-top:1px solid var(--border)}
+.act-grp{display:flex;align-items:center;gap:5px}
+.act-grp > span{font-family:var(--font-mono);font-size:9.5px;font-weight:700;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.act-pill{height:24px;padding:0 9px;border:1px solid var(--border);
+  background:transparent;color:var(--label);font-size:11px;
+  font-family:var(--font-mono);cursor:pointer;line-height:1}
+.act-pill.active{border-color:var(--accent);color:var(--accent)}
+
+/* pan lives on the body, an ancestor of BOTH the lanes and the month rule that
+   sits below them, so the two move together; the reveal lives on the lanes
+   alone, so the rule is panned but never clipped */
+.act-body{--act-pan:0px}
+.act-lanes{position:relative;--act-rev:100%}
+.act-scroll{position:relative}
+.act-scroll.scroll{max-height:430px;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.act-row{display:grid;grid-template-columns:20px minmax(0,150px) minmax(0,1fr) 28px;
+  gap:9px;align-items:center;height:18px;transition:opacity .45s;cursor:pointer}
+.act-row.gone{opacity:.34}
+.act-row:hover{background:var(--card-hover)}
+.act-cover{width:18px;height:18px;object-fit:cover;background:var(--search-bg);
+  filter:grayscale(1) opacity(.3);transition:filter .35s}
+.act-cover.owned{filter:none}
+.act-name{font-size:11px;line-height:1.15;overflow:hidden;white-space:nowrap;
+  text-overflow:ellipsis;color:var(--label)}
+.act-name b{color:var(--text);font-weight:600}
+.act-lane{position:relative;height:18px;overflow:hidden}
+/* the baseline sits outside the track, so an unrevealed lane still reads as a
+   lane rather than as empty space */
+.act-lane::before{content:'';position:absolute;left:0;right:0;top:8px;height:1px;
+  background:var(--border)}
+.act-track{position:absolute;top:0;bottom:0;left:0;width:100%;
+  transform:translateX(var(--act-pan));
+  /* the fallback is what leaves the month rule unclipped: it never inherits
+     --act-rev, because that is defined on .act-lanes, which is not its parent */
+  clip-path:inset(0 var(--act-rev,0%) 0 0);will-change:transform}
+.act-mk{position:absolute;top:4px;height:10px;width:2px;border-radius:1px;margin-left:-1px}
+.act-mk.p{background:var(--ev-played)}
+.act-mk.c{background:var(--ev-cleaned);top:2px;height:14px}
+.act-mk.n{background:var(--ev-note);top:0;height:18px;width:3px}
+.act-mk.b{background:var(--ev-bought);top:6px;height:6px;width:6px;
+  border-radius:50%;margin-left:-3px}
+.act-quiet{position:absolute;top:8px;height:1px;
+  background:repeating-linear-gradient(90deg,var(--border) 0 3px,transparent 3px 6px)}
+.act-ct{font-family:var(--font-mono);font-size:11px;font-weight:700;text-align:right;
+  color:var(--label);font-variant-numeric:tabular-nums}
+.act-tail{margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.act-tail .act-row{height:24px;cursor:default}
+.act-tail .act-row:hover{background:transparent}
+.act-tail .act-lane{height:24px}
+.act-tail .act-lane::before{top:11px}
+.act-tail .act-mk{opacity:.4;top:6px;height:12px}
+.act-tail .act-mk.b{top:9px;height:6px;width:6px}
+.act-tail .act-name{font-style:italic}
+.act-head{position:absolute;top:0;bottom:0;width:1px;background:var(--accent);
+  opacity:.8;pointer-events:none;z-index:2}
+
+.act-readout{display:flex;align-items:flex-end;justify-content:space-between;
+  gap:14px;margin-top:11px;flex-wrap:wrap}
+.act-day{font-family:var(--font-mono);font-size:26px;font-weight:700;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1}
+.act-caption{font-size:12px;color:var(--label);min-height:1.4em;text-align:right;
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+@media (max-width:640px){
+  .act-band{height:62px}
+  .act-row{grid-template-columns:16px minmax(0,88px) minmax(0,1fr) 24px;gap:7px}
+  .act-cover{width:15px;height:15px}
+  .act-day{font-size:19px}
+  .act-strip{gap:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  .act-seg{transition:none}
+  .act-row{transition:none}
+  .act-cover{transition:none}
 }
 
 /* stats/history segment — mobile only. The bottom bar already carries four
@@ -1353,6 +1485,80 @@ select option{background:var(--surface);color:var(--text)}
         <button class="race-btn hidden" id="raceReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
       </div>
     </div>
+
+      <!-- how the collection is used — the same days at two scales -->
+      <div class="chart-box" id="actBox">
+        <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span>how the collection is used</span>
+          <div class="act-legend">
+            <span class="act-lg"><i class="ti ti-shopping-bag" style="color:var(--ev-bought)"></i>bought <b id="actTotB">0</b></span>
+            <span class="act-lg"><i class="ti ti-headphones" style="color:var(--ev-played)"></i>played <b id="actTotP">0</b></span>
+            <span class="act-lg"><i class="ti ti-droplet" style="color:var(--ev-cleaned)"></i>cleaned <b id="actTotC">0</b></span>
+            <span class="act-lg"><i class="ti ti-note" style="color:var(--ev-note)"></i>noted <b id="actTotN">0</b></span>
+          </div>
+        </div>
+
+        <p class="act-empty" id="actEmpty" hidden>nothing to replay yet — records need a bought date to appear here.</p>
+
+        <div class="act-body" id="actBody">
+          <div class="act-band-wrap" id="actBandWrap">
+            <div class="act-band" id="actBand"></div>
+            <div class="act-win" id="actWinRect"></div>
+            <div class="act-solo" id="actSolo"></div>
+            <div class="act-pin" id="actPin"></div>
+          </div>
+          <div class="act-axis" id="actBandAxis"></div>
+          <div class="act-note" id="actNote"><span class="who"></span><span class="txt"></span></div>
+
+          <div class="act-strip">
+            <div class="act-grp"><span>zoom</span>
+              <button class="act-pill active" data-act-zoom="0">all</button>
+              <button class="act-pill" data-act-zoom="365">1 yr</button>
+              <button class="act-pill" data-act-zoom="90">90 d</button>
+              <button class="act-pill" data-act-zoom="30">30 d</button>
+            </div>
+            <div class="act-grp"><span>show</span>
+              <button class="act-pill active" data-act-show="21">top 21</button>
+              <button class="act-pill" data-act-show="50">top 50</button>
+              <button class="act-pill" data-act-show="0">all</button>
+            </div>
+            <div class="act-grp"><span>order</span>
+              <button class="act-pill active" data-act-sort="plays">most played</button>
+              <button class="act-pill" data-act-sort="recent">in rotation</button>
+              <button class="act-pill" data-act-sort="bought">bought</button>
+            </div>
+          </div>
+
+          <div class="act-lanes" id="actLanes">
+            <div class="act-scroll" id="actScroll"></div>
+            <div class="act-tail" id="actTail" hidden>
+              <div class="act-row">
+                <span></span>
+                <span class="act-name" id="actTailName"></span>
+                <span class="act-lane"><span class="act-track" id="actTailTrack"></span></span>
+                <span class="act-ct" id="actTailCt">0</span>
+              </div>
+            </div>
+            <span class="act-head" id="actHead"></span>
+          </div>
+          <div class="act-axis" id="actLaneAxis"><span class="act-track" id="actLaneAxisTrack"></span></div>
+
+          <div class="act-readout">
+            <span class="act-day" id="actDay"></span>
+            <span class="act-caption" id="actCaption"></span>
+          </div>
+          <div class="race-controls">
+            <button class="race-btn" id="actPlayBtn" aria-label="play" aria-pressed="false"><i class="ti ti-player-play"></i></button>
+            <input type="range" id="actScrub" min="0" max="0" step="1" value="0" aria-label="day">
+            <div class="race-speeds">
+              <button class="act-speed-btn" data-act-speed="0.5">0.5&times;</button>
+              <button class="act-speed-btn active" data-act-speed="1">1&times;</button>
+              <button class="act-speed-btn" data-act-speed="2">2&times;</button>
+            </div>
+            <button class="race-btn hidden" id="actReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
+          </div>
+        </div>
+      </div>
   </div>
 
   <!-- collection page -->
@@ -1818,6 +2024,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/topojson-client.min.js"></script>
 <script src="/static/grouping.js"></script>
 <script src="/static/history.js"></script>
+<script src="/static/activity.js"></script>
 <script src="/static/spend.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
@@ -3830,6 +4037,94 @@ function bindEvents(){
   document.querySelectorAll('.race-speed-btn').forEach(b => {
     b.addEventListener('click', () => raceSetSpeed(Number(b.dataset.speed)));
   });
+  document.getElementById('actPlayBtn').addEventListener('click', function () {
+    actPlaying ? actPause() : actPlay();
+  });
+  document.getElementById('actReplayBtn').addEventListener('click', actReplay);
+  document.getElementById('actScrub').addEventListener('input', function () {
+    /* Seek FIRST. actPause() syncs the transport from actPos, so pausing
+       before the seek would sync the position being left rather than the one
+       being landed on — visibly wrong the moment a drag crosses the end, and
+       wrong in the other direction on the drag back. actSeek() deliberately
+       does not sync on its own: actTick calls it every frame, and
+       actSyncControls' querySelectorAll would be per-frame DOM work. */
+    actSeek(Number(this.value));
+    actPause();
+  });
+  document.querySelectorAll('.act-speed-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      actSpeed = Number(b.dataset.actSpeed);
+      actSyncControls();
+    });
+  });
+  document.querySelectorAll('[data-act-zoom]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      actActivate('data-act-zoom', b.dataset.actZoom);
+      const d = Number(b.dataset.actZoom);
+      actWin = d > 0 ? Math.min(actLast(), d) : actLast();
+      actApplyZoom();
+      actPaint();
+    });
+  });
+  document.querySelectorAll('[data-act-show]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      actActivate('data-act-show', b.dataset.actShow);
+      actSetVisible(Number(b.dataset.actShow));
+      actPaint();
+    });
+  });
+
+  /* All three orders are computed from the whole timeline, never from the
+   * playhead, so rows do not re-rank while it plays — the race chart directly
+   * above already owns rank animation, and a row that moves cannot be
+   * followed. Re-sorting re-applies the current cut, so the folded band always
+   * holds exactly the records that are not on screen. */
+  document.querySelectorAll('[data-act-sort]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      actActivate('data-act-sort', b.dataset.actSort);
+      actSort = b.dataset.actSort;
+      const scroll = document.getElementById('actScroll');
+      actRows.sort(function (x, y) { return ACT_SORTS[actSort](x.lane, y.lane); })
+             .forEach(function (o) { scroll.appendChild(o.el); });
+      actSetVisible(actShow);
+      actPaint();
+    });
+  });
+  /* The band is the control, not a picture of one: drag it to scrub. The range
+   * input stays for keyboard and assistive access; both write through
+   * actSeek(). */
+  let actDragging = false;
+  const actBandWrap = document.getElementById('actBandWrap');
+  function actSeekAt(e) {
+    const r = actBandWrap.getBoundingClientRect();
+    actSeek(actClamp((e.clientX - r.left) / r.width, 0, 1) * actLast());
+    /* Sync AFTER the seek, for the same reason the scrubber seeks before it
+       pauses: actSyncControls() reads actPos, so syncing first would render
+       the position being left. A drag is user-paced, not per-frame, so the
+       querySelectorAll here costs nothing — unlike inside actSeek(). */
+    actSyncControls();
+  }
+  actBandWrap.addEventListener('pointerdown', function (e) {
+    if (!act) return;
+    actPause();
+    actDragging = true;
+    actBandWrap.setPointerCapture(e.pointerId);
+    actSeekAt(e);
+    e.preventDefault();
+  });
+  actBandWrap.addEventListener('pointermove', function (e) {
+    if (actDragging) actSeekAt(e);
+  });
+  actBandWrap.addEventListener('pointerup', function () { actDragging = false; });
+  actBandWrap.addEventListener('pointercancel', function () { actDragging = false; });
+  /* Guarded: #historyPage is display:none while another tab is current, so
+     every getBoundingClientRect() would return 0 and zero out actLaneW —
+     silently breaking the playhead and the pan until the next render. */
+  window.addEventListener('resize', function () {
+    if (!act || currentTab !== 'history') return;
+    actMeasure();
+    actPaint();
+  });
   // Delegated, so it survives rows and covers being created and removed as
   // the race runs. A cover click both pauses and opens — pausing before a
   // record opens is what you want anyway.
@@ -4335,8 +4630,8 @@ function switchTab(tab) {
   });
   syncMobileTabbar();
 
-  // Leaving the tab stops the race — no timer runs behind the collection view.
-  if (leaving === 'history' && tab !== 'history') racePause();
+  // Leaving the tab stops both charts — no timer runs behind the collection view.
+  if (leaving === 'history' && tab !== 'history') { racePause(); actPause(); }
 
   if (tab === 'stats') renderStats();
   if (tab === 'calendar') renderCalendar();
@@ -4367,6 +4662,7 @@ let raceRows = new Map();     // genre -> its row element, kept across frames
                               // so transforms transition instead of redrawing
 
 function renderHistory() {
+  renderActivity();          // the second chart on this tab, its own clock
   raceFrames = VinylHistory.buildTimeline(records);
   raceRows = new Map();
   raceIndex = 0;
@@ -4588,6 +4884,407 @@ function raceSetSpeed(s) {
   raceApplyDuration();
   raceSyncControls();
   if (racePlaying) raceSchedule();   // the change applies from the next frame
+}
+
+// ── history: how the collection is used ────────────────────────────────────
+const ACT_ANCHOR = 0.62;    // where the playhead rides while the window flies
+const ACT_QUIET  = 60;      // days of silence before a lane dims. 60, not 120:
+                            // at 120 the class never fires once on this
+                            // collection — its most-played records are never
+                            // untouched for four months.
+const ACT_MAX_RATE = 150;   // days per second at 1x, full span — ~5.4s end to end
+const ACT_MIN_RATE = 25;
+
+let act = null;             // the built model, or null when nothing is in scope
+let actCols = [];           // one entry per week column in the band
+let actRows = [];           // one entry per lane, every record, in DOM order
+let actLive = [];           // the subset currently displayed
+let actPos = 0;             // playhead, in days, fractional
+let actWin = 1;             // zoom window width in days
+let actWinStart = 0;
+let actShow = 21;
+let actSort = 'plays';
+let actLaneW = 0, actLaneL = 0;
+
+/* The axis is [0, span-1]. A one-day collection would make that a zero-width
+ * range and every percentage NaN, so the denominator floors at 1. */
+function actLast() { return act ? Math.max(1, act.span - 1) : 1; }
+function actPct(i) { return i / actLast() * 100; }
+function actClamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+const ACT_SORTS = {
+  plays:  function (a, b) { return b.plays.length - a.plays.length || a.bought - b.bought; },
+  recent: function (a, b) { return b.lastPlay - a.lastPlay || a.bought - b.bought; },
+  bought: function (a, b) { return a.bought - b.bought; },
+};
+
+/* Every mark is a percentage of the full span, so widening the track re-lays
+ * them all out with no JS and marks keep their 2px width. */
+function actMarksHTML(lane) {
+  let h = '<span class="act-mk b" style="left:' + actPct(lane.bought) + '%"></span>';
+  if (actLast() - lane.lastPlay > ACT_QUIET) {
+    h += '<span class="act-quiet" style="left:' + actPct(lane.lastPlay) +
+         '%;width:' + actPct(actLast() - lane.lastPlay) + '%"></span>';
+  }
+  lane.plays.forEach(function (d)  { h += '<span class="act-mk p" style="left:' + actPct(d) + '%"></span>'; });
+  lane.cleans.forEach(function (d) { h += '<span class="act-mk c" style="left:' + actPct(d) + '%"></span>'; });
+  lane.notes.forEach(function (d)  { h += '<span class="act-mk n" style="left:' + actPct(d) + '%"></span>'; });
+  return h;
+}
+
+/* One label per month; every third gets .q3 so the lane rule can thin itself
+ * out when the window is wide and the labels would collide. */
+function actTicks(host, d0) {
+  host.innerHTML = '';
+  const first = new Date(d0 + 'T00:00:00');
+  let d = new Date(first.getFullYear(), first.getMonth() + 1, 1), n = 0;
+  const end = new Date(first.getFullYear(), first.getMonth(), first.getDate() + actLast());
+  while (d <= end) {
+    const off = Math.round((d - first) / 86400000);
+    const t = document.createElement('span');
+    t.className = 'act-tick' + (d.getMonth() === 0 ? ' yr' : '') + (n % 3 === 0 ? ' q3' : '');
+    t.style.left = actPct(off) + '%';
+    if (actPct(off) < 4) { t.style.transform = 'none'; t.style.left = '0'; }
+    t.textContent = d.toLocaleDateString('en', { month: 'short' }) + ' ' +
+                    String(d.getFullYear()).slice(2);
+    host.appendChild(t);
+    d = new Date(d.getFullYear(), d.getMonth() + 1, 1); n++;
+  }
+}
+
+function actBuildBand() {
+  const band = document.getElementById('actBand');
+  band.innerHTML = '';
+  const max = act.weeks.reduce(function (m, w) { return Math.max(m, w.total); }, 1);
+  actCols = act.weeks.map(function (w) {
+    const el = document.createElement('div');
+    el.className = 'act-wk';
+    /* column-reverse, so the first child sits on the baseline */
+    ['p', 'c', 'n', 'b'].forEach(function (k) {
+      const s = document.createElement('div');
+      s.className = 'act-seg ' + k;
+      s.dataset.h = (w[k] / max * 100).toFixed(3);
+      s.style.height = '0%';
+      el.appendChild(s);
+    });
+    band.appendChild(el);
+    return { segs: Array.prototype.slice.call(el.children), rev: -1 };
+  });
+}
+
+function actBuildLanes() {
+  const scroll = document.getElementById('actScroll');
+  scroll.innerHTML = '';
+  actRows = act.lanes.map(function (lane) {
+    const el = document.createElement('div');
+    el.className = 'act-row';
+    el.innerHTML =
+      '<img class="act-cover" src="' + esc(lane.cover) + '" alt="" loading="lazy">' +
+      '<span class="act-name"><b>' + esc(lane.artist) + '</b> · ' + esc(lane.album) + '</span>' +
+      '<span class="act-lane"><span class="act-track">' + actMarksHTML(lane) + '</span></span>' +
+      '<span class="act-ct">0</span>';
+    scroll.appendChild(el);
+    const entry = { lane: lane, el: el, cover: el.children[0],
+                    track: el.children[2].firstChild, ct: el.children[3],
+                    owned: false, count: -1, gone: false };
+    el.addEventListener('mouseenter', function () { actSolo(entry); });
+    el.addEventListener('mouseleave', function () { actSolo(null); });
+    /* Tear the solo down explicitly rather than trusting a mouseleave to
+       arrive. openDetail() only unhides a fixed overlay on top of this row —
+       it does not move it — and a browser fires mouseleave only on a real
+       pointer event that changes the hit target. Click the row and close the
+       detail view with Escape, never moving the mouse, and no mouseleave ever
+       fires: the chart comes back dimmed with the caption pinned to a record
+       you are no longer pointing at. */
+    el.addEventListener('click', function () { actSolo(null); openDetail(lane.id); });
+    return entry;
+  });
+}
+
+/* The lane column's width, measured from a real lane rather than assumed, so
+ * the playhead and the month rule sit on the same scale the marks do. */
+function actMeasure() {
+  const lane = document.querySelector('#actLanes .act-lane');
+  if (!lane) return;
+  const a = lane.getBoundingClientRect();
+  const b = document.getElementById('actLanes').getBoundingClientRect();
+  actLaneW = a.width; actLaneL = a.left - b.left;
+  const axis = document.getElementById('actLaneAxis');
+  axis.style.marginLeft = actLaneL + 'px';
+  axis.style.width = actLaneW + 'px';
+}
+
+/* One pill in a group is lit at a time. Zoom, show and order all want this,
+   and so does the reset every render does — four call sites, one rule. */
+function actActivate(attr, value) {
+  document.querySelectorAll('[' + attr + ']').forEach(function (x) {
+    x.classList.toggle('active', x.getAttribute(attr) === String(value));
+  });
+}
+
+/* Zoom is one width: the track holds the whole span, the lane shows actWin
+ * days of it. */
+function actApplyZoom() {
+  const w = (100 * actLast() / actWin).toFixed(3) + '%';
+  actRows.forEach(function (o) { o.track.style.width = w; });
+  document.getElementById('actTailTrack').style.width = w;
+  document.getElementById('actLaneAxisTrack').style.width = w;
+  document.getElementById('actWinRect').classList.toggle('on', actWin < actLast());
+  document.getElementById('actLaneAxis').classList.toggle('wide', actWin > 400);
+}
+
+let actTailPlays = [];
+
+/* Whatever is not on screen is folded into the density band below, so nothing
+ * is ever hidden — only compressed. */
+function actSetVisible(n) {
+  actShow = n > 0 ? Math.min(n, actRows.length) : actRows.length;
+  actRows.forEach(function (o, i) {
+    o.el.style.display = i < actShow ? '' : 'none';
+  });
+  actLive = actRows.slice(0, actShow);
+  const rest = actRows.slice(actShow);
+  const tail = document.getElementById('actTail');
+  tail.hidden = !rest.length;
+  if (rest.length) {
+    document.getElementById('actTailTrack').innerHTML =
+      rest.map(function (o) { return actMarksHTML(o.lane); }).join('');
+    document.getElementById('actTailName').textContent =
+      'the other ' + rest.length + ' records';
+    actTailPlays = rest.reduce(function (all, o) { return all.concat(o.lane.plays); }, [])
+                       .sort(function (a, b) { return a - b; });
+  } else actTailPlays = [];
+  document.getElementById('actScroll').classList.toggle('scroll', actShow > 30);
+  actLive.forEach(function (o) { o.count = -1; o.owned = null; o.gone = null; });
+  actApplyZoom();
+  actMeasure();
+}
+
+function renderActivity() {
+  /* Stop any loop still running before rebuilding. renderActivity() is called
+     on every tab open AND on the theme toggle, which can land mid-playback:
+     actPlay()'s `if (actPlaying) return` would then no-op, leaving the old
+     frame loop alive with a pre-rebuild actLastT. Its next tick computes dt
+     against a stale timestamp, clamps to the 0.12s ceiling, and jumps the
+     just-reset playhead ~18 days in one paint. */
+  actPause();
+  act = VinylActivity.buildActivity(records);
+  const empty = !act;
+  document.getElementById('actEmpty').hidden = !empty;
+  document.getElementById('actBody').hidden = empty;
+  if (empty) return;
+
+  actPos = 0;
+  actNoteIdx = -1;
+  document.getElementById('actNote').classList.remove('on');
+  actWin = actLast();
+  actSort = 'plays';
+  actBuildBand();
+  actBuildLanes();
+  actTicks(document.getElementById('actBandAxis'), act.d0);
+  actTicks(document.getElementById('actLaneAxisTrack'), act.d0);
+  const scrub = document.getElementById('actScrub');
+  scrub.max = String(actLast());
+  scrub.disabled = false;
+  actActivate('data-act-zoom', 0);
+  actActivate('data-act-show', 21);
+  actActivate('data-act-sort', 'plays');
+  actSetVisible(21);
+  /* Reduced motion opens on the finished chart instead — a statistic, not a
+   * replay. Everything still works; you just start it yourself. */
+  if (actReducedMotion()) { actSeek(actLast()); actPause(); }
+  else { actSeek(0); actPlay(); }
+}
+
+function actSetTotals(day) {
+  const ids = { b: 'actTotB', p: 'actTotP', c: 'actTotC', n: 'actTotN' };
+  ['b', 'p', 'c', 'n'].forEach(function (k) {
+    const el = document.getElementById(ids[k]);
+    const v = String(act.cum[k][day]);
+    if (el.textContent !== v) el.textContent = v;
+  });
+}
+
+let actSoloCaption = null;
+
+/* Pointing at a lane dims the band to just that record's events, drawn across
+ * the whole span. It answers what neither panel can alone: where does this one
+ * album sit inside the overall habit? */
+function actSolo(o) {
+  const el = document.getElementById('actSolo');
+  const wrap = document.getElementById('actBandWrap');
+  if (!o) {
+    el.classList.remove('on');
+    el.innerHTML = '';
+    wrap.classList.remove('dim');
+    actSoloCaption = null;
+    actPaint();
+    return;
+  }
+  const lane = o.lane, m = [];
+  function mark(d, v) {
+    m.push('<span class="sm" style="left:' + actPct(d) + '%;background:var(--' + v + ')"></span>');
+  }
+  mark(lane.bought, 'ev-bought');
+  lane.plays.forEach(function (d)  { mark(d, 'ev-played'); });
+  lane.cleans.forEach(function (d) { mark(d, 'ev-cleaned'); });
+  lane.notes.forEach(function (d)  { mark(d, 'ev-note'); });
+  el.innerHTML = m.join('');
+  el.classList.add('on');
+  wrap.classList.add('dim');
+  actSoloCaption = lane.artist + ' — ' + lane.album + ' · ' +
+    lane.plays.length + ' plays · ' +
+    (lane.plays.length ? 'last ' + VinylActivity.dayAt(act.d0, lane.lastPlay)
+                       : 'never played');
+  actPaint();
+}
+
+let actNoteIdx = -1;
+
+/* The most recent note as of the playhead, held rather than flashed: with 28
+ * notes over a five-second run, anything timer-driven is a flicker. */
+function actPaintNote(day) {
+  let idx = -1;
+  for (let i = 0; i < act.notes.length && act.notes[i].day <= day; i++) idx = i;
+  if (idx === actNoteIdx) return;
+  actNoteIdx = idx;
+  const card = document.getElementById('actNote');
+  if (idx < 0) { card.classList.remove('on'); return; }
+  const n = act.notes[idx];
+  card.querySelector('.who').textContent =
+    n.artist + ' — ' + n.album + ' · ' + VinylActivity.dayAt(act.d0, n.day);
+  card.querySelector('.txt').textContent = n.text;
+  card.classList.add('on');
+}
+
+function actCaptionFor(day) {
+  let rec = null;
+  for (let d = day; d >= 0 && d > day - 30; d--) {
+    if (act.playedOn[d]) { rec = act.playedOn[d][0]; break; }
+  }
+  if (rec === null) return 'nothing played yet';
+  const lane = actRows.find(function (o) { return o.lane.id === rec; });
+  return lane ? '▸ ' + lane.lane.artist + ' — ' + lane.lane.album : '';
+}
+
+function actPaint() {
+  if (!act) return;
+  const day = Math.min(act.span - 1, Math.floor(actPos));
+
+  /* The band grows as the head crosses each week. Only columns whose fill
+   * actually moved are touched. */
+  for (let i = 0; i < actCols.length; i++) {
+    const rv = actClamp((actPos - i * 7) / 7, 0, 1);
+    if (Math.abs(rv - actCols[i].rev) < 0.004) continue;
+    actCols[i].rev = rv;
+    const segs = actCols[i].segs;
+    for (let j = 0; j < segs.length; j++) {
+      segs[j].style.height = (segs[j].dataset.h * rv).toFixed(3) + '%';
+    }
+  }
+  actSetTotals(day);
+  document.getElementById('actPin').style.left = actPct(actPos) + '%';
+  document.getElementById('actDay').textContent = VinylActivity.dayAt(act.d0, day);
+
+  /* Pan and reveal are one write each on the shared ancestor, so this costs
+   * the same whether 21 lanes are on screen or 112. */
+  actWinStart = actWin >= actLast() ? 0
+              : actClamp(actPos - actWin * ACT_ANCHOR, 0, actLast() - actWin);
+  document.getElementById('actBody').style.setProperty(
+    '--act-pan', (-(actLaneW * actWinStart / actWin)) + 'px');
+  document.getElementById('actLanes').style.setProperty(
+    '--act-rev', (100 - actPct(actPos)).toFixed(3) + '%');
+  const win = document.getElementById('actWinRect');
+  win.style.left = actPct(actWinStart) + '%';
+  win.style.width = (actWin / actLast() * 100) + '%';
+  document.getElementById('actHead').style.left =
+    (actLaneL + actLaneW * (actPos - actWinStart) / actWin) + 'px';
+
+  /* Per-row state is written only when it changes. */
+  for (const o of actLive) {
+    const own = actPos >= o.lane.bought;
+    if (own !== o.owned) { o.owned = own; o.cover.classList.toggle('owned', own); }
+    let n = 0, lp = o.lane.bought;
+    const plays = o.lane.plays;
+    for (let i = 0; i < plays.length && plays[i] <= day; i++) { n++; lp = plays[i]; }
+    if (n !== o.count) { o.count = n; o.ct.textContent = n; }
+    const gone = own && (actPos - lp) > ACT_QUIET;
+    if (gone !== o.gone) { o.gone = gone; o.el.classList.toggle('gone', gone); }
+  }
+  let tn = 0;
+  for (let i = 0; i < actTailPlays.length && actTailPlays[i] <= day; i++) tn++;
+  const tct = document.getElementById('actTailCt');
+  if (tct.textContent !== String(tn)) tct.textContent = tn;
+
+  actPaintNote(day);
+
+  const cap = document.getElementById('actCaption');
+  const text = actSoloCaption || actCaptionFor(day);
+  if (cap.textContent !== text) cap.textContent = text;
+}
+
+let actPlaying = false, actRaf = 0, actLastT = 0, actSpeed = 1;
+
+function actReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/* Tied to zoom so the visible window always takes about two and a half seconds
+ * to cross, whatever the magnification. */
+function actRate() {
+  return Math.min(ACT_MAX_RATE, Math.max(ACT_MIN_RATE, actWin / 2.5));
+}
+
+function actSeek(day) {
+  actPos = actClamp(day, 0, actLast());
+  const scrub = document.getElementById('actScrub');
+  if (Number(scrub.value) !== Math.round(actPos)) scrub.value = Math.round(actPos);
+  actPaint();
+}
+
+/* A continuous day clock, not the race chart's setTimeout frame chain: this
+ * axis is continuous calendar time, and a frame-per-event-day clock would hop
+ * unevenly and stutter the band. */
+function actTick(t) {
+  if (!actPlaying) return;
+  if (!actLastT) actLastT = t;
+  const dt = Math.min(0.12, (t - actLastT) / 1000);
+  actLastT = t;
+  actSeek(actPos + actRate() * actSpeed * dt);
+  if (actPos >= actLast()) { actPause(); return; }
+  actRaf = requestAnimationFrame(actTick);
+}
+
+function actPlay() {
+  if (!act || actPlaying) return;
+  if (actPos >= actLast()) actSeek(0);
+  actPlaying = true;
+  actLastT = 0;
+  actSyncControls();
+  actRaf = requestAnimationFrame(actTick);
+}
+
+function actPause() {
+  actPlaying = false;
+  cancelAnimationFrame(actRaf);
+  actRaf = 0;
+  actSyncControls();
+}
+
+function actReplay() { actSeek(0); actPlay(); }
+
+function actSyncControls() {
+  const btn = document.getElementById('actPlayBtn');
+  btn.innerHTML = actPlaying ? '<i class="ti ti-player-pause"></i>'
+                             : '<i class="ti ti-player-play"></i>';
+  btn.setAttribute('aria-pressed', actPlaying ? 'true' : 'false');
+  btn.setAttribute('aria-label', actPlaying ? 'pause' : 'play');
+  const atEnd = !!act && actPos >= actLast();
+  document.getElementById('actReplayBtn').classList.toggle('hidden', !atEnd || actPlaying);
+  btn.classList.toggle('hidden', atEnd && !actPlaying);
+  document.querySelectorAll('.act-speed-btn').forEach(function (b) {
+    b.classList.toggle('active', Number(b.dataset.actSpeed) === actSpeed);
+  });
 }
 
 // ── statistics ─────────────────────────────────────────────────────────────
