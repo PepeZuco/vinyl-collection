@@ -65,6 +65,7 @@ class Record(db.Model):
     bought_date = db.Column(db.String(50))  # a stamp — see the note above
     bought_where= db.Column(db.String(200))
     bought_by   = db.Column(db.String(100))
+    condition   = db.Column(db.String(10))  # '' | 'new' | 'used'
     my_rating   = db.Column(db.Float, default=0)
     wife_rating = db.Column(db.Float, default=0)
     have_it     = db.Column(db.Boolean, default=True)
@@ -86,6 +87,7 @@ class Record(db.Model):
             "bought_date": self.bought_date or "",
             "bought_where": self.bought_where or "",
             "bought_by": self.bought_by or "",
+            "condition": self.condition or "",
             "my_rating": self.my_rating or 0,
             "wife_rating": self.wife_rating or 0,
             "have_it": bool(self.have_it),
@@ -123,6 +125,7 @@ with app.app_context():
         "country": "VARCHAR(2)",
         "play_dates": "TEXT",
         "cleaned_dates": "TEXT",
+        "condition": "VARCHAR(10)",
     }
     added_cleaned_dates = "cleaned_dates" not in existing_cols
     for col, ddl_type in missing_cols.items():
@@ -200,6 +203,7 @@ def create_record():
         bought_date = d.get("bought_date",""),
         bought_where= d.get("bought_where",""),
         bought_by   = d.get("bought_by",""),
+        condition   = d.get("condition",""),
         my_rating   = float(d.get("my_rating") or 0),
         wife_rating = float(d.get("wife_rating") or 0),
         have_it     = bool(d.get("have_it", True)),
@@ -219,7 +223,7 @@ def create_record():
 def update_record(rid):
     r = Record.query.get_or_404(rid)
     d = request.get_json(silent=True) or {}
-    for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by"]:
+    for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by","condition"]:
         if field in d:
             setattr(r, field, d[field])
     if "my_rating"   in d: r.my_rating   = float(d["my_rating"] or 0)
@@ -411,7 +415,7 @@ def scan_usage():
 def export_csv():
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country"]
+            "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country"]
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -451,6 +455,7 @@ def _record_mapping(row):
         "bought_date": row.get("bought_date",""),
         "bought_where":row.get("bought_where",""),
         "bought_by":   row.get("bought_by",""),
+        "condition":   row.get("condition",""),
         "my_rating":   float(row.get("my_rating") or 0),
         "wife_rating": float(row.get("wife_rating") or 0),
         "have_it":     row.get("have_it","").lower() in ("true","1","yes"),
