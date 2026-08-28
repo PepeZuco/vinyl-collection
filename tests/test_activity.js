@@ -382,6 +382,20 @@ test('out-of-range input clamps instead of throwing or going NaN', () => {
   assert.strictEqual(progressAtDay(c, 999), c.cum[4]);
 });
 
+/* Integers alone hide a clamping bug: `day - Math.floor(day)` is 0 for every
+   integer however far out of range, so an integer-only test passes even when
+   the clamp is broken. These are the values that actually catch it. */
+test('fractional out-of-range days clamp too, on both sides', () => {
+  const c = clockOf([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-05') })]);
+  const lastStart = c.cum[4];
+  assert.strictEqual(progressAtDay(c, -0.3), 0);
+  assert.strictEqual(progressAtDay(c, 4.99), lastStart);
+  assert.strictEqual(progressAtDay(c, 5.5), lastStart);
+  assert.strictEqual(progressAtDay(c, 999.5), lastStart);
+  assert.strictEqual(progressAtDay(c, NaN), 0);
+});
+
 test('a null clock answers zero rather than throwing', () => {
   assert.strictEqual(dayAtProgress(null, 5), 0);
   assert.strictEqual(progressAtDay(null, 5), 0);

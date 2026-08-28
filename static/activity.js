@@ -248,13 +248,15 @@ const VinylActivity = (function (grouping) {
   function progressAtDay(clock, day) {
     if (!clock) return 0;
     const last = clock.cum.length - 2;
-    const f = Math.floor(day) || 0;
-    const d = Math.max(0, Math.min(last, f));
-    /* frac comes from the raw floor, not the clamped d — otherwise an
-     * overflowing day (e.g. 999) drags frac to 1 and the result lands on
-     * cum[d + 1], past the last day's start, instead of clamping there. */
-    const frac = Math.max(0, Math.min(1, (day - f) || 0));
-    return clock.cum[d] + (clock.cum[d + 1] - clock.cum[d]) * frac;
+    /* Clamp the day FIRST, then split it. Decomposing before clamping gets
+     * this wrong whichever order you pick: measure the fraction against the
+     * clamped whole and a large day drags it to 1, landing past the last
+     * day's start; measure it against the raw whole and -0.3 becomes +0.7 of
+     * day zero. Clamping the input once leaves nothing to disagree about. */
+    const n = Number(day);
+    const at = Math.max(0, Math.min(last, isNaN(n) ? 0 : n));
+    const d = Math.floor(at);
+    return clock.cum[d] + (clock.cum[d + 1] - clock.cum[d]) * (at - d);
   }
 
   return { buildActivity: buildActivity, dayAt: dayAt, buildClock: buildClock,
