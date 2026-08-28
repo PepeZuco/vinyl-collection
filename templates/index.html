@@ -1477,6 +1477,10 @@ select option{background:var(--surface);color:var(--text)}
       </div>
     </div>
     <div class="chart-box" style="margin-bottom:28px">
+      <div class="chart-title">records by condition</div>
+      <div class="chart-wrap" style="max-width:380px;margin:0 auto" id="conditionChartWrap"><canvas id="conditionChart"></canvas></div>
+    </div>
+    <div class="chart-box" style="margin-bottom:28px">
       <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
         <span>records by country</span>
         <span style="display:flex;align-items:center;gap:6px;font-size:10px;text-transform:none;letter-spacing:0;color:var(--muted)">
@@ -1681,6 +1685,18 @@ select option{background:var(--surface);color:var(--text)}
                 <span id="toggleAllLabel">deselect all</span>
               </div>
               <div class="genre-list" id="genreList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="filter-sheet-section">
+          <div class="filter-sheet-label">Condition</div>
+          <div class="genre-dropdown" id="conditionDropdown">
+            <button class="genre-trigger" id="conditionTrigger" onclick="toggleConditionDropdown()">
+              <span id="conditionLabel">all conditions</span>
+              <i class="ti ti-chevron-down" id="conditionChevron" style="font-size:12px;transition:transform .15s"></i>
+            </button>
+            <div class="genre-panel hidden" id="conditionPanel">
+              <div class="genre-list" id="conditionList"></div>
             </div>
           </div>
         </div>
@@ -2165,6 +2181,7 @@ async function init() {
   syncSortTrigger();
   buildGroupList();
   syncGroupTrigger();
+  buildConditionList();
   syncMobileTabbar();
   bindEvents();
 }
@@ -2300,6 +2317,7 @@ function filtered() {
       if (!searchText.join(' ').toLowerCase().includes(q)) return false;
     }
     if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
+    if (selectedConditions.size < CONDITION_OPTIONS.length && !selectedConditions.has(r.condition||'')) return false;
     if (haveItMode === 'collection' && !r.have_it) return false;
     if (haveItMode === 'wishlist'   &&  r.have_it) return false;
     return true;
@@ -2452,9 +2470,17 @@ function resetGenreFilter() {
   render();
 }
 
+function resetConditionFilter() {
+  selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
+  buildConditionList();
+  render();
+}
+
 function clearAllFilters() {
   selectedGenres = new Set(allGenres);
+  selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
   buildGenreList();
+  buildConditionList();
   render();
 }
 
@@ -2464,6 +2490,9 @@ function renderChips(matchCount) {
 
   if (selectedGenres.size < allGenres.length) {
     chips.push(`<span class="filter-chip">Genres: ${selectedGenres.size} of ${allGenres.length}<button onclick="resetGenreFilter()" title="reset genre filter"><i class="ti ti-x"></i></button></span>`);
+  }
+  if (selectedConditions.size < CONDITION_OPTIONS.length) {
+    chips.push(`<span class="filter-chip">Condition: ${selectedConditions.size} of ${CONDITION_OPTIONS.length}<button onclick="resetConditionFilter()" title="reset condition filter"><i class="ti ti-x"></i></button></span>`);
   }
   el.innerHTML = chips.length ? chips.concat(`<button class="filter-chips-clear" onclick="clearAllFilters()">clear filters</button>`).join('') : '';
 
@@ -4565,6 +4594,68 @@ function updateGenreLabel() {
   toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
 }
 
+// ── condition multi-select — same pattern as genre, over a fixed 3-value set ─
+const CONDITION_OPTIONS = [
+  { value: 'new',  label: 'New' },
+  { value: 'used', label: 'Used' },
+  { value: '',     label: 'Unknown' },
+];
+let selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
+
+function buildConditionList() {
+  const list = document.getElementById('conditionList');
+  list.innerHTML = CONDITION_OPTIONS.map(o => `
+    <div class="genre-item condition-item${selectedConditions.has(o.value)?' selected':''}" data-condition="${esc(o.value)}">
+      <div class="genre-check"></div>
+      <span>${esc(o.label)}</span>
+    </div>`).join('');
+  updateConditionLabel();
+}
+
+document.addEventListener('click', e => {
+  const item = e.target.closest('.condition-item');
+  if (item && item.dataset.condition !== undefined) toggleCondition(item.dataset.condition);
+});
+
+function toggleCondition(v) {
+  if (selectedConditions.has(v)) {
+    if (selectedConditions.size === 1) return; // keep at least one
+    selectedConditions.delete(v);
+  } else {
+    selectedConditions.add(v);
+  }
+  buildConditionList();
+  render();
+}
+
+function updateConditionLabel() {
+  const label = document.getElementById('conditionLabel');
+  const allSelected = selectedConditions.size === CONDITION_OPTIONS.length;
+  label.textContent = allSelected ? 'all conditions' : selectedConditions.size === 1
+    ? CONDITION_OPTIONS.find(o => selectedConditions.has(o.value)).label
+    : `${selectedConditions.size} conditions`;
+}
+
+function toggleConditionDropdown() {
+  const panel = document.getElementById('conditionPanel');
+  const chevron = document.getElementById('conditionChevron');
+  const open = !panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', open);
+  chevron.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+// close condition dropdown when clicking outside
+document.addEventListener('click', e => {
+  const dd = document.getElementById('conditionDropdown');
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
+  if (dd && !clickedInside) {
+    document.getElementById('conditionPanel')?.classList.add('hidden');
+    const ch = document.getElementById('conditionChevron');
+    if (ch) ch.style.transform = '';
+  }
+});
+
 // close dropdown when clicking outside
 document.addEventListener('click', e => {
   const dd = document.getElementById('genreDropdown');
@@ -5510,6 +5601,30 @@ function renderStats() {
         x: { grid:{ color:gridColor() }, ticks:{ color:textColor(), font:{size:11}, stepSize:1 } },
         y: { grid:{ display:false }, ticks:{ color:textColor(), font:{size:11} } }
       }
+    }
+  });
+
+  // ── doughnut: records by condition ─────────────────────────────────────────
+  const conditionCounts = { new: 0, used: 0, '': 0 };
+  all.forEach(r => { conditionCounts[r.condition === 'new' || r.condition === 'used' ? r.condition : '']++; });
+  const conditionLabels = ['New', 'Used', 'Unknown'];
+  const conditionData = [conditionCounts.new, conditionCounts.used, conditionCounts['']];
+  const conditionColors = ['#E0A529', '#4AA3C4', isDark() ? '#555' : '#ccc'];
+
+  destroyChart('condition');
+  chartInstances['condition'] = new Chart(document.getElementById('conditionChart'), {
+    type: 'doughnut',
+    data: {
+      labels: conditionLabels,
+      datasets: [{
+        data: conditionData,
+        backgroundColor: conditionColors,
+        borderColor: 'transparent',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { color: textColor(), font: { size: 12 }, boxWidth: 12 } } }
     }
   });
 
