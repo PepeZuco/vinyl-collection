@@ -115,10 +115,13 @@ test('a long empty stretch takes a small share of the clock', () => {
     bought_date: '2026-01-01', play_dates: plays('2026-07-20'),
   })]));
   const empty = a.cum[a.cum.length - 2] - a.cum[1];   // everything between
-  assert.ok(empty / a.total < 0.55,
+  /* Unweighted those 199 empty days would be 99% of the run; weighted they are
+     about 53%. The thresholds are deliberately loose — they exist to catch a
+     weighting that has stopped working, not to pin one exact ratio. */
+  assert.ok(empty / a.total < 0.70,
     'empty stretch took ' + (empty / a.total * 100).toFixed(0) + '% of the run');
   const eventful = (6 + 1) / a.total;
-  assert.ok(eventful > 0.45,
+  assert.ok(eventful > 0.30,
     'event days took only ' + (eventful * 100).toFixed(0) + '% of the run');
 });
 ```
@@ -624,6 +627,17 @@ Update `actSeekAt`'s comment, which still names the old functions:
    * histSeek(). */
 ```
 
+**Take the duplicate date write out of `actPaint()`.** It currently ends with
+
+```js
+  document.getElementById('actDay').textContent = VinylActivity.dayAt(act.d0, day);
+```
+
+Delete that line. `histPaint` now writes the date, to `#raceDay`. Removing it
+here rather than in Task 4 matters: Task 4 deletes the `#actDay` element, and
+if this write outlived it every frame would throw on a null element and take
+the whole chart down.
+
 Finally, the zoom, show and order handlers each end with `actPaint();` — leave them. They change only the activity chart, and repainting the race chart on a zoom click would be wasted work.
 
 - [ ] **Step 4: Verify in the browser**
@@ -662,7 +676,16 @@ In `#actBox`, delete the whole `<div class="race-controls">…</div>` block cont
 
 - [ ] **Step 2: Remove the duplicate date readout**
 
-In `.act-readout`, delete `<span class="act-day" id="actDay"></span>`, leaving the caption. `histPaint` writes the date to `#raceDay` only. Delete the now-unused `.act-day` CSS rule and its `@media(max-width:640px)` override.
+In `.act-readout`, delete `<span class="act-day" id="actDay"></span>`, leaving the caption. Task 3 already removed the only JavaScript that wrote to it, so nothing references it. Delete the now-unused `.act-day` CSS rule and its `@media(max-width:640px)` override.
+
+Confirm the write really is gone before deleting the element — a leftover
+`getElementById('actDay').textContent` would throw on every frame:
+
+```bash
+grep -n "actDay" templates/index.html
+```
+
+Expected after your edit: no output.
 
 - [ ] **Step 3: Move the surviving transport out to the page**
 
