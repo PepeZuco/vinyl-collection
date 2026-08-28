@@ -9,7 +9,7 @@ process.env.TZ = 'America/Sao_Paulo';
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { buildActivity, dayAt } = require('../static/activity.js');
+const { buildActivity, dayAt, buildClock } = require('../static/activity.js');
 
 // A record only needs the fields the model reads, so each test builds the
 // smallest one that exercises its rule.
@@ -258,4 +258,81 @@ test('every play in the model is counted exactly once', () => {
   assert.strictEqual(a.totals.p, 2);
   assert.strictEqual(a.lanes[0].plays.length, 2);
   assert.deepStrictEqual(a.playedOn[1].length, 2);
+});
+
+// ── the clock ───────────────────────────────────────────────────────────────
+
+// CLOCK_W_EMPTY is 0.04, which binary floats cannot hold exactly, so weights
+// are compared with a tolerance rather than strictEqual.
+const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9,
+  (msg || '') + ' expected ' + b + ', got ' + a);
+const weightOf = (clock, d) => clock.cum[d + 1] - clock.cum[d];
+
+test('no model means no clock', () => {
+  assert.strictEqual(buildClock(null), null);
+});
+
+test('the table runs one longer than the axis and starts at zero', () => {
+  const a = buildClock(buildActivity([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-05') })]));
+  assert.strictEqual(a.cum.length, 6);       // span 5, plus the closing edge
+  assert.strictEqual(a.cum[0], 0);
+  assert.strictEqual(a.total, a.cum[a.cum.length - 1]);
+});
+
+test('the table never decreases', () => {
+  const a = buildClock(buildActivity([
+    rec({ bought_date: '2026-01-01', play_dates: plays('2026-01-09') }),
+  ]));
+  for (let i = 1; i < a.cum.length; i++) assert.ok(a.cum[i] >= a.cum[i - 1]);
+});
+
+test('a purchase day, an event day and an empty day weigh 6, 1 and 0.04', () => {
+  const a = buildClock(buildActivity([rec({
+    bought_date: '2026-01-01',                 // day 0 — purchase
+    play_dates: plays('2026-01-03'),           // day 2 — event
+  })]));                                       // day 1 — empty
+  near(weightOf(a, 0), 6,    'purchase day');
+  near(weightOf(a, 1), 0.04, 'empty day');
+  near(weightOf(a, 2), 1,    'event day');
+});
+
+test('a day that is both bought on and played on weighs 6, not 7', () => {
+  const a = buildClock(buildActivity([rec({
+    bought_date: '2026-01-01', play_dates: plays('2026-01-01'),
+  })]));
+  near(weightOf(a, 0), 6);
+});
+
+test('a cleaning and a note each make a day an event day', () => {
+  const a = buildClock(buildActivity([rec({
+    bought_date: '2026-01-01',
+    cleaned_dates: plays('2026-01-03'),
+    notes: JSON.stringify([{ date: '2026-01-05', text: 'n' }]),
+  })]));
+  near(weightOf(a, 2), 1, 'cleaning day');
+  near(weightOf(a, 4), 1, 'note day');
+});
+
+test('a one-day collection still yields a usable clock', () => {
+  const a = buildClock(buildActivity([rec({ bought_date: '2026-01-01' })]));
+  assert.strictEqual(a.cum.length, 2);
+  near(a.total, 6);
+});
+
+// The whole point of the weighting: quiet stretches must not eat the run.
+test('a long empty stretch takes a small share of the clock', () => {
+  // bought on day 0, played once 200 days later: 199 empty days between.
+  const a = buildClock(buildActivity([rec({
+    bought_date: '2026-01-01', play_dates: plays('2026-07-20'),
+  })]));
+  const empty = a.cum[a.cum.length - 2] - a.cum[1];   // everything between
+  /* Unweighted those 199 empty days would be 99% of the run; weighted they are
+     about 53%. The thresholds are deliberately loose — they exist to catch a
+     weighting that has stopped working, not to pin one exact ratio. */
+  assert.ok(empty / a.total < 0.70,
+    'empty stretch took ' + (empty / a.total * 100).toFixed(0) + '% of the run');
+  const eventful = (6 + 1) / a.total;
+  assert.ok(eventful > 0.30,
+    'event days took only ' + (eventful * 100).toFixed(0) + '% of the run');
 });

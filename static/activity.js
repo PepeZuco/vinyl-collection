@@ -21,6 +21,17 @@ const VinylActivity = (function (grouping) {
 
   const WEEK = 7;
 
+  /* How much wall clock each day is worth. The axis stays linear in calendar
+   * time — every mark keeps its place — but the RATE of travel varies, so a
+   * run does not spend 43% of itself on the 352 empty days between this
+   * collection's first purchase and its second. A purchase day is a race-chart
+   * frame and must be on screen long enough for bars to visibly move; a day
+   * carrying only plays or cleanings is worth seeing but cheaper; an empty day
+   * passes almost for free. */
+  const CLOCK_W_BUY   = 6;
+  const CLOCK_W_EVENT = 1;
+  const CLOCK_W_EMPTY = 0.04;
+
   /* Same scope rule as the race chart: owned and dated. Every have_it record
    * in the collection carries a bought_date and every undated one is a
    * wishlist item, so this loses nothing owned. */
@@ -190,7 +201,33 @@ const VinylActivity = (function (grouping) {
              lanes: lanes, playedOn: playedOn, notes: noteList, totals: totals };
   }
 
-  return { buildActivity: buildActivity, dayAt: dayAt };
+  /* A running total of weight, one entry per day plus a closing edge. Because
+   * it never decreases, both lookups over it are a binary search. */
+  function buildClock(act) {
+    if (!act) return null;
+    const span = act.span;
+    const buy = new Array(span).fill(false);
+    const ev  = new Array(span).fill(false);
+    act.lanes.forEach(function (lane) {
+      buy[lane.bought] = true;
+      lane.plays.forEach(function (d)  { ev[d] = true; });
+      lane.cleans.forEach(function (d) { ev[d] = true; });
+      lane.notes.forEach(function (d)  { ev[d] = true; });
+    });
+    const cum = new Array(span + 1);
+    cum[0] = 0;
+    for (let d = 0; d < span; d++) {
+      /* bought wins outright — a day you bought and played on is still one
+       * race frame, and paying for both would give it seven days' worth of
+       * screen time for one transition. */
+      cum[d + 1] = cum[d] + (buy[d] ? CLOCK_W_BUY
+                          : ev[d]  ? CLOCK_W_EVENT
+                          :          CLOCK_W_EMPTY);
+    }
+    return { cum: cum, total: cum[span] };
+  }
+
+  return { buildActivity: buildActivity, dayAt: dayAt, buildClock: buildClock };
 })(typeof module !== 'undefined' && module.exports
      ? require('./grouping.js') : VinylGrouping);
 
