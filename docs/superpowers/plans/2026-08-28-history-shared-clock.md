@@ -301,8 +301,12 @@ In `static/activity.js`, after `buildClock`:
   function progressAtDay(clock, day) {
     if (!clock) return 0;
     const last = clock.cum.length - 2;
-    const d = Math.max(0, Math.min(last, Math.floor(day) || 0));
-    const frac = Math.max(0, Math.min(1, (day - d) || 0));
+    const f = Math.floor(day) || 0;
+    const d = Math.max(0, Math.min(last, f));
+    /* frac comes from the raw floor, not the clamped d — otherwise an
+     * overflowing day (e.g. 999) drags frac to 1 and the result lands on
+     * cum[d + 1], past the last day's start, instead of clamping there. */
+    const frac = Math.max(0, Math.min(1, (day - f) || 0));
     return clock.cum[d] + (clock.cum[d + 1] - clock.cum[d]) * frac;
   }
 ```
