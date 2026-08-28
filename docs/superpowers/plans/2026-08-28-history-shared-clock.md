@@ -262,6 +262,20 @@ test('out-of-range input clamps instead of throwing or going NaN', () => {
   assert.strictEqual(progressAtDay(c, 999), c.cum[4]);
 });
 
+/* Integers alone hide a clamping bug: `day - Math.floor(day)` is 0 for every
+   integer however far out of range, so an integer-only test passes even when
+   the clamp is broken. These are the values that actually catch it. */
+test('fractional out-of-range days clamp too, on both sides', () => {
+  const c = clockOf([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-05') })]);
+  const lastStart = c.cum[4];
+  assert.strictEqual(progressAtDay(c, -0.3), 0);
+  assert.strictEqual(progressAtDay(c, 4.99), lastStart);
+  assert.strictEqual(progressAtDay(c, 5.5), lastStart);
+  assert.strictEqual(progressAtDay(c, 999.5), lastStart);
+  assert.strictEqual(progressAtDay(c, NaN), 0);
+});
+
 test('a null clock answers zero rather than throwing', () => {
   assert.strictEqual(dayAtProgress(null, 5), 0);
   assert.strictEqual(progressAtDay(null, 5), 0);
@@ -301,13 +315,15 @@ In `static/activity.js`, after `buildClock`:
   function progressAtDay(clock, day) {
     if (!clock) return 0;
     const last = clock.cum.length - 2;
-    const f = Math.floor(day) || 0;
-    const d = Math.max(0, Math.min(last, f));
-    /* frac comes from the raw floor, not the clamped d — otherwise an
-     * overflowing day (e.g. 999) drags frac to 1 and the result lands on
-     * cum[d + 1], past the last day's start, instead of clamping there. */
-    const frac = Math.max(0, Math.min(1, (day - f) || 0));
-    return clock.cum[d] + (clock.cum[d + 1] - clock.cum[d]) * frac;
+    /* Clamp the day FIRST, then split it. Decomposing before clamping gets
+     * this wrong whichever order you pick: measure the fraction against the
+     * clamped whole and a large day drags it to 1, landing past the last
+     * day's start; measure it against the raw whole and -0.3 becomes +0.7 of
+     * day zero. Clamping the input once leaves nothing to disagree about. */
+    const n = Number(day);
+    const at = Math.max(0, Math.min(last, isNaN(n) ? 0 : n));
+    const d = Math.floor(at);
+    return clock.cum[d] + (clock.cum[d + 1] - clock.cum[d]) * (at - d);
   }
 ```
 
