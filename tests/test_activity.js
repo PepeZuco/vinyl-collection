@@ -9,7 +9,7 @@ process.env.TZ = 'America/Sao_Paulo';
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { buildActivity, dayAt, buildClock } = require('../static/activity.js');
+const { buildActivity, dayAt, buildClock, dayAtProgress, progressAtDay } = require('../static/activity.js');
 
 // A record only needs the fields the model reads, so each test builds the
 // smallest one that exercises its rule.
@@ -335,4 +335,54 @@ test('a long empty stretch takes a small share of the clock', () => {
   const eventful = (6 + 1) / a.total;
   assert.ok(eventful > 0.30,
     'event days took only ' + (eventful * 100).toFixed(0) + '% of the run');
+});
+
+// ── progress <-> day ────────────────────────────────────────────────────────
+
+const clockOf = recs => buildClock(buildActivity(recs));
+
+test('zero progress is day zero and full progress is the last day', () => {
+  const c = clockOf([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-05') })]);
+  assert.strictEqual(dayAtProgress(c, 0), 0);
+  assert.strictEqual(dayAtProgress(c, c.total), 4);
+});
+
+test('progress and day round-trip at every day boundary', () => {
+  const c = clockOf([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-04', '2026-01-09') })]);
+  for (let d = 0; d < c.cum.length - 1; d++) {
+    assert.strictEqual(dayAtProgress(c, progressAtDay(c, d)), d, 'day ' + d);
+  }
+});
+
+test('progress interpolates inside a day so the playhead glides', () => {
+  const c = clockOf([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-03') })]);
+  const half = progressAtDay(c, 1) + (progressAtDay(c, 2) - progressAtDay(c, 1)) / 2;
+  const d = dayAtProgress(c, half);
+  assert.ok(d > 1 && d < 2, 'expected a fractional day, got ' + d);
+});
+
+test('an empty day costs far less progress than a purchase day', () => {
+  const c = clockOf([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-05') })]);
+  const buy   = progressAtDay(c, 1) - progressAtDay(c, 0);
+  const empty = progressAtDay(c, 2) - progressAtDay(c, 1);
+  assert.ok(buy > empty * 100, 'buy ' + buy + ' vs empty ' + empty);
+});
+
+test('out-of-range input clamps instead of throwing or going NaN', () => {
+  const c = clockOf([rec({ bought_date: '2026-01-01',
+    play_dates: plays('2026-01-05') })]);
+  assert.strictEqual(dayAtProgress(c, -5), 0);
+  assert.strictEqual(dayAtProgress(c, c.total * 10), 4);
+  assert.strictEqual(dayAtProgress(c, NaN), 0);
+  assert.strictEqual(progressAtDay(c, -5), 0);
+  assert.strictEqual(progressAtDay(c, 999), c.cum[4]);
+});
+
+test('a null clock answers zero rather than throwing', () => {
+  assert.strictEqual(dayAtProgress(null, 5), 0);
+  assert.strictEqual(progressAtDay(null, 5), 0);
 });

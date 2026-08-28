@@ -227,7 +227,38 @@ const VinylActivity = (function (grouping) {
     return { cum: cum, total: cum[span] };
   }
 
-  return { buildActivity: buildActivity, dayAt: dayAt, buildClock: buildClock };
+  /* The largest day whose running total has not yet passed p, plus the
+   * fraction of the way through that day — so the playhead glides rather than
+   * stepping from day to day. */
+  function dayAtProgress(clock, p) {
+    if (!clock) return 0;
+    const last = clock.cum.length - 2;
+    if (!(p > 0)) return 0;                 // also catches NaN
+    if (p >= clock.total) return last;
+    let lo = 0, hi = last;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (clock.cum[mid] <= p) lo = mid; else hi = mid - 1;
+    }
+    const w = clock.cum[lo + 1] - clock.cum[lo];
+    return lo + (w > 0 ? (p - clock.cum[lo]) / w : 0);
+  }
+
+  /* The inverse, so a seek in calendar days lands on the right progress. */
+  function progressAtDay(clock, day) {
+    if (!clock) return 0;
+    const last = clock.cum.length - 2;
+    const f = Math.floor(day) || 0;
+    const d = Math.max(0, Math.min(last, f));
+    /* frac comes from the raw floor, not the clamped d — otherwise an
+     * overflowing day (e.g. 999) drags frac to 1 and the result lands on
+     * cum[d + 1], past the last day's start, instead of clamping there. */
+    const frac = Math.max(0, Math.min(1, (day - f) || 0));
+    return clock.cum[d] + (clock.cum[d + 1] - clock.cum[d]) * frac;
+  }
+
+  return { buildActivity: buildActivity, dayAt: dayAt, buildClock: buildClock,
+           dayAtProgress: dayAtProgress, progressAtDay: progressAtDay };
 })(typeof module !== 'undefined' && module.exports
      ? require('./grouping.js') : VinylGrouping);
 
