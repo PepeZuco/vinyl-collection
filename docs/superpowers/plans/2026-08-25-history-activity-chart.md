@@ -1186,6 +1186,13 @@ function actSetVisible(n) {
 
 ```js
 function renderActivity() {
+  /* Stop any loop still running before rebuilding. renderActivity() is called
+     on every tab open AND on the theme toggle, which can land mid-playback:
+     actPlay()'s `if (actPlaying) return` would then no-op, leaving the old
+     frame loop alive with a pre-rebuild actLastT. Its next tick computes dt
+     against a stale timestamp, clamps to the 0.12s ceiling, and jumps the
+     just-reset playhead ~18 days in one paint. */
+  actPause();
   act = VinylActivity.buildActivity(records);
   const empty = !act;
   document.getElementById('actEmpty').hidden = !empty;
