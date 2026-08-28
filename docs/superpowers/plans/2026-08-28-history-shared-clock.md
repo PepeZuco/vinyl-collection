@@ -704,9 +704,31 @@ git commit -m "Drive both History charts from one clock"
 - Consumes: the `hist*` transport from Task 3. No JS behaviour changes here.
 - Produces: `.history-transport` as the last child of `#historyPage`; `#actDay` no longer exists.
 
-- [ ] **Step 1: Delete the activity chart's dead control row**
+- [ ] **Step 1: Delete the activity chart's dead control row, and the JS that still feeds it**
 
-In `#actBox`, delete the whole `<div class="race-controls">…</div>` block containing `#actPlayBtn`, `#actScrub`, the three `.act-speed-btn` buttons and `#actReplayBtn`. Nothing references them after Task 3.
+In `#actBox`, delete the whole `<div class="race-controls">…</div>` block containing `#actPlayBtn`, `#actScrub`, the three `.act-speed-btn` buttons and `#actReplayBtn`.
+
+**Then remove the three lines in `renderActivity()` that still write to `#actScrub`:**
+
+```js
+  const scrub = document.getElementById('actScrub');
+  scrub.max = String(actLast());
+  scrub.disabled = false;
+```
+
+Task 3 left these behind because the element was still on the page. Once the
+markup goes, `getElementById('actScrub')` returns `null` and `scrub.max = …`
+throws a TypeError — on every History tab open, taking the whole tab down.
+This is the same trap as the `#actDay` write, and the shared transport already
+sets `#raceScrub`'s `max` and `disabled` in `renderHistory()`.
+
+After the edit, confirm no JavaScript still reaches for a deleted element:
+
+```bash
+grep -n "actScrub\|actPlayBtn\|actReplayBtn\|act-speed-btn" templates/index.html
+```
+
+Expected: no output.
 
 - [ ] **Step 2: Remove the duplicate date readout**
 
