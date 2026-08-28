@@ -379,7 +379,7 @@ git commit -m "Map wall-clock progress onto calendar days, and back"
 
 **Interfaces:**
 - Consumes: `VinylActivity.buildClock/dayAtProgress/progressAtDay/dayAt`, `buildActivity`; the existing `racePaint(i, animate)`, `raceFrames[].day` (a `'YYYY-MM-DD'` string), `actPaint()`, `actPos`, `actLast()`, `actClamp(v,a,b)`, `actMeasure()`, `renderActivity()`.
-- Produces: `histPlay() histPause() histSeek(day, seeking) histReplay() histSyncControls() histPaint(seeking) histTick(t) histSetSpeed(s) histReducedMotion() raceBuildFrameMap() raceApplyDuration(f)`, and state `histClock histProgress histSpeed histPlaying histRaf histLastT histFrameShown raceFrameOfDay raceFrameDay`.
+- Produces: `histPlay() histPause() histSeek(day, seeking) histApply(seeking) histReplay() histSyncControls() histPaint(seeking) histTick(t) histSetSpeed(s) histReducedMotion() raceBuildFrameMap() raceApplyDuration(f)`, and state `histClock histProgress histSpeed histPlaying histRaf histLastT histFrameShown raceFrameOfDay raceFrameDay`.
 
 **Note:** the activity chart's transport *markup* is left in place by this task and simply stops being wired up. Task 4 removes it. Splitting it this way means the app is fully working at the end of this task — one clock, both charts — with one dead control row still on screen.
 
@@ -488,13 +488,26 @@ function histPaint(seeking) {
   actPaint();
 }
 
-function histSeek(day, seeking) {
-  if (!act) return;
-  actPos = actClamp(day, 0, actLast());
-  histProgress = VinylActivity.progressAtDay(histClock, actPos);
+/* Progress is the clock's own state; actPos is derived from it for drawing,
+ * never the other way round while playing. Deriving progress back from a
+ * clamped actPos deadlocks the last day: dayAtProgress legitimately returns
+ * `last` plus a fraction, actPos clamps that to `last`, and progressAtDay of
+ * `last` is that day's START — so the clock gives back exactly the fraction it
+ * just gained, every frame, and never reaches total. Playback would spin on
+ * the final day forever and the replay button would never appear. */
+function histApply(seeking) {
+  actPos = actClamp(VinylActivity.dayAtProgress(histClock, histProgress), 0, actLast());
   const scrub = document.getElementById('raceScrub');
   if (Number(scrub.value) !== Math.round(actPos)) scrub.value = Math.round(actPos);
   histPaint(seeking);
+}
+
+/* A seek runs the other way: the user names a day, and the clock moves to that
+ * day's start. This is the only direction in which a day sets the progress. */
+function histSeek(day, seeking) {
+  if (!act) return;
+  histProgress = VinylActivity.progressAtDay(histClock, actClamp(day, 0, actLast()));
+  histApply(seeking);
 }
 
 function histTick(t) {
@@ -504,11 +517,12 @@ function histTick(t) {
   histLastT = t;
   histProgress += histClock.total / (HIST_TOTAL_MS / 1000) * histSpeed * dt;
   if (histProgress >= histClock.total) {
-    histSeek(actLast());
+    histProgress = histClock.total;
+    histApply();
     histPause();
     return;
   }
-  histSeek(VinylActivity.dayAtProgress(histClock, histProgress));
+  histApply();
   histRaf = requestAnimationFrame(histTick);
 }
 
