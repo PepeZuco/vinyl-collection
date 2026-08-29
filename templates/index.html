@@ -2062,6 +2062,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/filters.js"></script>
 <script src="/static/timeline.js"></script>
 <script src="/static/health.js"></script>
+<script src="/static/draft.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/grouping.js"></script>
 <script src="/static/history.js"></script>
@@ -3355,6 +3356,45 @@ function resetFormScroll(){
   overlay.querySelectorAll('.modal,.modal-body').forEach(el=>{el.scrollTop=0;});
 }
 
+/* Offer back a draft the tab lost — a crash, a stray navigation, a phone
+ * that reclaimed the page. Only for a genuinely new record: restoring a
+ * half-finished edit onto a record that may have changed since is a worse
+ * outcome than losing it. */
+function offerDraft(){
+  const kept = VinylDraft.load(draftStore(), Date.now(), DRAFT_MAX_AGE_MS);
+  if (!kept || kept.editingId !== null) { VinylDraft.clear(draftStore()); return false; }
+  const name = [kept.draft.artist, kept.draft.album_name].filter(Boolean).join(' — ');
+  if (!confirm(`Pick up where you left off${name ? ' with ' + name : ''}?`)) {
+    VinylDraft.clear(draftStore());
+    return false;
+  }
+  applyDraft(kept.draft);
+  return true;
+}
+
+function applyDraft(d){
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
+  set('fArtist', d.artist); set('fAlbum', d.album_name); set('fYear', d.year);
+  set('fGenre', d.genre); set('fWhere', d.bought_where); set('fPlays', d.play_count);
+  set('fCountry', d.country ? countryLabelFromCode(d.country) : '');
+  const m = momentOf(d.bought_date);
+  set('fDate', m.day); set('fTime', m.time);
+  document.getElementById('fCondition').value = d.condition || '';
+  renderCondSwitch();
+  setHaveIt(d.have_it !== false);
+  myRating = Number(d.my_rating) || 0;
+  wifeRating = Number(d.wife_rating) || 0;
+  updateRatingUI();
+  formNotes = parseNotes(d.notes);
+  renderNotesForm();
+  formPlayDates = parsePlayDates(d.play_dates);
+  renderPlayDatesForm();
+  formCleanedDates = parseCleanedDates(d.cleaned_dates);
+  renderCleanedDatesForm();
+  if (d.cover_data) applyCover(d.cover_data);
+  formBaseline = formValues();
+}
+
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';coverDirty=false;editingCoverUrl='';
   document.getElementById('formTitle').textContent='add record';
@@ -3397,7 +3437,9 @@ function openAdd(){
   clearCover();
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
+  formBaseline = formValues();
   document.getElementById('formOverlay').classList.remove('hidden');
+  offerDraft();
   refreshScanUsage();
   resetFormScroll();
 }
@@ -3464,12 +3506,41 @@ function openEdit(id){
   if(previewSrc){ showCover(previewSrc); } else { clearCover(); }
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
+  formBaseline = formValues();
   document.getElementById('formOverlay').classList.remove('hidden');
   refreshScanUsage();
   resetFormScroll();
 }
 
-function closeForm(){
+/* How long a draft is still what you meant. Long enough to survive a crash,
+ * a reboot or an accidental navigation; short enough that you are never asked
+ * about a record you started thinking about last week. */
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+// The values the form held when it opened. isDirty compares against this, so
+// "changed" means changed by you rather than merely present.
+let formBaseline = null;
+
+function draftStore(){
+  try { return window.localStorage; } catch (e) { return null; }
+}
+
+function formIsDirty(){
+  return VinylDraft.isDirty(formValues(), formBaseline || {});
+}
+
+/* Closing throws work away, so it asks first — and only when there is
+ * something to lose. A scan is the case that matters: it has already been
+ * billed by the time it fills the form, and re-doing it is charged again. */
+function closeForm(force){
+  if (force !== true && formIsDirty()) {
+    const scanned = coverDirty || scanWrote && Object.keys(scanWrote).length;
+    if (!confirm(scanned
+      ? 'Discard this record? The scan that filled it would have to be paid for again.'
+      : 'Discard this record? What you typed will be lost.')) return;
+  }
+  VinylDraft.clear(draftStore());
+  formBaseline = null;
   document.getElementById('formOverlay').classList.add('hidden');
   closeCoverSheet();
   closeScanOverlay();
@@ -3477,9 +3548,28 @@ function closeForm(){
   setScanBusy(false);
 }
 
-async function submitForm(){
+/* Keeps the last edit recoverable across a closed tab, not merely warned
+ * about. Written on the way past rather than on a timer: the form is small
+ * and localStorage is synchronous, so the cost is a fraction of a keystroke. */
+function rememberDraft(){
+  if (!formBaseline) return;              // the form is not open
+  if (!formIsDirty()) { VinylDraft.clear(draftStore()); return; }
+  VinylDraft.save(draftStore(), formValues(), Date.now(), editingId);
+}
+
+// Every field, however it is edited — typing, the rating segments, a date row.
+document.addEventListener('input', e => {
+  if (e.target.closest && e.target.closest('#formOverlay')) rememberDraft();
+});
+
+/* Everything the form currently holds, as it would be saved.
+ *
+ * submitForm sends this and the dirty check compares it, so "what you would
+ * lose" and "what you would save" cannot drift apart — which they would if
+ * each read the DOM in its own way. */
+function formValues(){
   const owned = document.getElementById('fHaveIt').checked;
-  const body={
+  return {
     artist: document.getElementById('fMultiArtist').checked
       ? formArtists.map(s => s.trim()).filter(Boolean).join('; ')
       : document.getElementById('fArtist').value,
@@ -3506,6 +3596,10 @@ async function submitForm(){
     cleaned_dates:JSON.stringify(formCleanedDates),
     country:countryCodeFromInput(document.getElementById('fCountry').value),
   };
+}
+
+async function submitForm(){
+  const body = formValues();
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
   const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -3521,7 +3615,7 @@ async function submitForm(){
   const rec=await res.json();
   if(editingId){records=records.map(x=>x.id===editingId?rec:x);toast('changes saved');}
   else{records.push(rec);toast('record added');}
-  closeForm();render();
+  closeForm(true);render();
 }
 
 // ── cover: action sheet, camera, resize ────────────────────────────────────
@@ -4351,6 +4445,10 @@ function bindEvents(){
     else if (e.key === 'Escape') closeDetail();
   });
   document.getElementById('formOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeForm();});
+  // Leaving the page with unsaved work gets the browser's own warning.
+  window.addEventListener('beforeunload', e => {
+    if (formBaseline && formIsDirty()) { e.preventDefault(); e.returnValue = ''; }
+  });
   document.getElementById('loginOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeLogin();});
   bindCalSwipe();
   blockZoomGestures();
