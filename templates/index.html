@@ -2476,23 +2476,10 @@ function render() {
 // One control decides both whether the collection is in crates and what the
 // crates are; 'none' is the flat grid. It replaces the old grid/group toggle,
 // whose "group" simply meant "bucket by whatever Sort by happens to be".
-let groupBy = loadGroupBy();
-
-function loadGroupBy() {
-  const stored = localStorage.getItem('vinyl-group');
-  if (stored && GROUP_OPTIONS.some(o => o.value === stored)) return stored;
-  // Migration from the retired view toggle: whoever was in group view was
-  // grouping by the sort field, which defaulted to date added. 'list' is the
-  // even older third mode and lands in the grid like anything unrecognised.
-  const legacy = localStorage.getItem('vinyl-view');
-  if (legacy) {
-    localStorage.removeItem('vinyl-view');
-    const migrated = legacy === 'group' ? 'bought_date' : 'none';
-    localStorage.setItem('vinyl-group', migrated);
-    return migrated;
-  }
-  return 'bought_date';   // the collection opens in crates
-}
+// Deliberately not persisted: the collection always opens grouped by month
+// added, regardless of what you last picked, so a filtered/sorted session
+// never leaks into the next time you open the app.
+let groupBy = 'bought_date';
 
 // Crates are keyed by the field they belong to, so shutting every artist does
 // not also shut your decades — and "collapse all" survives a reload as a mode
@@ -2525,7 +2512,6 @@ function countryNameOf(code) {
 
 function setGroupBy(field) {
   groupBy = field;
-  localStorage.setItem('vinyl-group', field);
   buildGroupList();
   syncGroupTrigger();
   render();
