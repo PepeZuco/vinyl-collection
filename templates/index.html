@@ -2125,15 +2125,20 @@ select option{background:var(--surface);color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="/static/topojson-client.min.js"></script>
+<!-- grouping.js first: timeline, health, history and activity each close over
+     VinylGrouping as they evaluate, and `const` gives no hoisting to lean on —
+     loading one of them earlier throws a ReferenceError that stops the page,
+     taking every script after it down too. Order here is a dependency, not a
+     preference. -->
+<script src="/static/grouping.js"></script>
 <script src="/static/filters.js"></script>
 <script src="/static/timeline.js"></script>
 <script src="/static/health.js"></script>
+<script src="/static/history.js"></script>
+<script src="/static/activity.js"></script>
 <script src="/static/draft.js"></script>
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
-<script src="/static/grouping.js"></script>
-<script src="/static/history.js"></script>
-<script src="/static/activity.js"></script>
 <script src="/static/spend.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
@@ -4613,16 +4618,7 @@ function bindEvents(){
   });
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
-  document.getElementById('searchInput').addEventListener('input', e => {
-    const mirror = document.getElementById('statsSearchInput');
-    if (mirror) mirror.value = e.target.value;
-    applyQueryChange();
-  });
-  // the stats search box edits the shared query, so it re-renders both surfaces
-  document.getElementById('statsSearchInput').addEventListener('input', e => {
-    document.getElementById('searchInput').value = e.target.value;
-    applyQueryChange();
-  });
+  document.getElementById('searchInput').addEventListener('input', applyQueryChange);
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
   document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
@@ -6330,11 +6326,9 @@ function statsRowHTML(r) {
 }
 
 function renderStatsTable(all) {
-  buildStatsGenreList();
-  buildStatsConditionList();
-
+  // The picker and chip builders this used to call went with the statistics
+  // page's own filter widgets; the shared bar above the tabs owns both now.
   const recs = statsSorted(all);
-  renderStatsChips(recs.length);
 
   const wrap = document.getElementById('statsTableWrap');
   if (!recs.length) {
