@@ -2179,6 +2179,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="/static/topojson-client.min.js"></script>
+<script src="/static/filters.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/grouping.js"></script>
 <script src="/static/history.js"></script>
@@ -2408,7 +2409,7 @@ const SORT_OPTIONS = [
 
 function toggleSearchField(field) {
   searchFields[field] = !searchFields[field];
-  render();
+  applyQueryChange();
 }
 
 function toggleSearchFields() {
@@ -2416,26 +2417,41 @@ function toggleSearchFields() {
   panel.classList.toggle('hidden');
 }
 
+/* The current filter, as the shared model understands it.
+ *
+ * The pickers still hold Sets because that is what a checkbox list is, but
+ * "everything ticked" is translated to null — no constraint — so the model
+ * never has to infer intent from a set's size. That inference is what let the
+ * old code disagree with itself about what an empty selection meant. */
+function currentQuery() {
+  // selectedGenres is null until renderFilters() has seen the records once, and
+  // renderStats() can run first. Unset means unconstrained, same as "all ticked".
+  const noGenreConstraint = !selectedGenres || selectedGenres.size === allGenres.length;
+  const allCondsPicked = selectedConditions.size === CONDITION_OPTIONS.length;
+  return {
+    text: document.getElementById('searchInput').value,
+    fields: searchFields,
+    genres: noGenreConstraint ? null : [...selectedGenres],
+    conditions: allCondsPicked ? null : [...selectedConditions],
+    ownership: haveItMode === 'collection' ? 'owned' : haveItMode,
+  };
+}
+
+const FILTER_DEPS = { parseNotes: (raw) => parseNotes(raw) };
+
+/* Re-render whatever surface is on screen. Every control that changes the
+ * query calls this, so the collection and the statistics page can never drift
+ * apart again — there is only one thing to change. */
+function applyQueryChange() {
+  render();
+  if (currentTab === 'stats') renderStats();
+}
+
 function filtered() {
-  const q  = document.getElementById('searchInput').value.toLowerCase();
   const s  = sortBy;
 
-  const base = records.filter(r => {
-    if (q) {
-      const searchText = [];
-      if (searchFields.artist) searchText.push(r.artist || '');
-      if (searchFields.album) searchText.push(r.album_name || '');
-      if (searchFields.genre) searchText.push(r.genre || '');
-      if (searchFields.bought_at) searchText.push(r.bought_where || '');
-      if (searchFields.notes) searchText.push(parseNotes(r.notes).map(n=>n.text).join(' '));
-      if (!searchText.join(' ').toLowerCase().includes(q)) return false;
-    }
-    if (selectedGenres.size > 0 && !selectedGenres.has(r.genre||'')) return false;
-    if (selectedConditions.size < CONDITION_OPTIONS.length && !selectedConditions.has(r.condition||'')) return false;
-    if (haveItMode === 'collection' && !r.have_it) return false;
-    if (haveItMode === 'wishlist'   &&  r.have_it) return false;
-    return true;
-  }).sort((a, b_) => {
+  const base = VinylFilters.filterRecords(records, currentQuery(), FILTER_DEPS)
+    .sort((a, b_) => {
     // First level: the crate. Records of the same crate compare equal here and
     // fall through to the sort field below, so one flat sort produces a list
     // whose crates are already contiguous — which is what lets the detail
@@ -2567,13 +2583,13 @@ function cratesHTML(recs) {
 function resetGenreFilter() {
   selectedGenres = new Set(allGenres);
   buildGenreList();
-  render();
+  applyQueryChange();
 }
 
 function resetConditionFilter() {
   selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
   buildConditionList();
-  render();
+  applyQueryChange();
 }
 
 function clearAllFilters() {
@@ -2581,7 +2597,7 @@ function clearAllFilters() {
   selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
   buildGenreList();
   buildConditionList();
-  render();
+  applyQueryChange();
 }
 
 function renderChips(matchCount) {
@@ -2757,7 +2773,10 @@ function listRowHTML(r) {
 }
 
 function renderFilters() {
-  const genres = [...new Set(records.map(r=>r.genre).filter(Boolean))].sort();
+  // genreUniverse keeps the "no genre" bucket when records need it. Building
+  // this list with .filter(Boolean) is what made three wishlist records
+  // unreachable: '' was never offered, so nothing could match them.
+  const genres = VinylFilters.genreUniverse(records);
   // init selectedGenres with all genres if not set yet
   if (selectedGenres === null) {
     selectedGenres = new Set(genres);
@@ -4431,8 +4450,16 @@ function bindEvents(){
   });
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
-  document.getElementById('searchInput').addEventListener('input',render);
-  document.getElementById('statsSearchInput').addEventListener('input', () => renderStatsTable(records.filter(r => r.have_it)));
+  document.getElementById('searchInput').addEventListener('input', e => {
+    const mirror = document.getElementById('statsSearchInput');
+    if (mirror) mirror.value = e.target.value;
+    applyQueryChange();
+  });
+  // the stats search box edits the shared query, so it re-renders both surfaces
+  document.getElementById('statsSearchInput').addEventListener('input', e => {
+    document.getElementById('searchInput').value = e.target.value;
+    applyQueryChange();
+  });
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
   document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
@@ -4501,7 +4528,7 @@ function setHaveItMode(mode) {
   document.getElementById('btnHaveCollection').classList.toggle('active', mode === 'collection');
   document.getElementById('btnHaveWishlist').classList.toggle('active', mode === 'wishlist');
   syncMobileTabbar();
-  render();
+  applyQueryChange();
 }
 
 // ── dice button: random face, rapid cycling shuffle on hover ───────────────
@@ -4684,7 +4711,7 @@ function buildGenreList() {
   list.innerHTML = allGenres.map(g => `
     <div class="genre-item${selectedGenres.has(g)?' selected':''}" data-genre="${esc(g)}">
       <div class="genre-check"></div>
-      <span>${esc(g)}</span>
+      <span${g ? '' : ' style="opacity:.75;font-style:italic"'}>${esc(g) || 'No genre'}</span>
     </div>`).join('');
   updateGenreLabel();
 }
@@ -4703,7 +4730,7 @@ function toggleGenre(g) {
     selectedGenres.add(g);
   }
   buildGenreList();
-  render();
+  applyQueryChange();
 }
 
 function toggleAllGenres() {
@@ -4714,7 +4741,7 @@ function toggleAllGenres() {
     selectedGenres = new Set(allGenres);
   }
   buildGenreList();
-  render();
+  applyQueryChange();
 }
 
 function updateGenreLabel() {
@@ -4722,7 +4749,7 @@ function updateGenreLabel() {
   const toggleAll = document.getElementById('toggleAllLabel');
   const allSelected = selectedGenres.size === allGenres.length;
   label.textContent = allSelected ? 'all genres' : selectedGenres.size === 1
-    ? [...selectedGenres][0]
+    ? ([...selectedGenres][0] || 'No genre')
     : `${selectedGenres.size} genres`;
   toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
 }
@@ -4758,7 +4785,7 @@ function toggleCondition(v) {
     selectedConditions.add(v);
   }
   buildConditionList();
-  render();
+  applyQueryChange();
 }
 
 function updateConditionLabel() {
@@ -5638,7 +5665,10 @@ function chartTooltipHTML(title, recs, cap = 20) {
 }
 
 function renderStats() {
-  const all = records.filter(r => r.have_it);
+  // The whole point of one shared query: the charts describe what you filtered
+  // to, not always the owned collection. That is what makes 88 rated wishlist
+  // records visible to "avg rating by genre" when you ask for them.
+  const all = VinylFilters.filterRecords(records, currentQuery(), FILTER_DEPS);
 
   const avgOf = (arr, key) => {
     const vals = arr.map(r => Number(r[key])||0).filter(x => x > 0);
@@ -5885,10 +5915,12 @@ function renderStats() {
 // sort keys applied in priority order — plain click resets to a single key,
 // shift+click appends/toggles one, spreadsheet-style
 let statsSortKeys = [{ key: 'bought_date', dir: 'desc' }];
-let statsSearchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
-let statsAllGenres = [];
-let statsSelectedGenres = null; // lazily filled with "all genres" on first render
-let statsSelectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
+// The statistics page used to keep its own search fields, genre set and
+// condition set. It has none now: it renders the same query the collection
+// does, through the same model, so filtering in one place is visible in the
+// other. What remains below are the stats page's own widgets, driven by that
+// shared state — they disappear entirely when the filter bar becomes a single
+// universal one.
 
 // default sort direction the first time a column is picked — text columns
 // read best A→Z, numeric/date columns read best highest/most-recent first
@@ -5914,7 +5946,7 @@ function statsSortClick(key, ev) {
   } else {
     statsSortKeys = [{ key, dir: STATS_COLUMNS.find(c => c.key === key).dir }];
   }
-  renderStatsTable(records.filter(r => r.have_it));
+  renderStatsTable(VinylFilters.filterRecords(records, currentQuery(), FILTER_DEPS));
 }
 
 function statsCompareValue(a, b, key) {
@@ -5924,22 +5956,10 @@ function statsCompareValue(a, b, key) {
   return (a[key]||'').localeCompare(b[key]||'');
 }
 
-function statsFiltered(all) {
-  const q = document.getElementById('statsSearchInput').value.toLowerCase();
-  return all.filter(r => {
-    if (q) {
-      const searchText = [];
-      if (statsSearchFields.artist) searchText.push(r.artist || '');
-      if (statsSearchFields.album) searchText.push(r.album_name || '');
-      if (statsSearchFields.genre) searchText.push(r.genre || '');
-      if (statsSearchFields.bought_at) searchText.push(r.bought_where || '');
-      if (statsSearchFields.notes) searchText.push(parseNotes(r.notes).map(n=>n.text).join(' '));
-      if (!searchText.join(' ').toLowerCase().includes(q)) return false;
-    }
-    if (statsSelectedGenres.size > 0 && !statsSelectedGenres.has(r.genre||'')) return false;
-    if (statsSelectedConditions.size < CONDITION_OPTIONS.length && !statsSelectedConditions.has(r.condition||'')) return false;
-    return true;
-  }).sort((a, b) => {
+/* Sorting is the only thing the table still decides for itself — which records
+ * it shows is the shared query's business, exactly as on the shelf. */
+function statsSorted(all) {
+  return all.slice().sort((a, b) => {
     for (const { key, dir } of statsSortKeys) {
       const cmp = statsCompareValue(a, b, key);
       if (cmp) return dir === 'asc' ? cmp : -cmp;
@@ -5988,18 +6008,10 @@ function statsRowHTML(r) {
 }
 
 function renderStatsTable(all) {
-  const genres = [...new Set(all.map(r => r.genre).filter(Boolean))].sort();
-  if (statsSelectedGenres === null) {
-    statsSelectedGenres = new Set(genres);
-    statsAllGenres = genres;
-  } else {
-    genres.forEach(g => { if (!statsAllGenres.includes(g)) { statsAllGenres.push(g); statsSelectedGenres.add(g); } });
-    statsAllGenres = genres;
-  }
   buildStatsGenreList();
   buildStatsConditionList();
 
-  const recs = statsFiltered(all);
+  const recs = statsSorted(all);
   renderStatsChips(recs.length);
 
   const wrap = document.getElementById('statsTableWrap');
@@ -6013,182 +6025,121 @@ function renderStatsTable(all) {
   );
 }
 
-function toggleStatsSearchField(field) {
-  statsSearchFields[field] = !statsSearchFields[field];
-  renderStatsTable(records.filter(r => r.have_it));
-}
+/* The statistics page's own filter widgets, driven entirely by the shared
+ * query. They keep their names because the markup still calls them by name;
+ * the markup itself goes when the filter bar becomes one universal control.
+ * Nothing below owns any state — every one of these edits the same sets the
+ * shelf edits, and re-renders both surfaces. */
+
+function toggleStatsSearchField(field) { toggleSearchField(field); }
 
 function toggleStatsSearchFields() {
   document.getElementById('statsSearchFieldsPanel').classList.toggle('hidden');
 }
 
 document.addEventListener('click', e => {
-  const search = document.getElementById('statsSearchInput');
   const btn = document.getElementById('statsSearchFieldsBtn');
   const panel = document.getElementById('statsSearchFieldsPanel');
-  const path = e.composedPath ? e.composedPath() : [];
-  const clickedInside = path.includes(search) || path.includes(btn) || path.includes(panel);
-  if (panel && !clickedInside && !panel.classList.contains('hidden')) {
-    panel.classList.add('hidden');
-  }
+  if (!btn || !panel) return;
+  if (!btn.contains(e.target) && !panel.contains(e.target)) panel.classList.add('hidden');
 });
 
-// ── stats genre multi-select — same pattern as the collection's genre dropdown
 function buildStatsGenreList() {
   const list = document.getElementById('statsGenreList');
-  list.innerHTML = statsAllGenres.map(g => `
-    <div class="genre-item${statsSelectedGenres.has(g)?' selected':''}" data-stats-genre="${esc(g)}">
+  if (!list) return;
+  list.innerHTML = allGenres.map(g => `
+    <div class="genre-item${selectedGenres.has(g)?' selected':''}" data-stats-genre="${esc(g)}">
       <div class="genre-check"></div>
-      <span>${esc(g)}</span>
+      <span${g ? '' : ' style="opacity:.75;font-style:italic"'}>${esc(g) || 'No genre'}</span>
     </div>`).join('');
   updateStatsGenreLabel();
 }
 
 document.addEventListener('click', e => {
   const item = e.target.closest('[data-stats-genre]');
-  if (item) toggleStatsGenre(item.dataset.statsGenre);
+  if (item) toggleGenre(item.dataset.statsGenre);
 });
-
-function toggleStatsGenre(g) {
-  if (statsSelectedGenres.has(g)) {
-    if (statsSelectedGenres.size === 1) return; // keep at least one
-    statsSelectedGenres.delete(g);
-  } else {
-    statsSelectedGenres.add(g);
-  }
-  buildStatsGenreList();
-  renderStatsTable(records.filter(r => r.have_it));
-}
-
-function toggleAllStatsGenres() {
-  statsSelectedGenres = statsSelectedGenres.size === statsAllGenres.length
-    ? new Set([statsAllGenres[0]])
-    : new Set(statsAllGenres);
-  buildStatsGenreList();
-  renderStatsTable(records.filter(r => r.have_it));
-}
 
 function updateStatsGenreLabel() {
   const label = document.getElementById('statsGenreLabel');
   const toggleAll = document.getElementById('statsToggleAllLabel');
-  const allSelected = statsSelectedGenres.size === statsAllGenres.length;
-  label.textContent = allSelected ? 'all genres' : statsSelectedGenres.size === 1
-    ? [...statsSelectedGenres][0]
-    : `${statsSelectedGenres.size} genres`;
-  toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
+  if (!label) return;
+  const allSelected = selectedGenres.size === allGenres.length;
+  label.textContent = allSelected ? 'all genres' : selectedGenres.size === 1
+    ? ([...selectedGenres][0] || 'No genre')
+    : `${selectedGenres.size} genres`;
+  if (toggleAll) toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
 }
+
+function toggleAllStatsGenres() { toggleAllGenres(); }
 
 function toggleStatsGenreDropdown() {
   const panel = document.getElementById('statsGenrePanel');
   const chevron = document.getElementById('statsGenreChevron');
-  const open = !panel.classList.contains('hidden');
-  panel.classList.toggle('hidden', open);
-  chevron.style.transform = open ? '' : 'rotate(180deg)';
+  const open = panel.classList.toggle('hidden');
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
 }
 
-document.addEventListener('click', e => {
-  const dd = document.getElementById('statsGenreDropdown');
-  const path = e.composedPath ? e.composedPath() : [];
-  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
-  if (dd && !clickedInside) {
-    document.getElementById('statsGenrePanel')?.classList.add('hidden');
-    const ch = document.getElementById('statsGenreChevron');
-    if (ch) ch.style.transform = '';
-  }
-});
-
-// ── stats condition multi-select — same pattern, over the fixed 3-value set ─
 function buildStatsConditionList() {
   const list = document.getElementById('statsConditionList');
+  if (!list) return;
   list.innerHTML = CONDITION_OPTIONS.map(o => `
-    <div class="genre-item${statsSelectedConditions.has(o.value)?' selected':''}" data-stats-condition="${esc(o.value)}">
-      <div class="genre-check"></div>
+    <div class="genre-item condition-item" data-stats-condition="${esc(o.value)}"
+         style="${selectedConditions.has(o.value) ? '' : 'opacity:.55'}">
+      <div class="genre-check${selectedConditions.has(o.value) ? '' : ''}"></div>
       <span>${esc(o.label)}</span>
     </div>`).join('');
+  // the .selected class carries the tick, and it has to match the shared set
+  [...list.children].forEach(el => {
+    el.classList.toggle('selected', selectedConditions.has(el.dataset.statsCondition));
+  });
   updateStatsConditionLabel();
 }
 
 document.addEventListener('click', e => {
   const item = e.target.closest('[data-stats-condition]');
-  if (item) toggleStatsCondition(item.dataset.statsCondition);
+  if (item) toggleCondition(item.dataset.statsCondition);
 });
-
-function toggleStatsCondition(v) {
-  if (statsSelectedConditions.has(v)) {
-    if (statsSelectedConditions.size === 1) return; // keep at least one
-    statsSelectedConditions.delete(v);
-  } else {
-    statsSelectedConditions.add(v);
-  }
-  buildStatsConditionList();
-  renderStatsTable(records.filter(r => r.have_it));
-}
 
 function updateStatsConditionLabel() {
   const label = document.getElementById('statsConditionLabel');
-  const allSelected = statsSelectedConditions.size === CONDITION_OPTIONS.length;
-  label.textContent = allSelected ? 'all conditions' : statsSelectedConditions.size === 1
-    ? CONDITION_OPTIONS.find(o => statsSelectedConditions.has(o.value)).label
-    : `${statsSelectedConditions.size} conditions`;
+  if (!label) return;
+  const allSelected = selectedConditions.size === CONDITION_OPTIONS.length;
+  label.textContent = allSelected ? 'all conditions' : selectedConditions.size === 1
+    ? CONDITION_OPTIONS.find(o => selectedConditions.has(o.value)).label
+    : `${selectedConditions.size} conditions`;
 }
 
 function toggleStatsConditionDropdown() {
   const panel = document.getElementById('statsConditionPanel');
   const chevron = document.getElementById('statsConditionChevron');
-  const open = !panel.classList.contains('hidden');
-  panel.classList.toggle('hidden', open);
-  chevron.style.transform = open ? '' : 'rotate(180deg)';
+  const open = panel.classList.toggle('hidden');
+  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
 }
 
-document.addEventListener('click', e => {
-  const dd = document.getElementById('statsConditionDropdown');
-  const path = e.composedPath ? e.composedPath() : [];
-  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
-  if (dd && !clickedInside) {
-    document.getElementById('statsConditionPanel')?.classList.add('hidden');
-    const ch = document.getElementById('statsConditionChevron');
-    if (ch) ch.style.transform = '';
-  }
-});
-
-function resetStatsGenreFilter() {
-  statsSelectedGenres = new Set(statsAllGenres);
-  buildStatsGenreList();
-  renderStatsTable(records.filter(r => r.have_it));
-}
-
-function resetStatsConditionFilter() {
-  statsSelectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
-  buildStatsConditionList();
-  renderStatsTable(records.filter(r => r.have_it));
-}
-
-function clearAllStatsFilters() {
-  statsSelectedGenres = new Set(statsAllGenres);
-  statsSelectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
-  buildStatsGenreList();
-  buildStatsConditionList();
-  renderStatsTable(records.filter(r => r.have_it));
-}
+function resetStatsGenreFilter() { resetGenreFilter(); }
+function resetStatsConditionFilter() { resetConditionFilter(); }
+function clearAllStatsFilters() { clearAllFilters(); }
 
 function renderStatsChips(matchCount) {
   const el = document.getElementById('statsFilterChips');
+  if (!el) return;
   const chips = [];
-
-  if (statsSelectedGenres.size < statsAllGenres.length) {
-    chips.push(`<span class="filter-chip">Genres: ${statsSelectedGenres.size} of ${statsAllGenres.length}<button onclick="resetStatsGenreFilter()" title="reset genre filter"><i class="ti ti-x"></i></button></span>`);
+  if (selectedGenres.size < allGenres.length) {
+    chips.push(`<span class="filter-chip">Genres: ${selectedGenres.size} of ${allGenres.length}<button onclick="resetStatsGenreFilter()" title="reset genre filter"><i class="ti ti-x"></i></button></span>`);
   }
-  if (statsSelectedConditions.size < CONDITION_OPTIONS.length) {
-    chips.push(`<span class="filter-chip">Condition: ${statsSelectedConditions.size} of ${CONDITION_OPTIONS.length}<button onclick="resetStatsConditionFilter()" title="reset condition filter"><i class="ti ti-x"></i></button></span>`);
+  if (selectedConditions.size < CONDITION_OPTIONS.length) {
+    chips.push(`<span class="filter-chip">Condition: ${selectedConditions.size} of ${CONDITION_OPTIONS.length}<button onclick="resetStatsConditionFilter()" title="reset condition filter"><i class="ti ti-x"></i></button></span>`);
   }
   el.innerHTML = chips.length ? chips.concat(`<button class="filter-chips-clear" onclick="clearAllStatsFilters()">clear filters</button>`).join('') : '';
 
   const badge = document.getElementById('statsFilterSheetBadge');
-  const badgeCount = chips.length;
-  badge.textContent = badgeCount;
-  badge.classList.toggle('hidden', badgeCount === 0);
+  if (badge) {
+    badge.textContent = chips.length;
+    badge.classList.toggle('hidden', chips.length === 0);
+  }
   const applyBtn = document.getElementById('statsFilterSheetApply');
-  applyBtn.textContent = `Show ${matchCount} record${matchCount === 1 ? '' : 's'}`;
+  if (applyBtn) applyBtn.textContent = `Show ${matchCount} record${matchCount === 1 ? '' : 's'}`;
 }
 
 // ── mobile filter bottom sheet for the stats table — mirrors toggleFilterSheet
