@@ -1,8 +1,9 @@
-import os, io, base64, csv, json, uuid
+import os, io, base64, csv, json, uuid, hashlib
 csv.field_size_limit(10 * 1024 * 1024)
 from flask import Flask, request, jsonify, send_file, session, render_template
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
+from sqlalchemy.orm import defer
 from werkzeug.utils import secure_filename
 from datetime import datetime
 from functools import wraps
@@ -42,6 +43,15 @@ EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD", "vinyl123")
 
 db = SQLAlchemy(app)
 
+
+def _cover_hash(cover):
+    """Short content hash of a stored cover, used as its ETag and cache buster.
+
+    Not a security boundary — it only has to change when the bytes change, so
+    a truncated digest is plenty and keeps the URL readable.
+    """
+    return hashlib.sha256((cover or "").encode("utf-8")).hexdigest()[:16]
+
 # Every dated field on a record — bought_date, play_dates, cleaned_dates and a
 # note's date — holds the same two shapes, and the app only ever reads them, never
 # computes on them, so they stay opaque strings here:
@@ -75,6 +85,12 @@ class Record(db.Model):
     last_cleaned= db.Column(db.String(50))  # deprecated: superseded by cleaned_dates, kept for migration only
     cleaned_dates = db.Column(db.Text)    # JSON array of stamps, one per cleaning
     cover_data  = db.Column(db.Text)      # base64 data URI
+    # Content hash of cover_data, maintained on every write. It exists so a
+    # record can advertise its cover's URL without the blob being loaded:
+    # to_dict() runs on a query that defers cover_data, and reading that column
+    # there would lazy-load one ~155KB blob per row — the very cost this whole
+    # arrangement removes. Also the cache buster; see record_cover().
+    cover_hash  = db.Column(db.String(64))
     notes       = db.Column(db.Text)      # JSON array of {date: stamp, text: markdown}
     country     = db.Column(db.String(2)) # ISO 3166-1 alpha-2 country code, e.g. "BR", "US"
 
@@ -95,7 +111,9 @@ class Record(db.Model):
             "play_count": self.play_count or 0,
             "play_dates": self.play_dates or "",
             "cleaned_dates": self.cleaned_dates or "",
-            "cover_data": self.cover_data or "",
+            # Deliberately a URL, not the bytes. Inlining every cover as base64
+            # made this endpoint a 45MB response that blocked the first paint.
+            "cover_url": f"/api/records/{self.id}/cover?v={self.cover_hash}" if self.cover_hash else "",
             "notes": self.notes or "",
             "country": self.country or "",
         }
@@ -127,8 +145,10 @@ with app.app_context():
         "play_dates": "TEXT",
         "cleaned_dates": "TEXT",
         "condition": "VARCHAR(10)",
+        "cover_hash": "VARCHAR(64)",
     }
     added_cleaned_dates = "cleaned_dates" not in existing_cols
+    added_cover_hash = "cover_hash" not in existing_cols
     for col, ddl_type in missing_cols.items():
         if col not in existing_cols:
             with db.engine.connect() as conn:
@@ -146,6 +166,26 @@ with app.app_context():
             r.cleaned_dates = json.dumps([r.last_cleaned])
         if stale:
             db.session.commit()
+
+    # one-time backfill: hash every existing cover, so rows written before this
+    # column existed still advertise a cover_url. Done in batches by id rather
+    # than with one .all(): the whole point of the column is that the blobs are
+    # expensive, and loading all of them at boot to compute their hashes would
+    # reproduce the very spike this avoids.
+    if added_cover_hash:
+        BATCH = 50
+        last_id = 0
+        while True:
+            rows = (db.session.query(Record.id, Record.cover_data)
+                    .filter(Record.id > last_id,
+                            Record.cover_data.isnot(None), Record.cover_data != "")
+                    .order_by(Record.id).limit(BATCH).all())
+            if not rows:
+                break
+            db.session.bulk_update_mappings(Record, [
+                {"id": rid, "cover_hash": _cover_hash(cover)} for rid, cover in rows])
+            db.session.commit()
+            last_id = rows[-1][0]
 
 # ── auth helpers ──────────────────────────────────────────────────────────────
 
@@ -189,7 +229,11 @@ def auth_status():
 
 @app.route("/api/records")
 def list_records():
-    recs = Record.query.order_by(Record.artist).all()
+    # defer(cover_data) is the load-bearing part: without it this query pulls
+    # ~45MB of base64 through the process on every page load. to_dict() must
+    # therefore never touch cover_data, or each row lazy-loads it right back.
+    recs = (Record.query.options(defer(Record.cover_data))
+            .order_by(Record.artist).all())
     return jsonify([r.to_dict() for r in recs])
 
 @app.route("/api/records", methods=["POST"])
@@ -212,6 +256,7 @@ def create_record():
         play_dates  = d.get("play_dates",""),
         cleaned_dates = d.get("cleaned_dates",""),
         cover_data  = d.get("cover_data",""),
+        cover_hash  = _cover_hash(d.get("cover_data","")) if d.get("cover_data") else None,
         notes       = d.get("notes",""),
         country     = (d.get("country") or "").strip().upper()[:2],
     )
@@ -233,11 +278,52 @@ def update_record(rid):
     if "play_count"  in d: r.play_count   = int(d["play_count"] or 0)
     if "play_dates"  in d: r.play_dates   = d["play_dates"]
     if "cleaned_dates" in d: r.cleaned_dates = d["cleaned_dates"]
-    if "cover_data"  in d: r.cover_data   = d["cover_data"]
+    if "cover_data"  in d:
+        r.cover_data = d["cover_data"]
+        r.cover_hash = _cover_hash(d["cover_data"]) if d["cover_data"] else None
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
     db.session.commit()
     return jsonify(r.to_dict())
+
+def _decode_cover(cover):
+    """(bytes, mimetype) for a stored cover, or None if there is nothing to serve.
+
+    Covers are stored as `data:<mime>;base64,<payload>` data URIs. A row whose
+    payload is malformed is treated as having no cover rather than raising: a
+    single bad import should 404 one image, not 500 the page around it.
+    """
+    if not cover or not cover.startswith("data:"):
+        return None
+    header, _, payload = cover.partition(",")
+    if not payload:
+        return None
+    mime = header[len("data:"):].split(";")[0] or "image/jpeg"
+    try:
+        return base64.b64decode(payload), mime
+    except Exception:
+        return None
+
+
+@app.route("/api/records/<int:rid>/cover")
+def record_cover(rid):
+    """Serve one record's cover as its own cacheable resource.
+
+    Immutable caching is safe because the URL carries a content hash (see
+    cover_url in Record.to_dict): editing a cover changes the hash, which
+    changes the URL, which is a fresh cache entry. The `v` parameter is never
+    read here — it only has to differ.
+    """
+    row = db.session.query(Record.cover_data).filter(Record.id == rid).first()
+    decoded = _decode_cover(row[0]) if row else None
+    if decoded is None:
+        return jsonify({"error": "No cover"}), 404
+    data, mime = decoded
+    resp = app.response_class(data, mimetype=mime)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    resp.set_etag(_cover_hash(row[0]))
+    return resp.make_conditional(request)
+
 
 @app.route("/api/records/<int:rid>", methods=["DELETE"])
 @require_auth
@@ -422,7 +508,8 @@ def export_csv():
         yield ",".join(cols) + "\n"
         for r in recs:
             d = r.to_dict()
-            d["cover_image_base64"] = d.pop("cover_data","")
+            # to_dict() reports a URL now, but a backup has to carry the bytes.
+            d["cover_image_base64"] = r.cover_data or ""
             row = []
             for c in cols:
                 v = str(d.get(c,""))
@@ -464,6 +551,7 @@ def _record_mapping(row):
         "play_dates":  row.get("play_dates",""),
         "cleaned_dates": cleaned_dates,
         "cover_data":  cover,
+        "cover_hash":  _cover_hash(cover) if cover else None,
         "notes":       row.get("notes",""),
         "country":     (row.get("country","") or "").strip().upper()[:2],
     }

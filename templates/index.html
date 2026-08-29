@@ -2179,6 +2179,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="/static/topojson-client.min.js"></script>
+<script src="/static/cover.js"></script>
 <script src="/static/grouping.js"></script>
 <script src="/static/history.js"></script>
 <script src="/static/activity.js"></script>
@@ -2191,6 +2192,13 @@ let editingId = null;
 let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
+// True only once the user picks, captures or scans a cover in this session.
+// A save leaves cover_data out unless this is set, so editing a rating cannot
+// wipe artwork the form never held. See static/cover.js.
+let coverDirty = false;
+// The saved cover's URL while editing — what the preview shows, and what
+// Analyse re-reads when asked to scan a record that already has artwork.
+let editingCoverUrl = '';
 // A Spotify link that has been handed in but not yet analysed. Submitting a
 // link used to scan on the spot; now it only arms the analyse button, so the
 // URL has to be parked somewhere until the user taps it. Declared up here with
@@ -2634,8 +2642,8 @@ function dotsHTML(n, max=5) {
 
 function cardHTML(r) {
   const styles = cardStyles(r);
-  const cover = r.cover_data
-    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`
+  const cover = r.cover_url
+    ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`
     : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
 
   const myR  = Number(r.my_rating)  || 0;
@@ -2725,8 +2733,8 @@ function listHeadHTML() {
 }
 
 function listRowHTML(r) {
-  const cover = r.cover_data
-    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+  const cover = r.cover_url
+    ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
     : `<i class="ti ti-disc"></i>`;
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
@@ -2764,8 +2772,8 @@ function renderFilters() {
 
 // ── detail modal ───────────────────────────────────────────────────────────
 function renderDetailContent(r) {
-  const coverEl = r.cover_data
-    ? `<img src="${r.cover_data}" class="detail-cover" alt="${esc(r.album_name)}" onerror="this.style.display='none'">`
+  const coverEl = r.cover_url
+    ? `<img src="${r.cover_url}" class="detail-cover" alt="${esc(r.album_name)}" onerror="this.style.display='none'">`
     : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:48px"></i></div>`;
 
   // mobile: crate carousel navigates the same filtered list as the desktop arrows
@@ -2803,15 +2811,15 @@ function renderDetailContent(r) {
 let dmList = [], dmIdx = 0;
 
 function dmSlideHTML(rec) {
-  const img = rec.cover_data
-    ? `<img src="${rec.cover_data}" alt="${esc(rec.album_name)}" loading="lazy" onerror="this.style.display='none'">`
+  const img = rec.cover_url
+    ? `<img src="${rec.cover_url}" alt="${esc(rec.album_name)}" loading="lazy" onerror="this.style.display='none'">`
     : `<div class="dm-slide-ph"><i class="ti ti-disc" style="font-size:56px"></i></div>`;
   return `<div class="dm-slide" data-id="${rec.id}">${img}</div>`;
 }
 
 function dmThumbHTML(rec) {
-  const img = rec.cover_data
-    ? `<img src="${rec.cover_data}" alt="" loading="lazy">`
+  const img = rec.cover_url
+    ? `<img src="${rec.cover_url}" alt="" loading="lazy">`
     : `<i class="ti ti-disc"></i>`;
   return `<button type="button" class="dm-thumb" data-id="${rec.id}" title="${esc(rec.album_name)}">${img}</button>`;
 }
@@ -3453,7 +3461,7 @@ function resetFormScroll(){
 }
 
 function openAdd(){
-  editingId=null;myRating=0;wifeRating=0;coverDataUri='';
+  editingId=null;myRating=0;wifeRating=0;coverDataUri='';coverDirty=false;editingCoverUrl='';
   document.getElementById('formTitle').textContent='add record';
   scanCandidates = [];
   scanWrote = {};
@@ -3502,7 +3510,8 @@ function openAdd(){
 function openEdit(id){
   closeDetail();
   const r=records.find(x=>x.id===id);if(!r)return;
-  editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;coverDataUri=r.cover_data||'';
+  editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;
+  coverDataUri='';coverDirty=false;editingCoverUrl=r.cover_url||'';
   document.getElementById('formTitle').textContent='edit record';
   scanCandidates = [];
   scanWrote = {};
@@ -3556,7 +3565,8 @@ function openEdit(id){
   document.getElementById('fNoteTime').value=nowStamp().slice(11,16);
   document.getElementById('fNoteText').value='';
   renderNotesForm();
-  if(coverDataUri){ showCover(coverDataUri); } else { clearCover(); }
+  const previewSrc = VinylCover.coverPreviewSrc(r, coverDataUri);
+  if(previewSrc){ showCover(previewSrc); } else { clearCover(); }
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   document.getElementById('formOverlay').classList.remove('hidden');
@@ -3592,7 +3602,10 @@ async function submitForm(){
     condition: owned ? document.getElementById('fCondition').value : '',
     play_count:Number(document.getElementById('fPlays').value)||0,
     have_it:owned,
-    my_rating:myRating,wife_rating:wifeRating,cover_data:coverDataUri,
+    my_rating:myRating,wife_rating:wifeRating,
+    // Omitted unless the cover actually changed — the server leaves a stored
+    // cover alone when the key is absent, and clears it when it is ''.
+    ...VinylCover.coverFields({dirty:coverDirty, uri:coverDataUri}),
     notes:serializeNotes(formNotes),
     play_dates:JSON.stringify(formPlayDates),
     cleaned_dates:JSON.stringify(formCleanedDates),
@@ -3700,6 +3713,7 @@ async function resizeImage(file, maxEdge=1000){
 // link — a candidate's cover art arriving is not a change of mind.
 function applyCover(dataUri, fromUser = true){
   coverDataUri = dataUri;
+  coverDirty = true;
   if(fromUser) pendingSpotifyUrl = '';
   showCover(dataUri);
 }
@@ -3753,7 +3767,7 @@ function renderScanUsage(){
 // Whether analyse has anything to work on. A cover counts however it got on
 // screen — openEdit loading the record's own artwork included, which is what
 // makes re-analysing an existing record possible.
-function analyseArmed(){ return !!pendingSpotifyUrl || !!coverDataUri; }
+function analyseArmed(){ return !!pendingSpotifyUrl || !!coverDataUri || !!editingCoverUrl; }
 
 // The analyse button tracks whatever has been handed in: nothing submitted,
 // nothing to send, so it stays grey and the hint says why. The repick button
@@ -3778,10 +3792,33 @@ function updateScanControls(){
 // Whichever source was handed in last wins: applyCover clears a pending link,
 // and submitting a link overrides the cover. Anything else would make the
 // button's target depend on history the user can no longer see.
-function runPendingScan(){
+// The cover a scan should read. Usually one the user just handed in; when
+// re-analysing a saved record the bytes are no longer in the page, so they are
+// fetched back from the cover URL. That read is cached and costs no API call —
+// the scan itself is the billable part, and it is unchanged either way.
+async function coverBytesForScan(){
+  if(coverDataUri) return coverDataUri;
+  if(!editingCoverUrl) return '';
+  try{
+    const blob = await (await fetch(editingCoverUrl)).blob();
+    coverDataUri = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return coverDataUri;
+  }catch(e){
+    return '';
+  }
+}
+
+async function runPendingScan(){
   if(scanInFlight || !analyseArmed()) return;
-  if(pendingSpotifyUrl) scanFromSpotify(pendingSpotifyUrl);
-  else scanFromImage(coverDataUri);
+  if(pendingSpotifyUrl){ scanFromSpotify(pendingSpotifyUrl); return; }
+  const image = await coverBytesForScan();
+  if(!image){ toast('could not read the cover to scan'); return; }
+  scanFromImage(image);
 }
 
 // ── the analyse button's thinking face ─────────────────────────────────────
@@ -5067,7 +5104,7 @@ function raceCovers(strip, bar, animate) {
       img.dataset.id = String(r.id);
       img.loading = 'lazy';
       img.alt = '';
-      if (r.cover_data) img.src = r.cover_data;
+      if (r.cover_url) img.src = r.cover_url;
       img.onerror = function () { this.style.visibility = 'hidden'; };
       img.title = (r.artist || 'unknown') + ' – ' + (r.album_name || 'untitled');
     }
@@ -5923,8 +5960,8 @@ function statsHeadHTML() {
 }
 
 function statsRowHTML(r) {
-  const cover = r.cover_data
-    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+  const cover = r.cover_url
+    ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
     : `<i class="ti ti-disc"></i>`;
   const pepeFilled  = Math.round(Number(r.my_rating)   || 0);
   const jenniFilled = Math.round(Number(r.wife_rating) || 0);
@@ -6349,8 +6386,8 @@ function renderCalendar() {
 // one event row — shared by week view, day view and the day modal
 function calEventRow(ev, fullNote) {
   const r = ev.r;
-  const cover = r.cover_data
-    ? `<div class="cal-ev-cover-wrap"><img src="${r.cover_data}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'"></div>`
+  const cover = r.cover_url
+    ? `<div class="cal-ev-cover-wrap"><img src="${r.cover_url}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'"></div>`
     : `<div class="cal-ev-cover-wrap"><i class="ti ti-disc"></i></div>`;
   let noteHtml = '';
   if (ev.type === 'note' && ev.text) {
@@ -6377,8 +6414,8 @@ function calEventRow(ev, fullNote) {
 function calWeekChip(ev) {
   const r = ev.r;
   const label = esc(r.album_name) || esc(artistDisplay(r)) || 'untitled';
-  const cover = r.cover_data
-    ? `<img src="${r.cover_data}" alt="" loading="lazy" onerror="this.remove()">`
+  const cover = r.cover_url
+    ? `<img src="${r.cover_url}" alt="" loading="lazy" onerror="this.remove()">`
     : `<i class="ti ti-disc"></i>`;
   return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(artistDisplay(r))} — ${label} (${CAL_TYPE_LABEL[ev.type]}${ev.time ? ' ' + esc(ev.time) : ''})">
     <span class="cal-week-chip-cover">${cover}</span>
