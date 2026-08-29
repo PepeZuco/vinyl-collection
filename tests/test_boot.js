@@ -34,6 +34,12 @@ const ROOT = path.join(__dirname, '..');
 const PAGE = process.env.VINYL_PAGE_HTML;   // the rendered template, from Flask
 const RECORDS = JSON.parse(fs.readFileSync(process.env.VINYL_RECORDS_JSON, 'utf8'));
 
+/* Every boot gets its own origin. localStorage is keyed by origin, and the app
+ * persists the view mode and which crates are collapsed — so without this one
+ * test's leftovers decide what the next one opens on, and a test that passes
+ * alone fails in company. */
+let bootCount = 0;
+
 /* Boot the page with the network stubbed and the CDN libraries replaced by
  * stand-ins. Returns the window plus anything that went wrong on the way. */
 async function boot(hash) {
@@ -54,7 +60,7 @@ async function boot(hash) {
   const dom = new JSDOM(html, {
     runScripts: 'outside-only',
     pretendToBeVisual: true,
-    url: 'http://localhost/' + (hash || ''),
+    url: 'http://t' + (++bootCount) + '.localhost/' + (hash || ''),
     virtualConsole: vc,
   });
   const win = dom.window;
@@ -134,6 +140,33 @@ async function boot(hash) {
    * console would. */
   const read = expr => win.__peek(expr);
   return { win, doc: win.document, errors, read };
+}
+
+/* Press something the way a person would.
+ *
+ * jsdom does not compile inline handler attributes under
+ * runScripts:'outside-only', and this app wires a great deal of its chrome
+ * with onclick="...". So an element carrying one gets its attribute compiled
+ * in the page's own scope and called; anything else gets a real click event.
+ * Compiled on demand rather than up front, because most of this DOM is
+ * replaced by innerHTML on every render. */
+function press(win, el) {
+  const code = el.getAttribute && el.getAttribute('onclick');
+  if (code) {
+    win.__peek('(function(event){' + code + '})').call(el, new win.MouseEvent('click'));
+    return;
+  }
+  el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+}
+
+/* The detail drawer changes record on animationend, which jsdom never fires —
+ * it has no CSS animations to end. Driving them by hand is what a browser does
+ * a frame later. */
+function settleAnimations(win, doc) {
+  for (let i = 0; i < 4; i++) {
+    doc.querySelectorAll('#detailBody').forEach(el =>
+      el.dispatchEvent(new win.Event('animationend', { bubbles: true })));
+  }
 }
 
 const $ = (doc, sel) => doc.querySelector(sel);
@@ -322,4 +355,191 @@ test('a form with something in it asks before throwing it away', async () => {
   win.closeForm();
   assert.strictEqual(asked, true, 'it discarded typed work silently');
   assert.ok(!$(doc, '#formOverlay').classList.contains('hidden'), 'it closed anyway');
+});
+
+// ── arranging the shelf ─────────────────────────────────────────────────────
+
+test('changing the crate regroups the shelf', async () => {
+  const { win, doc, read } = await boot();
+  win.setGroupBy('genre');
+  assert.strictEqual(read('groupBy'), 'genre');
+  const heads = [...doc.querySelectorAll('#recordsContainer .crate-head')];
+  assert.ok(heads.length > 0, 'no crates were drawn');
+  assert.match($(doc, '#groupLabel').textContent, /Genre/);
+});
+
+test('no crates draws one flat grid', async () => {
+  const { win, doc } = await boot();
+  win.setGroupBy('none');
+  assert.strictEqual(count(doc, '#recordsContainer .crate-head'), 0);
+  assert.ok(count(doc, '#recordsContainer .vcard') > 0);
+});
+
+test('changing the sort keeps every record on the shelf', async () => {
+  const { win, doc, read } = await boot();
+  const before = count(doc, '#recordsContainer .vcard');
+  const item = $(doc, '#sortList [data-sort="artist"]');
+  assert.ok(item, 'the sort list offers no artist option');
+  item.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(read('sortBy'), 'artist');
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), before);
+});
+
+test('flipping the sort direction keeps every record on the shelf', async () => {
+  const { win, doc, read } = await boot();
+  const before = count(doc, '#recordsContainer .vcard');
+  win.toggleSortDir();
+  assert.strictEqual(read('sortDir'), 'asc');
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), before);
+});
+
+test('the list view draws rows instead of cards', async () => {
+  const { win, doc } = await boot();
+  win.setViewMode('list');
+  assert.ok(count(doc, '#recordsContainer .list-row') > 0, 'no rows');
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), 0);
+});
+
+test('collapsing a crate hides its records but keeps its header', async () => {
+  const { win, doc } = await boot();
+  win.setGroupBy('genre');
+  const head = $(doc, '#recordsContainer .crate-head');
+  const id = head.dataset.crate;
+  win.toggleCrate(id);
+  assert.ok($(doc, `[data-crate="${id}"]`).closest('.crate').classList.contains('collapsed'));
+});
+
+// ── the record drawer ───────────────────────────────────────────────────────
+
+test('prev and next walk the filtered shelf', async () => {
+  const { win, doc, read } = await boot();
+  const shelf = read('filtered()').map(r => r.id);
+  win.openDetail(shelf[0]);
+  win.navigateDetail(1);
+  settleAnimations(win, doc);
+  assert.strictEqual(read('currentDetailId'), shelf[1], 'next did not reach the next record');
+  win.navigateDetail(-1);
+  settleAnimations(win, doc);
+  assert.strictEqual(read('currentDetailId'), shelf[0], 'prev did not come back');
+});
+
+test('closing the drawer clears the record from the address bar', async () => {
+  const { win, doc } = await boot();
+  win.openDetail(RECORDS.find(r => r.have_it).id);
+  win.closeDetail();
+  assert.ok(!/rec=/.test(win.location.hash), 'the record stayed in the url');
+  assert.ok($(doc, '#detailOverlay').classList.contains('hidden'));
+});
+
+// ── the add and edit form ───────────────────────────────────────────────────
+
+test('editing an existing record fills the form from it', async () => {
+  const { win, doc, read } = await boot();
+  const rec = RECORDS.find(r => r.have_it && r.album_name);
+  win.openEdit(rec.id);
+  assert.strictEqual(read('editingId'), rec.id);
+  assert.strictEqual($(doc, '#fAlbum').value, rec.album_name);
+  assert.strictEqual($(doc, '#fArtist').value, rec.artist);
+});
+
+test('an untouched edit form is not dirty, so it will not nag on close', async () => {
+  const { win } = await boot();
+  win.openEdit(RECORDS.find(r => r.have_it).id);
+  assert.strictEqual(win.formIsDirty(), false,
+    'opening a record for editing already counts as an edit');
+});
+
+test('saving sends what the form holds and closes', async () => {
+  const { win, doc } = await boot();
+  const rec = RECORDS.find(r => r.have_it);
+  win.openEdit(rec.id);
+  $(doc, '#fAlbum').value = 'Renamed By The Test';
+  let sent = null;
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => {
+    if (opts && opts.method === 'PUT') sent = JSON.parse(opts.body);
+    return realFetch(url, opts);
+  };
+  await win.submitForm();
+  assert.ok(sent, 'nothing was sent');
+  assert.strictEqual(sent.album_name, 'Renamed By The Test');
+  assert.ok(!('cover_data' in sent), 'an untouched cover must not be sent, it would wipe it');
+  assert.ok($(doc, '#formOverlay').classList.contains('hidden'), 'the form stayed open');
+});
+
+test('a draft is kept while typing and offered back on the next add', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  $(doc, '#fAlbum').value = 'Half Typed';
+  win.rememberDraft();
+  assert.ok(win.localStorage.getItem('vinyl-form-draft'), 'nothing was kept');
+  win.closeForm(true);
+  win.localStorage.setItem('vinyl-form-draft', JSON.stringify({
+    savedAt: Date.now(), editingId: null, draft: { album_name: 'Half Typed', artist: 'Someone' },
+  }));
+  win.confirm = () => true;
+  win.openAdd();
+  assert.strictEqual($(doc, '#fAlbum').value, 'Half Typed', 'the draft was not restored');
+});
+
+test('declining a draft throws it away rather than asking again', async () => {
+  const { win, doc } = await boot();
+  win.localStorage.setItem('vinyl-form-draft', JSON.stringify({
+    savedAt: Date.now(), editingId: null, draft: { album_name: 'Unwanted' },
+  }));
+  win.confirm = () => false;
+  win.openAdd();
+  assert.strictEqual($(doc, '#fAlbum').value, '');
+  assert.strictEqual(win.localStorage.getItem('vinyl-form-draft'), null);
+});
+
+test('the form records a play date and a cleaning without the modal fighting back', async () => {
+  const { win, doc, read } = await boot();
+  win.openAdd();
+  win.addPlayDate();
+  win.addCleanedDate();
+  assert.strictEqual(read('formPlayDates').length, 1);
+  assert.strictEqual(read('formCleanedDates').length, 1);
+  assert.ok(count(doc, '#fPlayDatesList .playdate-row') > 0 ||
+            $(doc, '#fPlayDatesList').children.length > 0, 'no play date row drawn');
+});
+
+// ── the rest of the chrome ──────────────────────────────────────────────────
+
+test('the theme toggle redraws whatever is on screen', async () => {
+  const { win, doc, errors } = await boot();
+  win.applyTheme('light');
+  assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'light');
+  win.switchTab('stats');
+  win.applyTheme('dark');
+  assert.deepStrictEqual(errors, [], 'toggling the theme threw:\n' + errors.join('\n'));
+});
+
+test('the dice opens some record from the current filter', async () => {
+  const { win, doc, read } = await boot();
+  $(doc, '#randomBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  const shown = read('currentDetailId');
+  assert.ok(shown !== null, 'the dice opened nothing');
+  assert.ok(read('filtered()').some(r => r.id === shown), 'it opened something filtered out');
+});
+
+test('a calendar day with events opens its agenda', async () => {
+  const { win, doc, errors } = await boot();
+  win.switchTab('timeline');
+  const day = $(doc, '#calBody .cal-cell.has-ev');
+  if (!day) return;                      // this month may be empty in a small sample
+  press(win, day);
+  assert.ok(!$(doc, '#calDayOverlay').classList.contains('hidden'), 'the day did not open');
+  assert.deepStrictEqual(errors, []);
+});
+
+test('the replay controls run without throwing', async () => {
+  const { win, errors } = await boot();
+  win.switchTab('timeline');
+  win.setCalScale('replay');
+  win.histPlay();
+  win.histPause();
+  win.histReplay();
+  win.histPause();
+  assert.deepStrictEqual(errors, [], 'the replay threw:\n' + errors.join('\n'));
 });

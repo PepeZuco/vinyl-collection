@@ -56,24 +56,40 @@ def test_page_boots_and_responds(tmp_path):
     page.write_text(app_module.app.test_client().get("/").get_data(as_text=True),
                     encoding="utf-8")
 
+    # A collection built here rather than read from the database. conftest
+    # binds the app to an empty throwaway one, and a developer's real
+    # collection would make this test's outcome depend on whose machine it is.
+    # It has to be varied enough for every assertion below to bite: records to
+    # navigate between, both ownerships, a blank genre, cleaned and never
+    # cleaned, played recently and long ago.
+    def rec(n, **over):
+        base = dict(
+            id=n, artist=f"Artist {n}", album_name=f"Album {n}", year="1975",
+            genre="Rock", bought_date=f"2026-08-{n:02d}", bought_where="Benedito Calixto",
+            bought_by="", condition="used", my_rating=3, wife_rating=4, have_it=True,
+            play_count=2, play_dates='["2026-08-20T20:00:00"]',
+            cleaned_dates='["2026-08-02"]', cover_url="", notes="", country="BR",
+        )
+        base.update(over)
+        return base
+
+    rows = [
+        rec(1), rec(2, genre="Jazz", year="1968", country="US"),
+        rec(3, genre="", condition="new", cleaned_dates=""),
+        rec(4, genre="Pop", year="1985", cleaned_dates="", play_dates=""),
+        rec(5, genre="Jazz", play_dates='["2024-01-05"]'),
+        rec(6, genre="Soul & Funk", year="1993", country="US", cleaned_dates="[]"),
+        rec(7, genre="Rock", condition="new"),
+        rec(8, genre="Pop", year="2020", bought_where="Amazon"),
+        rec(9, have_it=False, bought_date="", cleaned_dates="", play_dates="",
+            play_count=0, condition="", my_rating=0, wife_rating=0),
+        rec(10, have_it=False, bought_date="", genre="Jazz", cleaned_dates="",
+            play_dates="", play_count=0, condition=""),
+        rec(11, have_it=False, bought_date="", genre="", cleaned_dates="",
+            play_dates="", play_count=0, condition=""),
+        rec(12, genre="Rock", notes='[{"date": "2026-08-23", "text": "clicky side B"}]'),
+    ]
     records = tmp_path / "records.json"
-    with app_module.app.app_context():
-        rows = [r.to_dict() for r in app_module.Record.query.limit(60).all()]
-    # A collection with nothing in it would let every assertion pass vacuously.
-    if not rows:
-        rows = [{
-            "id": 1, "artist": "Tim Maia", "album_name": "Uma Onda", "year": "1993",
-            "genre": "Soul & Funk", "bought_date": "2026-08-01", "bought_where": "Unique",
-            "bought_by": "", "condition": "used", "my_rating": 5, "wife_rating": 5,
-            "have_it": True, "play_count": 3, "play_dates": '["2026-08-20"]',
-            "cleaned_dates": "", "cover_url": "", "notes": "", "country": "BR",
-        }, {
-            "id": 2, "artist": "Wanted", "album_name": "Not Bought", "year": "1980",
-            "genre": "", "bought_date": "", "bought_where": "", "bought_by": "",
-            "condition": "", "my_rating": 0, "wife_rating": 0, "have_it": False,
-            "play_count": 0, "play_dates": "", "cleaned_dates": "", "cover_url": "",
-            "notes": "", "country": "",
-        }]
     records.write_text(json.dumps(rows), encoding="utf-8")
 
     env = dict(os.environ,
