@@ -316,6 +316,23 @@ select option{background:var(--surface);color:var(--text)}
   color:var(--muted);margin-bottom:4px}
 .dm-total .tv{font-size:26px;font-weight:800;color:var(--accent);line-height:1;font-variant-numeric:tabular-nums}
 .dm-total .tv small{font-size:12px;color:var(--muted);font-weight:600}
+/* an editable rating: the same bars, but they take a press */
+.dm-bars.live{gap:3px}
+.dm-bars.live i,.dm-bars.live button{flex:1;height:9px;border-radius:2px;background:var(--border);
+  border:none;padding:0;cursor:pointer;transition:background .12s,box-shadow .12s}
+.dm-bars.live button:hover{box-shadow:0 0 0 1px color-mix(in srgb,var(--text) 30%,transparent)}
+.dm-rate.pepe .dm-bars.live button.f{background:#F5C518}
+.dm-rate.jenni .dm-bars.live button.f{background:#D4608A}
+
+/* the two things you do repeatedly, one tap from the record */
+.dm-quick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.dm-qbtn{height:44px;border:1px solid var(--border);border-radius:8px;background:var(--card);
+  color:var(--text);font:600 12.5px var(--font);display:flex;align-items:center;justify-content:center;
+  gap:7px;cursor:pointer;transition:border-color .12s,color .12s}
+.dm-qbtn i{font-size:15px}
+.dm-qbtn.play:hover{border-color:#5FBF7A;color:#5FBF7A}
+.dm-qbtn.clean:hover{border-color:#4AA3C4;color:#4AA3C4}
+
 .dm-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .dm-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
   background:var(--card);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted)}
@@ -2826,7 +2843,13 @@ function dmInfoHTML(r) {
   const herR = Number(r.wife_rating) || 0;
   const tot = myR + herR;
   const totalStr = tot > 0 ? (tot % 1 === 0 ? tot : tot.toFixed(1)) : '—';
-  const bars = v => `<div class="dm-bars">${Array.from({length:5},(_,i)=>`<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('')}</div>`;
+  // The bars ARE the control when you can edit. Changing a rating used to
+  // cost four steps — open, edit, scroll past cover and purchase, save — while
+  // the play count next to it had been one tap on the card all along.
+  const bars = (v, who) => `<div class="dm-bars${authed ? ' live' : ''}">` +
+    Array.from({length:5}, (_,i) => authed
+      ? `<button class="${i < Math.round(v) ? 'f' : ''}" data-rate="${who}" data-rid="${r.id}" data-val="${i+1}" aria-label="${who} ${i+1} of 5"></button>`
+      : `<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('') + `</div>`;
   const historyGroups = dmHistoryGroups(dmHistoryEvents(r));
   const countryStr = r.country
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
@@ -2835,8 +2858,8 @@ function dmInfoHTML(r) {
     <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
     <div class="dm-artist">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
     <div class="dm-rates">
-      <div class="dm-rate pepe"><div class="who">Pepe</div>${myR>0?bars(myR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
-      <div class="dm-rate jenni"><div class="who">Jenni</div>${herR>0?bars(herR):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${herR>0?herR+'/5':''}</div></div>
+      <div class="dm-rate pepe"><div class="who">Pepe</div>${(myR>0||authed)?bars(myR,'my_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
+      <div class="dm-rate jenni"><div class="who">Jenni</div>${(herR>0||authed)?bars(herR,'wife_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${herR>0?herR+'/5':''}</div></div>
       <div class="dm-total"><div class="who">Total</div><div class="tv">${totalStr}<small>/10</small></div></div>
     </div>
     <div class="dm-chips">
@@ -2851,6 +2874,14 @@ function dmInfoHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${lastCleanedLabel(r)}</span></div>
     </div>
+    ${authed ? `<div class="dm-quick">
+      <button class="dm-qbtn play" onclick="logPlayed(${r.id})">
+        <i class="ti ti-headphones"></i>Played today
+      </button>
+      <button class="dm-qbtn clean" onclick="logCleaned(${r.id})">
+        <i class="ti ti-droplet"></i>Cleaned today
+      </button>
+    </div>` : ''}
     ${historyGroups.length ? `<div class="dm-history"><h4>History</h4>${historyGroups.map(dmHistoryGroupHTML).join('')}</div>` : ''}`;
 }
 
@@ -4629,6 +4660,66 @@ function dropLatestPlay(dates) {
   let latest = 0;
   dates.forEach((d, i) => { if (momentAt(d) >= momentAt(dates[latest])) latest = i; });
   return dates.filter((_, i) => i !== latest);
+}
+
+/* One writer for every in-place edit, so a rating, a play and a cleaning all
+ * save the same way: change the record we already hold, redraw what is on
+ * screen, then persist — and put the old value back if the server refuses. */
+async function patchRecord(id, changes) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  const before = {};
+  Object.keys(changes).forEach(k => { before[k] = record[k]; });
+  Object.assign(record, changes);
+
+  if (currentDetailId === id) renderDetailContent(record);
+  render();
+
+  try {
+    const res = await fetch(`/api/records/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(changes),
+    });
+    if (!res.ok) throw new Error(res.status === 401 ? 'not in edit mode' : 'save failed');
+  } catch (e) {
+    Object.assign(record, before);
+    if (currentDetailId === id) renderDetailContent(record);
+    render();
+    toast(`Could not save — ${e.message}`);
+  }
+}
+
+/* Clicking the segment you are already on clears back to it minus one, so the
+ * same control that sets a 3 can take it off again without a separate reset. */
+function setRating(id, who, value) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  const now = Math.round(Number(record[who]) || 0);
+  patchRecord(id, { [who]: now === value ? value - 1 : value });
+}
+
+document.addEventListener('click', e => {
+  const seg = e.target.closest('[data-rate]');
+  if (seg) setRating(Number(seg.dataset.rid), seg.dataset.rate, Number(seg.dataset.val));
+});
+
+function logPlayed(id) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  const dates = [...parsePlayDates(record.play_dates), nowStamp()];
+  patchRecord(id, { play_count: (record.play_count || 0) + 1, play_dates: JSON.stringify(dates) });
+  toast('Played today');
+}
+
+/* 53 of 129 owned records had never been cleaned, and the only way to record
+ * one was through the edit form's seventh section. */
+function logCleaned(id) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  const dates = [...parseCleanedDates(record.cleaned_dates), nowStamp()];
+  patchRecord(id, { cleaned_dates: JSON.stringify(dates) });
+  toast('Cleaned today');
 }
 
 async function adjustPlayCount(id, delta) {
