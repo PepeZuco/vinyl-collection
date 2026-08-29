@@ -69,11 +69,6 @@ test('ownership all keeps both, which the old UI could never do', () => {
 
 // ── the facet registry ──────────────────────────────────────────────────────
 
-test('the registry offers the facets the bar can narrow by', () => {
-  assert.deepStrictEqual(FACETS.map(f => f.id),
-    ['genre', 'condition', 'decade', 'country', 'store', 'cleaning']);
-});
-
 test('every facet knows its own label and how to read a record', () => {
   FACETS.forEach(f => {
     assert.ok(f.label, `${f.id} has no label`);
@@ -260,4 +255,55 @@ test('a missing field reads as the empty value rather than throwing', () => {
   assert.strictEqual(matches(bare, withFacet('genre', ['']), deps), true);
   assert.strictEqual(matches(bare, withFacet('decade', ['']), deps), true);
   assert.strictEqual(matches(bare, withFacet('genre', ['Rock']), deps), false);
+});
+
+// ── when a record was last played ───────────────────────────────────────────
+// The teardown's "gathering dust" view needs this, and unlike the others it is
+// relative to a date — so the facet reads one off deps rather than pretending
+// it can know today from a record alone.
+
+const playedDeps = Object.assign({ today: '2026-08-29' }, deps);
+const played = (records, values) =>
+  filterRecords(records, withFacet('played', values), playedDeps);
+
+test('played buckets a record by how long ago it last span', () => {
+  const recent = rec({ play_dates: JSON.stringify(['2026-08-20']) });
+  const months = rec({ play_dates: JSON.stringify(['2026-06-01']) });
+  const stale  = rec({ play_dates: JSON.stringify(['2025-01-01']) });
+  const never  = rec({ play_dates: '' });
+  const all = [recent, months, stale, never];
+  assert.deepStrictEqual(played(all, ['recent']).map(r => r.id), [recent.id]);
+  assert.deepStrictEqual(played(all, ['months']).map(r => r.id), [months.id]);
+  assert.deepStrictEqual(played(all, ['stale']).map(r => r.id),  [stale.id]);
+  assert.deepStrictEqual(played(all, ['never']).map(r => r.id),  [never.id]);
+});
+
+test('gathering dust is stale and never together, which is the saved view', () => {
+  const all = [
+    rec({ play_dates: JSON.stringify(['2026-08-20']) }),
+    rec({ play_dates: JSON.stringify(['2025-01-01']) }),
+    rec({ play_dates: '' }),
+  ];
+  assert.strictEqual(played(all, ['stale', 'never']).length, 2);
+});
+
+test('the most recent play decides the bucket, not the first', () => {
+  const r = rec({ play_dates: JSON.stringify(['2020-01-01', '2026-08-20', '2023-05-05']) });
+  assert.deepStrictEqual(played([r], ['recent']).map(x => x.id), [r.id]);
+});
+
+test('an unparseable play date does not make a record look recently played', () => {
+  const r = rec({ play_dates: JSON.stringify(['2026-02-30']) });
+  assert.deepStrictEqual(played([r], ['never']).map(x => x.id), [r.id]);
+});
+
+test('without a date to measure against, every record reads as never played', () => {
+  // deps carries no today: the facet must not guess one, and must not throw.
+  const r = rec({ play_dates: JSON.stringify(['2026-08-20']) });
+  assert.strictEqual(matches(r, withFacet('played', ['never']), deps), true);
+});
+
+test('played joins the registry, after cleaning', () => {
+  assert.deepStrictEqual(FACETS.map(f => f.id),
+    ['genre', 'condition', 'decade', 'country', 'store', 'cleaning', 'played']);
 });

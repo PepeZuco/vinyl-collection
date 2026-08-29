@@ -10,7 +10,7 @@ process.env.TZ = 'America/Sao_Paulo';
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { DEFAULTS, encode, decode } = require('../static/urlstate.js');
+const { DEFAULTS, FACET_IDS, encode, decode } = require('../static/urlstate.js');
 
 const state = (over) => Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), over);
 
@@ -139,4 +139,11 @@ test('encoding refuses to write a facet the bar does not offer', () => {
   // Both directions have to hold: decode drops what it does not know, and
   // encode never puts it there in the first place.
   assert.strictEqual(encode(state({ facets: { nonsense: ['x'] } })), '');
+});
+
+test('the facets a link may carry are exactly the facets the bar offers', () => {
+  // Two modules each holding a list of ids is how a link silently loses a
+  // filter: encode drops what it does not recognise, with no error anywhere.
+  const { FACETS } = require('../static/filters.js');
+  assert.deepStrictEqual(FACET_IDS.slice().sort(), FACETS.map(f => f.id).sort());
 });

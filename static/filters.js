@@ -41,6 +41,36 @@ const VinylFilters = (function () {
     artist: true, album: true, genre: false, notes: false, bought_at: false,
   };
 
+  const DAY_MS = 86400000;
+  const RECENT_DAYS = 30;    // still in rotation
+  const STALE_DAYS = 180;    // gathering dust
+
+  /* 'YYYY-MM-DD' -> days since the epoch, through Date.UTC from the calendar
+   * parts rather than Date.parse, so the arithmetic is timezone-proof. */
+  function dayNumber(day) {
+    const [y, m, d] = day.split('-').map(Number);
+    return Math.floor(Date.UTC(y, m - 1, d) / DAY_MS);
+  }
+
+  /* The day of the most recent play, or '' — the same rule VinylGrouping's
+   * lastPlayed uses, inlined so the model has no dependency to carry. */
+  function lastPlayedDay(r) {
+    let dates;
+    try { dates = JSON.parse(r.play_dates || '[]'); } catch (e) { return ''; }
+    if (!Array.isArray(dates)) return '';
+    const days = dates
+      .map(d => /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')))
+      .filter(Boolean)
+      .map(m => m[0])
+      // the shape matching is not the calendar: 2026-02-30 has to fall out
+      .filter(day => {
+        const [y, mo, dd] = day.split('-').map(Number);
+        const probe = new Date(y, mo - 1, dd);
+        return probe.getMonth() === mo - 1 && probe.getDate() === dd;
+      });
+    return days.length ? days.reduce((a, b) => (a > b ? a : b)) : '';
+  }
+
   function hasCleaning(r) {
     try {
       const parsed = JSON.parse(r.cleaned_dates || '[]');
@@ -63,6 +93,19 @@ const VinylFilters = (function () {
     { id: 'country',   label: 'Country',   valueOf: r => r.country || '' },
     { id: 'store',     label: 'Bought at', valueOf: r => r.bought_where || '' },
     { id: 'cleaning',  label: 'Cleaning',  valueOf: r => (hasCleaning(r) ? 'cleaned' : 'never') },
+    /* The only facet measured against a date, so it reads one off deps. With
+     * no date to measure against every record reads as never played, which is
+     * the honest answer rather than a guessed one. */
+    { id: 'played',    label: 'Last played',
+      valueOf: (r, deps) => {
+        const day = lastPlayedDay(r);
+        const today = deps && deps.today;
+        if (!day || !today) return 'never';
+        const age = dayNumber(today) - dayNumber(day);
+        if (age <= RECENT_DAYS) return 'recent';
+        if (age <= STALE_DAYS) return 'months';
+        return 'stale';
+      } },
   ];
 
   function facetById(id) {
@@ -106,7 +149,7 @@ const VinylFilters = (function () {
       if (facet.id === exceptId) continue;
       const allowed = facets[facet.id];
       if (!allowed) continue;                     // absent means no constraint
-      if (allowed.indexOf(facet.valueOf(record)) === -1) return false;
+      if (allowed.indexOf(facet.valueOf(record, deps)) === -1) return false;
     }
 
     const text = (q.text || '').trim().toLowerCase();
@@ -139,7 +182,7 @@ const VinylFilters = (function () {
     const counts = new Map();
     (records || []).forEach(r => {
       if (!matchesExcept(r, query, deps, facetId)) return;
-      const v = facet.valueOf(r);
+      const v = facet.valueOf(r, deps);
       counts.set(v, (counts.get(v) || 0) + 1);
     });
     return [...counts.entries()]

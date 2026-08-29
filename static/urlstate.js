@@ -38,9 +38,11 @@ const VinylUrlState = (function () {
   const DIRS = ['asc', 'desc'];
   const VIEWS = ['grid', 'list'];
 
-  /* The facets a link may name. Kept here rather than read from the filter
-   * model so a hash can never reach a dimension the bar does not offer. */
-  const FACET_IDS = ['genre', 'condition', 'decade', 'country', 'store', 'cleaning'];
+  /* The facets a link may name. Listed here rather than read from the filter
+   * model so a hash can never reach a dimension the bar does not offer — and
+   * pinned to that model by a test, because two lists that must agree will
+   * otherwise drift and quietly drop a filter from a link. */
+  const FACET_IDS = ['genre', 'condition', 'decade', 'country', 'store', 'cleaning', 'played'];
 
   const FACET_PREFIX = 'f.';
 

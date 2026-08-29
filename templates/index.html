@@ -1140,6 +1140,12 @@ select option{background:var(--surface);color:var(--text)}
 .facet-check{width:15px;height:15px;border-radius:3px;border:1px solid var(--border);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;font-size:10px}
 .facet-item.on .facet-check{background:var(--accent);border-color:var(--accent);color:#141414}
+.facet-section{font-family:var(--font-mono);font-size:9.5px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);padding:10px 10px 5px}
+.facet-section:first-child{padding-top:4px}
+.facet-item.view .facet-name{display:flex;flex-direction:column;gap:2px}
+.facet-hint{font-size:11px;color:var(--muted);font-weight:400}
+.facet-item.view{padding:9px 10px}
 .facet-count{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--muted);
   font-variant-numeric:tabular-nums}
 .facet-foot{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--border)}
@@ -2337,7 +2343,11 @@ function currentQuery() {
   };
 }
 
-const FILTER_DEPS = { parseNotes: (raw) => parseNotes(raw) };
+const FILTER_DEPS = {
+  parseNotes: (raw) => parseNotes(raw),
+  // read fresh, so a tab left open across midnight still measures from today
+  get today() { return today(); },
+};
 
 /* Re-render whatever surface is on screen. Every control that changes the
  * query calls this, so the collection and the statistics page can never drift
@@ -4848,10 +4858,50 @@ async function adjustPlayCount(id, delta) {
  * as an ISO code. */
 const CONDITION_LABELS = { new: 'New', used: 'Used', '': 'Unknown' };
 const CLEANING_LABELS  = { cleaned: 'Cleaned at least once', never: 'Never cleaned' };
+const PLAYED_LABELS = {
+  recent: 'In the last 30 days', months: 'In the last 6 months',
+  stale:  'Over 6 months ago',   never:  'Never played',
+};
+
+/* Questions worth asking often enough to deserve a name.
+ *
+ * Each is the shared query with a different setting — nothing here is a
+ * feature of its own, which is exactly why they are cheap. They set the query
+ * outright rather than adding to it: "show me what needs cleaning" is a place
+ * you go, not a filter you stack onto wherever you happened to be. */
+const SAVED_VIEWS = [
+  { id: 'needs-cleaning', label: 'Needs cleaning', hint: 'never been cleaned',
+    query: { ownership: 'owned', facets: { cleaning: ['never'] } } },
+  { id: 'gathering-dust', label: 'Gathering dust', hint: 'not played in 6 months',
+    query: { ownership: 'owned', facets: { played: ['stale', 'never'] } } },
+  { id: 'in-rotation', label: 'In rotation', hint: 'played in the last 30 days',
+    query: { ownership: 'owned', facets: { played: ['recent'] } } },
+  { id: 'wishlist', label: 'The wishlist', hint: 'wanted, not bought',
+    query: { ownership: 'wishlist', facets: {} } },
+];
+
+function applySavedView(id) {
+  const view = SAVED_VIEWS.find(v => v.id === id);
+  if (!view) return;
+  filterState.ownership = view.query.ownership;
+  filterState.facets = JSON.parse(JSON.stringify(view.query.facets));
+  document.getElementById('searchInput').value = '';
+  if (currentTab !== 'collection') switchTab('collection');
+  else applyQueryChange();
+  closeFacetPop();
+}
+
+/* How many records a view would show, so a name that would land you on an
+ * empty shelf says so before you go. */
+function savedViewCount(view) {
+  return VinylFilters.filterRecords(records, Object.assign(
+    VinylFilters.defaultQuery(), view.query), FILTER_DEPS).length;
+}
 
 function facetValueLabel(facetId, value) {
   if (facetId === 'condition') return CONDITION_LABELS[value] || 'Unknown';
   if (facetId === 'cleaning')  return CLEANING_LABELS[value] || value;
+  if (facetId === 'played')    return PLAYED_LABELS[value] || value;
   if (facetId === 'country')   return value ? countryNameOf(value) : 'No country';
   if (!value) {
     return { genre: 'No genre', decade: 'No year', store: 'Not recorded' }[facetId] || 'Not set';
@@ -4891,10 +4941,19 @@ function renderFacetPop() {
 
   if (facetPopFor === 'pick') {
     pop.innerHTML = `<div class="facet-head">
-        <span class="modal-title">narrow the shelf by</span>
+        <span class="modal-title">views and filters</span>
         <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()"><i class="ti ti-x"></i></button>
       </div>
-      <div class="facet-body">` +
+      <div class="facet-body">
+        <div class="facet-section">saved views</div>` +
+      SAVED_VIEWS.map(v => {
+        const n = savedViewCount(v);
+        return `<button class="facet-item view" onclick="applySavedView('${v.id}')">
+          <span class="facet-name">${esc(v.label)}<span class="facet-hint">${esc(v.hint)}</span></span>
+          <span class="facet-count">${n}</span>
+        </button>`;
+      }).join('') +
+      `<div class="facet-section">narrow the shelf by</div>` +
       VinylFilters.FACETS.map(f => {
         const n = VinylFilters.facetValues(records, q, f.id, FILTER_DEPS).length;
         const on = !!q.facets[f.id];
