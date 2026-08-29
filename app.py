@@ -10,6 +10,7 @@ from functools import wraps
 import pricing
 import scan
 
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 
