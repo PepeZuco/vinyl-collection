@@ -669,8 +669,6 @@ select option{background:var(--surface);color:var(--text)}
 .collection-page.hidden{display:none}
 
 /* history page — the collection's growth as a bar chart race */
-.history-page{display:none}
-.history-page.visible{display:block}
 
 .race-total{color:var(--label);font-size:11px;font-variant-numeric:tabular-nums;
   text-transform:none;letter-spacing:0}
@@ -878,17 +876,6 @@ select option{background:var(--surface);color:var(--text)}
   .act-cover{transition:none}
 }
 
-/* stats/history segment — mobile only. The bottom bar already carries four
-   items plus the centre FAB, and a fifth would land underneath it, so on a
-   phone History is reached from inside the Stats tab instead. */
-.stats-seg{display:none}
-@media(max-width:760px){
-  .stats-seg{display:flex;gap:5px;margin-bottom:16px}
-  .stats-seg-btn{flex:1;height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);
-    background:transparent;color:var(--muted);font:600 12px var(--font);cursor:pointer}
-  .stats-seg-btn.active{border-color:var(--accent);color:var(--accent);
-    background:color-mix(in srgb, var(--accent) 10%, transparent)}
-}
 /* split scoreboard: Pepe's and Jenni's ratings flank the collection-wide
    totals, which sit in the middle since they belong to neither side */
 .stats-split{display:grid;grid-template-columns:1fr auto 1fr;grid-template-areas:"pepe shared jenni";
@@ -1272,8 +1259,8 @@ select option{background:var(--surface);color:var(--text)}
 
 /* ── calendar page ─────────────────────────────────────────────────────────
    event colors: bought = accent gold, cleaned = teal, note = logo purple */
-.calendar-page{display:none}
-.calendar-page.visible{display:block}
+.timeline-page{display:none}
+.timeline-page.visible{display:block}
 .cal-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
 .cal-nav{display:flex;align-items:center;gap:6px}
 .cal-title{font-family:var(--font-mono);font-weight:700;font-size:15px;margin-left:8px;white-space:nowrap}
@@ -1438,13 +1425,15 @@ select option{background:var(--surface);color:var(--text)}
 
   <div class="nav-tabs">
     <button class="nav-tab active" id="tabCollection"><i class="ti ti-layout-grid"></i> Collection</button>
-    <button class="nav-tab" id="tabCalendar"><i class="ti ti-calendar-month"></i> Calendar</button>
+    <button class="nav-tab" id="tabTimeline"><i class="ti ti-calendar-month"></i> Timeline</button>
     <button class="nav-tab" id="tabStats"><i class="ti ti-chart-bar"></i> Statistics</button>
-    <button class="nav-tab" id="tabHistory"><i class="ti ti-timeline"></i> History</button>
   </div>
 
-  <!-- calendar page -->
-  <div class="calendar-page" id="calendarPage">
+  <!-- timeline page — the same events at four zooms. Month, Week and Day are
+       the calendar; Replay is the growth race and the activity lanes, which
+       used to be a tab of their own reached through a segmented control that
+       existed in two places and had no home at all on a phone. -->
+  <div class="timeline-page" id="timelinePage">
     <div class="cal-toolbar">
       <div class="cal-nav">
         <button class="btn btn-icon" onclick="calNavigate(-1)" title="previous"><i class="ti ti-chevron-left"></i></button>
@@ -1463,18 +1452,112 @@ select option{background:var(--surface);color:var(--text)}
           <button class="cal-scale-btn active" data-scale="month" onclick="setCalScale('month')">month</button>
           <button class="cal-scale-btn" data-scale="week" onclick="setCalScale('week')">week</button>
           <button class="cal-scale-btn" data-scale="day" onclick="setCalScale('day')">day</button>
+          <button class="cal-scale-btn" data-scale="replay" onclick="setCalScale('replay')">replay</button>
         </div>
       </div>
     </div>
     <div id="calBody"></div>
+    <div id="replayBody" hidden>
+    <div class="chart-box" style="margin-bottom:28px">
+      <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <span>how the collection grew</span>
+        <span class="race-total" id="raceTotal"></span>
+      </div>
+      <div class="race-plot-wrap">
+        <div class="race-plot" id="racePlot"></div>
+        <div class="chart-tooltip" id="raceTooltip"></div>
+      </div>
+      <div class="race-day" id="raceDay"></div>
+      <div class="race-controls">
+        <button class="race-btn" id="racePlayBtn" aria-label="play" aria-pressed="false"><i class="ti ti-player-play"></i></button>
+        <input type="range" id="raceScrub" min="0" max="0" step="1" value="0" aria-label="purchase day">
+        <div class="race-speeds">
+          <button class="race-speed-btn" data-speed="0.5">0.5&times;</button>
+          <button class="race-speed-btn active" data-speed="1">1&times;</button>
+          <button class="race-speed-btn" data-speed="2">2&times;</button>
+        </div>
+        <button class="race-btn hidden" id="raceReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
+      </div>
+    </div>
+
+      <!-- how the collection is used — the same days at two scales -->
+      <div class="chart-box" id="actBox">
+        <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span>how the collection is used</span>
+          <div class="act-legend">
+            <span class="act-lg"><i class="ti ti-shopping-bag" style="color:var(--ev-bought)"></i>bought <b id="actTotB">0</b></span>
+            <span class="act-lg"><i class="ti ti-headphones" style="color:var(--ev-played)"></i>played <b id="actTotP">0</b></span>
+            <span class="act-lg"><i class="ti ti-droplet" style="color:var(--ev-cleaned)"></i>cleaned <b id="actTotC">0</b></span>
+            <span class="act-lg"><i class="ti ti-note" style="color:var(--ev-note)"></i>noted <b id="actTotN">0</b></span>
+          </div>
+        </div>
+
+        <p class="act-empty" id="actEmpty" hidden>nothing to replay yet — records need a bought date to appear here.</p>
+
+        <div class="act-body" id="actBody">
+          <div class="act-band-wrap" id="actBandWrap">
+            <div class="act-band" id="actBand"></div>
+            <div class="act-win" id="actWinRect"></div>
+            <div class="act-solo" id="actSolo"></div>
+            <div class="act-pin" id="actPin"></div>
+          </div>
+          <div class="act-axis" id="actBandAxis"></div>
+          <div class="act-note" id="actNote"><span class="who"></span><span class="txt"></span></div>
+
+          <div class="act-strip">
+            <div class="act-grp"><span>zoom</span>
+              <button class="act-pill active" data-act-zoom="0">all</button>
+              <button class="act-pill" data-act-zoom="365">1 yr</button>
+              <button class="act-pill" data-act-zoom="90">90 d</button>
+              <button class="act-pill" data-act-zoom="30">30 d</button>
+            </div>
+            <div class="act-grp"><span>show</span>
+              <button class="act-pill active" data-act-show="21">top 21</button>
+              <button class="act-pill" data-act-show="50">top 50</button>
+              <button class="act-pill" data-act-show="0">all</button>
+            </div>
+            <div class="act-grp"><span>order</span>
+              <button class="act-pill active" data-act-sort="plays">most played</button>
+              <button class="act-pill" data-act-sort="recent">in rotation</button>
+              <button class="act-pill" data-act-sort="bought">bought</button>
+            </div>
+          </div>
+
+          <div class="act-lanes" id="actLanes">
+            <div class="act-scroll" id="actScroll"></div>
+            <div class="act-tail" id="actTail" hidden>
+              <div class="act-row">
+                <span></span>
+                <span class="act-name" id="actTailName"></span>
+                <span class="act-lane"><span class="act-track" id="actTailTrack"></span></span>
+                <span class="act-ct" id="actTailCt">0</span>
+              </div>
+            </div>
+            <span class="act-head" id="actHead"></span>
+          </div>
+          <div class="act-axis" id="actLaneAxis"><span class="act-track" id="actLaneAxisTrack"></span></div>
+
+          <div class="act-readout">
+            <span class="act-day" id="actDay"></span>
+            <span class="act-caption" id="actCaption"></span>
+          </div>
+          <div class="race-controls">
+            <button class="race-btn" id="actPlayBtn" aria-label="play" aria-pressed="false"><i class="ti ti-player-play"></i></button>
+            <input type="range" id="actScrub" min="0" max="0" step="1" value="0" aria-label="day">
+            <div class="race-speeds">
+              <button class="act-speed-btn" data-act-speed="0.5">0.5&times;</button>
+              <button class="act-speed-btn active" data-act-speed="1">1&times;</button>
+              <button class="act-speed-btn" data-act-speed="2">2&times;</button>
+            </div>
+            <button class="race-btn hidden" id="actReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- stats page -->
   <div class="stats-page" id="statsPage">
-    <div class="stats-seg">
-      <button class="stats-seg-btn active" data-seg="stats" onclick="switchTab('stats')">stats</button>
-      <button class="stats-seg-btn" data-seg="history" onclick="switchTab('history')">history</button>
-    </div>
     <div class="stats-split" id="statsCards"></div>
     <div class="charts-row">
       <div class="chart-box">
@@ -1589,109 +1672,6 @@ select option{background:var(--surface);color:var(--text)}
       <div class="filter-chips" id="statsFilterChips"></div>
       <div class="stats-table-wrap" id="statsTableWrap"></div>
     </div>
-  </div>
-
-  <!-- history page — the collection's growth, replayed -->
-  <div class="history-page" id="historyPage">
-    <div class="stats-seg">
-      <button class="stats-seg-btn" data-seg="stats" onclick="switchTab('stats')">stats</button>
-      <button class="stats-seg-btn active" data-seg="history" onclick="switchTab('history')">history</button>
-    </div>
-    <div class="chart-box" style="margin-bottom:28px">
-      <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <span>how the collection grew</span>
-        <span class="race-total" id="raceTotal"></span>
-      </div>
-      <div class="race-plot-wrap">
-        <div class="race-plot" id="racePlot"></div>
-        <div class="chart-tooltip" id="raceTooltip"></div>
-      </div>
-      <div class="race-day" id="raceDay"></div>
-      <div class="race-controls">
-        <button class="race-btn" id="racePlayBtn" aria-label="play" aria-pressed="false"><i class="ti ti-player-play"></i></button>
-        <input type="range" id="raceScrub" min="0" max="0" step="1" value="0" aria-label="purchase day">
-        <div class="race-speeds">
-          <button class="race-speed-btn" data-speed="0.5">0.5&times;</button>
-          <button class="race-speed-btn active" data-speed="1">1&times;</button>
-          <button class="race-speed-btn" data-speed="2">2&times;</button>
-        </div>
-        <button class="race-btn hidden" id="raceReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
-      </div>
-    </div>
-
-      <!-- how the collection is used — the same days at two scales -->
-      <div class="chart-box" id="actBox">
-        <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-          <span>how the collection is used</span>
-          <div class="act-legend">
-            <span class="act-lg"><i class="ti ti-shopping-bag" style="color:var(--ev-bought)"></i>bought <b id="actTotB">0</b></span>
-            <span class="act-lg"><i class="ti ti-headphones" style="color:var(--ev-played)"></i>played <b id="actTotP">0</b></span>
-            <span class="act-lg"><i class="ti ti-droplet" style="color:var(--ev-cleaned)"></i>cleaned <b id="actTotC">0</b></span>
-            <span class="act-lg"><i class="ti ti-note" style="color:var(--ev-note)"></i>noted <b id="actTotN">0</b></span>
-          </div>
-        </div>
-
-        <p class="act-empty" id="actEmpty" hidden>nothing to replay yet — records need a bought date to appear here.</p>
-
-        <div class="act-body" id="actBody">
-          <div class="act-band-wrap" id="actBandWrap">
-            <div class="act-band" id="actBand"></div>
-            <div class="act-win" id="actWinRect"></div>
-            <div class="act-solo" id="actSolo"></div>
-            <div class="act-pin" id="actPin"></div>
-          </div>
-          <div class="act-axis" id="actBandAxis"></div>
-          <div class="act-note" id="actNote"><span class="who"></span><span class="txt"></span></div>
-
-          <div class="act-strip">
-            <div class="act-grp"><span>zoom</span>
-              <button class="act-pill active" data-act-zoom="0">all</button>
-              <button class="act-pill" data-act-zoom="365">1 yr</button>
-              <button class="act-pill" data-act-zoom="90">90 d</button>
-              <button class="act-pill" data-act-zoom="30">30 d</button>
-            </div>
-            <div class="act-grp"><span>show</span>
-              <button class="act-pill active" data-act-show="21">top 21</button>
-              <button class="act-pill" data-act-show="50">top 50</button>
-              <button class="act-pill" data-act-show="0">all</button>
-            </div>
-            <div class="act-grp"><span>order</span>
-              <button class="act-pill active" data-act-sort="plays">most played</button>
-              <button class="act-pill" data-act-sort="recent">in rotation</button>
-              <button class="act-pill" data-act-sort="bought">bought</button>
-            </div>
-          </div>
-
-          <div class="act-lanes" id="actLanes">
-            <div class="act-scroll" id="actScroll"></div>
-            <div class="act-tail" id="actTail" hidden>
-              <div class="act-row">
-                <span></span>
-                <span class="act-name" id="actTailName"></span>
-                <span class="act-lane"><span class="act-track" id="actTailTrack"></span></span>
-                <span class="act-ct" id="actTailCt">0</span>
-              </div>
-            </div>
-            <span class="act-head" id="actHead"></span>
-          </div>
-          <div class="act-axis" id="actLaneAxis"><span class="act-track" id="actLaneAxisTrack"></span></div>
-
-          <div class="act-readout">
-            <span class="act-day" id="actDay"></span>
-            <span class="act-caption" id="actCaption"></span>
-          </div>
-          <div class="race-controls">
-            <button class="race-btn" id="actPlayBtn" aria-label="play" aria-pressed="false"><i class="ti ti-player-play"></i></button>
-            <input type="range" id="actScrub" min="0" max="0" step="1" value="0" aria-label="day">
-            <div class="race-speeds">
-              <button class="act-speed-btn" data-act-speed="0.5">0.5&times;</button>
-              <button class="act-speed-btn active" data-act-speed="1">1&times;</button>
-              <button class="act-speed-btn" data-act-speed="2">2&times;</button>
-            </div>
-            <button class="race-btn hidden" id="actReplayBtn" aria-label="replay"><i class="ti ti-refresh"></i></button>
-          </div>
-        </div>
-      </div>
   </div>
 
   <!-- collection page -->
@@ -1821,8 +1801,8 @@ select option{background:var(--surface);color:var(--text)}
   <button class="mtab-item active" id="mtabCollection" onclick="setHaveItMode('collection');switchTab('collection')">
     <span class="mtab-icon-wrap"><i class="ti ti-layout-grid"></i></span><span>Collection</span>
   </button>
-  <button class="mtab-item" id="mtabCalendar" onclick="switchTab('calendar')">
-    <span class="mtab-icon-wrap"><i class="ti ti-calendar-month"></i></span><span>Calendar</span>
+  <button class="mtab-item" id="mtabTimeline" onclick="switchTab('timeline')">
+    <span class="mtab-icon-wrap"><i class="ti ti-calendar-month"></i></span><span>Timeline</span>
   </button>
   <button class="mtab-fab" id="mtabFab" style="display:none" onclick="openAdd()" title="add record"><i class="ti ti-plus"></i></button>
   <button class="mtab-item" id="mtabStats" onclick="switchTab('stats')">
@@ -2180,6 +2160,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="/static/topojson-client.min.js"></script>
 <script src="/static/filters.js"></script>
+<script src="/static/timeline.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/grouping.js"></script>
 <script src="/static/history.js"></script>
@@ -2218,7 +2199,7 @@ function applyTheme(t) {
   localStorage.setItem('vinyl-theme', t);
 }
 applyTheme(theme);
-document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='history') renderHistory(); });
+document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
 
 // ── genre colours ──────────────────────────────────────────────────────────
 // One hue per genre, used for the card shadow and every genre-coloured chart,
@@ -2327,7 +2308,7 @@ async function loadRecords() {
   records = await r.json();
   calUpdateDateRange();
   render();
-  if (currentTab === 'calendar') renderCalendar();
+  if (currentTab === 'timeline') renderTimeline();
 }
 
 // avg uses only ratings that exist — if only one person rated, uses that score alone
@@ -4321,7 +4302,6 @@ document.getElementById('exportBtn').addEventListener('click',()=>{window.locati
 function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
-  document.getElementById('tabHistory').addEventListener('click', () => switchTab('history'));
   document.getElementById('racePlayBtn').addEventListener('click', function () {
     histPlaying ? histPause() : histPlay();
   });
@@ -4396,11 +4376,11 @@ function bindEvents(){
   });
   actBandWrap.addEventListener('pointerup', function () { actDragging = false; });
   actBandWrap.addEventListener('pointercancel', function () { actDragging = false; });
-  /* Guarded: #historyPage is display:none while another tab is current, so
-     every getBoundingClientRect() would return 0 and zero out actLaneW —
+  /* Guarded: #replayBody is hidden unless the Timeline is on its replay scale,
+     so every getBoundingClientRect() would return 0 and zero out actLaneW —
      silently breaking the playhead and the pan until the next render. */
   window.addEventListener('resize', function () {
-    if (!act || currentTab !== 'history') return;
+    if (!act || currentTab !== 'timeline' || calScale !== 'replay') return;
     actMeasure();
     actPaint();
   });
@@ -4431,8 +4411,8 @@ function bindEvents(){
   racePlot.addEventListener('mouseleave', () => {
     document.getElementById('raceTooltip').style.opacity = 0;
   });
-  document.getElementById('tabCalendar').addEventListener('click', () => {
-    switchTab('calendar');
+  document.getElementById('tabTimeline').addEventListener('click', () => {
+    switchTab('timeline');
     calUpdateDateRange();
   });
   document.getElementById('calDayOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDay();});
@@ -4973,23 +4953,17 @@ function switchTab(tab) {
   currentTab = tab;
   document.getElementById('collectionPage').classList.toggle('hidden', tab !== 'collection');
   document.getElementById('statsPage').classList.toggle('visible', tab === 'stats');
-  document.getElementById('calendarPage').classList.toggle('visible', tab === 'calendar');
-  document.getElementById('historyPage').classList.toggle('visible', tab === 'history');
+  document.getElementById('timelinePage').classList.toggle('visible', tab === 'timeline');
   document.getElementById('tabCollection').classList.toggle('active', tab === 'collection');
   document.getElementById('tabStats').classList.toggle('active', tab === 'stats');
-  document.getElementById('tabCalendar').classList.toggle('active', tab === 'calendar');
-  document.getElementById('tabHistory').classList.toggle('active', tab === 'history');
-  document.querySelectorAll('.stats-seg-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.seg === tab);
-  });
+  document.getElementById('tabTimeline').classList.toggle('active', tab === 'timeline');
   syncMobileTabbar();
 
-  // Leaving the tab stops both charts — no timer runs behind the collection view.
-  if (leaving === 'history' && tab !== 'history') histPause();
+  // Leaving the tab stops the replay — no timer runs behind another view.
+  if (leaving === 'timeline' && tab !== 'timeline') histPause();
 
   if (tab === 'stats') renderStats();
-  if (tab === 'calendar') renderCalendar();
-  if (tab === 'history') renderHistory();
+  if (tab === 'timeline') renderTimeline();
 }
 
 // ── mobile bottom tab bar — mirrors haveItMode + currentTab, no separate state ─
@@ -4997,11 +4971,10 @@ function syncMobileTabbar() {
   const onCollection = currentTab === 'collection';
   document.getElementById('mtabCollection').classList.toggle('active', onCollection && haveItMode === 'collection');
   document.getElementById('mtabWishlist').classList.toggle('active', onCollection && haveItMode === 'wishlist');
-  document.getElementById('mtabCalendar').classList.toggle('active', currentTab === 'calendar');
-  // History has no item of its own on the phone — it lives inside Stats, so
-  // the Stats item stays lit while you are on it.
-  document.getElementById('mtabStats').classList.toggle('active',
-    currentTab === 'stats' || currentTab === 'history');
+  document.getElementById('mtabTimeline').classList.toggle('active', currentTab === 'timeline');
+  // Every tab now has an item of its own, so nothing has to lie about where
+  // you are — History used to light up Stats because it had no slot at all.
+  document.getElementById('mtabStats').classList.toggle('active', currentTab === 'stats');
 }
 
 // ── history: the collection's growth as a bar chart race ───────────────────
@@ -6220,7 +6193,7 @@ function renderWorldMap(all) {
 
 // ── calendar ───────────────────────────────────────────────────────────────
 // month / week / day views over bought_date, cleaned_dates, play_dates and dated notes
-let calScale = 'month';                  // 'month' | 'week' | 'day'
+let calScale = 'month';                  // 'month' | 'week' | 'day' | 'replay'
 let calAnchor = new Date();              // any date inside the visible range
 let calTypes = { bought: true, cleaned: true, played: true, note: true };
 let calMinDate = null, calMaxDate = null; // date range constraints
@@ -6269,32 +6242,18 @@ function calUpdateDateRange() {
 }
 
 // map of 'YYYY-MM-DD' -> [{type, r, time, text?}], honoring the active type filters
+const TIMELINE_DEPS = {
+  parsePlayDates: (raw) => parsePlayDates(raw),
+  parseCleanedDates: (raw) => parseCleanedDates(raw),
+  parseNotes: (raw, fallback) => parseNotes(raw, fallback),
+};
+
+/* The calendar used to read every record while the growth chart read only the
+ * owned ones, so the same tab disagreed with itself about what the collection
+ * was. Both now read what the shared query selected. */
 function calEventsByDay() {
-  const map = new Map();
-  // every event files under the day of its LOCAL clock, so an evening one stays
-  // on the evening it happened rather than sliding onto the next day
-  const add = (date, ev) => {
-    const m = momentOf(date);
-    if (!m.day) return;
-    if (!map.has(m.day)) map.set(m.day, []);
-    map.get(m.day).push(Object.assign({ time: m.time }, ev));
-  };
-  records.forEach(r => {
-    if (calTypes.bought) add(r.bought_date, { type:'bought', r });
-    if (calTypes.cleaned) parseCleanedDates(r.cleaned_dates).forEach(dt => add(dt, { type:'cleaned', r }));
-    if (calTypes.played) parsePlayDates(r.play_dates).forEach(dt => add(dt, { type:'played', r }));
-    if (calTypes.note) parseNotes(r.notes, r.bought_date).forEach(n => {
-      if (n.text && n.text.trim()) add(n.date, { type:'note', r, text:n.text });
-    });
-  });
-  const order = { bought:0, cleaned:1, played:2, note:3 };
-  // a day reads as an agenda: chronological, with anything that carries no clock
-  // counting as midnight and so leading the day in its old type order
-  map.forEach(list => list.sort((a,b) =>
-    (a.time||'').localeCompare(b.time||'') ||
-    order[a.type]-order[b.type] ||
-    String(a.r.album_name).localeCompare(String(b.r.album_name))));
-  return map;
+  const scoped = VinylFilters.filterRecords(records, currentQuery(), FILTER_DEPS);
+  return VinylTimeline.eventsByDay(scoped, calTypes, TIMELINE_DEPS);
 }
 
 function calNavigate(dir) {
@@ -6317,7 +6276,21 @@ function setCalScale(scale) {
   calScale = scale;
   document.querySelectorAll('#calScaleBar .cal-scale-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.scale === scale));
-  renderCalendar();
+  renderTimeline();
+}
+
+/* One tab, four zooms. Month, Week and Day answer "what happened then";
+ * Replay answers "how did we get here". They read the same events off the same
+ * records, which is why they were never two tabs' worth of idea. */
+function renderTimeline() {
+  const replaying = calScale === 'replay';
+  document.getElementById('calBody').hidden = replaying;
+  document.getElementById('replayBody').hidden = !replaying;
+  // Date navigation and the event-type switches say nothing about a replay of
+  // the whole collection, so they step aside rather than sit there inert.
+  document.querySelector('#timelinePage .cal-nav').style.display = replaying ? 'none' : '';
+  document.getElementById('calTypesBar').style.display = replaying ? 'none' : '';
+  if (replaying) { renderHistory(); } else { histPause(); renderCalendar(); }
 }
 
 function toggleCalType(type) {
@@ -6326,6 +6299,9 @@ function toggleCalType(type) {
   if (btn) btn.classList.toggle('active', calTypes[type]);
   renderCalendar();
 }
+
+// calTypes is the Timeline's own view control, alongside the scale — it says
+// which kinds of event to draw, not which records are in scope.
 
 function renderCalendar() {
   const events = calEventsByDay();
