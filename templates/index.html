@@ -593,7 +593,6 @@ select option{background:var(--surface);color:var(--text)}
 .form-layout{display:grid;grid-template-columns:330px 1fr;gap:20px;align-items:start}
 @media(max-width:760px){.form-layout{grid-template-columns:1fr}}
 .form-cover-col{display:flex;flex-direction:column}
-.form-info-col{display:flex;flex-direction:column;min-width:0}
 .form-cover-col .cover-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px}
 /* Empty, the drop is a fixed-height target to aim a file at. With a cover in
    it, it becomes a frame around the picture instead of a window into it: the
@@ -979,30 +978,9 @@ select option{background:var(--surface);color:var(--text)}
 .stats-th-order{font-size:9px;font-weight:700;color:var(--accent);margin-left:1px}
 .list-condition,.list-bought,.list-lastplayed{font-size:12px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.bar-chart{display:flex;flex-direction:column;gap:8px}
-.bar-row{display:flex;align-items:center;gap:8px}
-.bar-label{font-size:11px;color:var(--muted);min-width:110px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}
-.bar-fill{height:100%;border-radius:4px;transition:width .4s ease}
-.bar-val{font-size:11px;color:var(--muted);min-width:32px;text-align:right}
 @media(max-width:700px){.charts-row{grid-template-columns:1fr}}
 
-/* genre multi-select dropdown */
-.genre-dropdown{position:relative;flex-shrink:0}
-.genre-trigger{height:34px;padding:0 12px;display:flex;align-items:center;gap:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-family:var(--font);white-space:nowrap;min-width:130px;justify-content:space-between}
-.genre-trigger:hover{border-color:#444}
-.genre-panel{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-width:200px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden}
-.genre-panel.hidden{display:none}
-.genre-toggle-all{padding:8px 12px;font-size:12px;color:var(--accent);cursor:pointer;border-bottom:1px solid var(--border);font-weight:600}
-.genre-toggle-all:hover{background:var(--card)}
-.genre-list{}
-.genre-item{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;transition:background .1s}
-.genre-item:hover{background:var(--card)}
-.genre-check{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .1s}
-.genre-item.selected .genre-check{background:var(--accent);border-color:var(--accent)}
-.genre-item.selected .genre-check::after{content:'✓';font-size:9px;color:#000;font-weight:700}
-
-/* sort dropdown — custom, app-styled (mirrors genre-dropdown) */
+/* crate and sort dropdowns on the arrange row */
 .sort-dropdown,.group-dropdown{position:relative;flex-shrink:0}
 .sort-trigger,.group-trigger{height:34px;padding:0 10px;display:flex;align-items:center;gap:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-family:var(--font);white-space:nowrap;min-width:132px}
 /* the sort trigger is welded to the direction button on its right */
@@ -1234,12 +1212,11 @@ select option{background:var(--surface);color:var(--text)}
   .crate{margin-bottom:10px}
   .crate-body{padding:12px 0 16px}
 }
-.notes-preview p,.detail-notes-body p{margin-bottom:6px}
-.notes-preview h1,.notes-preview h2,.notes-preview h3,
+.detail-notes-body p{margin-bottom:6px}
 .detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
-.notes-preview ul,.notes-preview ol,.detail-notes-body ul,.detail-notes-body ol{padding-left:16px;margin-bottom:6px}
-.notes-preview code,.detail-notes-body code{background:var(--border);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);font-size:11px}
-.notes-preview blockquote,.detail-notes-body blockquote{border-left:2px solid var(--accent);padding-left:8px;color:var(--muted);margin:4px 0}
+.detail-notes-body ul,.detail-notes-body ol{padding-left:16px;margin-bottom:6px}
+.detail-notes-body code{background:var(--border);padding:1px 4px;border-radius:3px;font-family:var(--font-mono);font-size:11px}
+.detail-notes-body blockquote{border-left:2px solid var(--accent);padding-left:8px;color:var(--muted);margin:4px 0}
 
 /* ── multi-note section in form ────────────────────────────────────────────── */
 .notes-section{display:flex;flex-direction:column;gap:10px}
@@ -1420,7 +1397,6 @@ select option{background:var(--surface);color:var(--text)}
 /* date picker modal */
 .cal-title{cursor:pointer;transition:all .12s}
 .cal-title:hover{opacity:0.8}
-.cal-picker-body{padding:16px}
 .cal-picker-month{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:16px}
 .cal-picker-title{font-weight:600;min-width:140px;text-align:center}
 .cal-picker-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
