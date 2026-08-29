@@ -2080,6 +2080,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/timeline.js"></script>
 <script src="/static/health.js"></script>
 <script src="/static/draft.js"></script>
+<script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/grouping.js"></script>
 <script src="/static/history.js"></script>
@@ -2193,9 +2194,11 @@ async function init() {
   syncSortTrigger();
   buildGroupList();
   syncGroupTrigger();
-  buildConditionList();
   syncMobileTabbar();
   bindEvents();
+  // Last, so it lands on a page that is already built: the hash decides the
+  // tab, the filter, the arrangement and which record is open.
+  applyUrl(location.hash);
 }
 
 async function checkAuth() {
@@ -2343,7 +2346,76 @@ function applyQueryChange() {
   render();
   if (currentTab === 'stats') renderStats();
   if (currentTab === 'timeline') renderTimeline();
+  syncUrl();
 }
+
+// ── the address bar ────────────────────────────────────────────────────────
+// Where you are, so it can be linked, gone back from, and reloaded into.
+
+// True while the app is writing the hash, so the hashchange it causes is not
+// mistaken for the user pressing Back.
+let urlWriting = false;
+
+function urlSnapshot() {
+  return {
+    tab: currentTab,
+    text: document.getElementById('searchInput').value,
+    ownership: filterState.ownership,
+    facets: filterState.facets,
+    crate: groupBy,
+    sort: sortBy,
+    dir: sortDir,
+    view: viewMode,
+    recordId: currentDetailId,
+  };
+}
+
+/* Replace rather than push, so typing into the search box leaves one history
+ * entry instead of one per keystroke. Back still works: switching tab and
+ * opening a record push, because those are the moves you expect to undo. */
+function syncUrl(push) {
+  const hash = VinylUrlState.encode(urlSnapshot());
+  const next = hash ? '#' + hash : location.pathname + location.search;
+  if (location.hash.replace(/^#/, '') === hash) return;
+  urlWriting = true;
+  try {
+    if (push) history.pushState(null, '', next);
+    else history.replaceState(null, '', next);
+  } finally {
+    urlWriting = false;
+  }
+}
+
+/* Take the app to whatever the hash says. Used on first load and on Back. */
+function applyUrl(hash) {
+  const st = VinylUrlState.decode(hash);
+
+  document.getElementById('searchInput').value = st.text;
+  filterState.ownership = st.ownership;
+  filterState.facets = st.facets;
+  if (GROUP_OPTIONS.some(o => o.value === st.crate)) groupBy = st.crate;
+  if (SORT_OPTIONS.some(o => o.value === st.sort)) sortBy = st.sort;
+  sortDir = st.dir;
+  setViewMode(st.view);
+  syncGroupTrigger();
+  syncSortTrigger();
+  document.getElementById('sortDirBtn').className = 'sort-dir-btn ' + sortDir;
+
+  if (st.tab !== currentTab) switchTab(st.tab); else applyQueryChange();
+
+  // The record last, so it opens over a shelf that has already been filtered —
+  // its prev/next walk the same list the URL described.
+  if (st.recordId !== null && records.some(r => r.id === st.recordId)) {
+    if (currentDetailId !== st.recordId) openDetail(st.recordId);
+  } else if (currentDetailId !== null) {
+    closeDetail();
+  }
+}
+
+window.addEventListener('hashchange', () => {
+  if (urlWriting) return;
+  applyUrl(location.hash);
+});
 
 function filtered() {
   const s  = sortBy;
@@ -2939,6 +3011,7 @@ function openDetail(id) {
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
+  syncUrl(true);
   if (window.matchMedia('(max-width:760px)').matches) {
     dmCenterSlide(dmIdx, false);
     dmCenterCrateThumb(dmIdx, false);
@@ -2976,6 +3049,7 @@ function navigateDetail(delta) {
     body.removeEventListener('animationend', onOutEnd);
     currentDetailId = nextRecord.id;
     renderDetailContent(nextRecord);
+    syncUrl();
     updateDetailNavVisibility();
     body.classList.remove(outClass);
     body.classList.add(inClass);
@@ -3004,7 +3078,11 @@ function renderDetailFoot(id) {
   if (dmFoot) dmFoot.innerHTML = html;
 }
 
-function closeDetail(){document.getElementById('detailOverlay').classList.add('hidden');confirmDeleteId=null;currentDetailId=null;}
+function closeDetail(){
+  document.getElementById('detailOverlay').classList.add('hidden');
+  confirmDeleteId=null;currentDetailId=null;
+  syncUrl(true);
+}
 
 async function doDelete(id){
   await fetch(`/api/records/${id}`,{method:'DELETE'});
@@ -5057,6 +5135,7 @@ function switchTab(tab) {
 
   if (tab === 'stats') renderStats();
   if (tab === 'timeline') renderTimeline();
+  syncUrl(true);
 }
 
 // ── mobile bottom tab bar — mirrors currentTab, no separate state ──────────
