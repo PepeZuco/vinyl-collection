@@ -982,14 +982,6 @@ select option{background:var(--surface);color:var(--text)}
 .sort-dir-btn{height:34px;width:30px;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--surface);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:color .12s,background .12s}
 .sort-dir-btn:hover{color:var(--text);background:var(--card)}
 
-/* have-it icon toggle: collection (check) vs wishlist (cart) */
-.haveit-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;height:34px;flex-shrink:0}
-.haveit-btn{width:38px;height:100%;border:none;border-right:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .12s}
-.haveit-btn:last-child{border-right:none}
-.haveit-btn:not(.active){opacity:.4}
-.haveit-btn.active[data-mode="collection"]{background:rgba(80,200,120,.15);color:#4cc471}
-.haveit-btn.active[data-mode="wishlist"]{background:rgba(245,197,24,.15);color:#F5C518}
-
 /* random dice button */
 .dice-btn{width:34px;height:34px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
 .dice-btn:hover{border-color:var(--text)}
@@ -1002,7 +994,8 @@ select option{background:var(--surface);color:var(--text)}
 .view-btn{width:34px;height:100%;border:none;border-right:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .12s}
 .view-btn:last-child{border-right:none}
 .view-btn.active{background:rgba(245,197,24,.15);color:var(--accent)}
-@media(max-width:760px){.view-toggle{display:none}}
+/* the list view is arguably more useful on a phone than on a desktop, so
+   the toggle stays put at every width */
 
 /* list view — rows instead of cards, one crate section at a time when crates
    are on */
@@ -1024,52 +1017,6 @@ select option{background:var(--surface);color:var(--text)}
 .list-bars{display:flex;gap:2px}
 .list-bars .score-sq{height:6px}
 .list-plays{font-size:12px;color:var(--label);display:flex;align-items:center;gap:4px;white-space:nowrap}
-
-/* mobile filter bottom sheet — desktop: transparent wrapper around the existing toolbar controls */
-.filter-sheet,.filter-sheet-body,.filter-sheet-section{display:contents}
-.filter-sheet-btn{display:none;position:relative;width:34px;height:34px;padding:0;flex-shrink:0;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--muted);font-size:15px;cursor:pointer}
-.filter-sheet-btn:hover{border-color:var(--text);color:var(--text)}
-.filter-sheet-badge{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;padding:0 3px;border-radius:999px;background:var(--accent);color:#141414;font:700 9px/15px var(--font);text-align:center}
-[data-theme="light"] .filter-sheet-badge{color:#fff}
-.filter-sheet-badge.hidden{display:none}
-.filter-sheet-backdrop{display:none}
-.filter-sheet-head,.filter-sheet-label,.filter-sheet-apply{display:none}
-
-@media(max-width:760px){
-  .haveit-toggle{display:none}
-  .nav-tabs{display:none}
-  #addBtn{display:none}
-  .app{padding-bottom:90px}
-
-  .filter-sheet-btn{display:flex}
-  .filter-sheet-backdrop{
-    display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:95;
-    opacity:0;pointer-events:none;transition:opacity .2s;
-  }
-  .filter-sheet-backdrop.open{opacity:1;pointer-events:auto}
-  .filter-sheet{
-    display:flex;flex-direction:column;position:fixed;left:0;right:0;bottom:0;z-index:96;
-    max-height:80vh;background:var(--surface);border-top:1px solid var(--border);
-    border-radius:16px 16px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.35);
-    transform:translateY(100%);transition:transform .25s ease;
-  }
-  .filter-sheet.open{transform:translateY(0)}
-  .filter-sheet-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
-  .filter-sheet-body{display:flex;flex-direction:column;gap:18px;padding:16px 18px;overflow-y:auto}
-  .filter-sheet-section{display:block}
-  .filter-sheet-label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:8px}
-  .filter-sheet-section .sort-group,.filter-sheet-section .group-dropdown{width:100%}
-  .filter-sheet-section .sort-trigger{flex:1;min-width:0}
-  .filter-sheet-section .group-trigger{width:100%}
-  .filter-sheet-section .genre-dropdown{width:100%}
-  .filter-sheet-section .genre-trigger{width:100%}
-  .filter-sheet-apply{
-    display:block;margin:0 18px 18px;height:44px;border:none;border-radius:8px;
-    background:var(--accent);color:#141414;font:700 13px var(--font);cursor:pointer;
-    flex-shrink:0;
-  }
-  [data-theme="light"] .filter-sheet-apply{color:#fff}
-}
 
 /* mobile bottom tab bar — replaces the top nav-tabs + haveit-toggle */
 .mobile-tabbar{display:none}
@@ -1103,13 +1050,95 @@ select option{background:var(--surface);color:var(--text)}
 }
 
 /* smart filter chips — only rendered once a filter is restricted from its default */
-.filter-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:-8px 0 16px}
-.filter-chips:empty{display:none;margin:0}
-.filter-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 6px 0 10px;border-radius:999px;font-size:12px;background:rgba(245,197,24,.08);border:1px solid color-mix(in srgb, var(--accent) 45%, transparent);color:var(--accent);white-space:nowrap}
-.filter-chip button{background:transparent;border:none;color:inherit;opacity:.7;cursor:pointer;font-size:13px;line-height:1;padding:2px;display:flex}
-.filter-chip button:hover{opacity:1}
-.filter-chips-clear{background:transparent;border:none;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0;font-family:var(--font)}
-.filter-chips-clear:hover{color:var(--text)}
+/* ── the filter bar ──────────────────────────────────────────────────────
+   Two labelled rows. The top decides WHICH records; the bottom decides how
+   they are arranged and can never remove one. */
+.bar{display:flex;flex-direction:column;gap:9px;margin-bottom:20px}
+.bar-row{display:flex;align-items:center;gap:8px;min-height:34px;flex-wrap:wrap}
+.bar-tag{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.14em;color:color-mix(in srgb,var(--text) 22%,transparent);
+  width:58px;flex-shrink:0;user-select:none}
+.bar-row.arrange{padding-top:9px;border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
+@media(max-width:760px){
+  .bar-tag{width:auto;font-size:9px}
+  .bar-row{gap:6px}
+}
+
+.chiprow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.chip{display:inline-flex;align-items:center;height:26px;border-radius:999px;font-size:12px;
+  background:rgba(245,197,24,.08);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);
+  color:var(--accent);white-space:nowrap;overflow:hidden}
+.chip .k{opacity:.62;margin-right:5px}
+.chip b{font-weight:700}
+.chip-open{background:transparent;border:none;color:inherit;font-family:var(--font);font-size:12px;
+  padding:0 4px 0 10px;height:100%;display:flex;align-items:center;cursor:pointer}
+.chip-open:hover{background:rgba(245,197,24,.10)}
+.chip-x{background:transparent;border:none;color:inherit;opacity:.6;cursor:pointer;
+  padding:0 6px 0 2px;height:100%;display:flex;align-items:center;font-size:13px}
+.chip-x:hover{opacity:1;background:rgba(245,197,24,.16)}
+/* ownership is always present — the shelf is always showing something — so it
+   reads as a state you cycle rather than a filter you added */
+.chip.own{background:rgba(95,191,122,.09);border-color:rgba(95,191,122,.45);color:#4CB96B;
+  padding:0 9px 0 10px;gap:5px;cursor:pointer;font-family:var(--font)}
+.chip.own:hover{background:rgba(95,191,122,.16)}
+.chip.own i{font-size:12px;opacity:.7}
+.chip.own.wishlist{background:rgba(155,127,212,.11);border-color:rgba(155,127,212,.5);color:#9B7FD4}
+.chip.own.wishlist:hover{background:rgba(155,127,212,.18)}
+.chip.own.all{background:color-mix(in srgb,var(--label) 12%,transparent);
+  border-color:color-mix(in srgb,var(--label) 45%,transparent);color:var(--label)}
+.chip-add{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 11px 0 8px;
+  border-radius:999px;font-size:12px;background:transparent;border:1px dashed var(--border);
+  color:var(--muted);cursor:pointer;font-family:var(--font)}
+.chip-add:hover{border-color:var(--accent);color:var(--accent)}
+.chip-clear{background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;
+  text-underline-offset:2px;cursor:pointer;padding:0 4px;font-family:var(--font)}
+.chip-clear:hover{color:var(--text)}
+.matchcount{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--label);
+  letter-spacing:.05em;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:10px}
+
+.trigger-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted)}
+#groupChevron,#sortChevron{font-size:12px;margin-left:auto;color:var(--muted)}
+
+/* ── the facet popover ───────────────────────────────────────────────────
+   One control doing two jobs: pick a dimension, then pick its values. A
+   dropdown on a desktop, a bottom sheet on a phone. */
+.facet-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:95;
+  opacity:0;pointer-events:none;transition:opacity .2s}
+.facet-backdrop.open{opacity:1;pointer-events:auto}
+#filterRow{position:relative}
+.facet-pop{position:absolute;top:calc(100% + 6px);left:66px;z-index:96;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);width:290px;box-shadow:0 12px 34px rgba(0,0,0,.5);
+  display:flex;flex-direction:column;overflow:hidden}
+.facet-pop.hidden{display:none}
+.facet-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.facet-head .modal-title{flex:1}
+.facet-body{max-height:320px;overflow-y:auto;padding:4px}
+.facet-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;font-size:13px;
+  border:none;background:transparent;color:var(--text);text-align:left;border-radius:var(--radius-sm);
+  cursor:pointer;font-family:var(--font)}
+.facet-item:hover{background:var(--card)}
+.facet-item.sel{color:var(--accent)}
+.facet-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.facet-check{width:15px;height:15px;border-radius:3px;border:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:10px}
+.facet-item.on .facet-check{background:var(--accent);border-color:var(--accent);color:#141414}
+.facet-count{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.facet-foot{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--border)}
+.facet-apply{flex:1;height:34px;border:none;border-radius:var(--radius-sm);background:var(--accent);
+  color:#141414;font:700 12.5px var(--font);cursor:pointer}
+[data-theme="light"] .facet-apply{color:#fff}
+
+@media(max-width:760px){
+  .facet-backdrop{display:block}
+  .facet-pop{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:82vh;
+    border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none}
+  .facet-body{max-height:none;flex:1}
+  .facet-item{padding:13px 12px;font-size:14.5px}
+  .facet-apply{height:46px;font-size:14px}
+  .facet-foot{padding:12px 14px 20px}
+}
 
 /* more menu — groups export / import / edit-mode behind the header */
 .more-menu{position:relative;flex-shrink:0}
@@ -1147,8 +1176,6 @@ select option{background:var(--surface);color:var(--text)}
 .crate-body{padding:14px 0 20px}
 .crate.collapsed .crate-body{display:none}
 
-/* Later in the file than the shared .filter-sheet-section rules on purpose:
-   same specificity, so source order is what lets these win on mobile. */
 @media(max-width:760px){
   /* at two columns a hairline header gets lost between rows of covers, and it
      has to be a real tap target */
@@ -1425,6 +1452,72 @@ select option{background:var(--surface);color:var(--text)}
     <button class="nav-tab" id="tabStats"><i class="ti ti-chart-bar"></i> Statistics</button>
   </div>
 
+  <!-- The filter bar, above the tabs' content because it belongs to all of
+       them: one query decides what the shelf, the timeline and the charts are
+       describing. The top row changes WHICH records; the bottom row changes
+       how they are arranged and can never remove one. Splitting the two verbs
+       is what turns a drawer of 43 controls into six that state their setting. -->
+  <div class="bar" id="filterBar">
+    <div class="bar-row" id="filterRow">
+      <span class="bar-tag">Filter</span>
+      <div class="search">
+        <i class="ti ti-search"></i>
+        <input type="text" id="searchInput" placeholder="search artist, album...">
+        <button class="btn btn-icon search-fields-btn" id="searchFieldsBtn" onclick="toggleSearchFields()" title="search in">
+          <i class="ti ti-filter-search"></i>
+        </button>
+        <div class="search-fields-panel hidden" id="searchFieldsPanel">
+          <div class="search-fields-label">search in:</div>
+          <div class="search-fields-list">
+            <label class="search-field-check"><input type="checkbox" id="searchField_artist" onchange="toggleSearchField('artist')" checked><span>Artist</span></label>
+            <label class="search-field-check"><input type="checkbox" id="searchField_album" onchange="toggleSearchField('album')" checked><span>Album</span></label>
+            <label class="search-field-check"><input type="checkbox" id="searchField_genre" onchange="toggleSearchField('genre')"><span>Genre</span></label>
+            <label class="search-field-check"><input type="checkbox" id="searchField_notes" onchange="toggleSearchField('notes')"><span>Notes</span></label>
+            <label class="search-field-check"><input type="checkbox" id="searchField_bought_at" onchange="toggleSearchField('bought_at')"><span>Bought At</span></label>
+          </div>
+        </div>
+      </div>
+      <div class="chiprow" id="filterChips"></div>
+      <span class="matchcount" id="matchCount"></span>
+      <div class="facet-pop hidden" id="facetPop"></div>
+    </div>
+
+    <div class="bar-row arrange" id="arrangeRow">
+      <span class="bar-tag">Arrange</span>
+      <div class="group-dropdown" id="groupDropdown">
+        <button class="group-trigger" id="groupTrigger" onclick="toggleGroupDropdown()">
+          <i class="ti ti-calendar-event" id="groupTriggerIcon"></i>
+          <span class="trigger-label">crates</span>
+          <span id="groupLabel">Month added</span>
+          <i class="ti ti-chevron-down" id="groupChevron"></i>
+        </button>
+        <div class="group-panel hidden" id="groupPanel"><div class="group-list" id="groupList"></div></div>
+      </div>
+      <div class="sort-group">
+        <div class="sort-dropdown" id="sortDropdown">
+          <button class="sort-trigger" id="sortTrigger" onclick="toggleSortDropdown()">
+            <i class="ti ti-arrows-sort" id="sortTriggerIcon"></i>
+            <span class="trigger-label">sort</span>
+            <span id="sortLabel">Date added</span>
+            <i class="ti ti-chevron-down" id="sortChevron"></i>
+          </button>
+          <div class="sort-panel hidden" id="sortPanel"><div class="sort-list" id="sortList"></div></div>
+        </div>
+        <button class="sort-dir-btn desc" id="sortDirBtn" title="toggle sort direction"><i class="ti ti-arrow-down"></i></button>
+      </div>
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-btn active" id="viewGridBtn" data-view="grid" title="grid view"><i class="ti ti-layout-grid"></i></button>
+        <button class="view-btn" id="viewListBtn" data-view="list" title="list view"><i class="ti ti-list"></i></button>
+      </div>
+      <button class="dice-btn" id="randomBtn" title="surprise me from this filter">
+        <div class="dice-face" id="diceFace"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Dims the page behind the popover when it rises as a sheet on a phone. -->
+  <div class="facet-backdrop" id="facetBackdrop" onclick="closeFacetPop()"></div>
+
   <!-- timeline page — the same events at four zooms. Month, Week and Day are
        the calendar; Replay is the growth race and the activity lanes, which
        used to be a tab of their own reached through a segmented control that
@@ -1590,211 +1683,22 @@ select option{background:var(--surface);color:var(--text)}
     </div>
     <div class="chart-box" style="margin-bottom:28px" id="statsTableBox">
       <div class="chart-title">records</div>
-      <div class="toolbar">
-        <div class="search">
-          <i class="ti ti-search"></i>
-          <input type="text" id="statsSearchInput" placeholder="search artist, album, genre...">
-          <button class="btn btn-icon search-fields-btn" id="statsSearchFieldsBtn" onclick="toggleStatsSearchFields()" title="search in">
-            <i class="ti ti-filter-search"></i>
-          </button>
-          <div class="search-fields-panel hidden" id="statsSearchFieldsPanel">
-            <div class="search-fields-label">search in:</div>
-            <div class="search-fields-list">
-              <label class="search-field-check">
-                <input type="checkbox" id="statsSearchField_artist" onchange="toggleStatsSearchField('artist')" checked>
-                <span>Artist</span>
-              </label>
-              <label class="search-field-check">
-                <input type="checkbox" id="statsSearchField_album" onchange="toggleStatsSearchField('album')" checked>
-                <span>Album</span>
-              </label>
-              <label class="search-field-check">
-                <input type="checkbox" id="statsSearchField_genre" onchange="toggleStatsSearchField('genre')">
-                <span>Genre</span>
-              </label>
-              <label class="search-field-check">
-                <input type="checkbox" id="statsSearchField_notes" onchange="toggleStatsSearchField('notes')">
-                <span>Notes</span>
-              </label>
-              <label class="search-field-check">
-                <input type="checkbox" id="statsSearchField_bought_at" onchange="toggleStatsSearchField('bought_at')">
-                <span>Bought At</span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <button class="filter-sheet-btn" id="statsFilterSheetBtn" onclick="toggleStatsFilterSheet()" title="filters">
-          <i class="ti ti-adjustments-horizontal"></i>
-          <span class="filter-sheet-badge hidden" id="statsFilterSheetBadge">0</span>
-        </button>
-        <div class="filter-sheet-backdrop" id="statsFilterSheetBackdrop" onclick="toggleStatsFilterSheet(false)"></div>
-        <div class="filter-sheet" id="statsFilterSheet">
-          <div class="filter-sheet-head">
-            <span class="modal-title">filters</span>
-            <button class="btn btn-ghost btn-sm" onclick="toggleStatsFilterSheet(false)"><i class="ti ti-x"></i></button>
-          </div>
-          <div class="filter-sheet-body">
-            <div class="filter-sheet-section">
-              <div class="filter-sheet-label">Genres</div>
-              <div class="genre-dropdown" id="statsGenreDropdown">
-                <button class="genre-trigger" id="statsGenreTrigger" onclick="toggleStatsGenreDropdown()">
-                  <span id="statsGenreLabel">all genres</span>
-                  <i class="ti ti-chevron-down" id="statsGenreChevron" style="font-size:12px;transition:transform .15s"></i>
-                </button>
-                <div class="genre-panel hidden" id="statsGenrePanel">
-                  <div class="genre-toggle-all" onclick="toggleAllStatsGenres()">
-                    <span id="statsToggleAllLabel">deselect all</span>
-                  </div>
-                  <div class="genre-list" id="statsGenreList"></div>
-                </div>
-              </div>
-            </div>
-            <div class="filter-sheet-section">
-              <div class="filter-sheet-label">Condition</div>
-              <div class="genre-dropdown" id="statsConditionDropdown">
-                <button class="genre-trigger" id="statsConditionTrigger" onclick="toggleStatsConditionDropdown()">
-                  <span id="statsConditionLabel">all conditions</span>
-                  <i class="ti ti-chevron-down" id="statsConditionChevron" style="font-size:12px;transition:transform .15s"></i>
-                </button>
-                <div class="genre-panel hidden" id="statsConditionPanel">
-                  <div class="genre-list" id="statsConditionList"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <button class="filter-sheet-apply" id="statsFilterSheetApply" onclick="toggleStatsFilterSheet(false)">Show records</button>
-        </div>
-      </div>
-      <div class="filter-chips" id="statsFilterChips"></div>
       <div class="stats-table-wrap" id="statsTableWrap"></div>
     </div>
   </div>
 
   <!-- collection page -->
   <div class="collection-page" id="collectionPage">
-    <div class="toolbar">
-    <div class="search">
-      <i class="ti ti-search"></i>
-      <input type="text" id="searchInput" placeholder="search artist, album, genre...">
-      <button class="btn btn-icon search-fields-btn" id="searchFieldsBtn" onclick="toggleSearchFields()" title="search in">
-        <i class="ti ti-filter-search"></i>
-      </button>
-      <div class="search-fields-panel hidden" id="searchFieldsPanel">
-        <div class="search-fields-label">search in:</div>
-        <div class="search-fields-list">
-          <label class="search-field-check">
-            <input type="checkbox" id="searchField_artist" onchange="toggleSearchField('artist')" checked>
-            <span>Artist</span>
-          </label>
-          <label class="search-field-check">
-            <input type="checkbox" id="searchField_album" onchange="toggleSearchField('album')" checked>
-            <span>Album</span>
-          </label>
-          <label class="search-field-check">
-            <input type="checkbox" id="searchField_genre" onchange="toggleSearchField('genre')">
-            <span>Genre</span>
-          </label>
-          <label class="search-field-check">
-            <input type="checkbox" id="searchField_notes" onchange="toggleSearchField('notes')">
-            <span>Notes</span>
-          </label>
-          <label class="search-field-check">
-            <input type="checkbox" id="searchField_bought_at" onchange="toggleSearchField('bought_at')">
-            <span>Bought At</span>
-          </label>
-        </div>
-      </div>
-    </div>
-    <button class="filter-sheet-btn" id="filterSheetBtn" onclick="toggleFilterSheet()" title="filters">
-      <i class="ti ti-adjustments-horizontal"></i>
-      <span class="filter-sheet-badge hidden" id="filterSheetBadge">0</span>
-    </button>
-    <div class="filter-sheet-backdrop" id="filterSheetBackdrop" onclick="toggleFilterSheet(false)"></div>
-    <div class="filter-sheet" id="filterSheet">
-      <div class="filter-sheet-head">
-        <span class="modal-title">filters</span>
-        <button class="btn btn-ghost btn-sm" onclick="toggleFilterSheet(false)"><i class="ti ti-x"></i></button>
-      </div>
-      <div class="filter-sheet-body">
-        <div class="filter-sheet-section">
-          <div class="filter-sheet-label">Crates</div>
-          <div class="group-dropdown" id="groupDropdown">
-            <button class="group-trigger" id="groupTrigger" onclick="toggleGroupDropdown()">
-              <i class="ti ti-calendar-event" id="groupTriggerIcon"></i>
-              <span id="groupLabel">Month added</span>
-              <i class="ti ti-chevron-down" id="groupChevron" style="font-size:12px;transition:transform .15s;margin-left:auto"></i>
-            </button>
-            <div class="group-panel hidden" id="groupPanel">
-              <div class="group-list" id="groupList"></div>
-            </div>
-          </div>
-        </div>
-        <div class="filter-sheet-section">
-          <div class="filter-sheet-label">Sort by</div>
-          <div class="sort-group">
-            <div class="sort-dropdown" id="sortDropdown">
-              <button class="sort-trigger" id="sortTrigger" onclick="toggleSortDropdown()">
-                <i class="ti ti-calendar-event" id="sortTriggerIcon"></i>
-                <span id="sortLabel">Date added</span>
-                <i class="ti ti-chevron-down" id="sortChevron" style="font-size:12px;transition:transform .15s;margin-left:auto"></i>
-              </button>
-              <div class="sort-panel hidden" id="sortPanel">
-                <div class="sort-list" id="sortList"></div>
-              </div>
-            </div>
-            <button class="sort-dir-btn desc" id="sortDirBtn" title="toggle sort direction"><i class="ti ti-arrow-down"></i></button>
-          </div>
-        </div>
-        <div class="filter-sheet-section">
-          <div class="filter-sheet-label">Genres</div>
-          <div class="genre-dropdown" id="genreDropdown">
-            <button class="genre-trigger" id="genreTrigger" onclick="toggleGenreDropdown()">
-              <span id="genreLabel">all genres</span>
-              <i class="ti ti-chevron-down" id="genreChevron" style="font-size:12px;transition:transform .15s"></i>
-            </button>
-            <div class="genre-panel hidden" id="genrePanel">
-              <div class="genre-toggle-all" onclick="toggleAllGenres()">
-                <span id="toggleAllLabel">deselect all</span>
-              </div>
-              <div class="genre-list" id="genreList"></div>
-            </div>
-          </div>
-        </div>
-        <div class="filter-sheet-section">
-          <div class="filter-sheet-label">Condition</div>
-          <div class="genre-dropdown" id="conditionDropdown">
-            <button class="genre-trigger" id="conditionTrigger" onclick="toggleConditionDropdown()">
-              <span id="conditionLabel">all conditions</span>
-              <i class="ti ti-chevron-down" id="conditionChevron" style="font-size:12px;transition:transform .15s"></i>
-            </button>
-            <div class="genre-panel hidden" id="conditionPanel">
-              <div class="genre-list" id="conditionList"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <button class="filter-sheet-apply" id="filterSheetApply" onclick="toggleFilterSheet(false)">Show records</button>
-    </div>
-    <div class="haveit-toggle" id="haveItToggle">
-      <button class="haveit-btn active" id="btnHaveCollection" data-mode="collection" title="in collection"><i class="ti ti-check"></i></button>
-      <button class="haveit-btn" id="btnHaveWishlist" data-mode="wishlist" title="wishlist"><i class="ti ti-shopping-cart"></i></button>
-    </div>
-    <button class="dice-btn" id="randomBtn" title="random record">
-      <div class="dice-face" id="diceFace"></div>
-    </button>
-    <div class="view-toggle" id="viewToggle">
-      <button class="view-btn active" id="viewGridBtn" data-view="grid" title="grid view"><i class="ti ti-layout-grid"></i></button>
-      <button class="view-btn" id="viewListBtn" data-view="list" title="list view"><i class="ti ti-list"></i></button>
-    </div>
-    </div>
-    <div class="filter-chips" id="filterChips"></div>
     <div id="recordsContainer"></div>
   </div>
 </div>
 
-<!-- mobile bottom tab bar — mirrors haveItMode + currentTab, no separate state -->
+<!-- mobile bottom tab bar. Wishlist used to hold a slot here while being a
+     filter everywhere else; it is the ownership chip now, on both breakpoints.
+     Search takes the freed slot because it is what you actually reach for, and
+     it puts the filter bar under a thumb. -->
 <nav class="mobile-tabbar" id="mobileTabbar">
-  <button class="mtab-item active" id="mtabCollection" onclick="setHaveItMode('collection');switchTab('collection')">
+  <button class="mtab-item active" id="mtabCollection" onclick="switchTab('collection')">
     <span class="mtab-icon-wrap"><i class="ti ti-layout-grid"></i></span><span>Collection</span>
   </button>
   <button class="mtab-item" id="mtabTimeline" onclick="switchTab('timeline')">
@@ -1804,8 +1708,8 @@ select option{background:var(--surface);color:var(--text)}
   <button class="mtab-item" id="mtabStats" onclick="switchTab('stats')">
     <span class="mtab-icon-wrap"><i class="ti ti-chart-bar"></i></span><span>Stats</span>
   </button>
-  <button class="mtab-item" id="mtabWishlist" onclick="setHaveItMode('wishlist');switchTab('collection')">
-    <span class="mtab-icon-wrap"><i class="ti ti-shopping-cart"></i></span><span>Wishlist</span>
+  <button class="mtab-item" id="mtabSearch" onclick="focusSearch()">
+    <span class="mtab-icon-wrap"><i class="ti ti-search"></i></span><span>Search</span>
   </button>
 </nav>
 
@@ -2353,7 +2257,9 @@ function multiArtistBadgeHTML() {
 }
 
 // ── filtering & sorting ────────────────────────────────────────────────────
-let haveItMode = 'collection'; // 'collection' | 'wishlist'
+/* Everything the shared query is, apart from the search box's own text.
+ * One object, so no surface can hold a filter another surface cannot see. */
+let filterState = { ownership: 'owned', facets: {} };
 let sortDir = 'desc'; // 'asc' | 'desc'
 let sortBy = 'bought_date';
 
@@ -2402,16 +2308,11 @@ function toggleSearchFields() {
  * never has to infer intent from a set's size. That inference is what let the
  * old code disagree with itself about what an empty selection meant. */
 function currentQuery() {
-  // selectedGenres is null until renderFilters() has seen the records once, and
-  // renderStats() can run first. Unset means unconstrained, same as "all ticked".
-  const noGenreConstraint = !selectedGenres || selectedGenres.size === allGenres.length;
-  const allCondsPicked = selectedConditions.size === CONDITION_OPTIONS.length;
   return {
     text: document.getElementById('searchInput').value,
     fields: searchFields,
-    genres: noGenreConstraint ? null : [...selectedGenres],
-    conditions: allCondsPicked ? null : [...selectedConditions],
-    ownership: haveItMode === 'collection' ? 'owned' : haveItMode,
+    ownership: filterState.ownership,
+    facets: filterState.facets,
   };
 }
 
@@ -2423,6 +2324,7 @@ const FILTER_DEPS = { parseNotes: (raw) => parseNotes(raw) };
 function applyQueryChange() {
   render();
   if (currentTab === 'stats') renderStats();
+  if (currentTab === 'timeline') renderTimeline();
 }
 
 function filtered() {
@@ -2558,45 +2460,52 @@ function cratesHTML(recs) {
 }
 
 // ── smart filter chips — only shown once a filter is restricted from default ─
-function resetGenreFilter() {
-  selectedGenres = new Set(allGenres);
-  buildGenreList();
-  applyQueryChange();
-}
-
-function resetConditionFilter() {
-  selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
-  buildConditionList();
-  applyQueryChange();
-}
-
-function clearAllFilters() {
-  selectedGenres = new Set(allGenres);
-  selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
-  buildGenreList();
-  buildConditionList();
-  applyQueryChange();
-}
-
+/* The bar, rendered from the query. Every constraint is a chip that names its
+ * field and its value, so a shelf reads back as a sentence — "owned, used" —
+ * and an empty one always says why. Search and ownership used to leave no
+ * trace at all, which is how you ended up staring at a grid unable to tell
+ * what was hiding the rest of it. */
 function renderChips(matchCount) {
-  const el = document.getElementById('filterChips');
-  const chips = [];
+  const own = OWNERSHIP.find(o => o.value === filterState.ownership) || OWNERSHIP[0];
+  const chips = VinylFilters.chipsFor(currentQuery());
 
-  if (selectedGenres.size < allGenres.length) {
-    chips.push(`<span class="filter-chip">Genres: ${selectedGenres.size} of ${allGenres.length}<button onclick="resetGenreFilter()" title="reset genre filter"><i class="ti ti-x"></i></button></span>`);
-  }
-  if (selectedConditions.size < CONDITION_OPTIONS.length) {
-    chips.push(`<span class="filter-chip">Condition: ${selectedConditions.size} of ${CONDITION_OPTIONS.length}<button onclick="resetConditionFilter()" title="reset condition filter"><i class="ti ti-x"></i></button></span>`);
-  }
-  el.innerHTML = chips.length ? chips.concat(`<button class="filter-chips-clear" onclick="clearAllFilters()">clear filters</button>`).join('') : '';
+  const ownChip = `<button class="chip own ${esc(own.value)}" onclick="cycleOwnership()"
+      title="show owned, wishlist or all">
+      <span class="k">show</span><b>${esc(own.label)}</b>
+      <i class="ti ti-chevron-down"></i>
+    </button>`;
 
-  // mobile filter sheet: badge count + live "show N records" button
-  const badge = document.getElementById('filterSheetBadge');
-  const badgeCount = chips.length;
-  badge.textContent = badgeCount;
-  badge.classList.toggle('hidden', badgeCount === 0);
-  const applyBtn = document.getElementById('filterSheetApply');
-  applyBtn.textContent = `Show ${matchCount} record${matchCount === 1 ? '' : 's'}`;
+  const facetChips = chips.map(c => `<span class="chip">
+      <button class="chip-open" onclick="openFacetValues('${esc(c.id)}')">
+        <span class="k">${esc(c.label.toLowerCase())}</span><b>${esc(chipValueText(c))}</b>
+      </button>
+      <button class="chip-x" onclick="dropFacet('${esc(c.id)}')" title="remove this filter">
+        <i class="ti ti-x"></i>
+      </button>
+    </span>`).join('');
+
+  const add = `<button class="chip-add" onclick="openFacetPicker()">
+      <i class="ti ti-plus"></i>filter
+    </button>`;
+  const clear = chips.length
+    ? `<button class="chip-clear" onclick="clearAllFilters()">clear</button>` : '';
+
+  document.getElementById('filterChips').innerHTML = ownChip + facetChips + add + clear;
+
+  const total = OWNERSHIP_TOTALS[filterState.ownership];
+  document.getElementById('matchCount').textContent =
+    matchCount === total ? `${matchCount} records` : `${matchCount} of ${total}`;
+}
+
+/* How many records the current ownership admits before any facet narrows it —
+ * the denominator the match count reads against. */
+let OWNERSHIP_TOTALS = { owned: 0, wishlist: 0, all: 0 };
+function countOwnership() {
+  OWNERSHIP_TOTALS = {
+    owned: records.filter(r => r.have_it).length,
+    wishlist: records.filter(r => !r.have_it).length,
+    all: records.length,
+  };
 }
 
 // ── trigger square-shine animation only once a card is actually visible ────
@@ -2618,7 +2527,8 @@ function observeCardsForGlow() {
 }
 
 function renderCount(n) {
-  const label = haveItMode === 'wishlist' ? 'on wishlist' : 'in collection';
+  const label = filterState.ownership === 'wishlist' ? 'on wishlist'
+    : filterState.ownership === 'all' ? 'owned and wanted' : 'in collection';
   document.getElementById('recordCount').textContent = `— ${n} ${label}`;
 }
 
@@ -2751,20 +2661,8 @@ function listRowHTML(r) {
 }
 
 function renderFilters() {
-  // genreUniverse keeps the "no genre" bucket when records need it. Building
-  // this list with .filter(Boolean) is what made three wishlist records
-  // unreachable: '' was never offered, so nothing could match them.
-  const genres = VinylFilters.genreUniverse(records);
-  // init selectedGenres with all genres if not set yet
-  if (selectedGenres === null) {
-    selectedGenres = new Set(genres);
-    allGenres = genres;
-  } else {
-    // add any new genres
-    genres.forEach(g => { if (!allGenres.includes(g)) { allGenres.push(g); selectedGenres.add(g); } });
-    allGenres = genres;
-  }
-  buildGenreList();
+  countOwnership();
+  if (facetPopFor !== null) renderFacetPop();
 }
 
 // ── detail modal ───────────────────────────────────────────────────────────
@@ -4438,8 +4336,6 @@ function bindEvents(){
     applyQueryChange();
   });
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
-  document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
-  document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
   document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
   document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
   document.getElementById('viewGridBtn').classList.toggle('active', viewMode === 'grid');
@@ -4500,12 +4396,12 @@ function toggleSortDir() {
   render();
 }
 
-function setHaveItMode(mode) {
-  haveItMode = mode;
-  document.getElementById('btnHaveCollection').classList.toggle('active', mode === 'collection');
-  document.getElementById('btnHaveWishlist').classList.toggle('active', mode === 'wishlist');
-  syncMobileTabbar();
-  applyQueryChange();
+/* The phone's Search item: go where the bar is and put the cursor in it. */
+function focusSearch() {
+  if (currentTab !== 'collection') switchTab('collection');
+  const box = document.getElementById('searchInput');
+  box.scrollIntoView({ block: 'nearest' });
+  box.focus();
 }
 
 // ── dice button: random face, rapid cycling shuffle on hover ───────────────
@@ -4680,132 +4576,153 @@ async function adjustPlayCount(id, delta) {
 
 
 // ── genre multi-select ─────────────────────────────────────────────────────
-let selectedGenres = null; // null = not init yet (all selected)
-let allGenres = [];
+/* Facet values wear their raw form in the model and their words here: the
+ * model should not know that '' means "No genre", or that a country is stored
+ * as an ISO code. */
+const CONDITION_LABELS = { new: 'New', used: 'Used', '': 'Unknown' };
+const CLEANING_LABELS  = { cleaned: 'Cleaned at least once', never: 'Never cleaned' };
 
-function buildGenreList() {
-  const list = document.getElementById('genreList');
-  list.innerHTML = allGenres.map(g => `
-    <div class="genre-item${selectedGenres.has(g)?' selected':''}" data-genre="${esc(g)}">
-      <div class="genre-check"></div>
-      <span${g ? '' : ' style="opacity:.75;font-style:italic"'}>${esc(g) || 'No genre'}</span>
-    </div>`).join('');
-  updateGenreLabel();
+function facetValueLabel(facetId, value) {
+  if (facetId === 'condition') return CONDITION_LABELS[value] || 'Unknown';
+  if (facetId === 'cleaning')  return CLEANING_LABELS[value] || value;
+  if (facetId === 'country')   return value ? countryNameOf(value) : 'No country';
+  if (!value) {
+    return { genre: 'No genre', decade: 'No year', store: 'Not recorded' }[facetId] || 'Not set';
+  }
+  return value;
 }
 
-// delegated listener avoids quoting issues with genre names containing quotes/special chars
+/* What a chip says. One value reads as itself; several read as a count, since
+ * "Genre · Rock, Jazz, Soul & Funk, Pop" is longer than the shelf it explains. */
+function chipValueText(chip) {
+  if (chip.values.length === 0) return 'none';
+  if (chip.values.length === 1) return facetValueLabel(chip.id, chip.values[0]);
+  const total = VinylFilters.facetValues(records, currentQuery(), chip.id, FILTER_DEPS).length;
+  return chip.values.length + ' of ' + total;
+}
+
+// ── the facet popover: one control, two jobs ───────────────────────────────
+// Closed, it is nothing. Opened from "+ filter" it lists the dimensions you
+// could narrow by; opened from a chip it lists that dimension's values with
+// the count each would leave on screen. On a phone the same element rises as
+// a bottom sheet — the sheet it replaces was a settings screen holding every
+// control at once, which is what made it feel endless.
+let facetPopFor = null;   // null | 'pick' | a facet id
+
+function openFacetPicker() { facetPopFor = 'pick'; renderFacetPop(); }
+function openFacetValues(id) { facetPopFor = id; renderFacetPop(); }
+function closeFacetPop() { facetPopFor = null; renderFacetPop(); }
+
+function renderFacetPop() {
+  const pop = document.getElementById('facetPop');
+  const backdrop = document.getElementById('facetBackdrop');
+  pop.classList.toggle('hidden', facetPopFor === null);
+  backdrop.classList.toggle('open', facetPopFor !== null);
+  if (facetPopFor === null) { pop.innerHTML = ''; return; }
+
+  const q = currentQuery();
+
+  if (facetPopFor === 'pick') {
+    pop.innerHTML = `<div class="facet-head">
+        <span class="modal-title">narrow the shelf by</span>
+        <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="facet-body">` +
+      VinylFilters.FACETS.map(f => {
+        const n = VinylFilters.facetValues(records, q, f.id, FILTER_DEPS).length;
+        const on = !!q.facets[f.id];
+        return `<button class="facet-item${on ? ' sel' : ''}" onclick="openFacetValues('${f.id}')">
+          <span>${esc(f.label)}</span>
+          <span class="facet-count">${n} value${n === 1 ? '' : 's'}</span>
+        </button>`;
+      }).join('') + `</div>`;
+    return;
+  }
+
+  const facet = VinylFilters.facetById(facetPopFor);
+  const values = VinylFilters.facetValues(records, q, facet.id, FILTER_DEPS);
+  const picked = q.facets[facet.id] || null;
+  const shown = VinylFilters.filterRecords(records, q, FILTER_DEPS).length;
+  pop.innerHTML = `<div class="facet-head">
+      <button class="btn btn-ghost btn-sm" onclick="openFacetPicker()"><i class="ti ti-chevron-left"></i></button>
+      <span class="modal-title">${esc(facet.label)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="facet-body">` +
+    values.map(v => {
+      const on = picked === null || picked.indexOf(v.value) !== -1;
+      return `<button class="facet-item${on ? ' on' : ''}" data-facet="${esc(facet.id)}" data-value="${esc(v.value)}">
+        <span class="facet-check">${on ? '<i class="ti ti-check"></i>' : ''}</span>
+        <span class="facet-name">${esc(facetValueLabel(facet.id, v.value))}</span>
+        <span class="facet-count">${v.count}</span>
+      </button>`;
+    }).join('') + `</div>
+    <div class="facet-foot">
+      <button class="btn btn-sm" onclick="dropFacet('${facet.id}')">Reset</button>
+      <button class="facet-apply" onclick="closeFacetPop()">Show ${shown} record${shown === 1 ? '' : 's'}</button>
+    </div>`;
+}
+
+// delegated, so a value carrying quotes or an ampersand cannot break the handler
 document.addEventListener('click', e => {
-  const item = e.target.closest('.genre-item');
-  if (item && item.dataset.genre !== undefined) toggleGenre(item.dataset.genre);
+  const item = e.target.closest('#facetPop .facet-item[data-facet]');
+  if (item) toggleFacetValue(item.dataset.facet, item.dataset.value);
 });
 
-function toggleGenre(g) {
-  if (selectedGenres.has(g)) {
-    if (selectedGenres.size === 1) return; // keep at least one
-    selectedGenres.delete(g);
-  } else {
-    selectedGenres.add(g);
-  }
-  buildGenreList();
+/* Ticking values one at a time. An untouched facet has no entry at all, so the
+ * first click has to mean "only this one" rather than "all but this one" —
+ * otherwise picking Rock from a fresh list would leave everything else on. */
+function toggleFacetValue(id, value) {
+  const facets = Object.assign({}, filterState.facets);
+  const all = VinylFilters.facetValues(records, currentQuery(), id, FILTER_DEPS).map(v => v.value);
+  let picked = facets[id];
+  if (!picked) picked = [value];
+  else if (picked.indexOf(value) === -1) picked = picked.concat(value);
+  else picked = picked.filter(v => v !== value);
+
+  // Everything ticked is the same as no constraint, and must not leave a chip.
+  if (picked.length === all.length && all.every(v => picked.indexOf(v) !== -1)) delete facets[id];
+  else facets[id] = picked;
+
+  filterState.facets = facets;
   applyQueryChange();
+  renderFacetPop();
 }
 
-function toggleAllGenres() {
-  if (selectedGenres.size === allGenres.length) {
-    // deselect all → keep just first to avoid empty
-    selectedGenres = new Set([allGenres[0]]);
-  } else {
-    selectedGenres = new Set(allGenres);
-  }
-  buildGenreList();
+function dropFacet(id) {
+  const facets = Object.assign({}, filterState.facets);
+  delete facets[id];
+  filterState.facets = facets;
   applyQueryChange();
+  if (facetPopFor !== null) renderFacetPop();
 }
 
-function updateGenreLabel() {
-  const label = document.getElementById('genreLabel');
-  const toggleAll = document.getElementById('toggleAllLabel');
-  const allSelected = selectedGenres.size === allGenres.length;
-  label.textContent = allSelected ? 'all genres' : selectedGenres.size === 1
-    ? ([...selectedGenres][0] || 'No genre')
-    : `${selectedGenres.size} genres`;
-  toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
+function clearAllFilters() {
+  filterState.facets = {};
+  applyQueryChange();
+  closeFacetPop();
 }
 
-// ── condition multi-select — same pattern as genre, over a fixed 3-value set ─
-const CONDITION_OPTIONS = [
-  { value: 'new',  label: 'New' },
-  { value: 'used', label: 'Used' },
-  { value: '',     label: 'Unknown' },
+// ── ownership: three states, where there used to be two ────────────────────
+// Owned and Wishlist were separate destinations — a toggle on the desktop, two
+// bottom-bar tabs on the phone — and no combination showed all 292 records at
+// once. It is one chip now, and All is a state it can hold.
+const OWNERSHIP = [
+  { value: 'owned',    label: 'Owned',    icon: 'ti-disc' },
+  { value: 'wishlist', label: 'Wishlist', icon: 'ti-shopping-cart' },
+  { value: 'all',      label: 'All',      icon: 'ti-stack-2' },
 ];
-let selectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
 
-function buildConditionList() {
-  const list = document.getElementById('conditionList');
-  list.innerHTML = CONDITION_OPTIONS.map(o => `
-    <div class="genre-item condition-item${selectedConditions.has(o.value)?' selected':''}" data-condition="${esc(o.value)}">
-      <div class="genre-check"></div>
-      <span>${esc(o.label)}</span>
-    </div>`).join('');
-  updateConditionLabel();
+function cycleOwnership() {
+  const i = OWNERSHIP.findIndex(o => o.value === filterState.ownership);
+  setOwnership(OWNERSHIP[(i + 1) % OWNERSHIP.length].value);
 }
 
-document.addEventListener('click', e => {
-  const item = e.target.closest('.condition-item');
-  if (item && item.dataset.condition !== undefined) toggleCondition(item.dataset.condition);
-});
-
-function toggleCondition(v) {
-  if (selectedConditions.has(v)) {
-    if (selectedConditions.size === 1) return; // keep at least one
-    selectedConditions.delete(v);
-  } else {
-    selectedConditions.add(v);
-  }
-  buildConditionList();
+function setOwnership(value) {
+  filterState.ownership = value;
   applyQueryChange();
 }
 
-function updateConditionLabel() {
-  const label = document.getElementById('conditionLabel');
-  const allSelected = selectedConditions.size === CONDITION_OPTIONS.length;
-  label.textContent = allSelected ? 'all conditions' : selectedConditions.size === 1
-    ? CONDITION_OPTIONS.find(o => selectedConditions.has(o.value)).label
-    : `${selectedConditions.size} conditions`;
-}
-
-function toggleConditionDropdown() {
-  const panel = document.getElementById('conditionPanel');
-  const chevron = document.getElementById('conditionChevron');
-  const open = !panel.classList.contains('hidden');
-  panel.classList.toggle('hidden', open);
-  chevron.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-// close condition dropdown when clicking outside
-document.addEventListener('click', e => {
-  const dd = document.getElementById('conditionDropdown');
-  const path = e.composedPath ? e.composedPath() : [];
-  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
-  if (dd && !clickedInside) {
-    document.getElementById('conditionPanel')?.classList.add('hidden');
-    const ch = document.getElementById('conditionChevron');
-    if (ch) ch.style.transform = '';
-  }
-});
-
-// close dropdown when clicking outside
-document.addEventListener('click', e => {
-  const dd = document.getElementById('genreDropdown');
-  const path = e.composedPath ? e.composedPath() : [];
-  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
-  if (dd && !clickedInside) {
-    document.getElementById('genrePanel')?.classList.add('hidden');
-    const ch = document.getElementById('genreChevron');
-    if (ch) ch.style.transform = '';
-  }
-});
-
-// ── group dropdown — custom, app-styled (mirrors the sort dropdown) ────────
 function buildGroupList() {
   document.getElementById('groupList').innerHTML = GROUP_OPTIONS.map(o => `
     <div class="group-item${o.value===groupBy?' selected':''}" data-group="${o.value}">
@@ -4911,22 +4828,7 @@ document.addEventListener('click', e => {
   }
 });
 
-function toggleGenreDropdown() {
-  const panel = document.getElementById('genrePanel');
-  const chevron = document.getElementById('genreChevron');
-  const open = !panel.classList.contains('hidden');
-  panel.classList.toggle('hidden', open);
-  chevron.style.transform = open ? '' : 'rotate(180deg)';
-}
 
-// ── mobile filter bottom sheet — hosts sort + genre, hidden on desktop ─────
-function toggleFilterSheet(force) {
-  const sheet = document.getElementById('filterSheet');
-  const backdrop = document.getElementById('filterSheetBackdrop');
-  const open = typeof force === 'boolean' ? force : !sheet.classList.contains('open');
-  sheet.classList.toggle('open', open);
-  backdrop.classList.toggle('open', open);
-}
 
 // ── header "more actions" menu — export / import / edit mode ───────────────
 function toggleMoreMenu() {
@@ -4954,6 +4856,11 @@ function switchTab(tab) {
   document.getElementById('tabCollection').classList.toggle('active', tab === 'collection');
   document.getElementById('tabStats').classList.toggle('active', tab === 'stats');
   document.getElementById('tabTimeline').classList.toggle('active', tab === 'timeline');
+  // The filter row is on every surface — it is what they all describe. The
+  // arrange row is the shelf's: the Timeline arranges itself by scale, and
+  // there is nothing to arrange on a page of charts.
+  document.getElementById('arrangeRow').style.display = tab === 'collection' ? '' : 'none';
+  closeFacetPop();
   syncMobileTabbar();
 
   // Leaving the tab stops the replay — no timer runs behind another view.
@@ -4963,11 +4870,10 @@ function switchTab(tab) {
   if (tab === 'timeline') renderTimeline();
 }
 
-// ── mobile bottom tab bar — mirrors haveItMode + currentTab, no separate state ─
+// ── mobile bottom tab bar — mirrors currentTab, no separate state ──────────
 function syncMobileTabbar() {
   const onCollection = currentTab === 'collection';
-  document.getElementById('mtabCollection').classList.toggle('active', onCollection && haveItMode === 'collection');
-  document.getElementById('mtabWishlist').classList.toggle('active', onCollection && haveItMode === 'wishlist');
+  document.getElementById('mtabCollection').classList.toggle('active', onCollection);
   document.getElementById('mtabTimeline').classList.toggle('active', currentTab === 'timeline');
   // Every tab now has an item of its own, so nothing has to lie about where
   // you are — History used to light up Stats because it had no slot at all.
@@ -6037,132 +5943,6 @@ function renderStatsTable(all) {
   wrap.querySelectorAll('[data-id]').forEach(el =>
     el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
   );
-}
-
-/* The statistics page's own filter widgets, driven entirely by the shared
- * query. They keep their names because the markup still calls them by name;
- * the markup itself goes when the filter bar becomes one universal control.
- * Nothing below owns any state — every one of these edits the same sets the
- * shelf edits, and re-renders both surfaces. */
-
-function toggleStatsSearchField(field) { toggleSearchField(field); }
-
-function toggleStatsSearchFields() {
-  document.getElementById('statsSearchFieldsPanel').classList.toggle('hidden');
-}
-
-document.addEventListener('click', e => {
-  const btn = document.getElementById('statsSearchFieldsBtn');
-  const panel = document.getElementById('statsSearchFieldsPanel');
-  if (!btn || !panel) return;
-  if (!btn.contains(e.target) && !panel.contains(e.target)) panel.classList.add('hidden');
-});
-
-function buildStatsGenreList() {
-  const list = document.getElementById('statsGenreList');
-  if (!list) return;
-  list.innerHTML = allGenres.map(g => `
-    <div class="genre-item${selectedGenres.has(g)?' selected':''}" data-stats-genre="${esc(g)}">
-      <div class="genre-check"></div>
-      <span${g ? '' : ' style="opacity:.75;font-style:italic"'}>${esc(g) || 'No genre'}</span>
-    </div>`).join('');
-  updateStatsGenreLabel();
-}
-
-document.addEventListener('click', e => {
-  const item = e.target.closest('[data-stats-genre]');
-  if (item) toggleGenre(item.dataset.statsGenre);
-});
-
-function updateStatsGenreLabel() {
-  const label = document.getElementById('statsGenreLabel');
-  const toggleAll = document.getElementById('statsToggleAllLabel');
-  if (!label) return;
-  const allSelected = selectedGenres.size === allGenres.length;
-  label.textContent = allSelected ? 'all genres' : selectedGenres.size === 1
-    ? ([...selectedGenres][0] || 'No genre')
-    : `${selectedGenres.size} genres`;
-  if (toggleAll) toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
-}
-
-function toggleAllStatsGenres() { toggleAllGenres(); }
-
-function toggleStatsGenreDropdown() {
-  const panel = document.getElementById('statsGenrePanel');
-  const chevron = document.getElementById('statsGenreChevron');
-  const open = panel.classList.toggle('hidden');
-  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-function buildStatsConditionList() {
-  const list = document.getElementById('statsConditionList');
-  if (!list) return;
-  list.innerHTML = CONDITION_OPTIONS.map(o => `
-    <div class="genre-item condition-item" data-stats-condition="${esc(o.value)}"
-         style="${selectedConditions.has(o.value) ? '' : 'opacity:.55'}">
-      <div class="genre-check${selectedConditions.has(o.value) ? '' : ''}"></div>
-      <span>${esc(o.label)}</span>
-    </div>`).join('');
-  // the .selected class carries the tick, and it has to match the shared set
-  [...list.children].forEach(el => {
-    el.classList.toggle('selected', selectedConditions.has(el.dataset.statsCondition));
-  });
-  updateStatsConditionLabel();
-}
-
-document.addEventListener('click', e => {
-  const item = e.target.closest('[data-stats-condition]');
-  if (item) toggleCondition(item.dataset.statsCondition);
-});
-
-function updateStatsConditionLabel() {
-  const label = document.getElementById('statsConditionLabel');
-  if (!label) return;
-  const allSelected = selectedConditions.size === CONDITION_OPTIONS.length;
-  label.textContent = allSelected ? 'all conditions' : selectedConditions.size === 1
-    ? CONDITION_OPTIONS.find(o => selectedConditions.has(o.value)).label
-    : `${selectedConditions.size} conditions`;
-}
-
-function toggleStatsConditionDropdown() {
-  const panel = document.getElementById('statsConditionPanel');
-  const chevron = document.getElementById('statsConditionChevron');
-  const open = panel.classList.toggle('hidden');
-  if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-function resetStatsGenreFilter() { resetGenreFilter(); }
-function resetStatsConditionFilter() { resetConditionFilter(); }
-function clearAllStatsFilters() { clearAllFilters(); }
-
-function renderStatsChips(matchCount) {
-  const el = document.getElementById('statsFilterChips');
-  if (!el) return;
-  const chips = [];
-  if (selectedGenres.size < allGenres.length) {
-    chips.push(`<span class="filter-chip">Genres: ${selectedGenres.size} of ${allGenres.length}<button onclick="resetStatsGenreFilter()" title="reset genre filter"><i class="ti ti-x"></i></button></span>`);
-  }
-  if (selectedConditions.size < CONDITION_OPTIONS.length) {
-    chips.push(`<span class="filter-chip">Condition: ${selectedConditions.size} of ${CONDITION_OPTIONS.length}<button onclick="resetStatsConditionFilter()" title="reset condition filter"><i class="ti ti-x"></i></button></span>`);
-  }
-  el.innerHTML = chips.length ? chips.concat(`<button class="filter-chips-clear" onclick="clearAllStatsFilters()">clear filters</button>`).join('') : '';
-
-  const badge = document.getElementById('statsFilterSheetBadge');
-  if (badge) {
-    badge.textContent = chips.length;
-    badge.classList.toggle('hidden', chips.length === 0);
-  }
-  const applyBtn = document.getElementById('statsFilterSheetApply');
-  if (applyBtn) applyBtn.textContent = `Show ${matchCount} record${matchCount === 1 ? '' : 's'}`;
-}
-
-// ── mobile filter bottom sheet for the stats table — mirrors toggleFilterSheet
-function toggleStatsFilterSheet(force) {
-  const sheet = document.getElementById('statsFilterSheet');
-  const backdrop = document.getElementById('statsFilterSheetBackdrop');
-  const open = typeof force === 'boolean' ? force : !sheet.classList.contains('open');
-  sheet.classList.toggle('open', open);
-  backdrop.classList.toggle('open', open);
 }
 
 // ── D3 choropleth: records by country ───────────────────────────────────────
