@@ -132,6 +132,23 @@ select option{background:var(--surface);color:var(--text)}
   pointer-events:none;
 }
 
+/* hover-only info scrim: genre / condition / plays over the cover — desktop
+   pointer devices only, since touch has no hover state and already opens the
+   full detail drawer on tap */
+.vcard-hover-info{
+  position:absolute;inset:0;
+  background:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.8));
+  display:flex;flex-direction:column;justify-content:center;gap:8px;
+  padding:10px;
+  opacity:0;transition:opacity .15s;
+  pointer-events:none;
+}
+@media(hover:hover){.vcard:hover .vcard-hover-info{opacity:1}}
+@media(hover:none){.vcard-hover-info{display:none}}
+.vcard-hover-row{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vcard-hover-row i{font-size:12px;flex-shrink:0}
+.vcard-hover-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
 /* flag image — used wherever a country renders (card badge, list row, detail
    panel); a real picture on every platform instead of relying on the OS's
    emoji font, which most desktops lack for regional-indicator flag glyphs */
@@ -914,19 +931,24 @@ select option{background:var(--surface);color:var(--text)}
 .ct-item b{color:var(--text);font-weight:600}
 .ct-more{font-style:italic;color:var(--muted);margin-top:3px}
 
-/* stats: top artists / most played rankings — clickable, opens the record detail */
-.ranking-list{display:flex;flex-direction:column}
-.ranking-row{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border);
-  width:100%;background:transparent;border-left:none;border-right:none;border-top:none;text-align:left;
-  cursor:pointer;font-family:var(--font);color:var(--text);border-radius:4px;transition:background .12s}
-.ranking-row:last-child{border-bottom:none}
-.ranking-row:hover{background:var(--card)}
-.ranking-rank{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--accent);width:14px;flex-shrink:0;text-align:right}
-.ranking-cover-wrap{width:32px;height:32px;border-radius:3px;overflow:hidden;flex-shrink:0;background:#111;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:13px}
-.ranking-cover-wrap img{width:100%;height:100%;object-fit:cover}
-[data-theme="light"] .ranking-cover-wrap{background:#eee;color:#ccc}
-.ranking-name{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ranking-count{font-size:12px;color:var(--muted);flex-shrink:0;font-variant-numeric:tabular-nums;display:flex;align-items:center}
+/* stats table — sortable list of every owned record, at the bottom of the
+   stats page. Shares .list-* cell styling with the collection's list view,
+   but needs its own row grid (9 columns instead of 7) and clickable,
+   sort-aware headers. */
+.stats-table-wrap{overflow-x:auto}
+.stats-table{min-width:760px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.stats-row{display:grid;grid-template-columns:44px 2fr 100px 60px 90px 100px 70px 70px 64px;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.stats-row:last-child{border-bottom:none}
+.stats-row:hover{background:var(--card-hover)}
+.stats-row.stats-head{cursor:default;background:var(--surface);padding:0}
+.stats-row.stats-head:hover{background:var(--surface)}
+.stats-th{display:flex;align-items:center;gap:4px;height:100%;padding:8px 0;background:transparent;border:none;font:700 10px var(--font);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;cursor:pointer;font-family:var(--font)}
+.stats-th:hover{color:var(--text)}
+.stats-th.active{color:var(--accent)}
+.stats-th i{font-size:11px;visibility:hidden}
+.stats-th.active i{visibility:visible}
+.list-condition,.list-bought{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 .bar-chart{display:flex;flex-direction:column;gap:8px}
 .bar-row{display:flex;align-items:center;gap:8px}
 .bar-label{font-size:11px;color:var(--muted);min-width:110px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1460,16 +1482,6 @@ select option{background:var(--surface);color:var(--text)}
         <div class="chart-wrap-tall" id="genreWrap"><canvas id="genreChart"></canvas></div>
       </div>
     </div>
-    <div class="charts-row">
-      <div class="chart-box">
-        <div class="chart-title">top artists</div>
-        <div class="ranking-list" id="topArtistsList"></div>
-      </div>
-      <div class="chart-box">
-        <div class="chart-title">most played</div>
-        <div class="ranking-list" id="mostPlayedList"></div>
-      </div>
-    </div>
     <div class="chart-box" style="margin-bottom:28px">
       <div class="chart-title">release year distribution</div>
       <div id="yearWrap" style="width:100%;height:250px;position:relative">
@@ -1492,6 +1504,86 @@ select option{background:var(--surface);color:var(--text)}
       <div id="worldMapWrap" style="width:100%;height:420px;position:relative">
         <div class="chart-tooltip" id="worldMapTooltip"></div>
       </div>
+    </div>
+    <div class="chart-box" style="margin-bottom:28px" id="statsTableBox">
+      <div class="chart-title">records</div>
+      <div class="toolbar">
+        <div class="search">
+          <i class="ti ti-search"></i>
+          <input type="text" id="statsSearchInput" placeholder="search artist, album, genre...">
+          <button class="btn btn-icon search-fields-btn" id="statsSearchFieldsBtn" onclick="toggleStatsSearchFields()" title="search in">
+            <i class="ti ti-filter-search"></i>
+          </button>
+          <div class="search-fields-panel hidden" id="statsSearchFieldsPanel">
+            <div class="search-fields-label">search in:</div>
+            <div class="search-fields-list">
+              <label class="search-field-check">
+                <input type="checkbox" id="statsSearchField_artist" onchange="toggleStatsSearchField('artist')" checked>
+                <span>Artist</span>
+              </label>
+              <label class="search-field-check">
+                <input type="checkbox" id="statsSearchField_album" onchange="toggleStatsSearchField('album')" checked>
+                <span>Album</span>
+              </label>
+              <label class="search-field-check">
+                <input type="checkbox" id="statsSearchField_genre" onchange="toggleStatsSearchField('genre')">
+                <span>Genre</span>
+              </label>
+              <label class="search-field-check">
+                <input type="checkbox" id="statsSearchField_notes" onchange="toggleStatsSearchField('notes')">
+                <span>Notes</span>
+              </label>
+              <label class="search-field-check">
+                <input type="checkbox" id="statsSearchField_bought_at" onchange="toggleStatsSearchField('bought_at')">
+                <span>Bought At</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <button class="filter-sheet-btn" id="statsFilterSheetBtn" onclick="toggleStatsFilterSheet()" title="filters">
+          <i class="ti ti-adjustments-horizontal"></i>
+          <span class="filter-sheet-badge hidden" id="statsFilterSheetBadge">0</span>
+        </button>
+        <div class="filter-sheet-backdrop" id="statsFilterSheetBackdrop" onclick="toggleStatsFilterSheet(false)"></div>
+        <div class="filter-sheet" id="statsFilterSheet">
+          <div class="filter-sheet-head">
+            <span class="modal-title">filters</span>
+            <button class="btn btn-ghost btn-sm" onclick="toggleStatsFilterSheet(false)"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="filter-sheet-body">
+            <div class="filter-sheet-section">
+              <div class="filter-sheet-label">Genres</div>
+              <div class="genre-dropdown" id="statsGenreDropdown">
+                <button class="genre-trigger" id="statsGenreTrigger" onclick="toggleStatsGenreDropdown()">
+                  <span id="statsGenreLabel">all genres</span>
+                  <i class="ti ti-chevron-down" id="statsGenreChevron" style="font-size:12px;transition:transform .15s"></i>
+                </button>
+                <div class="genre-panel hidden" id="statsGenrePanel">
+                  <div class="genre-toggle-all" onclick="toggleAllStatsGenres()">
+                    <span id="statsToggleAllLabel">deselect all</span>
+                  </div>
+                  <div class="genre-list" id="statsGenreList"></div>
+                </div>
+              </div>
+            </div>
+            <div class="filter-sheet-section">
+              <div class="filter-sheet-label">Condition</div>
+              <div class="genre-dropdown" id="statsConditionDropdown">
+                <button class="genre-trigger" id="statsConditionTrigger" onclick="toggleStatsConditionDropdown()">
+                  <span id="statsConditionLabel">all conditions</span>
+                  <i class="ti ti-chevron-down" id="statsConditionChevron" style="font-size:12px;transition:transform .15s"></i>
+                </button>
+                <div class="genre-panel hidden" id="statsConditionPanel">
+                  <div class="genre-list" id="statsConditionList"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="filter-sheet-apply" id="statsFilterSheetApply" onclick="toggleStatsFilterSheet(false)">Show records</button>
+        </div>
+      </div>
+      <div class="filter-chips" id="statsFilterChips"></div>
+      <div class="stats-table-wrap" id="statsTableWrap"></div>
     </div>
   </div>
 
@@ -2159,6 +2251,13 @@ function hexToRgb(hex) {
   return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',');
 }
 
+// same New/Used icon+label everywhere a record's condition renders
+function conditionBadgeHTML(r) {
+  return r.condition === 'new' ? '<i class="ti ti-star" style="color:#E0A529"></i> New'
+    : r.condition === 'used' ? '<i class="ti ti-recycle" style="color:#4AA3C4"></i> Used'
+    : '—';
+}
+
 // ── shadow: flat genre colour, no rating influence ─────────────────────────
 function cardStyles(r) {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -2579,6 +2678,11 @@ function cardHTML(r) {
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
       ${cover}
+      <div class="vcard-hover-info">
+        <div class="vcard-hover-row"><span class="vcard-hover-dot" style="background:${genreColor(r.genre)}"></span>${esc(r.genre)||'no genre'}</div>
+        <div class="vcard-hover-row">${conditionBadgeHTML(r)}</div>
+        <div class="vcard-hover-row"><i class="ti ti-headphones"></i>${r.play_count||0}&nbsp;plays</div>
+      </div>
       ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagImgHTML(r.country, 28)}</div>` : ''}
       <div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>
@@ -2829,9 +2933,7 @@ function dmInfoHTML(r) {
   const historyGroups = dmHistoryGroups(dmHistoryEvents(r));
   const countryStr = r.country
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
-  const conditionStr = r.condition === 'new' ? '<i class="ti ti-star" style="color:#E0A529"></i> New'
-    : r.condition === 'used' ? '<i class="ti ti-recycle" style="color:#4AA3C4"></i> Used'
-    : '—';
+  const conditionStr = conditionBadgeHTML(r);
   return `
     <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
     <div class="dm-artist">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
@@ -4300,6 +4402,7 @@ function bindEvents(){
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
   document.getElementById('searchInput').addEventListener('input',render);
+  document.getElementById('statsSearchInput').addEventListener('input', () => renderStatsTable(records.filter(r => r.have_it)));
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('btnHaveCollection').addEventListener('click', () => setHaveItMode('collection'));
   document.getElementById('btnHaveWishlist').addEventListener('click', () => setHaveItMode('wishlist'));
@@ -5628,46 +5731,7 @@ function renderStats() {
     }
   });
 
-  // ── rankings: top artists by record count, most played by play count ──────
-  const coverPh = `<i class="ti ti-disc"></i>`;
-  const coverWrap = cover => cover
-    ? `<div class="ranking-cover-wrap"><img src="${cover}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'"></div>`
-    : `<div class="ranking-cover-wrap">${coverPh}</div>`;
-
-  const artistCounts = {};
-  all.forEach(r => {
-    const name = (r.artist||'').trim();
-    if (!name) return;
-    if (!artistCounts[name]) artistCounts[name] = { count: 0, cover: '', id: r.id };
-    artistCounts[name].count++;
-    if (!artistCounts[name].cover && r.cover_data) { artistCounts[name].cover = r.cover_data; artistCounts[name].id = r.id; }
-  });
-  const topArtists = Object.entries(artistCounts).sort((a,b) => b[1].count - a[1].count).slice(0, 5);
-
-  // rankings are clickable — opens the same record-detail view used by the
-  // collection grid, which already adapts itself to mobile vs desktop
-  document.getElementById('topArtistsList').innerHTML = topArtists.length
-    ? topArtists.map(([name, info], i) => `
-      <button type="button" class="ranking-row" onclick="openDetail(${info.id})" title="open ${esc(name)}">
-        <span class="ranking-rank">${i+1}</span>
-        ${coverWrap(info.cover)}
-        <span class="ranking-name">${esc(name)}</span>
-        <span class="ranking-count">${info.count} record${info.count===1?'':'s'}</span>
-      </button>`).join('')
-    : `<p style="color:var(--muted);font-size:13px;padding:8px 2px">no records yet.</p>`;
-
-  const mostPlayed = all.filter(r => Number(r.play_count) > 0)
-    .sort((a,b) => Number(b.play_count) - Number(a.play_count)).slice(0, 5);
-
-  document.getElementById('mostPlayedList').innerHTML = mostPlayed.length
-    ? mostPlayed.map((r, i) => `
-      <button type="button" class="ranking-row" onclick="openDetail(${r.id})" title="open ${esc(r.album_name)||'untitled'}">
-        <span class="ranking-rank">${i+1}</span>
-        ${coverWrap(r.cover_data)}
-        <span class="ranking-name">${esc(r.album_name)||'untitled'}</span>
-        <span class="ranking-count"><i class="ti ti-headphones" style="font-size:10px;opacity:.5;margin-right:4px"></i>${r.play_count}</span>
-      </button>`).join('')
-    : `<p style="color:var(--muted);font-size:13px;padding:8px 2px">no plays logged yet.</p>`;
+  renderStatsTable(all);
 
   // ── D3 ridgeline area: release year across the collection ─────────────────
   const wrap = document.getElementById('yearWrap');
@@ -5783,6 +5847,312 @@ function renderStats() {
     .call(g => g.selectAll('.tick text').attr('fill', tc).attr('font-size', 10));
 
   renderWorldMap(all);
+}
+
+// ── stats table: sortable, searchable, filterable list of owned records ────
+// Entirely independent of the collection page's search/filters — its own
+// state and DOM ids — so nothing here touches the collection view.
+let statsSortCol = 'bought_date';
+let statsSortDir = 'desc';
+let statsSearchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
+let statsAllGenres = [];
+let statsSelectedGenres = null; // lazily filled with "all genres" on first render
+let statsSelectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
+
+// default sort direction the first time a column is picked — text columns
+// read best A→Z, numeric/date columns read best highest/most-recent first
+const STATS_COLUMNS = [
+  { key: 'album_name',  label: 'Album',     dir: 'asc'  },
+  { key: 'genre',       label: 'Genre',     dir: 'asc'  },
+  { key: 'year',        label: 'Year',      dir: 'desc' },
+  { key: 'condition',   label: 'Condition', dir: 'asc'  },
+  { key: 'bought_date', label: 'Bought',    dir: 'desc' },
+  { key: 'my_rating',   label: 'Pepe',      dir: 'desc' },
+  { key: 'wife_rating', label: 'Jenni',     dir: 'desc' },
+  { key: 'play_count',  label: 'Plays',     dir: 'desc' },
+];
+
+function statsSortClick(key) {
+  if (statsSortCol === key) {
+    statsSortDir = statsSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    statsSortCol = key;
+    statsSortDir = STATS_COLUMNS.find(c => c.key === key).dir;
+  }
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function statsFiltered(all) {
+  const q = document.getElementById('statsSearchInput').value.toLowerCase();
+  return all.filter(r => {
+    if (q) {
+      const searchText = [];
+      if (statsSearchFields.artist) searchText.push(r.artist || '');
+      if (statsSearchFields.album) searchText.push(r.album_name || '');
+      if (statsSearchFields.genre) searchText.push(r.genre || '');
+      if (statsSearchFields.bought_at) searchText.push(r.bought_where || '');
+      if (statsSearchFields.notes) searchText.push(parseNotes(r.notes).map(n=>n.text).join(' '));
+      if (!searchText.join(' ').toLowerCase().includes(q)) return false;
+    }
+    if (statsSelectedGenres.size > 0 && !statsSelectedGenres.has(r.genre||'')) return false;
+    if (statsSelectedConditions.size < CONDITION_OPTIONS.length && !statsSelectedConditions.has(r.condition||'')) return false;
+    return true;
+  }).sort((a, b) => {
+    const s = statsSortCol;
+    let cmp;
+    if (s === 'bought_date') cmp = momentAt(a.bought_date).localeCompare(momentAt(b.bought_date));
+    else if (['year','my_rating','wife_rating','play_count'].includes(s)) cmp = (Number(a[s])||0) - (Number(b[s])||0);
+    else cmp = (a[s]||'').localeCompare(b[s]||'');
+    return statsSortDir === 'asc' ? cmp : -cmp;
+  });
+}
+
+function statsHeadHTML() {
+  const cols = STATS_COLUMNS.map(c => {
+    const active = statsSortCol === c.key;
+    const arrow = active && statsSortDir === 'asc' ? 'up' : 'down';
+    return `<button type="button" class="stats-th${active?' active':''}" onclick="statsSortClick('${c.key}')">${c.label}<i class="ti ti-arrow-${arrow}"></i></button>`;
+  }).join('');
+  return `<div class="stats-row stats-head"><span></span>${cols}</div>`;
+}
+
+function statsRowHTML(r) {
+  const cover = r.cover_data
+    ? `<img src="${r.cover_data}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+    : `<i class="ti ti-disc"></i>`;
+  const pepeFilled  = Math.round(Number(r.my_rating)   || 0);
+  const jenniFilled = Math.round(Number(r.wife_rating) || 0);
+  const pepeBars  = Array.from({length:5}, (_,i) => `<div class="score-sq${i < pepeFilled  ? ' pepe-on'  : ''}"></div>`).join('');
+  const jenniBars = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on' : ''}"></div>`).join('');
+  const conditionLabel = r.condition === 'new' ? 'New' : r.condition === 'used' ? 'Used' : '—';
+  const boughtDay = momentOf(r.bought_date).day || '—';
+  return `<div class="stats-row" data-id="${r.id}">
+    <div class="list-cover-wrap">${cover}</div>
+    <div class="list-main">
+      <div class="list-album">${esc(r.album_name)||'untitled'}</div>
+      <div class="list-artist">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}${r.country ? ' '+flagImgHTML(r.country, 14) : ''}</div>
+    </div>
+    <span class="list-genre">${esc(r.genre)||'—'}</span>
+    <span class="list-year">${esc(r.year)||'—'}</span>
+    <span class="list-condition">${conditionLabel}</span>
+    <span class="list-bought">${esc(boughtDay)}</span>
+    <div class="list-bars">${pepeBars}</div>
+    <div class="list-bars">${jenniBars}</div>
+    <span class="list-plays"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i>${r.play_count||0}</span>
+  </div>`;
+}
+
+function renderStatsTable(all) {
+  const genres = [...new Set(all.map(r => r.genre).filter(Boolean))].sort();
+  if (statsSelectedGenres === null) {
+    statsSelectedGenres = new Set(genres);
+    statsAllGenres = genres;
+  } else {
+    genres.forEach(g => { if (!statsAllGenres.includes(g)) { statsAllGenres.push(g); statsSelectedGenres.add(g); } });
+    statsAllGenres = genres;
+  }
+  buildStatsGenreList();
+  buildStatsConditionList();
+
+  const recs = statsFiltered(all);
+  renderStatsChips(recs.length);
+
+  const wrap = document.getElementById('statsTableWrap');
+  if (!recs.length) {
+    wrap.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${all.length ? 'no records match your filters.' : 'no records yet.'}</div>`;
+    return;
+  }
+  wrap.innerHTML = `<div class="stats-table">${statsHeadHTML()}${recs.map(r => statsRowHTML(r)).join('')}</div>`;
+  wrap.querySelectorAll('[data-id]').forEach(el =>
+    el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
+  );
+}
+
+function toggleStatsSearchField(field) {
+  statsSearchFields[field] = !statsSearchFields[field];
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function toggleStatsSearchFields() {
+  document.getElementById('statsSearchFieldsPanel').classList.toggle('hidden');
+}
+
+document.addEventListener('click', e => {
+  const search = document.getElementById('statsSearchInput');
+  const btn = document.getElementById('statsSearchFieldsBtn');
+  const panel = document.getElementById('statsSearchFieldsPanel');
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = path.includes(search) || path.includes(btn) || path.includes(panel);
+  if (panel && !clickedInside && !panel.classList.contains('hidden')) {
+    panel.classList.add('hidden');
+  }
+});
+
+// ── stats genre multi-select — same pattern as the collection's genre dropdown
+function buildStatsGenreList() {
+  const list = document.getElementById('statsGenreList');
+  list.innerHTML = statsAllGenres.map(g => `
+    <div class="genre-item${statsSelectedGenres.has(g)?' selected':''}" data-stats-genre="${esc(g)}">
+      <div class="genre-check"></div>
+      <span>${esc(g)}</span>
+    </div>`).join('');
+  updateStatsGenreLabel();
+}
+
+document.addEventListener('click', e => {
+  const item = e.target.closest('[data-stats-genre]');
+  if (item) toggleStatsGenre(item.dataset.statsGenre);
+});
+
+function toggleStatsGenre(g) {
+  if (statsSelectedGenres.has(g)) {
+    if (statsSelectedGenres.size === 1) return; // keep at least one
+    statsSelectedGenres.delete(g);
+  } else {
+    statsSelectedGenres.add(g);
+  }
+  buildStatsGenreList();
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function toggleAllStatsGenres() {
+  statsSelectedGenres = statsSelectedGenres.size === statsAllGenres.length
+    ? new Set([statsAllGenres[0]])
+    : new Set(statsAllGenres);
+  buildStatsGenreList();
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function updateStatsGenreLabel() {
+  const label = document.getElementById('statsGenreLabel');
+  const toggleAll = document.getElementById('statsToggleAllLabel');
+  const allSelected = statsSelectedGenres.size === statsAllGenres.length;
+  label.textContent = allSelected ? 'all genres' : statsSelectedGenres.size === 1
+    ? [...statsSelectedGenres][0]
+    : `${statsSelectedGenres.size} genres`;
+  toggleAll.textContent = allSelected ? 'deselect all' : 'select all';
+}
+
+function toggleStatsGenreDropdown() {
+  const panel = document.getElementById('statsGenrePanel');
+  const chevron = document.getElementById('statsGenreChevron');
+  const open = !panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', open);
+  chevron.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+document.addEventListener('click', e => {
+  const dd = document.getElementById('statsGenreDropdown');
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
+  if (dd && !clickedInside) {
+    document.getElementById('statsGenrePanel')?.classList.add('hidden');
+    const ch = document.getElementById('statsGenreChevron');
+    if (ch) ch.style.transform = '';
+  }
+});
+
+// ── stats condition multi-select — same pattern, over the fixed 3-value set ─
+function buildStatsConditionList() {
+  const list = document.getElementById('statsConditionList');
+  list.innerHTML = CONDITION_OPTIONS.map(o => `
+    <div class="genre-item${statsSelectedConditions.has(o.value)?' selected':''}" data-stats-condition="${esc(o.value)}">
+      <div class="genre-check"></div>
+      <span>${esc(o.label)}</span>
+    </div>`).join('');
+  updateStatsConditionLabel();
+}
+
+document.addEventListener('click', e => {
+  const item = e.target.closest('[data-stats-condition]');
+  if (item) toggleStatsCondition(item.dataset.statsCondition);
+});
+
+function toggleStatsCondition(v) {
+  if (statsSelectedConditions.has(v)) {
+    if (statsSelectedConditions.size === 1) return; // keep at least one
+    statsSelectedConditions.delete(v);
+  } else {
+    statsSelectedConditions.add(v);
+  }
+  buildStatsConditionList();
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function updateStatsConditionLabel() {
+  const label = document.getElementById('statsConditionLabel');
+  const allSelected = statsSelectedConditions.size === CONDITION_OPTIONS.length;
+  label.textContent = allSelected ? 'all conditions' : statsSelectedConditions.size === 1
+    ? CONDITION_OPTIONS.find(o => statsSelectedConditions.has(o.value)).label
+    : `${statsSelectedConditions.size} conditions`;
+}
+
+function toggleStatsConditionDropdown() {
+  const panel = document.getElementById('statsConditionPanel');
+  const chevron = document.getElementById('statsConditionChevron');
+  const open = !panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', open);
+  chevron.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+document.addEventListener('click', e => {
+  const dd = document.getElementById('statsConditionDropdown');
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
+  if (dd && !clickedInside) {
+    document.getElementById('statsConditionPanel')?.classList.add('hidden');
+    const ch = document.getElementById('statsConditionChevron');
+    if (ch) ch.style.transform = '';
+  }
+});
+
+function resetStatsGenreFilter() {
+  statsSelectedGenres = new Set(statsAllGenres);
+  buildStatsGenreList();
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function resetStatsConditionFilter() {
+  statsSelectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
+  buildStatsConditionList();
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function clearAllStatsFilters() {
+  statsSelectedGenres = new Set(statsAllGenres);
+  statsSelectedConditions = new Set(CONDITION_OPTIONS.map(o => o.value));
+  buildStatsGenreList();
+  buildStatsConditionList();
+  renderStatsTable(records.filter(r => r.have_it));
+}
+
+function renderStatsChips(matchCount) {
+  const el = document.getElementById('statsFilterChips');
+  const chips = [];
+
+  if (statsSelectedGenres.size < statsAllGenres.length) {
+    chips.push(`<span class="filter-chip">Genres: ${statsSelectedGenres.size} of ${statsAllGenres.length}<button onclick="resetStatsGenreFilter()" title="reset genre filter"><i class="ti ti-x"></i></button></span>`);
+  }
+  if (statsSelectedConditions.size < CONDITION_OPTIONS.length) {
+    chips.push(`<span class="filter-chip">Condition: ${statsSelectedConditions.size} of ${CONDITION_OPTIONS.length}<button onclick="resetStatsConditionFilter()" title="reset condition filter"><i class="ti ti-x"></i></button></span>`);
+  }
+  el.innerHTML = chips.length ? chips.concat(`<button class="filter-chips-clear" onclick="clearAllStatsFilters()">clear filters</button>`).join('') : '';
+
+  const badge = document.getElementById('statsFilterSheetBadge');
+  const badgeCount = chips.length;
+  badge.textContent = badgeCount;
+  badge.classList.toggle('hidden', badgeCount === 0);
+  const applyBtn = document.getElementById('statsFilterSheetApply');
+  applyBtn.textContent = `Show ${matchCount} record${matchCount === 1 ? '' : 's'}`;
+}
+
+// ── mobile filter bottom sheet for the stats table — mirrors toggleFilterSheet
+function toggleStatsFilterSheet(force) {
+  const sheet = document.getElementById('statsFilterSheet');
+  const backdrop = document.getElementById('statsFilterSheetBackdrop');
+  const open = typeof force === 'boolean' ? force : !sheet.classList.contains('open');
+  sheet.classList.toggle('open', open);
+  backdrop.classList.toggle('open', open);
 }
 
 // ── D3 choropleth: records by country ───────────────────────────────────────
