@@ -473,6 +473,32 @@ select option{background:var(--surface);color:var(--text)}
 .form-group .field input,.form-group .field select{padding-left:32px}
 
 /* grouped section card */
+/* the step spine — a real sequence, so it is numbered */
+.form-spine{display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;
+  background:var(--card);margin-bottom:16px}
+.fstep{flex:1;display:flex;align-items:center;gap:10px;padding:11px 13px;background:transparent;
+  border:none;border-right:1px solid var(--border);text-align:left;cursor:pointer;
+  font-family:var(--font);transition:background .12s}
+.fstep:last-child{border-right:none}
+.fstep:hover{background:var(--bg)}
+.fstep-n{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);
+  font-size:10.5px;font-weight:700;color:var(--muted)}
+.fstep-t{display:flex;flex-direction:column;min-width:0}
+.fstep-t b{font-size:12.5px;font-weight:700;color:var(--label);white-space:nowrap}
+.fstep-t small{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fstep.on{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.fstep.on .fstep-n{border-color:var(--accent);color:var(--accent)}
+.fstep.on .fstep-t b{color:var(--accent)}
+.fstep.done .fstep-n{background:#5FBF7A;border-color:#5FBF7A;color:#0c0c0c}
+.fstep.done .fstep-t b{color:var(--text)}
+@media(max-width:560px){ .fstep-t small{display:none} }
+
+.form-step-lead{font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+.draft-flag{display:inline-flex;align-items:center;gap:7px;margin-right:auto;
+  font-family:var(--font-mono);font-size:10.5px;color:#5FBF7A;letter-spacing:.04em}
+.draft-flag .d{width:6px;height:6px;border-radius:50%;background:#5FBF7A}
+
 .form-section{border:1px solid var(--border);border-radius:9px;background:var(--bg);overflow:hidden;margin-bottom:12px}
 .form-section > header{display:flex;align-items:center;gap:7px;padding:9px 13px;background:var(--card);border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--label)}
 .form-section > header i{font-size:13px;color:var(--accent)}
@@ -1763,9 +1789,17 @@ select option{background:var(--surface);color:var(--text)}
       <div id="scanDupWarning" style="display:none;margin-bottom:12px;padding:10px;
            border:1px solid var(--danger);border-radius:var(--radius);font-size:13px">
       </div>
-      <div class="form-layout">
+      <!-- Three steps in the order a record actually arrives: work out what it
+           is, record how you got it, then log what happens to it afterwards.
+           It was eight sections in one scroll before, and the last three —
+           plays, cleanings, notes — are empty on almost every new record, so
+           they were the ones you scrolled past to reach Save. Save is live
+           from step one; nothing after it is required. Field ids are unchanged,
+           so every reader and writer of this form is untouched. -->
+      <div class="form-spine" id="formSpine"></div>
 
-        <!-- left: how the record got here — cover, scan, status, purchase -->
+      <div class="form-step" data-step="1">
+        <div class="form-layout">
         <div class="form-cover-col">
           <div class="cover-drop" id="coverDrop" onclick="openCoverSheet()">
             <div id="coverDropInner">
@@ -1833,52 +1867,8 @@ select option{background:var(--surface);color:var(--text)}
             </div>
           </div>
 
-          <div class="form-group" style="margin-top:16px">
-            <label><i class="ti ti-status-change"></i> Status</label>
-            <!-- was a checkbox labelled "in my collection (uncheck = wishlist)":
-                 a negation, and an unticked box read the same whether the record
-                 was wanted or the field was simply never touched -->
-            <div class="own-switch" id="ownSwitch">
-              <button type="button" data-own="yes" onclick="setHaveIt(true)"><i class="ti ti-disc"></i> In collection</button>
-              <button type="button" data-own="no" onclick="setHaveIt(false)"><i class="ti ti-shopping-cart"></i> Wishlist</button>
-            </div>
-            <input type="checkbox" id="fHaveIt" checked hidden style="display:none">
-          </div>
-
-          <div class="own-note" id="wishlistNote" style="display:none">
-            <i class="ti ti-shopping-cart"></i>
-            <span>not bought yet — the purchase fields come back when you move it into the collection.</span>
-          </div>
-
-          <div class="form-section" id="purchaseSection" style="margin-bottom:0">
-            <header><i class="ti ti-shopping-bag"></i> The purchase</header>
-            <div class="sec-body">
-              <div class="form-group">
-                <label><i class="ti ti-calendar-event"></i> Bought on</label>
-                <div class="datetime-pair">
-                  <div class="field"><i class="ti ti-calendar-event"></i><input id="fDate" type="date"></div>
-                  <div class="field"><i class="ti ti-clock"></i><input id="fTime" type="time" title="time bought — leave blank if it was never recorded"></div>
-                </div>
-              </div>
-              <div class="form-group">
-                <label><i class="ti ti-map-pin"></i> Bought at</label>
-                <div class="field"><i class="ti ti-map-pin"></i><input id="fWhere" list="whereList" placeholder="store / city" autocomplete="off"></div>
-                <datalist id="whereList"></datalist>
-              </div>
-              <div class="form-group">
-                <label><i class="ti ti-certificate"></i> Condition</label>
-                <div class="own-switch" id="condSwitch">
-                  <button type="button" data-cond="new" onclick="setCondition('new')"><i class="ti ti-star"></i> New</button>
-                  <button type="button" data-cond="used" onclick="setCondition('used')"><i class="ti ti-recycle"></i> Used</button>
-                </div>
-                <input type="hidden" id="fCondition" value="">
-              </div>
-            </div>
-          </div>
         </div>
 
-        <!-- right: the record itself, then what the two of you make of it -->
-        <div class="form-info-col">
           <div class="form-section">
             <header><i class="ti ti-disc"></i> The record</header>
             <div class="sec-body">
@@ -1925,6 +1915,57 @@ select option{background:var(--surface);color:var(--text)}
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <div class="form-step" data-step="2" hidden>
+        <div class="form-step-lead">How did you get it?</div>
+          <div class="form-group" style="margin-top:16px">
+            <label><i class="ti ti-status-change"></i> Status</label>
+            <!-- was a checkbox labelled "in my collection (uncheck = wishlist)":
+                 a negation, and an unticked box read the same whether the record
+                 was wanted or the field was simply never touched -->
+            <div class="own-switch" id="ownSwitch">
+              <button type="button" data-own="yes" onclick="setHaveIt(true)"><i class="ti ti-disc"></i> In collection</button>
+              <button type="button" data-own="no" onclick="setHaveIt(false)"><i class="ti ti-shopping-cart"></i> Wishlist</button>
+            </div>
+            <input type="checkbox" id="fHaveIt" checked hidden style="display:none">
+          </div>
+
+          <div class="own-note" id="wishlistNote" style="display:none">
+            <i class="ti ti-shopping-cart"></i>
+            <span>not bought yet — the purchase fields come back when you move it into the collection.</span>
+          </div>
+
+          <div class="form-section" id="purchaseSection" style="margin-bottom:0">
+            <header><i class="ti ti-shopping-bag"></i> The purchase</header>
+            <div class="sec-body">
+              <div class="form-group">
+                <label><i class="ti ti-calendar-event"></i> Bought on</label>
+                <div class="datetime-pair">
+                  <div class="field"><i class="ti ti-calendar-event"></i><input id="fDate" type="date"></div>
+                  <div class="field"><i class="ti ti-clock"></i><input id="fTime" type="time" title="time bought — leave blank if it was never recorded"></div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label><i class="ti ti-map-pin"></i> Bought at</label>
+                <div class="field"><i class="ti ti-map-pin"></i><input id="fWhere" list="whereList" placeholder="store / city" autocomplete="off"></div>
+                <datalist id="whereList"></datalist>
+              </div>
+              <div class="form-group">
+                <label><i class="ti ti-certificate"></i> Condition</label>
+                <div class="own-switch" id="condSwitch">
+                  <button type="button" data-cond="new" onclick="setCondition('new')"><i class="ti ti-star"></i> New</button>
+                  <button type="button" data-cond="used" onclick="setCondition('used')"><i class="ti ti-recycle"></i> Used</button>
+                </div>
+                <input type="hidden" id="fCondition" value="">
+              </div>
+            </div>
+          </div>
+      </div>
+
+      <div class="form-step" data-step="3" hidden>
+        <div class="form-step-lead">Anything to log yet? Almost always empty on a new record.</div>
           <div class="form-section" style="margin-bottom:0">
             <header><i class="ti ti-star"></i> Ratings</header>
             <div class="sec-body" style="display:flex;flex-direction:column;gap:8px">
@@ -1933,8 +1974,6 @@ select option{background:var(--surface);color:var(--text)}
             </div>
           </div>
         </div>
-      </div>
-
       <div class="form-section" id="playDatesSection" style="margin-top:16px">
         <header><i class="ti ti-player-play"></i> Played on <span class="count" id="playDatesCount"></span></header>
         <div class="sec-body">
@@ -1969,9 +2008,13 @@ select option{background:var(--surface);color:var(--text)}
           </div>
         </div>
       </div>
-    </div>
+      </div>
+
     <div class="modal-foot">
+      <span class="draft-flag" id="draftFlag" hidden><span class="d"></span>draft kept</span>
       <button class="btn" onclick="closeForm()">cancel</button>
+      <button class="btn" id="formBackBtn" onclick="setFormStep(formStep - 1)">back</button>
+      <button class="btn" id="formNextBtn" onclick="setFormStep(formStep + 1)">next</button>
       <button class="btn btn-primary" id="formSaveBtn">save</button>
     </div>
   </div>
@@ -3557,6 +3600,7 @@ function openAdd(){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   formBaseline = formValues();
+  setFormStep(1);
   document.getElementById('formOverlay').classList.remove('hidden');
   offerDraft();
   refreshScanUsage();
@@ -3626,8 +3670,37 @@ function openEdit(id){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   formBaseline = formValues();
+  setFormStep(1);
   document.getElementById('formOverlay').classList.remove('hidden');
   refreshScanUsage();
+  resetFormScroll();
+}
+
+// ── the add/edit form's three steps ───────────────────────────────────────
+// Identify what the record is, record how you got it, log what happens to it.
+// Steps 2 and 3 are skippable and Save is live from step one, because a record
+// you just bought is worth having on the shelf before you have decided how you
+// feel about it.
+const FORM_STEPS = [
+  { n: 1, label: 'Identify', sub: 'what record is this' },
+  { n: 2, label: 'Acquire',  sub: 'how you got it' },
+  { n: 3, label: 'Log',      sub: 'what happens to it' },
+];
+let formStep = 1;
+
+function setFormStep(n) {
+  formStep = Math.min(FORM_STEPS.length, Math.max(1, n));
+  document.querySelectorAll('#formOverlay .form-step').forEach(el => {
+    el.hidden = Number(el.dataset.step) !== formStep;
+  });
+  document.getElementById('formBackBtn').disabled = formStep === 1;
+  document.getElementById('formNextBtn').disabled = formStep === FORM_STEPS.length;
+  document.getElementById('formSpine').innerHTML = FORM_STEPS.map(st => `
+    <button type="button" class="fstep${st.n === formStep ? ' on' : ''}${st.n < formStep ? ' done' : ''}"
+            onclick="setFormStep(${st.n})">
+      <span class="fstep-n">${st.n < formStep ? '<i class="ti ti-check"></i>' : st.n}</span>
+      <span class="fstep-t"><b>${st.label}</b><small>${st.sub}</small></span>
+    </button>`).join('');
   resetFormScroll();
 }
 
@@ -3672,8 +3745,10 @@ function closeForm(force){
  * and localStorage is synchronous, so the cost is a fraction of a keystroke. */
 function rememberDraft(){
   if (!formBaseline) return;              // the form is not open
-  if (!formIsDirty()) { VinylDraft.clear(draftStore()); return; }
+  const flag = document.getElementById('draftFlag');
+  if (!formIsDirty()) { VinylDraft.clear(draftStore()); if (flag) flag.hidden = true; return; }
   VinylDraft.save(draftStore(), formValues(), Date.now(), editingId);
+  if (flag) flag.hidden = false;
 }
 
 // Every field, however it is edited — typing, the rating segments, a date row.
