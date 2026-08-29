@@ -1039,7 +1039,16 @@ select option{background:var(--surface);color:var(--text)}
 .list-bars .score-sq{height:6px}
 .list-plays{font-size:12px;color:var(--label);display:flex;align-items:center;gap:4px;white-space:nowrap}
 
-/* mobile bottom tab bar — replaces the top nav-tabs + haveit-toggle */
+@media(max-width:760px){
+  /* the bottom bar carries these, so the desktop strip and header button
+     would be a second copy of both */
+  .nav-tabs{display:none}
+  #addBtn{display:none}
+  /* clears the fixed 58px bar plus whatever the device reserves below it */
+  .app{padding-bottom:calc(90px + env(safe-area-inset-bottom, 0px))}
+}
+
+/* mobile bottom tab bar — replaces the top nav-tabs */
 .mobile-tabbar{display:none}
 @media(max-width:760px){
   .mobile-tabbar{
@@ -1949,7 +1958,6 @@ select option{background:var(--surface);color:var(--text)}
               <div class="rating-row jenni" id="wifeRatingRow"></div>
             </div>
           </div>
-        </div>
       <div class="form-section" id="playDatesSection" style="margin-top:16px">
         <header><i class="ti ti-player-play"></i> Played on <span class="count" id="playDatesCount"></span></header>
         <div class="sec-body">
@@ -1985,6 +1993,7 @@ select option{background:var(--surface);color:var(--text)}
         </div>
       </div>
       </div>
+    </div>
 
     <div class="modal-foot">
       <span class="draft-flag" id="draftFlag" hidden><span class="d"></span>draft kept</span>
@@ -2408,6 +2417,10 @@ function urlSnapshot() {
  * entry instead of one per keystroke. Back still works: switching tab and
  * opening a record push, because those are the moves you expect to undo. */
 function syncUrl(push) {
+  // Reading the address bar must never write to it; applyUrl closes and opens
+  // things on its way through, and each of those would otherwise stamp a
+  // half-applied state onto the entry being navigated to.
+  if (applyingUrl) return;
   const hash = VinylUrlState.encode(urlSnapshot());
   const next = hash ? '#' + hash : location.pathname + location.search;
   if (location.hash.replace(/^#/, '') === hash) return;
@@ -2421,8 +2434,19 @@ function syncUrl(push) {
 }
 
 /* Take the app to whatever the hash says. Used on first load and on Back. */
+let applyingUrl = false;
+
 function applyUrl(hash) {
   const st = VinylUrlState.decode(hash);
+  applyingUrl = true;
+  try {
+    applyUrlState(st, String(hash || '').replace(/^#/, ''));
+  } finally {
+    applyingUrl = false;
+  }
+}
+
+function applyUrlState(st, params) {
 
   document.getElementById('searchInput').value = st.text;
   filterState.ownership = st.ownership;
@@ -2430,10 +2454,15 @@ function applyUrl(hash) {
   if (GROUP_OPTIONS.some(o => o.value === st.crate)) groupBy = st.crate;
   if (SORT_OPTIONS.some(o => o.value === st.sort)) sortBy = st.sort;
   sortDir = st.dir;
-  setViewMode(st.view);
+  // Only when the link actually says so: setViewMode persists, and a plain
+  // reload carries no view parameter — applying the default here overwrote a
+  // saved list-view preference every time.
+  if (/(^|&)view=/.test(params || '')) setViewMode(st.view);
+  else { document.getElementById('viewGridBtn').classList.toggle('active', viewMode === 'grid');
+         document.getElementById('viewListBtn').classList.toggle('active', viewMode === 'list'); }
   syncGroupTrigger();
   syncSortTrigger();
-  document.getElementById('sortDirBtn').className = 'sort-dir-btn ' + sortDir;
+  renderSortDirBtn();
 
   if (st.tab !== currentTab) switchTab(st.tab); else applyQueryChange();
 
@@ -2543,6 +2572,7 @@ function setGroupBy(field) {
   buildGroupList();
   syncGroupTrigger();
   render();
+  syncUrl();
 }
 
 function toggleCrate(id) {
@@ -2746,6 +2776,7 @@ function setViewMode(mode) {
   document.getElementById('viewGridBtn').classList.toggle('active', mode === 'grid');
   document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
   render();
+  syncUrl();
 }
 
 function recordsHTML(recs) {
@@ -4651,13 +4682,22 @@ function bindCalSwipe() {
   }, { passive: true });
 }
 
-function toggleSortDir() {
-  sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+/* The button's class and its arrow are the same fact, so one function owns
+ * both — applyUrl set the class alone and left the arrow pointing the wrong
+ * way until the next click. */
+function renderSortDirBtn() {
   const btn = document.getElementById('sortDirBtn');
   btn.classList.toggle('asc', sortDir === 'asc');
   btn.classList.toggle('desc', sortDir === 'desc');
-  btn.innerHTML = sortDir === 'asc' ? '<i class="ti ti-arrow-up"></i>' : '<i class="ti ti-arrow-down"></i>';
+  btn.innerHTML = sortDir === 'asc'
+    ? '<i class="ti ti-arrow-up"></i>' : '<i class="ti ti-arrow-down"></i>';
+}
+
+function toggleSortDir() {
+  sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+  renderSortDirBtn();
   render();
+  syncUrl();
 }
 
 /* The phone's Search item: go where the bar is and put the cursor in it. */
@@ -5162,7 +5202,7 @@ document.addEventListener('click', e => {
     sortBy = item.dataset.sort;
     buildSortList();
     syncSortTrigger();
-    render();
+    render(); syncUrl();
     document.getElementById('sortPanel')?.classList.add('hidden');
     const ch = document.getElementById('sortChevron');
     if (ch) ch.style.transform = '';
@@ -5266,8 +5306,11 @@ let raceRows = new Map();     // genre -> its row element, kept across frames
 
 function renderHistory() {
   histPause();
-  renderActivity();                          // builds `act`, the band and the lanes
-  raceFrames = VinylHistory.buildTimeline(records);
+  // The same records the calendar scales are showing. Reading the raw array
+  // here is what let Month say "Jazz" while Replay replayed all 292.
+  const scoped = VinylFilters.filterRecords(records, currentQuery(), FILTER_DEPS);
+  renderActivity(scoped);                    // builds `act`, the band and the lanes
+  raceFrames = VinylHistory.buildTimeline(scoped);
   raceRows = new Map();
   raceIndex = 0;
   histFrameShown = -2;
@@ -5746,8 +5789,8 @@ function actSetVisible(n) {
   actMeasure();
 }
 
-function renderActivity() {
-  act = VinylActivity.buildActivity(records);
+function renderActivity(scoped) {
+  act = VinylActivity.buildActivity(scoped || records);
   const empty = !act;
   document.getElementById('actEmpty').hidden = !empty;
   document.getElementById('actBody').hidden = empty;

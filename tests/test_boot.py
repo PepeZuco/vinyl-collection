@@ -68,7 +68,8 @@ def test_page_boots_and_responds(tmp_path):
             genre="Rock", bought_date=f"2026-08-{n:02d}", bought_where="Benedito Calixto",
             bought_by="", condition="used", my_rating=3, wife_rating=4, have_it=True,
             play_count=2, play_dates='["2026-08-20T20:00:00"]',
-            cleaned_dates='["2026-08-02"]', cover_url="", notes="", country="BR",
+            cleaned_dates='["2026-08-02"]', notes="", country="BR",
+            cover_url=f"/api/records/{n}/cover?v=hash{n}",
         )
         base.update(over)
         return base

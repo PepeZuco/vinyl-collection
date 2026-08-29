@@ -543,3 +543,89 @@ test('the replay controls run without throwing', async () => {
   win.histPause();
   assert.deepStrictEqual(errors, [], 'the replay threw:\n' + errors.join('\n'));
 });
+
+// ── what the review found ───────────────────────────────────────────────────
+
+test('reading the address bar never writes to it', async () => {
+  // The Back loop: applyUrl closed the record on its way through, but the
+  // query sync fired first and stamped the still-open record onto the entry
+  // just navigated to. Back reopened it, and you were stuck between two
+  // entries. Nothing applyUrl does may touch history.
+  const { win, read } = await boot();
+  win.openDetail(RECORDS.find(r => r.have_it).id);
+
+  let writes = 0;
+  const realPush = win.history.pushState.bind(win.history);
+  const realReplace = win.history.replaceState.bind(win.history);
+  win.history.pushState = (...a) => { writes++; return realPush(...a); };
+  win.history.replaceState = (...a) => { writes++; return realReplace(...a); };
+
+  win.applyUrl('');                       // what the hashchange handler does
+  assert.strictEqual(writes, 0, `applyUrl wrote history ${writes} time(s)`);
+  assert.strictEqual(read('currentDetailId'), null, 'the record stayed open');
+});
+
+test('a plain reload keeps the saved list-view preference', async () => {
+  const { win, read } = await boot();
+  win.setViewMode('list');
+  assert.strictEqual(win.localStorage.getItem('vinyl-view-mode'), 'list');
+  win.applyUrl('');                       // no view parameter, as on a reload
+  assert.strictEqual(win.localStorage.getItem('vinyl-view-mode'), 'list',
+    'applying a url with no view parameter destroyed the stored preference');
+  assert.strictEqual(read('viewMode'), 'list');
+});
+
+test('a link that names a view still wins', async () => {
+  const { read } = await boot('#view=list');
+  assert.strictEqual(read('viewMode'), 'list');
+});
+
+test('the arrange controls write themselves into the address bar', async () => {
+  const { win } = await boot();
+  win.setGroupBy('genre');
+  assert.match(win.location.hash, /crate=genre/);
+  win.toggleSortDir();
+  assert.match(win.location.hash, /dir=asc/);
+});
+
+test('a dir=asc link shows an ascending arrow', async () => {
+  const { doc } = await boot('#dir=asc');
+  assert.ok($(doc, '#sortDirBtn').classList.contains('asc'));
+  assert.match($(doc, '#sortDirBtn').innerHTML, /arrow-up/,
+    'the arrow disagreed with the sort it is describing');
+});
+
+test('replay describes the same records the calendar scales do', async () => {
+  const { win, read } = await boot();
+  win.applySavedView('needs-cleaning');
+  const shown = read('filtered()').length;
+  win.switchTab('timeline');
+  win.setCalScale('replay');
+  const replayed = read('raceFrames.length ? raceFrames[raceFrames.length - 1].total : 0');
+  assert.ok(replayed <= shown,
+    `replay covered ${replayed} records while the tab is filtered to ${shown}`);
+  assert.ok(replayed > 0, 'replay covered nothing at all');
+});
+
+test('plays, cleanings and notes live on the last step, not on all three', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  const step3 = $(doc, '.form-step[data-step="3"]');
+  assert.ok(step3.contains($(doc, '#playDatesSection')), 'play dates escaped step 3');
+  assert.ok(step3.contains($(doc, '#cleanedDatesSection')), 'cleanings escaped step 3');
+  assert.ok(step3.contains($(doc, '#fNotesList')), 'notes escaped step 3');
+  assert.strictEqual(step3.hidden, true, 'step 3 shows on step 1');
+});
+
+test('the replay lanes get real cover urls, not empty ones', async () => {
+  // activity.js kept reading cover_data after covers moved to their own
+  // endpoint, so every lane rendered <img src=""> — which re-requests the
+  // document and paints a broken image.
+  const { win, read } = await boot();
+  win.switchTab('timeline');
+  win.setCalScale('replay');
+  const covers = read('act ? act.lanes.map(function (l) { return l.cover; }) : []');
+  assert.ok(covers.length > 0, 'no lanes were built');
+  assert.ok(covers.some(c => /\/api\/records\/\d+\/cover/.test(c)),
+    'no lane carries a cover url — they are reading a field the API no longer sends');
+});

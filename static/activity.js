@@ -165,7 +165,9 @@ const VinylActivity = (function (grouping) {
         id: e.r.id,
         artist: e.r.artist || '',
         album: e.r.album_name || '',
-        cover: e.r.cover_data || '',
+        // cover_url, not cover_data: covers moved to their own endpoint and the
+        // record list stopped carrying bytes at all.
+        cover: e.r.cover_url || '',
         bought: bought,
         plays: plays,
         cleans: cleans,
