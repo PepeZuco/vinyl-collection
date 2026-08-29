@@ -933,21 +933,25 @@ select option{background:var(--surface);color:var(--text)}
 
 /* stats table — sortable list of every owned record, at the bottom of the
    stats page. Shares .list-* cell styling with the collection's list view,
-   but needs its own row grid (9 columns instead of 7) and clickable,
+   but needs its own row grid (10 columns instead of 7) and clickable,
    sort-aware headers. */
 .stats-table-wrap{overflow-x:auto}
-.stats-table{min-width:760px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.stats-row{display:grid;grid-template-columns:44px 2fr 100px 60px 90px 100px 70px 70px 64px;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.stats-table{min-width:850px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.stats-row{display:grid;grid-template-columns:44px 2fr 100px 60px 90px 100px 70px 70px 64px 90px;gap:12px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
 .stats-row:last-child{border-bottom:none}
 .stats-row:hover{background:var(--card-hover)}
-.stats-row.stats-head{cursor:default;background:var(--surface);padding:0}
+/* pinned to the top of the table wrap while its rows scroll underneath, so
+   the columns stay readable no matter how far down a long list you've scrolled */
+.stats-row.stats-head{cursor:default;background:var(--surface);padding:0;position:sticky;top:0;z-index:2}
 .stats-row.stats-head:hover{background:var(--surface)}
-.stats-th{display:flex;align-items:center;gap:4px;height:100%;padding:8px 0;background:transparent;border:none;font:700 10px var(--font);text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;cursor:pointer;font-family:var(--font)}
+/* --label, not --muted: #555 on the dark background is barely legible */
+.stats-th{display:flex;align-items:center;gap:4px;height:100%;padding:8px 0;background:transparent;border:none;font:700 10px var(--font);text-transform:uppercase;letter-spacing:.07em;color:var(--label);text-align:left;cursor:pointer;font-family:var(--font)}
 .stats-th:hover{color:var(--text)}
 .stats-th.active{color:var(--accent)}
 .stats-th i{font-size:11px;visibility:hidden}
 .stats-th.active i{visibility:visible}
-.list-condition,.list-bought{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stats-th-order{font-size:9px;font-weight:700;color:var(--accent);margin-left:1px}
+.list-condition,.list-bought,.list-lastplayed{font-size:12px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .bar-chart{display:flex;flex-direction:column;gap:8px}
 .bar-row{display:flex;align-items:center;gap:8px}
@@ -1026,17 +1030,17 @@ select option{background:var(--surface);color:var(--text)}
 .list-row:hover{background:var(--card-hover)}
 .list-row.list-head{cursor:default;background:var(--surface)}
 .list-row.list-head:hover{background:var(--surface)}
-.list-row.list-head span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.list-row.list-head span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--label)}
 .list-cover-wrap{width:36px;height:36px;border-radius:3px;overflow:hidden;flex-shrink:0;background:#111;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:14px}
 .list-cover-wrap img{width:100%;height:100%;object-fit:cover}
 [data-theme="light"] .list-cover-wrap{background:#eee;color:#ccc}
 .list-main{min-width:0}
 .list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.list-artist{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.list-genre,.list-year{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-artist{font-size:11px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-genre,.list-year{font-size:12px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-bars{display:flex;gap:2px}
 .list-bars .score-sq{height:6px}
-.list-plays{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;white-space:nowrap}
+.list-plays{font-size:12px;color:var(--label);display:flex;align-items:center;gap:4px;white-space:nowrap}
 
 /* mobile filter bottom sheet — desktop: transparent wrapper around the existing toolbar controls */
 .filter-sheet,.filter-sheet-body,.filter-sheet-section{display:contents}
@@ -2328,6 +2332,9 @@ const momentOf = VinylGrouping.momentOf;
 // sortable local stamp, so an entry with a clock and one without still order
 // against each other — the one without counts as midnight
 const momentAt = v => momentOf(v).at || String(v || '').slice(0, 10);
+// most recent play as a sortable local stamp, or '' if never played — also
+// in grouping.js, the one place that knows how to reduce play_dates to one moment
+const lastPlayed = VinylGrouping.lastPlayed;
 
 // Every dated field is stored the same way: 'YYYY-MM-DD' when it was recorded
 // before times were kept, 'YYYY-MM-DDTHH:MM:SS' on the local clock once one is
@@ -5852,8 +5859,9 @@ function renderStats() {
 // ── stats table: sortable, searchable, filterable list of owned records ────
 // Entirely independent of the collection page's search/filters — its own
 // state and DOM ids — so nothing here touches the collection view.
-let statsSortCol = 'bought_date';
-let statsSortDir = 'desc';
+// sort keys applied in priority order — plain click resets to a single key,
+// shift+click appends/toggles one, spreadsheet-style
+let statsSortKeys = [{ key: 'bought_date', dir: 'desc' }];
 let statsSearchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
 let statsAllGenres = [];
 let statsSelectedGenres = null; // lazily filled with "all genres" on first render
@@ -5867,19 +5875,30 @@ const STATS_COLUMNS = [
   { key: 'year',        label: 'Year',      dir: 'desc' },
   { key: 'condition',   label: 'Condition', dir: 'asc'  },
   { key: 'bought_date', label: 'Bought',    dir: 'desc' },
-  { key: 'my_rating',   label: 'Pepe',      dir: 'desc' },
-  { key: 'wife_rating', label: 'Jenni',     dir: 'desc' },
-  { key: 'play_count',  label: 'Plays',     dir: 'desc' },
+  { key: 'my_rating',   label: 'Pepe',        dir: 'desc' },
+  { key: 'wife_rating', label: 'Jenni',       dir: 'desc' },
+  { key: 'play_count',  label: 'Plays',       dir: 'desc' },
+  { key: 'last_played', label: 'Last played', dir: 'desc' },
 ];
 
-function statsSortClick(key) {
-  if (statsSortCol === key) {
-    statsSortDir = statsSortDir === 'asc' ? 'desc' : 'asc';
+function statsSortClick(key, ev) {
+  const idx = statsSortKeys.findIndex(s => s.key === key);
+  if (ev && ev.shiftKey) {
+    if (idx === -1) statsSortKeys.push({ key, dir: STATS_COLUMNS.find(c => c.key === key).dir });
+    else statsSortKeys[idx].dir = statsSortKeys[idx].dir === 'asc' ? 'desc' : 'asc';
+  } else if (statsSortKeys.length === 1 && idx === 0) {
+    statsSortKeys[0].dir = statsSortKeys[0].dir === 'asc' ? 'desc' : 'asc';
   } else {
-    statsSortCol = key;
-    statsSortDir = STATS_COLUMNS.find(c => c.key === key).dir;
+    statsSortKeys = [{ key, dir: STATS_COLUMNS.find(c => c.key === key).dir }];
   }
   renderStatsTable(records.filter(r => r.have_it));
+}
+
+function statsCompareValue(a, b, key) {
+  if (key === 'bought_date') return momentAt(a.bought_date).localeCompare(momentAt(b.bought_date));
+  if (key === 'last_played') return lastPlayed(a).localeCompare(lastPlayed(b));
+  if (['year','my_rating','wife_rating','play_count'].includes(key)) return (Number(a[key])||0) - (Number(b[key])||0);
+  return (a[key]||'').localeCompare(b[key]||'');
 }
 
 function statsFiltered(all) {
@@ -5898,20 +5917,21 @@ function statsFiltered(all) {
     if (statsSelectedConditions.size < CONDITION_OPTIONS.length && !statsSelectedConditions.has(r.condition||'')) return false;
     return true;
   }).sort((a, b) => {
-    const s = statsSortCol;
-    let cmp;
-    if (s === 'bought_date') cmp = momentAt(a.bought_date).localeCompare(momentAt(b.bought_date));
-    else if (['year','my_rating','wife_rating','play_count'].includes(s)) cmp = (Number(a[s])||0) - (Number(b[s])||0);
-    else cmp = (a[s]||'').localeCompare(b[s]||'');
-    return statsSortDir === 'asc' ? cmp : -cmp;
+    for (const { key, dir } of statsSortKeys) {
+      const cmp = statsCompareValue(a, b, key);
+      if (cmp) return dir === 'asc' ? cmp : -cmp;
+    }
+    return 0;
   });
 }
 
 function statsHeadHTML() {
   const cols = STATS_COLUMNS.map(c => {
-    const active = statsSortCol === c.key;
-    const arrow = active && statsSortDir === 'asc' ? 'up' : 'down';
-    return `<button type="button" class="stats-th${active?' active':''}" onclick="statsSortClick('${c.key}')">${c.label}<i class="ti ti-arrow-${arrow}"></i></button>`;
+    const idx = statsSortKeys.findIndex(s => s.key === c.key);
+    const active = idx !== -1;
+    const arrow = active && statsSortKeys[idx].dir === 'asc' ? 'up' : 'down';
+    const order = active && statsSortKeys.length > 1 ? `<sup class="stats-th-order">${idx + 1}</sup>` : '';
+    return `<button type="button" class="stats-th${active?' active':''}" onclick="statsSortClick('${c.key}', event)" title="Shift+click to add as a secondary sort">${c.label}${order}<i class="ti ti-arrow-${arrow}"></i></button>`;
   }).join('');
   return `<div class="stats-row stats-head"><span></span>${cols}</div>`;
 }
@@ -5926,6 +5946,7 @@ function statsRowHTML(r) {
   const jenniBars = Array.from({length:5}, (_,i) => `<div class="score-sq${i < jenniFilled ? ' jenni-on' : ''}"></div>`).join('');
   const conditionLabel = r.condition === 'new' ? 'New' : r.condition === 'used' ? 'Used' : '—';
   const boughtDay = momentOf(r.bought_date).day || '—';
+  const lastPlayedDay = momentOf(lastPlayed(r)).day || '—';
   return `<div class="stats-row" data-id="${r.id}">
     <div class="list-cover-wrap">${cover}</div>
     <div class="list-main">
@@ -5939,6 +5960,7 @@ function statsRowHTML(r) {
     <div class="list-bars">${pepeBars}</div>
     <div class="list-bars">${jenniBars}</div>
     <span class="list-plays"><i class="ti ti-headphones" style="font-size:10px;opacity:.5"></i>${r.play_count||0}</span>
+    <span class="list-lastplayed">${esc(lastPlayedDay)}</span>
   </div>`;
 }
 
