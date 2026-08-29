@@ -2,6 +2,7 @@ import os, io, base64, csv, json, uuid, hashlib
 csv.field_size_limit(10 * 1024 * 1024)
 from flask import Flask, request, jsonify, send_file, session, render_template
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.exceptions import NotFound
 from sqlalchemy import func
 from sqlalchemy.orm import defer
 from werkzeug.utils import secure_filename
@@ -236,6 +237,15 @@ def list_records():
             .order_by(Record.artist).all())
     return jsonify([r.to_dict() for r in recs])
 
+def get_record_or_404(rid):
+    """A record by id, or a 404 — through Session.get rather than the legacy
+    Query.get that get_or_404 still calls under SQLAlchemy 2.0."""
+    record = db.session.get(Record, rid)
+    if record is None:
+        raise NotFound()
+    return record
+
+
 @app.route("/api/records", methods=["POST"])
 @require_auth
 def create_record():
@@ -267,7 +277,7 @@ def create_record():
 @app.route("/api/records/<int:rid>", methods=["PUT"])
 @require_auth
 def update_record(rid):
-    r = Record.query.get_or_404(rid)
+    r = get_record_or_404(rid)
     d = request.get_json(silent=True) or {}
     for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by","condition"]:
         if field in d:
@@ -328,7 +338,7 @@ def record_cover(rid):
 @app.route("/api/records/<int:rid>", methods=["DELETE"])
 @require_auth
 def delete_record(rid):
-    r = Record.query.get_or_404(rid)
+    r = get_record_or_404(rid)
     db.session.delete(r)
     db.session.commit()
     return jsonify({"ok": True})
