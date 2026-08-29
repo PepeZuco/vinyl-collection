@@ -103,7 +103,10 @@ async function boot(hash) {
     });
     if (u.endsWith('/api/auth/status')) return json({ authed: true });
     if (u.includes('/api/records') && (!opts || !opts.method || opts.method === 'GET')) {
-      return json(RECORDS);
+      // A fresh copy: the app mutates records in place, and handing it the
+      // fixture's own objects let one test's edit rewrite every later one's
+      // expectations.
+      return json(JSON.parse(JSON.stringify(RECORDS)));
     }
     if (u.includes('/api/scan/usage')) return json({ month: '2026-08', month_usd: 0, month_scans: 0,
       total_usd: 0, total_scans: 0, estimate: { photo: 0.006, spotify: 0.0004 } });
@@ -628,4 +631,61 @@ test('the replay lanes get real cover urls, not empty ones', async () => {
   assert.ok(covers.length > 0, 'no lanes were built');
   assert.ok(covers.some(c => /\/api\/records\/\d+\/cover/.test(c)),
     'no lane carries a cover url — they are reading a field the API no longer sends');
+});
+
+test('a scan filling the form is kept as a draft, not just typing', async () => {
+  // The case draft.js exists for: a scan has already been billed by the time
+  // it fills the form, and it writes fields with el.value = …, which fires no
+  // input event. Listening for typing alone left it unprotected.
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.localStorage.removeItem('vinyl-form-draft');
+  win.applyScanResult({ source: 'photo', artist: 'Scanned Artist',
+    album_name: 'Scanned Album', genre: '', candidates: [], duplicate_of: null,
+    search_string: '' });
+  assert.ok(win.localStorage.getItem('vinyl-form-draft'),
+    'a completed scan left nothing in the draft');
+});
+
+
+test('the draft flag does not carry over to the next form', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  $(doc, '#fAlbum').value = 'Something';
+  win.formChanged();
+  assert.strictEqual($(doc, '#draftFlag').hidden, false, 'the flag never lit');
+  win.confirm = () => true;
+  win.closeForm();
+  win.openAdd();
+  assert.strictEqual($(doc, '#draftFlag').hidden, true,
+    'it still read "draft kept" over an empty form');
+});
+
+test('clicking away closes the facet popover on a desktop', async () => {
+  // The backdrop that carries the close is display:none above 760px, and the
+  // dropdowns this replaced each had an outside-click closer of their own.
+  const { win, doc, read } = await boot();
+  win.openFacetPicker();
+  assert.strictEqual(read('facetPopFor'), 'pick');
+  $(doc, '#recordsContainer').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(read('facetPopFor'), null, 'the popover would not go away');
+});
+
+test('escape closes the facet popover', async () => {
+  const { win, doc, read } = await boot();
+  win.openFacetPicker();
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.strictEqual(read('facetPopFor'), null);
+});
+
+test('the card play buttons and Played today write the same way', async () => {
+  const { win, read } = await boot();
+  const rec = RECORDS.find(r => r.have_it);
+  const held = () => read('records').find(r => r.id === rec.id);
+  const beforeCount = held().play_count;
+  const beforeDates = JSON.parse(held().play_dates || '[]').length;
+  await win.adjustPlayCount(rec.id, 1);
+  assert.strictEqual(held().play_count, beforeCount + 1);
+  assert.strictEqual(JSON.parse(held().play_dates || '[]').length, beforeDates + 1,
+    'the card button did not stamp a play date');
 });

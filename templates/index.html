@@ -3193,6 +3193,7 @@ function updateRatingUI(){
     highlightSegs(id,value);
     document.querySelector(`#${id} .rv`).textContent = value ? `${value}/5` : '—';
   });
+  formChanged();   // the rating segments
 }
 
 // ── new / used ───────────────────────────────────────────────────────────────
@@ -3202,6 +3203,7 @@ function setCondition(value){
   const field = document.getElementById('fCondition');
   field.value = field.value === value ? '' : value;
   renderCondSwitch();
+  formChanged();   // the condition switch
 }
 
 function renderCondSwitch(){
@@ -3214,6 +3216,7 @@ function renderCondSwitch(){
 function setHaveIt(value){
   document.getElementById('fHaveIt').checked = value;
   renderOwnSwitch();
+  formChanged();   // the status switch
 }
 
 function renderOwnSwitch(){
@@ -3358,6 +3361,7 @@ function renderNotesForm() {
       <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
+  formChanged();   // a note added or removed
 }
 
 // ── play dates in the form ──────────────────────────────────────────────────
@@ -3384,6 +3388,7 @@ function renderPlayDatesForm() {
       <input type="time" class="pd-time" value="${esc(stampTime(d))}" title="time played — blank means it was never recorded" onchange="updatePlayTime(${i}, this.value)">
       <button type="button" class="playdate-delete" title="remove this play" onclick="deletePlayDate(${i})"><i class="ti ti-x"></i></button>
     </div>`).join('');
+  formChanged();   // a play date added or removed
 }
 
 function bumpPlayCount(delta) {
@@ -3433,6 +3438,7 @@ function renderCleanedDatesForm() {
       <input type="time" class="pd-time" value="${esc(stampTime(d))}" title="time cleaned — blank means it was never recorded" onchange="updateCleanedTime(${i}, this.value)">
       <button type="button" class="playdate-delete" title="remove this cleaning" onclick="deleteCleanedDate(${i})"><i class="ti ti-x"></i></button>
     </div>`).join('');
+  formChanged();   // a cleaning added or removed
 }
 
 function addCleanedDate() {
@@ -3701,6 +3707,11 @@ const FORM_STEPS = [
 let formStep = 1;
 
 function setFormStep(n) {
+  // Opening always starts with nothing kept; rememberDraft lights it again on
+  // the first real change. Without this it still read "draft kept" over an
+  // empty form, from whatever the last session had typed.
+  const flag = document.getElementById('draftFlag');
+  if (flag && n === 1) flag.hidden = !VinylDraft.load(draftStore(), Date.now(), DRAFT_MAX_AGE_MS);
   formStep = Math.min(FORM_STEPS.length, Math.max(1, n));
   document.querySelectorAll('#formOverlay .form-step').forEach(el => {
     el.hidden = Number(el.dataset.step) !== formStep;
@@ -3745,6 +3756,7 @@ function closeForm(force){
   }
   VinylDraft.clear(draftStore());
   formBaseline = null;
+  document.getElementById('draftFlag').hidden = true;
   document.getElementById('formOverlay').classList.add('hidden');
   closeCoverSheet();
   closeScanOverlay();
@@ -3763,10 +3775,23 @@ function rememberDraft(){
   if (flag) flag.hidden = false;
 }
 
-// Every field, however it is edited — typing, the rating segments, a date row.
-document.addEventListener('input', e => {
-  if (e.target.closest && e.target.closest('#formOverlay')) rememberDraft();
-});
+/* Typing is only one of the ways this form changes.
+ *
+ * The scan writes fields with el.value = …, which fires nothing; the rating
+ * segments, the status and condition switches, the date rows and the note
+ * buttons are all clicks; the genre is a <select>. Listening for `input`
+ * alone meant the draft was never written for any of them — including the
+ * scan, which is the case draft.js exists to protect, since it has already
+ * been billed by the time it fills the form. The mutating helpers call
+ * formChanged() themselves; these two listeners cover the typed fields and
+ * the select. */
+function formChanged() {
+  if (formBaseline) rememberDraft();
+}
+
+['input', 'change'].forEach(type => document.addEventListener(type, e => {
+  if (e.target.closest && e.target.closest('#formOverlay')) formChanged();
+}));
 
 /* Everything the form currently holds, as it would be saved.
  *
@@ -3911,6 +3936,7 @@ function applyCover(dataUri, fromUser = true){
   coverDirty = true;
   if(fromUser) pendingSpotifyUrl = '';
   showCover(dataUri);
+  formChanged();   // a picked or scanned cover
 }
 
 // The DOM half of applyCover. openEdit needs to put the record's own cover on
@@ -4152,6 +4178,7 @@ function setScanField(id, value){
     delete scanWrote[id];
   }
   return false;
+  formChanged();   // a field the scan filled
 }
 
 function setScanBusy(busy){
@@ -4273,6 +4300,7 @@ function applyScanResult(data){
 
   closeCoverSheet();
   openScanOverlay(data);
+  formChanged();   // a scan fills fields without firing an input event
 }
 
 // Held for the results screen, which outlives the response that filled it —
@@ -4897,6 +4925,9 @@ function logCleaned(id) {
   toast('Cleaned today');
 }
 
+/* The card's +/- buttons. Everything but the count element is patchRecord's
+ * job — this used to hand-roll the same optimistic write with a different
+ * rollback, so the buttons and "Played today" could drift apart on failure. */
 async function adjustPlayCount(id, delta) {
   const record = records.find(r => r.id === id);
   if (!record) return;
@@ -4908,38 +4939,12 @@ async function adjustPlayCount(id, delta) {
   // array slot, which is not the same entry once the form has inserted one.
   const newDates = delta > 0 ? [...prevDates, nowStamp()] : dropLatestPlay(prevDates);
 
-  // Update local state
-  record.play_count = newCount;
-  record.play_dates = JSON.stringify(newDates);
-
-  // Update UI immediately
   const countEl = document.getElementById(`playCount${id}`);
   if (countEl) countEl.textContent = newCount;
 
-  // Save to database
-  try {
-    const res = await fetch(`/api/records/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ play_count: newCount, play_dates: JSON.stringify(newDates) })
-    });
-    if (!res.ok) {
-      // Revert on error
-      record.play_count = (record.play_count || 0) - delta;
-      record.play_dates = JSON.stringify(prevDates);
-      if (countEl) countEl.textContent = record.play_count;
-      toast('failed to update play count');
-    }
-  } catch (err) {
-    record.play_count = (record.play_count || 0) - delta;
-    record.play_dates = JSON.stringify(prevDates);
-    if (countEl) countEl.textContent = record.play_count;
-    toast('error updating play count');
-  }
+  await patchRecord(id, { play_count: newCount, play_dates: JSON.stringify(newDates) });
 }
 
-
-// ── genre multi-select ─────────────────────────────────────────────────────
 /* Facet values wear their raw form in the model and their words here: the
  * model should not know that '' means "No genre", or that a country is stored
  * as an ISO code. */
@@ -5080,6 +5085,21 @@ function renderFacetPop() {
 document.addEventListener('click', e => {
   const item = e.target.closest('#facetPop .facet-item[data-facet]');
   if (item) toggleFacetValue(item.dataset.facet, item.dataset.value);
+});
+
+/* Clicking away closes it. On a phone the backdrop catches that, but the
+ * backdrop is display:none on a desktop — where the dropdowns this replaced
+ * each had a closer of their own, all four of which went with them. */
+document.addEventListener('click', e => {
+  if (facetPopFor === null) return;
+  const pop = document.getElementById('facetPop');
+  if (pop.contains(e.target)) return;
+  if (e.target.closest('.chip-open, .chip-add')) return;   // the things that open it
+  closeFacetPop();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && facetPopFor !== null) closeFacetPop();
 });
 
 /* Ticking values one at a time. An untouched facet has no entry at all, so the
@@ -6351,7 +6371,9 @@ function renderStatsTable(all) {
 
   const wrap = document.getElementById('statsTableWrap');
   if (!recs.length) {
-    wrap.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${all.length ? 'no records match your filters.' : 'no records yet.'}</div>`;
+    // `all` is already the filtered set, so it can no longer tell the two
+    // apart — the collection itself is what says whether there is anything.
+    wrap.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet.'}</div>`;
     return;
   }
   wrap.innerHTML = `<div class="stats-table">${statsHeadHTML()}${recs.map(r => statsRowHTML(r)).join('')}</div>`;

@@ -32,7 +32,7 @@
  * the global lexical scope for the inline script below it; required as a module
  * by the tests. */
 
-const VinylFilters = (function () {
+const VinylFilters = (function (grouping) {
 
   /* Which fields the search box reads. Artist and album are what people
    * actually search; the rest are opt-in because matching on them surprises
@@ -50,25 +50,6 @@ const VinylFilters = (function () {
   function dayNumber(day) {
     const [y, m, d] = day.split('-').map(Number);
     return Math.floor(Date.UTC(y, m - 1, d) / DAY_MS);
-  }
-
-  /* The day of the most recent play, or '' — the same rule VinylGrouping's
-   * lastPlayed uses, inlined so the model has no dependency to carry. */
-  function lastPlayedDay(r) {
-    let dates;
-    try { dates = JSON.parse(r.play_dates || '[]'); } catch (e) { return ''; }
-    if (!Array.isArray(dates)) return '';
-    const days = dates
-      .map(d => /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')))
-      .filter(Boolean)
-      .map(m => m[0])
-      // the shape matching is not the calendar: 2026-02-30 has to fall out
-      .filter(day => {
-        const [y, mo, dd] = day.split('-').map(Number);
-        const probe = new Date(y, mo - 1, dd);
-        return probe.getMonth() === mo - 1 && probe.getDate() === dd;
-      });
-    return days.length ? days.reduce((a, b) => (a > b ? a : b)) : '';
   }
 
   function hasCleaning(r) {
@@ -95,10 +76,16 @@ const VinylFilters = (function () {
     { id: 'cleaning',  label: 'Cleaning',  valueOf: r => (hasCleaning(r) ? 'cleaned' : 'never') },
     /* The only facet measured against a date, so it reads one off deps. With
      * no date to measure against every record reads as never played, which is
-     * the honest answer rather than a guessed one. */
+     * the honest answer rather than a guessed one.
+     *
+     * The last play comes from VinylGrouping rather than a rule of its own:
+     * this used to take the leading YYYY-MM-DD off the raw string, which
+     * disagreed with health.js about an offset-bearing stamp near midnight and
+     * about a date the calendar cannot hold. One rule, so the filter bar's
+     * count and the Insights tile cannot describe the same record differently. */
     { id: 'played',    label: 'Last played',
       valueOf: (r, deps) => {
-        const day = lastPlayedDay(r);
+        const day = grouping.momentOf(grouping.lastPlayed(r)).day;
         const today = deps && deps.today;
         if (!day || !today) return 'never';
         const age = dayNumber(today) - dayNumber(day);
@@ -204,6 +191,7 @@ const VinylFilters = (function () {
 
   return { DEFAULT_FIELDS, FACETS, facetById, defaultQuery,
            matches, filterRecords, facetValues, chipsFor };
-})();
+})(typeof module !== 'undefined' && module.exports
+     ? require('./grouping.js') : VinylGrouping);
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylFilters;
