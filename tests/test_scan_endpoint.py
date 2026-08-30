@@ -110,3 +110,64 @@ def test_unexpected_scan_error_returns_json_not_500_page(client):
     assert response.status_code == 502
     assert response.is_json
     assert "error" in response.get_json()
+
+
+# ── MusicBrainz outage: keep the identification, flag the lookup ─────────────
+
+_SLEEVE = {"artist": "Tim Maia", "album_name": "Racional", "genre": "Soul & Funk",
+           "label": "Seroma", "catalog_number": None}
+
+
+def test_musicbrainz_outage_keeps_the_sleeve_read(client):
+    """The vision call is the expensive half and it already succeeded.
+
+    An unreachable MusicBrainz costs the year, the country and the alternates.
+    It must not cost the artist and album the user is waiting for, and it must
+    not become a 502 — that is the path that made a scan look like a failure
+    and sent the user back to scan the same photo again, paying twice.
+    """
+    with patch.object(app_module.scan, "extract_from_image", return_value=_SLEEVE), \
+         patch.object(app_module.scan, "lookup_musicbrainz",
+                      side_effect=app_module.scan.MusicBrainzUnavailable("down")):
+        response = client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"})
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["artist"] == "Tim Maia"
+    assert body["album_name"] == "Racional"
+    assert body["genre"] == "Soul & Funk"
+    assert body["candidates"] == []
+    assert body["lookup_failed"] is True
+
+
+def test_a_genuine_miss_is_not_reported_as_a_failure(client):
+    """MusicBrainz answered and had nothing. Same empty candidate list, but the
+    form must word it as "no release matched", not as an outage."""
+    with patch.object(app_module.scan, "extract_from_image", return_value=_SLEEVE), \
+         patch.object(app_module.scan, "lookup_musicbrainz", return_value=[]):
+        response = client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"})
+
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["candidates"] == []
+    assert body["lookup_failed"] is False
+
+
+def test_outage_still_records_what_the_scan_spent(client):
+    """The vision call was billed before MusicBrainz was ever asked."""
+    def spend(_image, _genres, usage_out=None):
+        usage_out.append({"model": "claude-sonnet-5",
+                          "input_tokens": 1200, "output_tokens": 40})
+        return _SLEEVE
+
+    with patch.object(app_module.scan, "extract_from_image", side_effect=spend), \
+         patch.object(app_module.scan, "lookup_musicbrainz",
+                      side_effect=app_module.scan.MusicBrainzUnavailable("down")), \
+         patch.object(app_module, "_record_scan_spend") as record:
+        client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"})
+
+    assert record.call_count == 1
+    source, spent = record.call_args.args
+    assert source == "photo"
+    assert spent == [{"model": "claude-sonnet-5",
+                      "input_tokens": 1200, "output_tokens": 40}]

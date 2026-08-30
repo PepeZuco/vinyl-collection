@@ -392,7 +392,18 @@ def scan_record():
         artist = fields.get("artist") or ""
         album = fields.get("album_name") or ""
 
-        candidates = scan.lookup_musicbrainz(artist, album)
+        # Caught here rather than by the handlers below, which would answer 502
+        # and throw away a sleeve the vision call already read and billed for.
+        # An unreachable MusicBrainz costs the year, the country and the
+        # alternates — not the identification.
+        try:
+            candidates = scan.lookup_musicbrainz(artist, album)
+            lookup_failed = False
+        except scan.MusicBrainzUnavailable:
+            app.logger.warning("MusicBrainz unavailable for %r / %r", artist, album)
+            candidates = []
+            lookup_failed = True
+
         for candidate in candidates:
             candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
 
@@ -418,6 +429,10 @@ def scan_record():
         "album_name": album,
         "genre": fields.get("genre") or "",
         "candidates": candidates,
+        # An empty candidate list has two very different meanings and the form
+        # has to word them differently: MusicBrainz has no such release, or
+        # MusicBrainz could not be reached and retrying is worth the user's time.
+        "lookup_failed": lookup_failed,
         "duplicate_of": {"id": duplicate["id"], "artist": duplicate["artist"],
                          "album_name": duplicate["album_name"]} if duplicate else None,
         "search_string": " ".join(p for p in [artist, album, year, "vinyl cover"] if p),

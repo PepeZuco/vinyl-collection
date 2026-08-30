@@ -727,3 +727,74 @@ test('every other control still redraws immediately', async () => {
   assert.strictEqual(read('heavyRenderTimer'), null,
     'a saved view deferred its redraw, which only the search box should do');
 });
+
+// ── the scan results screen tells the truth about an empty result ───────────
+
+/* Both of these render the same empty candidate list. The words have to
+ * differ: one is "MusicBrainz has never heard of this record", the other is
+ * "MusicBrainz did not answer". Only the second is worth trying again, and
+ * telling the user the wrong one is what made the same photo get scanned —
+ * and billed — twice. */
+const SCAN_MISS = {
+  source: 'photo', artist: 'Tim Maia', album_name: 'Racional', genre: '',
+  candidates: [], duplicate_of: null, lookup_failed: false,
+  search_string: 'Tim Maia Racional vinyl cover',
+};
+
+test('a record MusicBrainz does not have says so', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.applyScanResult(SCAN_MISS);
+
+  const body = $(doc, '#scanBody').textContent;
+  assert.match(body, /no releases matched/);
+  assert.doesNotMatch(body, /couldn't reach/i);
+});
+
+test('a MusicBrainz outage is not reported as a record it does not have', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.applyScanResult({ ...SCAN_MISS, lookup_failed: true });
+
+  const body = $(doc, '#scanBody').textContent;
+  assert.match(body, /couldn't reach MusicBrainz/i);
+  assert.doesNotMatch(body, /no release group for it/);
+});
+
+test('an outage still leaves the sleeve read in the form', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.applyScanResult({ ...SCAN_MISS, lookup_failed: true });
+
+  assert.strictEqual($(doc, '#fArtist').value, 'Tim Maia');
+  assert.strictEqual($(doc, '#fAlbum').value, 'Racional');
+});
+
+test('the outage message does not survive into the next scan', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.applyScanResult({ ...SCAN_MISS, lookup_failed: true });
+  assert.match($(doc, '#scanBody').textContent, /couldn't reach/i);
+
+  win.applyScanResult(SCAN_MISS);
+  assert.match($(doc, '#scanBody').textContent, /no releases matched/);
+});
+
+test('a candidate that is not an album says which kind it is', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.applyScanResult({
+    ...SCAN_MISS, artist: 'AC/DC', album_name: 'Back in Black',
+    candidates: [
+      {mbid: 'a', year: '1980', country: 'AU', artist: 'AC/DC',
+       album_name: 'Back in Black', type: 'Album', cover_data: null},
+      {mbid: 'b', year: '1980', country: 'AU', artist: 'AC/DC',
+       album_name: 'Back in Black', type: 'Single', cover_data: null},
+    ],
+  });
+
+  const cards = [...doc.querySelectorAll('.scan-card')].map(c => c.textContent);
+  assert.strictEqual(cards.length, 2);
+  assert.doesNotMatch(cards[0], /album$|· album/i);   // the LP needs no label
+  assert.match(cards[1], /single/i);
+});

@@ -3603,6 +3603,7 @@ function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';coverDirty=false;editingCoverUrl='';
   document.getElementById('formTitle').textContent='add record';
   scanCandidates = [];
+  scanLookupFailed = false;
   scanWrote = {};
   scanBase = null;
   setScanSearch('');
@@ -3656,6 +3657,7 @@ function openEdit(id){
   coverDataUri='';coverDirty=false;editingCoverUrl=r.cover_url||'';
   document.getElementById('formTitle').textContent='edit record';
   scanCandidates = [];
+  scanLookupFailed = false;
   scanWrote = {};
   scanBase = null;
   setScanSearch('');
@@ -4147,6 +4149,11 @@ document.getElementById('coverCaptureInput').addEventListener('change', handleCo
 
 // ── scan: autofill from photo or Spotify link ──────────────────────────────
 let scanCandidates = [];
+// Whether the empty candidate list means "MusicBrainz has no such release" or
+// "MusicBrainz could not be reached". Only the second is worth retrying, and
+// telling the user the wrong one is what sent them back to re-scan — and
+// re-pay for — a photo that had already been read correctly.
+let scanLookupFailed = false;
 let scanInFlight = false;
 let scanToken = 0;
 // Fields a scan has written during THIS form session. A later scan may clear a
@@ -4296,6 +4303,7 @@ function applyScanResult(data){
   setScanField('fGenre', data.genre);
 
   scanCandidates = data.candidates || [];
+  scanLookupFailed = !!data.lookup_failed;
   // No candidate is applied until the user picks one on the results screen.
   // A previous scan's year and country are still this scan's problem though:
   // clear them rather than let them ride along with a different album.
@@ -4396,13 +4404,23 @@ function sameAlbumTitle(a, b){
 function renderScanCandidates(){
   const body = document.getElementById('scanBody');
   if(!scanCandidates.length){
-    body.innerHTML =
-      `<div class="scan-empty">
-         <i class="ti ti-disc"></i>
-         <div class="scan-empty-title">no releases matched</div>
-         <div class="scan-empty-text">the sleeve was read, but MusicBrainz has no release group for
-           it — common for Brazilian pressings. whatever it could read is already in the form.</div>
-       </div>`;
+    // Two different empty states. The scan is not repeated either way — the
+    // sleeve is already read and re-reading it costs another API call — but
+    // only one of these is the user's cue that trying again would help.
+    body.innerHTML = scanLookupFailed
+      ? `<div class="scan-empty">
+           <i class="ti ti-cloud-off"></i>
+           <div class="scan-empty-title">couldn't reach MusicBrainz</div>
+           <div class="scan-empty-text">the sleeve was read and is already in the form — only the
+             year, country and alternate pressings are missing. MusicBrainz was busy, which passes;
+             fill the year by hand or scan again in a moment.</div>
+         </div>`
+      : `<div class="scan-empty">
+           <i class="ti ti-disc"></i>
+           <div class="scan-empty-title">no releases matched</div>
+           <div class="scan-empty-text">the sleeve was read, but MusicBrainz has no release group for
+             it — common for Brazilian pressings. whatever it could read is already in the form.</div>
+         </div>`;
     return;
   }
   const cards = scanCandidates.map((c,i)=>{
@@ -4413,7 +4431,10 @@ function renderScanCandidates(){
     const dup = (scanDuplicateOf && sameAlbumTitle(c.album_name, scanDuplicateOf.album_name))
       ? '<span class="scan-badge-dup"><i class="ti ti-alert-triangle"></i> already in your collection</span>'
       : '';
-    const meta = [c.year || '?', c.country ? countryLabelFromCode(c.country) : null]
+    // A single or an EP carries a different year from the LP with the same
+    // name, so say which one this is rather than letting it pass for the album.
+    const meta = [c.year || '?', c.country ? countryLabelFromCode(c.country) : null,
+                  (c.type && c.type !== 'Album') ? c.type.toLowerCase() : null]
       .filter(Boolean).join(' · ');
     return `<button type="button" class="scan-card" onclick="pickCandidate(${i})">
        <div class="scan-card-cover">${art}${best}${dup}</div>

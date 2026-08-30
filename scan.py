@@ -120,8 +120,44 @@ def find_duplicate(artist: str, album: str, existing: list[dict]) -> dict | None
 MB_BASE = "https://musicbrainz.org/ws/2"
 MB_TIMEOUT = 2.0
 
+# musicbrainz.org sheds load with a 503 ("the MusicBrainz web server is
+# currently busy") that has nothing to do with this client's own quota: the
+# responses carry X-RateLimit-Zone: global / search-global with most of the
+# bucket still unspent, and Retry-After: 0. Measured back to back against the
+# live API, a third to a half of identical searches came back that way. Treating
+# one as "MusicBrainz has no such release" is what made the same photo scan to
+# no matches and then, seconds later, to matches.
+#
+# So they are retried, with a widening gap rather than the throttle's flat
+# second: three attempts one second apart all landed inside the same shed and
+# still came back empty. The budget has to outlast the bad few seconds rather
+# than fit inside them.
+MB_MAX_ATTEMPTS = 4
+MB_RETRY_BACKOFF = 1.0
+MB_MAX_BACKOFF = 8.0
+
+# The search is worth waiting for; the artist country is a nice-to-have on a
+# form the user is watching, so it gives up sooner rather than adding seconds
+# to every scan MusicBrainz is having a bad minute for.
+MB_COUNTRY_ATTEMPTS = 2
+
+# MusicBrainz scores a search hit 0-100. A real match scores 100 even through an
+# accent difference or a misread letter; the tail below this is other records by
+# the same artist, and offering those as candidates is what makes a scan look
+# like it guessed. Never applied to the best candidate — see _rank_candidates.
+MB_MIN_SCORE = 50
+
 _mb_lock = threading.Lock()
 _mb_last_call = 0.0
+
+
+class MusicBrainzUnavailable(Exception):
+    """MusicBrainz could not be asked — as opposed to asked and having nothing.
+
+    The two have to stay distinguishable all the way to the form: "no release
+    matched this sleeve" and "the release database was down" call for different
+    words and different next steps from the user.
+    """
 
 
 def _musicbrainz_headers() -> dict:
@@ -139,28 +175,75 @@ def _throttle_musicbrainz() -> None:
         _mb_last_call = time.monotonic()
 
 
-def _mb_get(path: str, params: dict) -> dict | None:
-    _throttle_musicbrainz()
+def _retry_after(response, attempt: int) -> float:
+    """How long to wait before the next attempt.
+
+    Prefers the server's own Retry-After when it names a usable delay, and
+    otherwise doubles the gap each time. Capped either way: MusicBrainz mostly
+    sends Retry-After: 0 while shedding, and an unbounded header would let a
+    remote server stall a scan the user is watching.
+    """
+    header = (getattr(response, "headers", None) or {}).get("Retry-After")
     try:
-        response = requests.get(
-            f"{MB_BASE}{path}",
-            params={**params, "fmt": "json"},
-            headers=_musicbrainz_headers(),
-            timeout=MB_TIMEOUT,
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException:
-        # lookup_musicbrainz never raises; without this line the degradation
-        # (no year, no country) is silent and untraceable in production.
-        logger.warning("MusicBrainz request failed for %s", path, exc_info=True)
-        return None
+        named = float(header)
+    except (TypeError, ValueError):
+        named = 0.0
+    if named > 0:
+        return min(named, MB_MAX_BACKOFF)
+    return min(MB_RETRY_BACKOFF * 2 ** (attempt - 1), MB_MAX_BACKOFF)
+
+
+def _mb_get(path: str, params: dict, attempts: int = MB_MAX_ATTEMPTS) -> dict:
+    """GET a MusicBrainz endpoint, retrying the transient failures.
+
+    Raises MusicBrainzUnavailable once the attempt budget is spent. Callers
+    decide what that costs them: the search cannot go on without it, an artist
+    lookup just loses the country.
+    """
+    for attempt in range(1, attempts + 1):
+        _throttle_musicbrainz()
+        try:
+            response = requests.get(
+                f"{MB_BASE}{path}",
+                params={**params, "fmt": "json"},
+                headers=_musicbrainz_headers(),
+                timeout=MB_TIMEOUT,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            # A 4xx is the query's fault and will fail identically next time;
+            # only a timeout, a dropped connection or a 5xx is worth repeating.
+            failed = getattr(e, "response", None)
+            status = getattr(failed, "status_code", None)
+            retryable = status is None or status >= 500
+            last = attempt == attempts
+            logger.warning(
+                "MusicBrainz %s failed (attempt %d/%d, status %s, %s)",
+                path, attempt, attempts, status,
+                "retrying" if retryable and not last else "giving up",
+            )
+            if not retryable:
+                break
+            if not last:
+                time.sleep(_retry_after(failed, attempt))
+    raise MusicBrainzUnavailable(f"MusicBrainz did not answer for {path}")
 
 
 def _artist_country(artist_mbid: str, cache: dict) -> str | None:
     if artist_mbid in cache:
         return cache[artist_mbid]
-    payload = _mb_get(f"/artist/{artist_mbid}", {}) or {}
+    try:
+        payload = _mb_get(f"/artist/{artist_mbid}", {},
+                          attempts=MB_COUNTRY_ATTEMPTS) or {}
+    except MusicBrainzUnavailable:
+        # Country is the one optional field here. Losing it must not lose the
+        # release the user is actually trying to identify, so this failure is
+        # swallowed where the search's is not. Cached as None so three
+        # candidates by one artist don't each retry a server that is down.
+        logger.warning("Could not read country for artist %s", artist_mbid)
+        cache[artist_mbid] = None
+        return None
     country = payload.get("country")
     if not country:
         codes = (payload.get("area") or {}).get("iso-3166-1-codes") or []
@@ -169,21 +252,96 @@ def _artist_country(artist_mbid: str, cache: dict) -> str | None:
     return country
 
 
+# Lucene's metacharacters, as they appear in ordinary sleeve text: the slash in
+# AC/DC, the brackets around [Mono], the parens around (Reissue), the colon in a
+# subtitle. Unescaped, they change what the query means or make it unparseable.
+_LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
+
+
+def _lucene_escape(value: str) -> str:
+    return _LUCENE_SPECIAL.sub(r"\\\1", value or "")
+
+
+def _mb_query(artist: str, album: str) -> str:
+    """Build the release-group search query.
+
+    field:(terms), not field:"phrase". Quoting forces an exact-phrase match, and
+    a sleeve almost never reads exactly the way MusicBrainz spells it: measured
+    against the live API, "Space Is the Place (Reissue)", "Kind of Blue [Mono]",
+    "A Divina Comédia ou Ando Meio Desligado" and a one-letter misread of
+    "Carnegie" each returned zero groups quoted and the right album at score 100
+    unquoted. Bare terms would over-correct — `artist:Sun Ra` binds only "Sun"
+    and lets "Ra" match the default field, dragging in other artists — so the
+    parens keep every term bound to its own field while leaving the match fuzzy.
+    """
+    query = f"artist:({_lucene_escape(artist)})"
+    if album:
+        query += f" AND releasegroup:({_lucene_escape(album)})"
+    return query
+
+
+def _rank_candidates(groups: list[dict], album: str) -> list[dict]:
+    """Order search hits by how likely each is to be the record in the photo.
+
+    MusicBrainz's own order is by score alone, which loses three ways, all of
+    them reproduced against the live API:
+
+      - "Clube da Esquina" returns "Clube da Esquina 2" at score 100 ahead of
+        "Clube da Esquina" at 91, so an exact title has to outrank a score.
+      - AC/DC's "Back in Black" returns the single ahead of the album, both at
+        100. This is an LP collection, and the single carries a different year.
+      - "Tim Maia / Racional" returns the 2002 compilation "Tim Maia Racional"
+        ahead of the 1975 and 1976 originals, all three at 100.
+
+    Sorting is stable, so hits that tie on every key keep MusicBrainz's order.
+    """
+    wanted = _normalise(album)
+
+    def key(group: dict) -> tuple:
+        score = group.get("score")
+        secondary = group.get("secondary-types") or []
+        return (
+            bool(wanted) and _normalise(group.get("title") or "") == wanted,
+            # A compilation scoring the same is nearly always a later repackage
+            # of the record in the photo, and taking it stamps the reissue's
+            # year on an original pressing. Only Compilation is demoted: "Live"
+            # is a secondary type too, and a live album is an ordinary record.
+            "Compilation" not in secondary,
+            (group.get("primary-type") or "") == "Album",
+            score if isinstance(score, int) else 0,
+        )
+
+    ranked = sorted(groups, key=key, reverse=True)
+    # The floor trims the tail of same-artist noise, never the head: a weak best
+    # match is still the best information there is, and emptying the list would
+    # put the scan back to claiming it found nothing.
+    return ranked[:1] + [
+        g for g in ranked[1:]
+        if isinstance(g.get("score"), int) and g["score"] >= MB_MIN_SCORE
+    ]
+
+
 def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
-    """Return up to 3 release-group candidates with year and artist country."""
+    """Return up to 3 release-group candidates with year and artist country.
+
+    An empty list means MusicBrainz has no such release. It raises
+    MusicBrainzUnavailable when MusicBrainz could not be reached at all —
+    the caller must not word that as "nothing matched".
+    """
     if not artist:
         return []
-    query = f'artist:"{artist}"'
-    if album:
-        query += f' AND releasegroup:"{album}"'
 
-    payload = _mb_get("/release-group/", {"query": query, "limit": 5})
-    if not payload:
+    payload = _mb_get("/release-group/", {"query": _mb_query(artist, album),
+                                          "limit": 5})
+    groups = (payload or {}).get("release-groups") or []
+    if not groups:
         return []
 
     candidates = []
     country_cache: dict = {}
-    for group in payload.get("release-groups", [])[:3]:
+    # Ranked before the cut, not after: the exact match is regularly not the
+    # hit MusicBrainz put first, so truncating first can drop the right answer.
+    for group in _rank_candidates(groups, album)[:3]:
         credit = (group.get("artist-credit") or [{}])[0].get("artist") or {}
         released = group.get("first-release-date") or ""
         candidates.append({
@@ -194,6 +352,9 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
             "label": None,
             "artist": credit.get("name") or artist,
             "album_name": group.get("title") or album,
+            # Carried to the form so a Single or an EP can say so on the card
+            # rather than looking like the LP the user is holding.
+            "type": group.get("primary-type"),
         })
     return candidates
 

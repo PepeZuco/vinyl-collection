@@ -39,6 +39,13 @@ def test_returns_year_and_country():
 
 
 def test_missing_release_date_yields_no_year():
+    """A release group with no first-release-date reports year None rather
+    than a truncated empty string.
+
+    Found by title, not by position: this asks for "Para Sempre", and ranking
+    an exact title match first is what moved it off the index MusicBrainz's
+    own score order had put it at.
+    """
     responses = [
         _response(load_fixture("mb_release_group_withers")),
         _response(load_fixture("mb_artist_withers")),
@@ -46,8 +53,9 @@ def test_missing_release_date_yields_no_year():
     with patch.object(scan.requests, "get", side_effect=responses):
         candidates = scan.lookup_musicbrainz("Bill Withers", "Para Sempre")
 
-    assert candidates[1]["year"] is None
-    assert candidates[1]["country"] == "US"
+    para_sempre = next(c for c in candidates if c["album_name"] == "Para Sempre")
+    assert para_sempre["year"] is None
+    assert para_sempre["country"] == "US"
 
 
 def test_country_falls_back_to_area_iso_code():
@@ -83,9 +91,17 @@ def test_no_match_returns_empty_list():
         assert scan.lookup_musicbrainz("Nobody", "Nothing") == []
 
 
-def test_network_error_returns_empty_list():
+def test_network_error_raises_rather_than_reporting_no_match():
+    """An unreachable MusicBrainz must not look like a record it has never
+    heard of.
+
+    This used to return [], which the form worded as "MusicBrainz has no
+    release group for it" — the wrong message, and the reason a scan that had
+    merely hit a transient outage looked like a failed identification.
+    """
     with patch.object(scan.requests, "get", side_effect=scan.requests.RequestException):
-        assert scan.lookup_musicbrainz("Bill Withers", "Menagerie") == []
+        with pytest.raises(scan.MusicBrainzUnavailable):
+            scan.lookup_musicbrainz("Bill Withers", "Menagerie")
 
 
 def test_sends_identifying_user_agent():
