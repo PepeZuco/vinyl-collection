@@ -78,8 +78,20 @@ header{display:flex;align-items:center;justify-content:space-between;padding:28p
 .app-name{font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-family:var(--font-mono)}
 .record-count{font-size:13px;color:var(--muted)}
 .header-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.vinyl-logo{flex-shrink:0;cursor:default}
+.vinyl-logo{flex-shrink:0;cursor:pointer;border-radius:50%;transition:box-shadow .15s}
+.vinyl-logo:hover{box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent)}
+.vinyl-logo.active{box-shadow:0 0 0 3px var(--accent)}
 @keyframes vinyl-glint{to{transform:rotate(360deg)}}
+
+/* setup mode — the shelf view: full collection, ordered by artist, split into
+   the two physical blocks. Filters/sort/group don't apply here, so their bar
+   hides in favor of a banner naming the mode and how to leave it. */
+body.setup-mode .bar{display:none}
+.setup-banner{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:10px 14px;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:13px;color:var(--muted)}
+.setup-banner i{color:var(--accent);font-size:16px}
+.setup-banner strong{color:var(--text)}
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
@@ -1541,7 +1553,7 @@ select option{background:var(--surface);color:var(--text)}
 <div class="app">
   <header>
     <div class="logo-row">
-      <svg class="vinyl-logo" width="48" height="48" viewBox="0 0 44 44" aria-label="Vinyl collection logo">
+      <svg class="vinyl-logo" id="vinylLogo" width="48" height="48" viewBox="0 0 44 44" aria-label="Setup mode: order by artist, split into two blocks" role="button" tabindex="0" onclick="toggleSetupMode()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSetupMode();}">
         <circle cx="22" cy="22" r="21" fill="#9B7FD4"/>
         <circle cx="22" cy="22" r="16" fill="#F5C518"/>
         <circle cx="22" cy="22" r="8" fill="#D4608A"/>
@@ -1644,6 +1656,14 @@ select option{background:var(--surface);color:var(--text)}
         <div class="dice-face" id="diceFace"></div>
       </button>
     </div>
+  </div>
+
+  <!-- Setup mode: the whole collection, ordered by artist and split into the
+       two physical blocks the records actually sit in on the shelf. Shown in
+       place of the filter/arrange bar while active. -->
+  <div class="setup-banner hidden" id="setupBanner">
+    <i class="ti ti-disc"></i>
+    <span><strong>Setup mode</strong> — ordered by artist, split into two blocks. Click the record to exit.</span>
   </div>
 
   <!-- Dims the page behind the popover when it rises as a sheet on a phone. -->
@@ -2678,6 +2698,8 @@ function filtered() {
 }
 
 function render() {
+  document.getElementById('setupBanner').classList.toggle('hidden', !setupMode);
+  if (setupMode) { renderSetup(); return; }
   const recs = filtered();
   renderCount(recs.length);
   renderFilters();
@@ -2695,6 +2717,54 @@ function render() {
     el.addEventListener('click', () => toggleCrate(el.dataset.crate))
   );
   observeCardsForGlow();
+}
+
+// ── setup mode ─────────────────────────────────────────────────────────────
+// The physical shelf, not the filtered/sorted view of it: the whole collection,
+// ordered by artist and cut into the two blocks it actually sits in. Toggled
+// by clicking the spinning record next to the title. Not persisted — reloading
+// the page always comes back to the normal view.
+let setupMode = false;
+
+function toggleSetupMode() {
+  setupMode = !setupMode;
+  document.getElementById('vinylLogo').classList.toggle('active', setupMode);
+  document.body.classList.toggle('setup-mode', setupMode);
+  if (setupMode) switchTab('collection');
+  render();
+}
+
+function renderSetup() {
+  // Only what's actually on the shelf — a wishlist record has no physical
+  // copy to place in a block, regardless of what "ignore filters" otherwise means.
+  const owned = records.filter(r => r.have_it);
+  renderCount(owned.length);
+  const c = document.getElementById('recordsContainer');
+  if (!owned.length) {
+    c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>no records yet. add your first vinyl.</div>`;
+    return;
+  }
+  c.innerHTML = setupHTML(owned);
+  c.querySelectorAll('[data-id]').forEach(el =>
+    el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
+  );
+  observeCardsForGlow();
+}
+
+function setupHTML(recs) {
+  const blocks = VinylGrouping.setupBlocks(recs);
+  return blocks.map(block => {
+    const first = block.records[0], last = block.records[block.records.length - 1];
+    const initial = r => (r.artist || '').trim().charAt(0).toUpperCase() || '#';
+    const range = first ? `${initial(first)} – ${initial(last)}` : '';
+    return `<section class="crate">
+      <div class="crate-head" style="cursor:default">
+        <span class="crate-label">${esc(block.label)}${range ? ` <span style="font-weight:400;opacity:.6">(${esc(range)})</span>` : ''}</span>
+        <span class="crate-count">${block.records.length} ${block.records.length === 1 ? 'record' : 'records'}</span>
+      </div>
+      <div class="crate-body">${recordsHTML(block.records)}</div>
+    </section>`;
+  }).join('');
 }
 
 // ── crates ─────────────────────────────────────────────────────────────────

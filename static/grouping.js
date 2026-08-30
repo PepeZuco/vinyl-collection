@@ -217,7 +217,22 @@ const VinylGrouping = (function () {
     return [...crates.values()];
   }
 
-  return { avgRating, momentOf, lastPlayed, bucketOf, compareByGroup, buildGroups };
+  /* Setup mode: the two physical blocks the collection is split across on the
+   * shelf. Every record sorts by artist, then the sorted list is cut in half
+   * by COUNT rather than by letter, so an alphabet-heavy range (lots of "The
+   * ...") doesn't leave one block overflowing while the other sits half
+   * empty. An odd record count gives the extra record to block 1. */
+  function setupBlocks(records) {
+    const sorted = [...records].sort((a, b) =>
+      (a.artist || '').trim().toLowerCase().localeCompare((b.artist || '').trim().toLowerCase()));
+    const cut = Math.ceil(sorted.length / 2);
+    return [
+      { label: 'Block 1', records: sorted.slice(0, cut) },
+      { label: 'Block 2', records: sorted.slice(cut) },
+    ];
+  }
+
+  return { avgRating, momentOf, lastPlayed, bucketOf, compareByGroup, buildGroups, setupBlocks };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylGrouping;

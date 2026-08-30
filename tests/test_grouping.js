@@ -9,7 +9,7 @@ process.env.TZ = 'America/Sao_Paulo';
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { bucketOf, buildGroups, avgRating, momentOf, lastPlayed, compareByGroup } = require('../static/grouping.js');
+const { bucketOf, buildGroups, avgRating, momentOf, lastPlayed, compareByGroup, setupBlocks } = require('../static/grouping.js');
 
 // A record only needs the fields the bucket rule reads, so each test builds the
 // smallest one that exercises its rule.
@@ -410,4 +410,52 @@ test('last played crates run newest first and end with the never played', () => 
   const groups = buildGroups(list, 'last_played');
   assert.deepStrictEqual(groups.map(g => g.label), ['August 2026', 'July 2026', 'Never played']);
   assert.deepStrictEqual(groups.map(g => g.records.length), [2, 1, 1]);
+});
+
+// ── setupBlocks: the shelf's two physical blocks ────────────────────────────
+
+test('setupBlocks orders every record by artist, ignoring the id order given in', () => {
+  const list = [rec({ id: 1, artist: 'Wilco' }), rec({ id: 2, artist: 'ABBA' }), rec({ id: 3, artist: 'Metallica' })];
+  const [block1, block2] = setupBlocks(list);
+  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.artist),
+                         ['ABBA', 'Metallica', 'Wilco']);
+});
+
+test('setupBlocks artist order ignores case', () => {
+  const list = [rec({ id: 1, artist: 'wilco' }), rec({ id: 2, artist: 'ABBA' })];
+  const [block1, block2] = setupBlocks(list);
+  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.artist), ['ABBA', 'wilco']);
+});
+
+test('an even collection splits into two equal blocks', () => {
+  const list = [rec({ id: 1 }), rec({ id: 2 }), rec({ id: 3 }), rec({ id: 4 })];
+  const [block1, block2] = setupBlocks(list);
+  assert.strictEqual(block1.records.length, 2);
+  assert.strictEqual(block2.records.length, 2);
+});
+
+test('an odd collection gives the extra record to block 1', () => {
+  const list = [rec({ id: 1 }), rec({ id: 2 }), rec({ id: 3 })];
+  const [block1, block2] = setupBlocks(list);
+  assert.strictEqual(block1.records.length, 2);
+  assert.strictEqual(block2.records.length, 1);
+});
+
+test('setupBlocks labels the two blocks Block 1 and Block 2', () => {
+  const list = [rec({ id: 1 }), rec({ id: 2 })];
+  const [block1, block2] = setupBlocks(list);
+  assert.strictEqual(block1.label, 'Block 1');
+  assert.strictEqual(block2.label, 'Block 2');
+});
+
+test('setupBlocks does not mutate the array it is given', () => {
+  const list = [rec({ id: 1, artist: 'Wilco' }), rec({ id: 2, artist: 'ABBA' })];
+  setupBlocks(list);
+  assert.strictEqual(list[0].artist, 'Wilco');
+});
+
+test('setupBlocks of an empty collection gives two empty blocks', () => {
+  const [block1, block2] = setupBlocks([]);
+  assert.deepStrictEqual(block1.records, []);
+  assert.deepStrictEqual(block2.records, []);
 });
