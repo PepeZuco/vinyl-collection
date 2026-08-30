@@ -146,3 +146,78 @@ test('an unparseable bought date is dropped rather than thrown on', () => {
 test('play dates that are not valid JSON leave the record out of rotation', () => {
   assert.strictEqual(health([rec({ play_dates: 'not json' })]).rotation, 0);
 });
+
+// ── last-7-days trends ───────────────────────────────────────────────────────
+// TODAY is 2026-08-29, so the trend window (trendDays: 7) runs 08-23..08-29.
+
+test('playsByDay buckets plays by calendar day, oldest first, over the window', () => {
+  const h = health([rec({ play_dates: json('2026-08-29T21:00:00', '2026-08-23', '2026-08-29T08:00:00') })],
+                   { trendDays: 7 });
+  assert.deepStrictEqual(h.playsByDay.map(p => p.day),
+    ['2026-08-23', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']);
+  assert.deepStrictEqual(h.playsByDay.map(p => p.n), [1, 0, 0, 0, 0, 0, 2]);
+});
+
+test('a play outside the trend window is not bucketed', () => {
+  const h = health([rec({ play_dates: json('2026-08-01') })], { trendDays: 7 });
+  assert.strictEqual(h.playsByDay.reduce((a, p) => a + p.n, 0), 0);
+});
+
+test('a wishlist record contributes nothing to playsByDay', () => {
+  const h = health([rec({ have_it: false, play_dates: json('2026-08-29') })], { trendDays: 7 });
+  assert.strictEqual(h.playsByDay.reduce((a, p) => a + p.n, 0), 0);
+});
+
+test('rotationByDay\'s last entry matches today\'s rotation figure', () => {
+  const records = [rec({ play_dates: json('2026-08-20') }), rec({ play_dates: json('2026-05-01') }), rec({})];
+  const h = health(records, { trendDays: 7 });
+  assert.strictEqual(h.rotationByDay[h.rotationByDay.length - 1], h.rotation);
+});
+
+test('rotationByDay excludes a play that had not happened yet as of an earlier day', () => {
+  // Played today only: in rotation as of today, but not as of a week ago.
+  const h = health([rec({ play_dates: json('2026-08-29') })], { trendDays: 7 });
+  assert.strictEqual(h.rotationByDay[0], 0);
+  assert.strictEqual(h.rotationByDay[h.rotationByDay.length - 1], 1);
+});
+
+test('neverCleanedByDay\'s last entry matches today\'s neverCleaned figure', () => {
+  const records = [rec({}), rec({ cleaned_dates: json('2026-08-02') }), rec({})];
+  const h = health(records, { trendDays: 7 });
+  assert.strictEqual(h.neverCleanedByDay[h.neverCleanedByDay.length - 1], h.neverCleaned);
+});
+
+test('neverCleanedByDay counts a record cleaned mid-window as never-cleaned only before that day', () => {
+  const h = health([rec({ cleaned_dates: json('2026-08-26') })], { trendDays: 7 });
+  assert.deepStrictEqual(h.neverCleanedByDay, [1, 1, 1, 0, 0, 0, 0]);
+});
+
+test('addsThisWeek counts purchases in the trailing trendDays, inclusive of today', () => {
+  const h = health([
+    rec({ bought_date: '2026-08-23' }),   // 6 days back — inside a 7-day window
+    rec({ bought_date: '2026-08-22' }),   // 7 days back — outside
+    rec({ bought_date: '2026-08-29' }),   // today
+  ], { trendDays: 7 });
+  assert.strictEqual(h.addsThisWeek, 2);
+});
+
+test('addsThisWeek ignores a wishlist record\'s purchase date', () => {
+  const h = health([rec({ have_it: false, bought_date: '2026-08-29' })], { trendDays: 7 });
+  assert.strictEqual(h.addsThisWeek, 0);
+});
+
+test('an empty collection reports empty trends rather than throwing', () => {
+  const h = health([]);
+  assert.strictEqual(h.playsByDay.length, 7);
+  assert.deepStrictEqual(h.rotationByDay, [0, 0, 0, 0, 0, 0, 0]);
+  assert.deepStrictEqual(h.neverCleanedByDay, [0, 0, 0, 0, 0, 0, 0]);
+  assert.strictEqual(h.addsThisWeek, 0);
+});
+
+test('with no today, the trend fields come back empty rather than throwing', () => {
+  const h = collectionHealth([rec({})], {});
+  assert.deepStrictEqual(h.playsByDay, []);
+  assert.deepStrictEqual(h.rotationByDay, []);
+  assert.deepStrictEqual(h.neverCleanedByDay, []);
+  assert.strictEqual(h.addsThisWeek, 0);
+});

@@ -518,55 +518,71 @@ test('the theme toggle redraws whatever is on screen', async () => {
   assert.deepStrictEqual(errors, [], 'toggling the theme threw:\n' + errors.join('\n'));
 });
 
-/* The wood theme — the palette taken from the photo of the actual setup: teak
- * cabinet, walnut floor, and the VMN95E's green where the yellow accent was.
- * It is a third theme in a page that was written throughout for exactly two,
- * so these pin the three places that assumption is baked in. */
+/* The wood finish — a palette taken from the photo of the actual setup: the
+ * teak cabinet top, the walnut floor under it, and the AT-LP70XBT's green
+ * VMN95E stylus standing in for the yellow accent.
+ *
+ * It is deliberately a SECOND AXIS rather than a third theme. data-theme keeps
+ * meaning light-or-dark and nothing that reads it has to learn a new value;
+ * data-finish carries classic-or-wood. That is what lets the wood-light
+ * palette inherit all fourteen [data-theme="light"] component rules for free.
+ * These tests pin the two axes staying independent. */
 
-test('the theme button cycles dark to light to wood and back', async () => {
+test('switching finish leaves the light/dark tone alone', async () => {
   const { win, doc } = await boot();
-  win.applyTheme('dark');
-  const btn = $(doc, '#themeBtn');
-  const seen = [];
-  for (let i = 0; i < 3; i++) {
-    btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-    seen.push(doc.documentElement.getAttribute('data-theme'));
-  }
-  assert.deepStrictEqual(seen, ['light', 'wood', 'dark']);
+  win.applyTheme('light');
+  $(doc, '#finishBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(doc.documentElement.getAttribute('data-finish'), 'wood');
+  assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'light',
+    'toggling the finish also changed the tone');
 });
 
-test('each theme gets its own toggle icon', async () => {
+test('switching tone leaves the wood finish alone', async () => {
   const { win, doc } = await boot();
-  const icons = ['dark', 'light', 'wood'].map(t => {
-    win.applyTheme(t);
-    return $(doc, '#themeBtn').textContent;
-  });
-  assert.strictEqual(new Set(icons).size, 3,
-    'two themes share a toggle icon: ' + JSON.stringify(icons));
+  win.applyFinish('wood');
+  win.applyTheme('light');
+  $(doc, '#themeBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'dark');
+  assert.strictEqual(doc.documentElement.getAttribute('data-finish'), 'wood',
+    'toggling the tone dropped the wood finish');
 });
 
-test('wood counts as a dark theme for the colour logic', async () => {
+test('the finish is remembered separately from the tone', async () => {
   const { win, read } = await boot();
-  win.applyTheme('wood');
-  assert.strictEqual(read('isDark()'), true, 'isDark() said wood is light');
-  // genreColor picks hue[0] on dark and the deeper hue[1] on light
-  assert.strictEqual(read("genreColor('Rock')"), '#E0453C',
-    'genreColor gave wood the light-theme hue');
+  win.applyFinish('wood');
+  win.applyTheme('light');
+  assert.strictEqual(read("localStorage.getItem('vinyl-finish')"), 'wood');
+  assert.strictEqual(read("localStorage.getItem('vinyl-theme')"), 'light');
 });
 
-test('the wood palette defines every token the dark palette does', async () => {
+test('wood keeps the tone the colour logic sees', async () => {
+  const { win, read } = await boot();
+  win.applyFinish('wood');
+  win.applyTheme('dark');
+  assert.strictEqual(read('isDark()'), true, 'wood-dark did not read as dark');
+  assert.strictEqual(read("genreColor('Rock')"), '#E0453C');
+  win.applyTheme('light');
+  assert.strictEqual(read('isDark()'), false, 'wood-light did not read as light');
+  assert.strictEqual(read("genreColor('Rock')"), '#C0271F',
+    'wood-light got the dark-theme genre hue');
+});
+
+test('each wood palette defines every token its classic tone defines', async () => {
   const css = fs.readFileSync(PAGE, 'utf8');
-  const block = name => {
-    const m = css.match(new RegExp('\\[data-theme="' + name + '"\\]\\{([^}]*)\\}'));
-    assert.ok(m, 'no [data-theme="' + name + '"] palette block in the template');
+  const tokens = (selector, label) => {
+    const m = css.match(new RegExp(selector.replace(/[[\]"]/g, '\\$&') + '\\{([^}]*)\\}'));
+    assert.ok(m, 'no ' + label + ' palette block in the template');
     return new Set([...m[1].matchAll(/(--[\w-]+)\s*:/g)].map(x => x[1]));
   };
-  const dark = block('dark');
-  const wood = block('wood');
-  const missing = [...dark].filter(t => !wood.has(t));
-  assert.deepStrictEqual(missing, [],
-    'the wood palette is missing tokens the dark one defines: ' + missing.join(', '));
+  for (const tone of ['dark', 'light']) {
+    const classic = tokens('[data-theme="' + tone + '"]', 'classic ' + tone);
+    const wood = tokens('[data-finish="wood"][data-theme="' + tone + '"]', 'wood ' + tone);
+    const missing = [...classic].filter(t => !wood.has(t));
+    assert.deepStrictEqual(missing, [],
+      'the wood ' + tone + ' palette is missing: ' + missing.join(', '));
+  }
 });
+
 
 test('the dice opens some record from the current filter', async () => {
   const { win, doc, read } = await boot();
