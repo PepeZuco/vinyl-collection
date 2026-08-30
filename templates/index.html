@@ -33,32 +33,34 @@ html,body{touch-action:pan-x pan-y}
   --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☾'
 }
-/* Wood — the room the records actually live in: the teak cabinet top, the
-   walnut floor under it, and the AT-LP70XBT sitting on it. The accent is the
-   gold #f1c23f, the app's own house colour. Values sampled off the photo of the setup.
-   
+/* Wood — not the room itself any more, just the edges of it: the walnut
+   trim off the cabinet, on borders only. The ground underneath stays the
+   plain classic black/white so the record on top of it stays the thing your
+   eye lands on. The accent is the gold #f1c23f, the app's own house colour,
+   deepened for light. Values sampled off the photo of the setup.
+
    It rides a SECOND axis rather than replacing the tone. data-theme keeps
    meaning light-or-dark, so nothing that reads it has to learn a new value and
    the wood-light palette below inherits all fourteen [data-theme="light"]
    component rules for free. Two attributes = (0,2,0) specificity, so these
    win over the plain tone palettes above wherever both apply. */
 [data-finish="wood"][data-theme="dark"]{
-  --bg:#14100B;--surface:#1D1710;--card:#221B13;--border:#3A2C1D;
-  --text:#F0E4D2;--muted:#6E5B46;--label:#A88F70;--accent:#f1c23f;--danger:#c0392b;
-  --card-hover:#2C2117;--search-bg:transparent;
-  --sh-gray:rgba(120,95,70,0.35);
+  --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#3A2C1D;
+  --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#f1c23f;--danger:#c0392b;
+  --card-hover:#1f1f1f;--search-bg:transparent;
+  --sh-gray:rgba(100,100,100,0.35);
   --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☀'
 }
-/* The lit cabinet top rather than the shadowed floor. The accent has to go
-   deeper here: the gold #f1c23f reaches 11.3:1 on teak but only 1.22:1 on this
-   ground, so the rating numbers would vanish. #7A5A00 is the same 44deg hue at
-   full saturation, and clears 4.6:1. */
+/* Same classic-light ground as the plain tone palette. The accent still has
+   to go deeper than the classic one: the gold #f1c23f reaches only 1.22:1 on
+   this ground, so the rating numbers would vanish. #7A5A00 is the same 44deg
+   hue at full saturation, and clears 4.6:1. */
 [data-finish="wood"][data-theme="light"]{
-  --bg:#E8DAC4;--surface:#F4EADA;--card:#F4EADA;--border:#CBB596;
-  --text:#231A11;--muted:#8A7358;--label:#6B5844;--accent:#7A5A00;--danger:#c0392b;
-  --card-hover:#EDE2CF;--search-bg:#F4EADA;
-  --sh-gray:rgba(60,40,20,0.20);
+  --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#CBB596;
+  --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#7A5A00;--danger:#c0392b;
+  --card-hover:#e9e5dc;--search-bg:#f0ede6;
+  --sh-gray:rgba(0,0,0,0.18);
   --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☾'
 }
@@ -1624,7 +1626,7 @@ select option{background:var(--surface);color:var(--text)}
     </div>
     <div class="header-right">
       <button class="btn theme-btn btn-icon" id="themeBtn" title="Toggle theme">☀</button>
-      <button class="btn theme-btn btn-icon" id="finishBtn" title="Wood finish" style="display:none"><i class="ti ti-tree"></i></button>
+      <button class="btn theme-btn btn-icon" id="finishBtn" title="Wood finish"><i class="ti ti-tree"></i></button>
       <div class="auth-badge" id="authBadge" style="display:none"><i class="ti ti-lock"></i><span>visitor</span></div>
       <div class="more-menu" id="moreMenu">
         <button class="btn btn-icon" id="moreMenuBtn" title="more actions" onclick="toggleMoreMenu()"><i class="ti ti-dots"></i></button>
