@@ -2385,11 +2385,35 @@ const FILTER_DEPS = {
 /* Re-render whatever surface is on screen. Every control that changes the
  * query calls this, so the collection and the statistics page can never drift
  * apart again — there is only one thing to change. */
-function applyQueryChange() {
+/* Re-render whatever surface is on screen. Every control that changes the
+ * query calls this, so the collection and the statistics page can never drift
+ * apart again — there is only one thing to change.
+ *
+ * The shelf is cheap and redraws at once, because typing wants to see the
+ * grid keep up. The other two are not: Insights destroys and rebuilds three
+ * Chart.js instances, reprojects the country map and redraws the year
+ * distribution, and the Timeline's Replay rebuilds every frame and lane and
+ * drops playback back to the first day. Doing that per keystroke made a
+ * seven-letter search seven full rebuilds, and restarted a replay you were
+ * watching. So they wait for a pause — `defer` is what the search box asks
+ * for, and nothing else does. */
+let heavyRenderTimer = null;
+const HEAVY_RENDER_DELAY_MS = 200;
+
+function applyQueryChange(options) {
+  const defer = !!(options && options.defer === true);
   render();
-  if (currentTab === 'stats') renderStats();
-  if (currentTab === 'timeline') renderTimeline();
   syncUrl();
+
+  const heavy = () => {
+    heavyRenderTimer = null;
+    if (currentTab === 'stats') renderStats();
+    if (currentTab === 'timeline') renderTimeline();
+  };
+
+  if (heavyRenderTimer) { clearTimeout(heavyRenderTimer); heavyRenderTimer = null; }
+  if (defer) heavyRenderTimer = setTimeout(heavy, HEAVY_RENDER_DELAY_MS);
+  else heavy();
 }
 
 // ── the address bar ────────────────────────────────────────────────────────
@@ -4653,7 +4677,9 @@ function bindEvents(){
   });
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
-  document.getElementById('searchInput').addEventListener('input', applyQueryChange);
+  // the only caller that defers: the shelf keeps up with typing, the charts wait
+  document.getElementById('searchInput').addEventListener('input',
+    () => applyQueryChange({ defer: true }));
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
   document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
@@ -5296,6 +5322,7 @@ function switchTab(tab) {
   closeFacetPop();
   syncMobileTabbar();
 
+  if (heavyRenderTimer) { clearTimeout(heavyRenderTimer); heavyRenderTimer = null; }
   // Leaving the tab stops the replay — no timer runs behind another view.
   if (leaving === 'timeline' && tab !== 'timeline') histPause();
 

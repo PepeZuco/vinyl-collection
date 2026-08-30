@@ -689,3 +689,41 @@ test('the card play buttons and Played today write the same way', async () => {
   assert.strictEqual(JSON.parse(held().play_dates || '[]').length, beforeDates + 1,
     'the card button did not stamp a play date');
 });
+
+test('typing redraws the shelf at once but makes the charts wait', async () => {
+  // Insights rebuilds three Chart.js instances, the country map and the year
+  // distribution; Replay rebuilds every frame and drops playback to day one.
+  // Per keystroke that was a full rebuild per character.
+  const { win, doc, read } = await boot();
+  win.switchTab('stats');
+  assert.strictEqual(read('heavyRenderTimer'), null, 'something was already queued');
+
+  const box = $(doc, '#searchInput');
+  box.value = 'zzzz';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+  assert.notStrictEqual(read('heavyRenderTimer'), null,
+    'the charts rebuilt synchronously on a keystroke');
+  // the shelf still keeps up: nothing matches 'zzzz'
+  assert.match($(doc, '#matchCount').textContent, /^0\b/);
+});
+
+test('a queued rebuild does not fire into a tab you have left', async () => {
+  const { win, doc, read } = await boot();
+  win.switchTab('stats');
+  const box = $(doc, '#searchInput');
+  box.value = 'zz';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.notStrictEqual(read('heavyRenderTimer'), null);
+  win.switchTab('collection');
+  assert.strictEqual(read('heavyRenderTimer'), null,
+    'a stats rebuild was still queued after leaving stats');
+});
+
+test('every other control still redraws immediately', async () => {
+  const { win, read } = await boot();
+  win.switchTab('stats');
+  win.applySavedView('needs-cleaning');
+  assert.strictEqual(read('heavyRenderTimer'), null,
+    'a saved view deferred its redraw, which only the search box should do');
+});
