@@ -6682,9 +6682,19 @@ function calNavigate(dir) {
     else if (calScale === 'week') newAnchor.setDate(newAnchor.getDate() + 7*dir);
     else newAnchor.setDate(newAnchor.getDate() + dir);
 
-    // constrain to date range
-    if (calMinDate && newAnchor < calMinDate) return;
-    if (calMaxDate && newAnchor > calMaxDate) return;
+    // Constrain to the data's date range. Month view names a whole month, not
+    // a day within it, so the clamp compares year+month there — comparing full
+    // dates would weigh the anchor's leftover day-of-month (carried over from
+    // whatever date it started as) against the boundary's day-of-month, and
+    // could block landing back on a month that's plainly in range.
+    if (calScale === 'month') {
+      const ym = d => d.getFullYear() * 12 + d.getMonth();
+      if (calMinDate && ym(newAnchor) < ym(calMinDate)) return;
+      if (calMaxDate && ym(newAnchor) > ym(calMaxDate)) return;
+    } else {
+      if (calMinDate && newAnchor < calMinDate) return;
+      if (calMaxDate && newAnchor > calMaxDate) return;
+    }
     calAnchor = newAnchor;
   }
   renderCalendar();
