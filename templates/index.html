@@ -356,6 +356,14 @@ select option{background:var(--surface);color:var(--text)}
 .dm-album .dm-year{font-size:14px;color:var(--muted);font-weight:500;margin-left:8px}
 .dm-artist{margin-top:4px;font-size:14px;color:var(--muted)}
 .dm-artist .multi-artist-badge{margin-right:0;margin-left:4px}
+.dm-artist-more{display:none}
+.dm-artist.expanded .dm-artist-more{display:inline}
+.dm-artist-toggle{background:none;border:none;padding:0;margin-left:6px;
+  font-size:12px;font-weight:600;color:var(--accent);cursor:pointer}
+.dm-artist-toggle:hover{text-decoration:underline}
+.dm-artist-toggle .more{display:none}
+.dm-artist.expanded .dm-artist-toggle .less{display:none}
+.dm-artist.expanded .dm-artist-toggle .more{display:inline}
 .dm-rates{display:flex;align-items:center;gap:12px;margin-top:14px;
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
 .dm-rate{flex:1;min-width:0}
@@ -2434,6 +2442,20 @@ function isMultiArtist(r) {
 function artistDisplay(r) {
   return artistList(r).join(' / ');
 }
+// Detail-modal artist line: long compilation credits get truncated after
+// DM_ARTIST_LIMIT names with a click-to-expand toggle, since artistDisplay()
+// is shared with card/list/calendar views where truncation isn't wanted.
+const DM_ARTIST_LIMIT = 3;
+function dmArtistHTML(r) {
+  const list = artistList(r);
+  if (list.length <= DM_ARTIST_LIMIT) return esc(artistDisplay(r)) || 'unknown';
+  const shown = list.slice(0, DM_ARTIST_LIMIT).map(esc).join(' / ');
+  const rest = list.slice(DM_ARTIST_LIMIT).map(esc).join(' / ');
+  const extra = list.length - DM_ARTIST_LIMIT;
+  return `${shown}<span class="dm-artist-more"> / ${rest}</span>` +
+    `<button type="button" class="dm-artist-toggle" onclick="this.closest('.dm-artist').classList.toggle('expanded')">` +
+    `<span class="less">+${extra} more</span><span class="more">show less</span></button>`;
+}
 function multiArtistBadgeHTML() {
   return '<i class="ti ti-users multi-artist-badge" title="multiple artists"></i>';
 }
@@ -3120,7 +3142,7 @@ function dmInfoHTML(r) {
   const conditionStr = conditionBadgeHTML(r);
   return `
     <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
-    <div class="dm-artist">${esc(artistDisplay(r))||'unknown'}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
+    <div class="dm-artist">${dmArtistHTML(r)}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
     <div class="dm-rates">
       <div class="dm-rate pepe"><div class="who">Pepe</div>${(myR>0||authed)?bars(myR,'my_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
       <div class="dm-rate jenni"><div class="who">Jenni</div>${(herR>0||authed)?bars(herR,'wife_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${herR>0?herR+'/5':''}</div></div>
