@@ -518,6 +518,56 @@ test('the theme toggle redraws whatever is on screen', async () => {
   assert.deepStrictEqual(errors, [], 'toggling the theme threw:\n' + errors.join('\n'));
 });
 
+/* The wood theme — the palette taken from the photo of the actual setup: teak
+ * cabinet, walnut floor, and the VMN95E's green where the yellow accent was.
+ * It is a third theme in a page that was written throughout for exactly two,
+ * so these pin the three places that assumption is baked in. */
+
+test('the theme button cycles dark to light to wood and back', async () => {
+  const { win, doc } = await boot();
+  win.applyTheme('dark');
+  const btn = $(doc, '#themeBtn');
+  const seen = [];
+  for (let i = 0; i < 3; i++) {
+    btn.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    seen.push(doc.documentElement.getAttribute('data-theme'));
+  }
+  assert.deepStrictEqual(seen, ['light', 'wood', 'dark']);
+});
+
+test('each theme gets its own toggle icon', async () => {
+  const { win, doc } = await boot();
+  const icons = ['dark', 'light', 'wood'].map(t => {
+    win.applyTheme(t);
+    return $(doc, '#themeBtn').textContent;
+  });
+  assert.strictEqual(new Set(icons).size, 3,
+    'two themes share a toggle icon: ' + JSON.stringify(icons));
+});
+
+test('wood counts as a dark theme for the colour logic', async () => {
+  const { win, read } = await boot();
+  win.applyTheme('wood');
+  assert.strictEqual(read('isDark()'), true, 'isDark() said wood is light');
+  // genreColor picks hue[0] on dark and the deeper hue[1] on light
+  assert.strictEqual(read("genreColor('Rock')"), '#E0453C',
+    'genreColor gave wood the light-theme hue');
+});
+
+test('the wood palette defines every token the dark palette does', async () => {
+  const css = fs.readFileSync(PAGE, 'utf8');
+  const block = name => {
+    const m = css.match(new RegExp('\\[data-theme="' + name + '"\\]\\{([^}]*)\\}'));
+    assert.ok(m, 'no [data-theme="' + name + '"] palette block in the template');
+    return new Set([...m[1].matchAll(/(--[\w-]+)\s*:/g)].map(x => x[1]));
+  };
+  const dark = block('dark');
+  const wood = block('wood');
+  const missing = [...dark].filter(t => !wood.has(t));
+  assert.deepStrictEqual(missing, [],
+    'the wood palette is missing tokens the dark one defines: ' + missing.join(', '));
+});
+
 test('the dice opens some record from the current filter', async () => {
   const { win, doc, read } = await boot();
   $(doc, '#randomBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));

@@ -33,6 +33,19 @@ html,body{touch-action:pan-x pan-y}
   --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☾'
 }
+/* Wood — the room the records actually live in: the teak cabinet top and the
+   walnut floor under it, with the AT-LP70XBT's green VMN95E stylus standing in
+   for the yellow accent. Values sampled off the photo of the setup. It is a
+   DARK theme, so it inherits every component rule that is not written under
+   [data-theme="light"] and needs almost no overrides of its own. */
+[data-theme="wood"]{
+  --bg:#14100B;--surface:#1D1710;--card:#221B13;--border:#3A2C1D;
+  --text:#F0E4D2;--muted:#6E5B46;--label:#A88F70;--accent:#3FB56E;--danger:#c0392b;
+  --card-hover:#2C2117;--search-bg:transparent;
+  --sh-gray:rgba(120,95,70,0.35);
+  --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
+  --toggle-icon:'◉'
+}
 
 /* Pepe and Jenni's colours. Deliberately the same in both themes: the bars are
    shapes rather than text, and deepening them for light mode read as muddy. */
@@ -2151,15 +2164,25 @@ let confirmDeleteId = null;
 let currentDetailId = null;
 
 // ── theme ──────────────────────────────────────────────────────────────────
+const THEMES = ['dark', 'light', 'wood'];
+// Wood is dark: it takes the dark palette's component styling, so every colour
+// decision below that branches on "is this a dark theme" has to say yes to it.
+const DARK_THEMES = new Set(['dark', 'wood']);
+function themeIsDark() {
+  return DARK_THEMES.has(document.documentElement.getAttribute('data-theme'));
+}
+// The button shows where the next click GOES, not where you are.
+const THEME_NEXT_ICON = { dark: '☀', light: '◉', wood: '☾' };
 let theme = localStorage.getItem('vinyl-theme') || 'dark';
+if (!THEMES.includes(theme)) theme = 'dark';
 function applyTheme(t) {
   theme = t;
   document.documentElement.setAttribute('data-theme', t);
-  document.getElementById('themeBtn').textContent = t === 'dark' ? '☀' : '☾';
+  document.getElementById('themeBtn').textContent = THEME_NEXT_ICON[t];
   localStorage.setItem('vinyl-theme', t);
 }
 applyTheme(theme);
-document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
+document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
 
 // ── genre colours ──────────────────────────────────────────────────────────
 // One hue per genre, used for the card shadow and every genre-coloured chart,
@@ -2197,7 +2220,7 @@ function genreHues(genre) {
 }
 
 // Hex of a genre in the theme currently on screen.
-function genreColor(genre, dark = document.documentElement.getAttribute('data-theme') === 'dark') {
+function genreColor(genre, dark = themeIsDark()) {
   return genreHues(genre)[dark ? 0 : 1];
 }
 
@@ -2219,7 +2242,7 @@ function conditionBadgeHTML(r) {
 
 // ── shadow: flat genre colour, no rating influence ─────────────────────────
 function cardStyles(r) {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const isDark = themeIsDark();
 
   if (!r.have_it) {
     const g = isDark ? 'rgba(100,100,100,0.35)' : 'rgba(0,0,0,0.18)';
@@ -2741,7 +2764,7 @@ function cardHTML(r) {
   const avgStyle = '';
 
   // glow on total score — stronger as it climbs toward 10
-  const isDarkCard = document.documentElement.getAttribute('data-theme') === 'dark';
+  const isDarkCard = themeIsDark();
   let totalGlow = '';
   if      (total >= 9)   totalGlow = isDarkCard ? '0 0 10px rgba(245,197,24,0.95), 0 0 20px rgba(245,197,24,0.6)' : '0 0 8px rgba(200,155,10,0.8)';
   else if (total >= 7.5) totalGlow = isDarkCard ? '0 0 7px rgba(245,197,24,0.70)' : '0 0 6px rgba(200,155,10,0.55)';
@@ -6019,7 +6042,7 @@ function destroyChart(id) {
   if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
 }
 
-function isDark() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+function isDark() { return themeIsDark(); }
 function gridColor() { return isDark() ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'; }
 function textColor() { return isDark() ? '#888' : '#999'; }
 
