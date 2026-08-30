@@ -147,6 +147,17 @@ MB_COUNTRY_ATTEMPTS = 2
 # like it guessed. Never applied to the best candidate — see _rank_candidates.
 MB_MIN_SCORE = 50
 
+# How much of the sleeve's album title has to turn up in a candidate's title
+# before it counts as the same record. releasegroup:(a b c) is an OR over the
+# terms, so MusicBrainz's own score cannot answer this: measured live, "Coleção
+# Folha Raízes da Música Popular Brasileira, Volume 3" scored 100 against "Nova
+# História da Música Popular Brasileira" on the four words they share and
+# neither of the two that identify the record.
+#
+# Across the sleeves this was tuned on, every genuine match reached 1.0 and the
+# best false positive reached 0.6, so the exact threshold is not delicate.
+MB_MIN_TITLE_MATCH = 0.7
+
 _mb_lock = threading.Lock()
 _mb_last_call = 0.0
 
@@ -280,7 +291,56 @@ def _mb_query(artist: str, album: str) -> str:
     return query
 
 
-def _rank_candidates(groups: list[dict], album: str) -> list[dict]:
+# A parenthesised or bracketed tail — (Reissue), [Mono], (Vol 1) — is printed on
+# the sleeve or recorded in MusicBrainz, hardly ever both, so it is dropped
+# before two titles are compared. The query keeps it: there it costs nothing.
+_TITLE_TAIL = re.compile(r"[\(\[][^\)\]]*[\)\]]")
+
+# Portuguese and English function words. They are half of a title like "Nova
+# História da Música Popular Brasileira" and they are what a wrong candidate
+# matches on, so they do not get a vote.
+_GENERIC_WORDS = {
+    "a", "o", "as", "os", "um", "uma", "de", "da", "do", "das", "dos", "e", "ou",
+    "no", "na", "the", "of", "in", "is", "and", "to", "for", "at", "on",
+}
+
+
+def _title_words(value: str) -> set:
+    return set(_normalise(_TITLE_TAIL.sub(" ", value or "")).split())
+
+
+def _title_match(album: str, title: str, artist: str) -> float:
+    """What fraction of the sleeve's album title is present in a candidate's.
+
+    Deliberately one-directional. A candidate is allowed to say more than the
+    sleeve does — MusicBrainz has the full "A divina comédia ou ando meio
+    desligado" where the sleeve front reads "A Divina Comédia", and it has
+    "Clube da Esquina 2" — because the ranking below sorts those out. What it
+    may not do is leave out what the sleeve says, which is exactly how a record
+    MusicBrainz does not have comes back looking like one it does.
+
+    The artist's name is dropped from both titles: MusicBrainz routinely folds
+    it in ("Tim Maia Racional" for a sleeve reading "Racional") where the sleeve
+    does not repeat it. From both, not just the candidate — an artist whose name
+    is part of the album title ("Chico Buarque de Hollanda, Volume 3") would
+    otherwise have it struck from one side and still counted against the other.
+    Unless dropping it empties a title, which is what a self-titled album is:
+    Cartola's "Cartola" has to survive this.
+    """
+    performer = _title_words(artist)
+
+    def significant(value: str) -> set:
+        words = _title_words(value)
+        return ((words - _GENERIC_WORDS) or words) - performer or words
+
+    wanted, found = significant(album), significant(title)
+    if not wanted or not found:
+        return 0.0
+    return len(wanted & found) / len(wanted)
+
+
+def _rank_candidates(groups: list[dict], album: str,
+                     artist: str = "") -> list[dict]:
     """Order search hits by how likely each is to be the record in the photo.
 
     MusicBrainz's own order is by score alone, which loses three ways, all of
@@ -293,22 +353,40 @@ def _rank_candidates(groups: list[dict], album: str) -> list[dict]:
       - "Tim Maia / Racional" returns the 2002 compilation "Tim Maia Racional"
         ahead of the 1975 and 1976 originals, all three at 100.
 
+    Hits whose title does not actually contain the sleeve's are dropped first,
+    which is how "MusicBrainz does not have this record" becomes an empty list
+    instead of three confident strangers. See _title_match.
+
     Sorting is stable, so hits that tie on every key keep MusicBrainz's order.
     """
     wanted = _normalise(album)
+    if album:
+        groups = [g for g in groups
+                  if _title_match(album, g.get("title") or "", artist)
+                  >= MB_MIN_TITLE_MATCH]
 
     def key(group: dict) -> tuple:
         score = group.get("score")
         secondary = group.get("secondary-types") or []
         return (
             bool(wanted) and _normalise(group.get("title") or "") == wanted,
-            # A compilation scoring the same is nearly always a later repackage
-            # of the record in the photo, and taking it stamps the reissue's
-            # year on an original pressing. Only Compilation is demoted: "Live"
-            # is a secondary type too, and a live album is an ordinary record.
+            # Score outranks every editorial preference below it. Demoting
+            # compilations above the score was a real regression: this series,
+            # "Nova História da Música Popular Brasileira", IS a compilation,
+            # so Chico Buarque's 1976 volume at score 100 lost to a live album
+            # at 55 that merely shared a word, and the whole series was dated
+            # by whatever non-compilation turned up beside it.
+            score if isinstance(score, int) else 0,
+            # Among hits MusicBrainz scores equally, a compilation is nearly
+            # always a later repackage, and taking it stamps the reissue's year
+            # on an original pressing. Only Compilation is demoted: "Live" is a
+            # secondary type too, and a live album is an ordinary record.
             "Compilation" not in secondary,
             (group.get("primary-type") or "") == "Album",
-            score if isinstance(score, int) else 0,
+            # Last resort. The year is what the lookup is for and it is read
+            # from the first candidate alone, so where nothing else separates
+            # two hits, prefer the one that can answer.
+            bool(group.get("first-release-date")),
         )
 
     ranked = sorted(groups, key=key, reverse=True)
@@ -324,7 +402,9 @@ def _rank_candidates(groups: list[dict], album: str) -> list[dict]:
 def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
     """Return up to 3 release-group candidates with year and artist country.
 
-    An empty list means MusicBrainz has no such release. It raises
+    An empty list means MusicBrainz has nothing that matches — either the
+    search came back empty or nothing it returned was actually this record.
+    It raises
     MusicBrainzUnavailable when MusicBrainz could not be reached at all —
     the caller must not word that as "nothing matched".
     """
@@ -341,7 +421,7 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
     country_cache: dict = {}
     # Ranked before the cut, not after: the exact match is regularly not the
     # hit MusicBrainz put first, so truncating first can drop the right answer.
-    for group in _rank_candidates(groups, album)[:3]:
+    for group in _rank_candidates(groups, album, artist)[:3]:
         credit = (group.get("artist-credit") or [{}])[0].get("artist") or {}
         released = group.get("first-release-date") or ""
         candidates.append({

@@ -300,9 +300,14 @@ def test_low_scoring_noise_is_dropped():
 
 def test_the_best_candidate_survives_the_score_floor():
     """A weak best match is still the best information available — the floor
-    trims the tail, it must never empty a non-empty result."""
+    trims the tail, it must never empty a non-empty result.
+
+    The title has to be the record's, though: a low score is not the same thing
+    as a title that says something else, and only the score is under test here.
+    Emptying the list for an irrelevant title is now the point of _title_match.
+    """
     responses = [
-        _response(_groups(("Something Vaguely Like It", 20, "Album"))),
+        _response(_groups(("Pressing", 20, "Album"))),
         _response(ARTIST),
     ]
     with patch.object(scan.requests, "get", side_effect=responses):
@@ -315,8 +320,11 @@ def test_ranking_happens_before_the_three_candidate_cut():
     """MusicBrainz is asked for 5 and the form shows 3. Truncating first can
     cut the exact match, so the ordering has to come first."""
     responses = [
-        _response(_groups(("Wrong One", 99, "Album"), ("Wrong Two", 98, "Album"),
-                          ("Wrong Three", 97, "Album"), ("Wrong Four", 96, "Album"),
+        # All five are plausibly this record, so the ordering is what decides.
+        _response(_groups(("Racional Ao Vivo", 99, "Album"),
+                          ("Racional Remixado", 98, "Album"),
+                          ("Racional Instrumental", 97, "Album"),
+                          ("Racional Reissue", 96, "Album"),
                           ("Racional", 95, "Album"))),
         _response(ARTIST),
     ]
@@ -442,3 +450,129 @@ def test_the_optional_country_lookup_gives_up_sooner_than_the_search():
     # one search + the country's own smaller budget
     assert get.call_count == 1 + scan.MB_COUNTRY_ATTEMPTS
     assert scan.MB_COUNTRY_ATTEMPTS < scan.MB_MAX_ATTEMPTS
+
+
+# ── 5. a record MusicBrainz does not have must come back empty ───────────────
+#
+# The sleeve that exposed this: Cartola's volume of the Abril Cultural series
+# "Nova História da Música Popular Brasileira". Browsing the artist confirms
+# MusicBrainz holds 25 Cartola release groups and none of them is it, though the
+# series itself is there for Chico Buarque, Milton Nascimento, Noel Rosa and
+# seven more. So the honest answer is "not found" — but the search returned four
+# confident-looking hits, because releasegroup:(a b c) is an OR over the terms
+# and this title's tail, "da Música Popular Brasileira", is four common words
+# that a great many Brazilian compilations share.
+
+def test_a_title_sharing_only_common_words_is_not_a_match():
+    """Live, this scored 100: "Coleção Folha Raízes da Música Popular
+    Brasileira, Volume 3" against "Nova História da Música Popular Brasileira".
+
+    It shares the four generic words and neither distinctive one. Offering it
+    puts 2010 on a 1970s LP, which is the failure the user actually sees.
+    """
+    responses = [
+        _response(_groups(
+            ("Coleção Folha Raízes da Música Popular Brasileira, Volume 3",
+             100, "Album", ["Compilation"], "2010"),
+            ("A música brasileira deste século por seus autores e intérpretes: "
+             "Cartola", 70, "Album", ["Live"], ""),
+            ("Nova Bis - Cartola", 65, "Album", ["Compilation"], "2005"))),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz(
+            "Cartola", "Nova História da Música Popular Brasileira")
+
+    assert candidates == []
+
+
+def test_the_same_series_still_matches_the_artist_it_does_have():
+    """The control for the test above, and a regression in its own right.
+
+    MusicBrainz does hold this series for Chico Buarque, at score 100. The
+    rejection above must come from the title not matching, not from the app
+    having become shy about long titles.
+    """
+    responses = [
+        _response(_groups(
+            ("Nova História da Música Popular Brasileira: Chico Buarque",
+             100, "Album", ["Compilation"], "1976"),)),
+        _response(ARTIST),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz(
+            "Chico Buarque", "Nova História da Música Popular Brasileira")
+
+    assert candidates[0]["year"] == "1976"
+
+
+def test_a_strong_compilation_beats_a_weak_non_compilation():
+    """The compilation rule must break ties, not overrule the score.
+
+    Measured live on the sleeve above: demoting every compilation put "A música
+    brasileira deste século ... Chico Buarque" (a 2000 live album, score 55)
+    ahead of the correct 1976 volume (score 100), because the correct answer is
+    itself a compilation. A whole series of records was being dated by whatever
+    non-compilation happened to share a word with it.
+    """
+    responses = [
+        _response(_groups(
+            ("A música brasileira deste século por seus autores e intérpretes: "
+             "Chico Buarque", 55, "Album", ["Live"], "2000"),
+            ("Nova História da Música Popular Brasileira: Chico Buarque",
+             100, "Album", ["Compilation"], "1976"))),
+        _response(ARTIST),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz(
+            "Chico Buarque", "Nova História da Música Popular Brasileira")
+
+    assert candidates[0]["year"] == "1976"
+
+
+def test_a_self_titled_album_survives_the_relevance_check():
+    """The title is the artist's name, so stripping the artist out of it before
+    comparing leaves nothing to compare. Cartola's 1974 "Cartola" is the real
+    case; it must not be gated away as irrelevant to the query "Cartola"."""
+    responses = [
+        _response(_groups(("Cartola", 100, "Album", None, "1974"))),
+        _response(ARTIST),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Cartola", "Cartola")
+
+    assert candidates[0]["year"] == "1974"
+
+
+@pytest.mark.parametrize("album, title", [
+    ("Kind of Blue [Mono]", "Kind of Blue"),
+    ("Space Is the Place (Reissue)", "Space Is the Place"),
+    ("Racional", "Racional (Vol 1)"),
+    ("Clube da Esquina (50th Anniversary Edition)", "Clube da Esquina"),
+])
+def test_an_edition_or_volume_suffix_does_not_fail_the_relevance_check(album, title):
+    """A parenthesised or bracketed suffix is on the sleeve or in the database,
+    rarely both. It must not count against the match on either side."""
+    responses = [
+        _response(_groups((title, 100, "Album", None, "1970"))),
+        _response(ARTIST),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Some Artist", album)
+
+    assert candidates and candidates[0]["album_name"] == title
+
+
+def test_a_dated_release_wins_a_tie_with_an_undated_one():
+    """The year is the point of the lookup, and it is read from the first
+    candidate only. Where nothing else separates two hits, the one that can
+    actually answer the question is the better first."""
+    responses = [
+        _response(_groups(
+            ("Some Album", 100, "Album", None, ""),
+            ("Some Album", 100, "Album", None, "1975"))),
+        _response(ARTIST),
+    ]
+    with patch.object(scan.requests, "get", side_effect=responses):
+        candidates = scan.lookup_musicbrainz("Some Artist", "Some Album")
+
+    assert candidates[0]["year"] == "1975"
