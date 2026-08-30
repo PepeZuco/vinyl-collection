@@ -320,10 +320,29 @@ select option{background:var(--surface);color:var(--text)}
 @media(max-width:760px){.detail-layout{grid-template-columns:1fr}}
 .detail-cover-col{display:flex;flex-direction:column}
 .detail-info-col{display:flex;flex-direction:column;min-width:0}
-.detail-cover{width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--radius-sm);display:block;background:#0a0a0a;position:sticky;top:0}
-[data-theme="light"] .detail-cover{background:#ddd8cd}
-.detail-cover-ph{width:100%;aspect-ratio:1;background:#111;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:#222}
-[data-theme="light"] .detail-cover-ph{background:#ddd8cd;color:#b0a99b}
+
+/* desktop cover carousel — a vertical take on the mobile dm-carousel below:
+   the current record's cover sits centered and full-size, up to 3 neighbors
+   on each side taper smaller and dimmer the farther they are, and anything
+   past that fades to the same minimal sliver. Scrolling — or clicking a
+   neighbor — swaps the current record in place, same as the mobile crate
+   tap, without the header's slide animation. */
+.dd-carousel{width:100%;height:460px;overflow-y:auto;scroll-snap-type:y mandatory;
+  scrollbar-width:none;position:sticky;top:0;display:flex;flex-direction:column;
+  align-items:center;gap:10px;padding:200px 0}
+.dd-carousel::-webkit-scrollbar{display:none}
+.dd-carousel .dm-slide{flex:0 0 auto;border-radius:8px;overflow:hidden;position:relative;
+  background:#0a0a0a;cursor:pointer;scroll-snap-align:center;
+  transition:width .25s,height .25s,opacity .25s;width:42px;height:42px;opacity:.18}
+[data-theme="light"] .dd-carousel .dm-slide{background:#ddd8cd}
+.dd-carousel .dm-slide img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.dd-carousel .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
+[data-theme="light"] .dd-carousel .dm-slide-ph{color:#b0a99b}
+.dd-carousel .dm-slide[data-dist="3"]{width:58px;height:58px;opacity:.32}
+.dd-carousel .dm-slide[data-dist="2"]{width:80px;height:80px;opacity:.5}
+.dd-carousel .dm-slide[data-dist="1"]{width:106px;height:106px;opacity:.75}
+.dd-carousel .dm-slide[data-dist="0"]{width:140px;height:140px;opacity:1;
+  box-shadow:0 10px 30px rgba(0,0,0,.45);cursor:default;z-index:1}
 /* info-card styling shared by desktop drawer and mobile info sheet — built
    from the same dmInfoHTML() markup so both views stay in sync */
 .dm-album{font-size:22px;font-weight:800;line-height:1.15}
@@ -1147,15 +1166,22 @@ select option{background:var(--surface);color:var(--text)}
   padding:0 6px 0 2px;height:100%;display:flex;align-items:center;font-size:13px}
 .chip-x:hover{opacity:1;background:rgba(245,197,24,.16)}
 /* ownership is always present — the shelf is always showing something — so it
-   reads as a state you cycle rather than a filter you added */
-.chip.own{background:rgba(95,191,122,.09);border-color:rgba(95,191,122,.45);color:#4CB96B;
-  padding:0 9px 0 10px;gap:5px;cursor:pointer;font-family:var(--font)}
-.chip.own:hover{background:rgba(95,191,122,.16)}
-.chip.own i{font-size:12px;opacity:.7}
-.chip.own.wishlist{background:rgba(155,127,212,.11);border-color:rgba(155,127,212,.5);color:#9B7FD4}
-.chip.own.wishlist:hover{background:rgba(155,127,212,.18)}
-.chip.own.all{background:color-mix(in srgb,var(--label) 12%,transparent);
-  border-color:color-mix(in srgb,var(--label) 45%,transparent);color:var(--label)}
+   is a toggle rather than a filter you added. Both sides stay on screen: which
+   one you are on and what the other one is are the same glance, where the
+   cycling chip made you click to find out. */
+.own-seg{display:inline-flex;align-items:center;height:26px;padding:2px;gap:2px;
+  border-radius:999px;background:color-mix(in srgb,var(--label) 8%,transparent);
+  border:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
+.own-opt{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 10px;
+  border:none;border-radius:999px;background:transparent;cursor:pointer;white-space:nowrap;
+  font-family:var(--font);font-size:12px;font-weight:600;color:var(--muted)}
+.own-opt i{font-size:12px;opacity:.75}
+.own-opt:hover{color:var(--text)}
+.own-opt[aria-pressed="true"]{color:#4CB96B;background:rgba(95,191,122,.14);
+  box-shadow:inset 0 0 0 1px rgba(95,191,122,.4)}
+.own-opt[aria-pressed="true"] i{opacity:1}
+.own-opt.wishlist[aria-pressed="true"]{color:#9B7FD4;background:rgba(155,127,212,.16);
+  box-shadow:inset 0 0 0 1px rgba(155,127,212,.45)}
 .chip-add{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 11px 0 8px;
   border-radius:999px;font-size:12px;background:transparent;border:1px dashed var(--border);
   color:var(--muted);cursor:pointer;font-family:var(--font)}
@@ -2705,14 +2731,14 @@ function cratesHTML(recs) {
  * trace at all, which is how you ended up staring at a grid unable to tell
  * what was hiding the rest of it. */
 function renderChips(matchCount) {
-  const own = OWNERSHIP.find(o => o.value === filterState.ownership) || OWNERSHIP[0];
   const chips = VinylFilters.chipsFor(currentQuery());
 
-  const ownChip = `<button class="chip own ${esc(own.value)}" onclick="cycleOwnership()"
-      title="show owned, wishlist or all">
-      <span class="k">show</span><b>${esc(own.label)}</b>
-      <i class="ti ti-chevron-down"></i>
-    </button>`;
+  const ownSeg = `<div class="own-seg" role="group" aria-label="show owned or wishlist">
+      ${OWNERSHIP.map(o => `<button class="own-opt ${esc(o.value)}" onclick="setOwnership('${esc(o.value)}')"
+        aria-pressed="${o.value === filterState.ownership}" title="show ${esc(o.label.toLowerCase())}">
+        <i class="ti ${esc(o.icon)}"></i><span>${esc(o.label)}</span>
+      </button>`).join('')}
+    </div>`;
 
   const facetChips = chips.map(c => `<span class="chip">
       <button class="chip-open" onclick="openFacetValues('${esc(c.id)}')">
@@ -2729,7 +2755,7 @@ function renderChips(matchCount) {
   const clear = chips.length
     ? `<button class="chip-clear" onclick="clearAllFilters()">clear</button>` : '';
 
-  document.getElementById('filterChips').innerHTML = ownChip + facetChips + add + clear;
+  document.getElementById('filterChips').innerHTML = ownSeg + facetChips + add + clear;
 
   const total = OWNERSHIP_TOTALS[filterState.ownership];
   document.getElementById('matchCount').textContent =
@@ -2738,12 +2764,11 @@ function renderChips(matchCount) {
 
 /* How many records the current ownership admits before any facet narrows it —
  * the denominator the match count reads against. */
-let OWNERSHIP_TOTALS = { owned: 0, wishlist: 0, all: 0 };
+let OWNERSHIP_TOTALS = { owned: 0, wishlist: 0 };
 function countOwnership() {
   OWNERSHIP_TOTALS = {
     owned: records.filter(r => r.have_it).length,
     wishlist: records.filter(r => !r.have_it).length,
-    all: records.length,
   };
 }
 
@@ -2766,8 +2791,7 @@ function observeCardsForGlow() {
 }
 
 function renderCount(n) {
-  const label = filterState.ownership === 'wishlist' ? 'on wishlist'
-    : filterState.ownership === 'all' ? 'owned and wanted' : 'in collection';
+  const label = filterState.ownership === 'wishlist' ? 'on wishlist' : 'in collection';
   document.getElementById('recordCount').textContent = `— ${n} ${label}`;
 }
 
@@ -5244,20 +5268,14 @@ function clearAllFilters() {
   closeFacetPop();
 }
 
-// ── ownership: three states, where there used to be two ────────────────────
+// ── ownership: the shelf is either the collection or the wishlist ──────────
 // Owned and Wishlist were separate destinations — a toggle on the desktop, two
-// bottom-bar tabs on the phone — and no combination showed all 292 records at
-// once. It is one chip now, and All is a state it can hold.
+// bottom-bar tabs on the phone. It is one control now, on both breakpoints:
+// two options, both visible, one of them always on.
 const OWNERSHIP = [
   { value: 'owned',    label: 'Owned',    icon: 'ti-disc' },
   { value: 'wishlist', label: 'Wishlist', icon: 'ti-shopping-cart' },
-  { value: 'all',      label: 'All',      icon: 'ti-stack-2' },
 ];
-
-function cycleOwnership() {
-  const i = OWNERSHIP.findIndex(o => o.value === filterState.ownership);
-  setOwnership(OWNERSHIP[(i + 1) % OWNERSHIP.length].value);
-}
 
 function setOwnership(value) {
   filterState.ownership = value;

@@ -38,7 +38,7 @@ test('search text is carried, spaces and all', () => {
 });
 
 test('ownership is carried when it is not the default', () => {
-  assert.strictEqual(decode(encode(state({ ownership: 'all' }))).ownership, 'all');
+  assert.strictEqual(decode(encode(state({ ownership: 'wishlist' }))).ownership, 'wishlist');
   assert.strictEqual(encode(state({ ownership: 'owned' })), '');
 });
 
@@ -122,7 +122,7 @@ test('a malformed hash decodes to the defaults rather than throwing', () => {
 
 test('a fully loaded state survives the round trip intact', () => {
   const full = state({
-    tab: 'stats', text: 'tim maia', ownership: 'all',
+    tab: 'stats', text: 'tim maia', ownership: 'wishlist',
     facets: { genre: ['Soul & Funk', 'MPB & Samba'], cleaning: ['never'] },
     crate: 'country', sort: 'plays', dir: 'asc', view: 'list', recordId: 7,
   });

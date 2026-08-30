@@ -34,7 +34,7 @@ const VinylUrlState = (function () {
   };
 
   const TABS = ['collection', 'timeline', 'stats'];
-  const OWNERSHIPS = ['owned', 'wishlist', 'all'];
+  const OWNERSHIPS = ['owned', 'wishlist'];
   const DIRS = ['asc', 'desc'];
   const VIEWS = ['grid', 'list'];
 

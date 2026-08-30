@@ -196,18 +196,26 @@ test('the record count and the match count agree with the data', async () => {
 
 // ── the filter bar ──────────────────────────────────────────────────────────
 
-test('the bar shows the ownership chip and the add-filter button', async () => {
+test('the bar shows both ownership options and the add-filter button', async () => {
   const { doc } = await boot();
-  assert.ok($(doc, '#filterChips .chip.own'), 'no ownership chip');
+  const opts = [...doc.querySelectorAll('#filterChips .own-seg .own-opt')];
+  assert.deepStrictEqual(opts.map(o => o.textContent.trim()), ['Owned', 'Wishlist']);
+  assert.ok(opts.every(o => o.querySelector('i.ti')), 'an option is missing its icon');
   assert.ok($(doc, '#filterChips .chip-add'), 'no way to add a filter');
 });
 
-test('cycling ownership moves the shelf to the wishlist', async () => {
+test('the toggle moves the shelf to the wishlist and marks which side is on', async () => {
   const { win, doc, read } = await boot();
+  // Re-queried every time: choosing a side re-renders the whole bar.
+  const opt = value => $(doc, `#filterChips .own-opt.${value}`);
   assert.strictEqual(read('filterState.ownership'), 'owned');
-  win.cycleOwnership();
+  assert.strictEqual(opt('owned').getAttribute('aria-pressed'), 'true');
+
+  press(win, opt('wishlist'));
+
   assert.strictEqual(read('filterState.ownership'), 'wishlist');
-  assert.match($(doc, '#filterChips .chip.own').textContent, /Wishlist/);
+  assert.strictEqual(opt('wishlist').getAttribute('aria-pressed'), 'true');
+  assert.strictEqual(opt('owned').getAttribute('aria-pressed'), 'false');
   // The exact count, not merely a different one: a before/after diff would
   // also pass if the shelf emptied for the wrong reason.
   assert.strictEqual(count(doc, '#recordsContainer .vcard'),

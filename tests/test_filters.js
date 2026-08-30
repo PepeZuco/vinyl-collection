@@ -62,7 +62,10 @@ test('ownership wishlist keeps only records not yet bought', () => {
       .map(r => r.have_it), [false]);
 });
 
-test('ownership all keeps both, which the old UI could never do', () => {
+/* The toggle only ever sets 'owned' or 'wishlist'; a hash carrying anything
+ * else is normalised before it reaches here. Filtering is unconstrained by
+ * that, and an unknown value keeping everything is the safe way to be wrong. */
+test('an ownership the toggle cannot produce narrows nothing', () => {
   assert.strictEqual(
     keep([rec({ have_it: true }), rec({ have_it: false })], { ownership: 'all' }).length, 2);
 });

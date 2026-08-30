@@ -103,7 +103,7 @@ const VinylFilters = (function (grouping) {
     return {
       text: '',
       fields: Object.assign({}, DEFAULT_FIELDS),
-      ownership: 'owned',  // 'owned' | 'wishlist' | 'all'
+      ownership: 'owned',  // 'owned' | 'wishlist'
       facets: {},          // id -> array of allowed values; absent = no constraint
     };
   }
