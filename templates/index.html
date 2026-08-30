@@ -26,9 +26,9 @@ html,body{touch-action:pan-x pan-y}
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
-  --bg:#e9e6df;--surface:#f6f4ef;--card:#f6f4ef;--border:#d5d0c5;
-  --text:#1a1a18;--muted:#8a867d;--label:#6b6b63;--accent:#a07820;--danger:#c0392b;
-  --card-hover:#efece5;--search-bg:#f6f4ef;
+  --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#cbc5b8;
+  --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#a07820;--danger:#c0392b;
+  --card-hover:#e9e5dc;--search-bg:#f0ede6;
   --sh-gray:rgba(0,0,0,0.18);
   --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☾'
@@ -112,7 +112,7 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-cover img{width:100%;height:100%;object-fit:cover}
 .vcard-cover .no-cover{display:flex;flex-direction:column;align-items:center;gap:4px;color:#2a2a2a;font-size:10px;font-family:var(--font)}
 .vcard-cover .no-cover i{font-size:32px}
-[data-theme="light"] .vcard-cover .no-cover{color:#b8b2a6}
+[data-theme="light"] .vcard-cover .no-cover{color:#b0a99b}
 
 /* artist overlay on the cover */
 .vcard-artist-overlay{
@@ -217,7 +217,7 @@ select option{background:var(--surface);color:var(--text)}
 .stars-mini{display:flex;gap:1px}
 .star{color:var(--accent)}
 .star.off{color:var(--border)}
-[data-theme="light"] .star.off{color:#cdc7ba}
+[data-theme="light"] .star.off{color:#c5bfb0}
 
 /* modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -291,9 +291,9 @@ select option{background:var(--surface);color:var(--text)}
 .detail-cover-col{display:flex;flex-direction:column}
 .detail-info-col{display:flex;flex-direction:column;min-width:0}
 .detail-cover{width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--radius-sm);display:block;background:#0a0a0a;position:sticky;top:0}
-[data-theme="light"] .detail-cover{background:#e4e0d7}
+[data-theme="light"] .detail-cover{background:#ddd8cd}
 .detail-cover-ph{width:100%;aspect-ratio:1;background:#111;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:#222}
-[data-theme="light"] .detail-cover-ph{background:#e4e0d7;color:#b8b2a6}
+[data-theme="light"] .detail-cover-ph{background:#ddd8cd;color:#b0a99b}
 /* info-card styling shared by desktop drawer and mobile info sheet — built
    from the same dmInfoHTML() markup so both views stay in sync */
 .dm-album{font-size:22px;font-weight:800;line-height:1.15}
@@ -418,18 +418,18 @@ select option{background:var(--surface);color:var(--text)}
   .dm-slide{flex:0 0 86%;scroll-snap-align:center;scroll-snap-stop:always;
     aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:#0a0a0a;
     transition:transform .25s,opacity .25s;transform:scale(.94);opacity:.55}
-  [data-theme="light"] .dm-slide{background:#e4e0d7}
+  [data-theme="light"] .dm-slide{background:#ddd8cd}
   .dm-slide.cur{transform:scale(1);opacity:1;box-shadow:0 10px 30px rgba(0,0,0,.45)}
   .dm-slide img{width:100%;height:100%;object-fit:cover;display:block}
   .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
-  [data-theme="light"] .dm-slide-ph{color:#b8b2a6}
+  [data-theme="light"] .dm-slide-ph{color:#b0a99b}
 
   /* the crate — square cover thumbnails, freely scrollable; only a tap changes
      the current record, dragging the strip just browses it */
   .dm-crate-wrap{margin:6px 14px 0;border:1px solid var(--border);border-radius:10px;
     background:linear-gradient(color-mix(in srgb,var(--card) 72%,#000), var(--bg));
     overflow:hidden;flex-shrink:0}
-  [data-theme="light"] .dm-crate-wrap{background:linear-gradient(#e8e4da,#f2efe8)}
+  [data-theme="light"] .dm-crate-wrap{background:linear-gradient(#ded9cd,#e9e5dc)}
   /* overflow-y must be explicit: with overflow-x:auto a `visible` y-axis computes
      to auto, which let the scaled-up active thumb create a stray vertical scroll */
   .dm-crate{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;
@@ -631,7 +631,7 @@ select option{background:var(--surface);color:var(--text)}
 .scan-card:hover{border-color:color-mix(in srgb,var(--text) 40%,transparent);transform:translateY(-2px)}
 .scan-card-cover{width:100%;aspect-ratio:1;background:#111;position:relative;overflow:hidden;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#2a2a2a}
-[data-theme="light"] .scan-card-cover{background:#e4e0d7;color:#b8b2a6}
+[data-theme="light"] .scan-card-cover{background:#ddd8cd;color:#b0a99b}
 .scan-card-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .scan-card-cover .no-art{font-size:11px}
 .scan-card-body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:5px}
@@ -745,7 +745,7 @@ select option{background:var(--surface);color:var(--text)}
   mask-image:linear-gradient(to right,transparent 0,#000 min(34px, 60%))}
 .race-cover{width:calc(var(--race-row-h) - 12px);height:calc(var(--race-row-h) - 12px);
   flex-shrink:0;border-radius:2px;object-fit:cover;background:#111;cursor:pointer}
-[data-theme="light"] .race-cover{background:#e4e0d7}
+[data-theme="light"] .race-cover{background:#ddd8cd}
 
 /* A cover flies in at the bar's growing tip. Five arrivals — the busiest
    genre-day in the collection — stagger over 240ms, comfortably inside a
@@ -1030,7 +1030,7 @@ select option{background:var(--surface);color:var(--text)}
 .list-row.list-head span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--label)}
 .list-cover-wrap{width:36px;height:36px;border-radius:3px;overflow:hidden;flex-shrink:0;background:#111;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:14px}
 .list-cover-wrap img{width:100%;height:100%;object-fit:cover}
-[data-theme="light"] .list-cover-wrap{background:#e4e0d7;color:#b8b2a6}
+[data-theme="light"] .list-cover-wrap{background:#ddd8cd;color:#b0a99b}
 .list-main{min-width:0}
 .list-album{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-artist{font-size:11px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -6468,7 +6468,7 @@ function renderWorldMap(all) {
     .attr('viewBox', `0 0 ${W} ${H}`);
 
   const noDataFill = dark ? '#1d1d1d' : '#e8e5dd';
-  const borderColor = dark ? '#000' : '#f6f4ef';
+  const borderColor = dark ? '#000' : '#f0ede6';
   const colorScale = d3.scaleLinear().domain([0, maxCount]).range(['#3a3520', '#F5C518']);
 
   svg.selectAll('path')
