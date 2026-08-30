@@ -1377,8 +1377,16 @@ select option{background:var(--surface);color:var(--text)}
 .timeline-page{display:none}
 .timeline-page.visible{display:block}
 .cal-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
-.cal-nav{display:flex;align-items:center;gap:6px}
-.cal-title{font-family:var(--font-mono);font-weight:700;font-size:15px;margin-left:8px;white-space:nowrap}
+.cal-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cal-title{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;margin-left:4px;
+  font-family:var(--font-mono);font-weight:700;font-size:15px;white-space:nowrap;
+  background:transparent;border:1px solid transparent;border-radius:var(--radius-sm);
+  color:var(--text);cursor:pointer;transition:all .12s}
+/* reads as the heading it is until you reach for it, then it picks up the same
+   chrome as the buttons beside it — it opens the date picker. */
+.cal-title i{font-size:14px;color:var(--muted);transition:color .12s}
+.cal-title:hover{border-color:var(--border);background:var(--card)}
+.cal-title:hover i{color:var(--accent)}
 .cal-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
 .cal-types{display:flex;gap:6px}
 /* icon-only pills — the icon is the label, so it carries the event's own
@@ -1467,8 +1475,6 @@ select option{background:var(--surface);color:var(--text)}
 .cal-week-empty{font-size:10.5px;color:var(--muted);text-align:center;opacity:.5;padding:6px 0}
 
 /* date picker modal */
-.cal-title{cursor:pointer;transition:all .12s}
-.cal-title:hover{opacity:0.8}
 .cal-picker-month{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:16px}
 .cal-picker-title{font-weight:600;min-width:140px;text-align:center}
 .cal-picker-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
@@ -1481,7 +1487,7 @@ select option{background:var(--surface);color:var(--text)}
 @media(max-width:760px){
   .cal-toolbar{gap:8px}
   .cal-controls{margin-left:0;width:100%;justify-content:space-between}
-  .cal-title{font-size:13px;margin-left:4px}
+  .cal-title{font-size:13px;margin-left:2px;padding:0 8px;height:32px}
   .cal-cell{min-height:56px;padding:5px}
   .cal-cell-evs{display:none}
   .cal-cell-dots{display:flex}
@@ -1625,7 +1631,7 @@ select option{background:var(--surface);color:var(--text)}
         <button class="btn btn-icon" onclick="calNavigate(-1)" title="previous"><i class="ti ti-chevron-left"></i></button>
         <button class="btn" onclick="calNavigate(0)">today</button>
         <button class="btn btn-icon" onclick="calNavigate(1)" title="next"><i class="ti ti-chevron-right"></i></button>
-        <button class="cal-title" id="calTitle" onclick="openCalDatePicker()"></button>
+        <button class="cal-title" id="calTitle" onclick="openCalDatePicker()" title="jump to date"><span id="calTitleTxt"></span><i class="ti ti-chevron-down"></i></button>
       </div>
       <div class="cal-controls">
         <div class="cal-types" id="calTypesBar">
@@ -6829,7 +6835,7 @@ function calWeekChip(ev) {
 
 function renderCalMonth(events) {
   const y = calAnchor.getFullYear(), m = calAnchor.getMonth();
-  document.getElementById('calTitle').textContent = calFmtMonth(calAnchor);
+  document.getElementById('calTitleTxt').textContent = calFmtMonth(calAnchor);
   const firstDow = new Date(y, m, 1).getDay();
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const weeks = Math.ceil((firstDow + daysInMonth) / 7);
@@ -6865,7 +6871,7 @@ function renderCalWeek(events) {
   const t = d => d.toLocaleDateString('en-US', { month:'long', day:'numeric' });
   const startStr = calCapitalizeStr(t(start));
   const endStr = sameMonth ? end.getDate() : calCapitalizeStr(t(end));
-  document.getElementById('calTitle').textContent =
+  document.getElementById('calTitleTxt').textContent =
     `${startStr} – ${endStr}, ${end.getFullYear()}`;
   const todayK = calKey(new Date());
   const cur = new Date(start);
@@ -6890,7 +6896,7 @@ function renderCalWeek(events) {
 
 function renderCalDayView(events) {
   const k = calKey(calAnchor);
-  document.getElementById('calTitle').textContent = calFmtLong(calAnchor);
+  document.getElementById('calTitleTxt').textContent = calFmtLong(calAnchor);
   const evs = events.get(k) || [];
   const todayK = calKey(new Date());
   document.getElementById('calBody').innerHTML = `<div class="cal-agenda">
