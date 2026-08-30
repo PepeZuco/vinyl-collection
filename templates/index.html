@@ -261,6 +261,12 @@ select option{background:var(--surface);color:var(--text)}
   border-radius:0;border:none;border-left:1px solid var(--border);
   box-shadow:-24px 0 60px rgba(0,0,0,.4);
   animation:drawer-in .22s cubic-bezier(.2,.8,.3,1);
+  /* the drawer itself must not scroll — with 100+ records the cover
+     carousel's natural content height dwarfs the viewport, and if the modal
+     were the scroll container, that content would set the modal's scroll
+     height directly, burying the sticky/JS-centered carousel far off-screen
+     with no way back. Each column below scrolls independently instead. */
+  display:flex;flex-direction:column;overflow:hidden;
 }
 @keyframes drawer-in{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
 @media (prefers-reduced-motion:reduce){ #detailOverlay .modal.modal-wide{animation:none} }
@@ -304,24 +310,32 @@ select option{background:var(--surface);color:var(--text)}
 .spotify-mark{width:24px;height:24px;flex-shrink:0;display:block}
 
 /* detail — split layout: cover left, info right */
-.detail-layout{display:grid;grid-template-columns:260px 1fr;gap:20px}
+#detailOverlay .modal-body{flex:1;overflow:hidden;min-height:0}
+.detail-layout{display:grid;grid-template-columns:260px 1fr;grid-template-rows:minmax(0,1fr);
+  gap:20px;height:100%}
 @media(max-width:760px){.detail-layout{grid-template-columns:1fr}}
-.detail-cover-col{display:flex;flex-direction:column}
-.detail-info-col{display:flex;flex-direction:column;min-width:0}
+.detail-cover-col{display:flex;flex-direction:column;min-height:0}
+/* scrolls on its own, independent of the cover carousel, so a long history
+   doesn't fight the carousel for the drawer's one scroll gesture */
+.detail-info-col{display:flex;flex-direction:column;min-width:0;min-height:0;overflow-y:auto}
 
 /* desktop cover carousel — a vertical take on the mobile dm-carousel below:
    the current record's cover sits centered and full-size, up to 3 neighbors
    on each side taper smaller and dimmer the farther they are, and anything
-   past that fades to the same minimal sliver. flex:1 lets it fill however
-   tall the info column stretches it (grid's default align-items:stretch),
-   rather than leaving blank space below a short fixed-height strip.
+   past that fades to the same minimal sliver. flex:1 with min-height:0 fills
+   whatever height .detail-cover-col is given — now the drawer's own bounded
+   height, not the carousel's unbounded slide-stack — so it stays a real,
+   independently scrollable window instead of growing to match its own
+   content (which, with 100+ records, could run to thousands of pixels and
+   leave the "current" slide scrolled miles out of view with nothing able to
+   bring it back).
    Scrolling — or clicking a neighbor — swaps the current record in place,
    same as the mobile crate tap, without the header's slide animation.
    Wheel/touch are handled entirely in JS (ddBind): native scrolling here
    would let one light swipe fly past several records, since most slides
    are much shorter than a full scroll gesture's travel. */
-.dd-carousel{width:100%;flex:1 1 auto;min-height:520px;overflow-y:auto;overflow-x:hidden;
-  scrollbar-width:none;position:sticky;top:0;display:flex;flex-direction:column;
+.dd-carousel{width:100%;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:none;display:flex;flex-direction:column;
   align-items:center;gap:14px;padding:280px 0;touch-action:none}
 .dd-carousel::-webkit-scrollbar{display:none}
 .dd-carousel .dm-slide{flex:0 0 auto;border-radius:8px;overflow:hidden;position:relative;
@@ -1647,8 +1661,8 @@ select option{background:var(--surface);color:var(--text)}
           <button class="cal-type-btn active" data-type="note" onclick="toggleCalType('note')" title="notes" aria-label="notes"><i class="ti ti-note"></i></button>
         </div>
         <div class="cal-scale" id="calScaleBar">
-          <button class="cal-scale-btn active" data-scale="month" onclick="setCalScale('month')">month</button>
-          <button class="cal-scale-btn" data-scale="week" onclick="setCalScale('week')">week</button>
+          <button class="cal-scale-btn" data-scale="month" onclick="setCalScale('month')">month</button>
+          <button class="cal-scale-btn active" data-scale="week" onclick="setCalScale('week')">week</button>
           <button class="cal-scale-btn" data-scale="day" onclick="setCalScale('day')">day</button>
           <button class="cal-scale-btn" data-scale="replay" onclick="setCalScale('replay')">replay</button>
         </div>
@@ -6697,7 +6711,7 @@ function renderWorldMap(all) {
 
 // ── calendar ───────────────────────────────────────────────────────────────
 // month / week / day views over bought_date, cleaned_dates, play_dates and dated notes
-let calScale = 'month';                  // 'month' | 'week' | 'day' | 'replay'
+let calScale = 'week';                   // 'month' | 'week' | 'day' | 'replay'
 let calAnchor = new Date();              // any date inside the visible range
 let calTypes = { bought: true, cleaned: true, played: true, note: true };
 let calMinDate = null, calMaxDate = null; // date range constraints
