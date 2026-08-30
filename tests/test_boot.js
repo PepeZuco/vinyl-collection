@@ -528,11 +528,19 @@ test('the theme toggle redraws whatever is on screen', async () => {
  * palette inherit all fourteen [data-theme="light"] component rules for free.
  * These tests pin the two axes staying independent. */
 
+test('a first visit opens on wood, in light', async () => {
+  const { doc } = await boot();          // a fresh origin: nothing in localStorage
+  assert.strictEqual(doc.documentElement.getAttribute('data-finish'), 'wood');
+  assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'light');
+});
+
 test('switching finish leaves the light/dark tone alone', async () => {
   const { win, doc } = await boot();
   win.applyTheme('light');
+  const before = doc.documentElement.getAttribute('data-finish');
   $(doc, '#finishBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  assert.strictEqual(doc.documentElement.getAttribute('data-finish'), 'wood');
+  assert.notStrictEqual(doc.documentElement.getAttribute('data-finish'), before,
+    'the finish button did not change the finish');
   assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'light',
     'toggling the finish also changed the tone');
 });
@@ -567,19 +575,59 @@ test('wood keeps the tone the colour logic sees', async () => {
     'wood-light got the dark-theme genre hue');
 });
 
-test('each wood palette defines every token its classic tone defines', async () => {
+/* token name -> value for one palette block in the template's <style>. */
+function palette(selector, label) {
   const css = fs.readFileSync(PAGE, 'utf8');
-  const tokens = (selector, label) => {
-    const m = css.match(new RegExp(selector.replace(/[[\]"]/g, '\\$&') + '\\{([^}]*)\\}'));
-    assert.ok(m, 'no ' + label + ' palette block in the template');
-    return new Set([...m[1].matchAll(/(--[\w-]+)\s*:/g)].map(x => x[1]));
+  const m = css.match(new RegExp(selector.replace(/[[\]"]/g, '\\$&') + '\\{([^}]*)\\}'));
+  assert.ok(m, 'no ' + label + ' palette block in the template');
+  return new Map([...m[1].matchAll(/(--[\w-]+)\s*:\s*([^;}]+)/g)].map(x => [x[1], x[2].trim()]));
+}
+const CLASSIC = tone => palette('[data-theme="' + tone + '"]', 'classic ' + tone);
+const WOOD = tone => palette('[data-finish="wood"][data-theme="' + tone + '"]', 'wood ' + tone);
+
+// WCAG relative luminance, so the accent checks below are real numbers rather
+// than someone's opinion about whether a colour "looks readable".
+function contrast(a, b) {
+  const lum = hex => {
+    const c = i => {
+      const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * c(1) + 0.7152 * c(3) + 0.0722 * c(5);
   };
+  const [x, y] = [lum(a), lum(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+
+test('each wood palette defines every token its classic tone defines', async () => {
   for (const tone of ['dark', 'light']) {
-    const classic = tokens('[data-theme="' + tone + '"]', 'classic ' + tone);
-    const wood = tokens('[data-finish="wood"][data-theme="' + tone + '"]', 'wood ' + tone);
-    const missing = [...classic].filter(t => !wood.has(t));
+    const missing = [...CLASSIC(tone).keys()].filter(t => !WOOD(tone).has(t));
     assert.deepStrictEqual(missing, [],
       'the wood ' + tone + ' palette is missing: ' + missing.join(', '));
+  }
+});
+
+test('the wood accent is the gold, not the stylus green', async () => {
+  assert.strictEqual(WOOD('dark').get('--accent'), '#f1c23f');
+  // the light one has to be deepened to stay readable, but must stay gold:
+  // hue in the 30-60 degree band rather than green's ~145
+  const hex = WOOD('light').get('--accent');
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const hue = max === min ? 0
+    : 60 * (max === r ? (((g - b) / (max - min)) % 6)
+    : max === g ? ((b - r) / (max - min)) + 2 : ((r - g) / (max - min)) + 4);
+  assert.ok(hue >= 30 && hue <= 60,
+    'the wood light accent ' + hex + ' is at hue ' + hue.toFixed(0) + ', outside gold');
+});
+
+test('every wood accent stays readable on its own ground', async () => {
+  for (const tone of ['dark', 'light']) {
+    const p = WOOD(tone);
+    const ratio = contrast(p.get('--accent'), p.get('--bg'));
+    assert.ok(ratio >= 4.5,
+      'wood ' + tone + ' accent ' + p.get('--accent') + ' on ' + p.get('--bg') +
+      ' is only ' + ratio.toFixed(2) + ':1');
   }
 });
 
