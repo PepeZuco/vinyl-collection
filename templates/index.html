@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-finish="classic">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -17,34 +17,13 @@
    +/- buttons twice in a row still registers both taps. */
 html,body{touch-action:pan-x pan-y}
 
+/* The walnut trim off the cabinet, on borders only — the ground stays plain
+   black/white so the record on top of it stays the thing your eye lands on.
+   The accent is the gold #f1c23f, the app's own house colour, deepened for
+   light: full-saturation #f1c23f reaches only 1.22:1 there, so the rating
+   numbers would vanish; #7A5A00 is the same 44deg hue and clears 4.6:1.
+   Values sampled off the photo of the actual setup. */
 [data-theme="dark"]{
-  --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
-  --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#F5C518;--danger:#c0392b;
-  --card-hover:#1f1f1f;--search-bg:transparent;
-  --sh-gray:rgba(100,100,100,0.35);
-  --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
-  --toggle-icon:'☀'
-}
-[data-theme="light"]{
-  --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#cbc5b8;
-  --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#a07820;--danger:#c0392b;
-  --card-hover:#e9e5dc;--search-bg:#f0ede6;
-  --sh-gray:rgba(0,0,0,0.18);
-  --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
-  --toggle-icon:'☾'
-}
-/* Wood — not the room itself any more, just the edges of it: the walnut
-   trim off the cabinet, on borders only. The ground underneath stays the
-   plain classic black/white so the record on top of it stays the thing your
-   eye lands on. The accent is the gold #f1c23f, the app's own house colour,
-   deepened for light. Values sampled off the photo of the setup.
-
-   It rides a SECOND axis rather than replacing the tone. data-theme keeps
-   meaning light-or-dark, so nothing that reads it has to learn a new value and
-   the wood-light palette below inherits all fourteen [data-theme="light"]
-   component rules for free. Two attributes = (0,2,0) specificity, so these
-   win over the plain tone palettes above wherever both apply. */
-[data-finish="wood"][data-theme="dark"]{
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#3A2C1D;
   --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#f1c23f;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
@@ -52,11 +31,7 @@ html,body{touch-action:pan-x pan-y}
   --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☀'
 }
-/* Same classic-light ground as the plain tone palette. The accent still has
-   to go deeper than the classic one: the gold #f1c23f reaches only 1.22:1 on
-   this ground, so the rating numbers would vanish. #7A5A00 is the same 44deg
-   hue at full saturation, and clears 4.6:1. */
-[data-finish="wood"][data-theme="light"]{
+[data-theme="light"]{
   --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#CBB596;
   --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#7A5A00;--danger:#c0392b;
   --card-hover:#e9e5dc;--search-bg:#f0ede6;
@@ -89,11 +64,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:28p
    the two physical blocks. Filters/sort/group don't apply here, so their bar
    hides in favor of a banner naming the mode and how to leave it. */
 body.setup-mode .bar{display:none}
-.setup-banner{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:10px 14px;
+.setup-banner{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 14px;
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);
-  font-size:13px;color:var(--muted)}
+  font-size:13px;color:var(--muted);flex-wrap:wrap}
+.setup-banner.hidden{display:none}
+.setup-banner .info{display:flex;align-items:center;gap:8px}
 .setup-banner i{color:var(--accent);font-size:16px}
 .setup-banner strong{color:var(--text)}
+.setup-banner .search{margin-left:auto;height:30px;flex:0 1 260px}
 
 /* toolbar */
 .toolbar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
@@ -1626,13 +1604,13 @@ select option{background:var(--surface);color:var(--text)}
     </div>
     <div class="header-right">
       <button class="btn theme-btn btn-icon" id="themeBtn" title="Toggle theme">☀</button>
-      <button class="btn theme-btn btn-icon" id="finishBtn" title="Wood finish"><i class="ti ti-tree"></i></button>
       <div class="auth-badge" id="authBadge" style="display:none"><i class="ti ti-lock"></i><span>visitor</span></div>
       <div class="more-menu" id="moreMenu">
         <button class="btn btn-icon" id="moreMenuBtn" title="more actions" onclick="toggleMoreMenu()"><i class="ti ti-dots"></i></button>
         <div class="more-panel hidden" id="morePanel">
           <button class="menu-item" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
           <button class="menu-item" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
+          <button class="menu-item" id="idleTriggerBtn"><i class="ti ti-disc"></i><span>preview screensaver</span></button>
           <label class="menu-item" id="importLabel" style="display:none">
             <i class="ti ti-upload"></i><span>import</span>
             <input type="file" accept=".csv" id="importInput" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
@@ -1717,8 +1695,14 @@ select option{background:var(--surface);color:var(--text)}
        two physical blocks the records actually sit in on the shelf. Shown in
        place of the filter/arrange bar while active. -->
   <div class="setup-banner hidden" id="setupBanner">
-    <i class="ti ti-disc"></i>
-    <span><strong>Setup mode</strong> — ordered by artist, split into two blocks. Click the record to exit.</span>
+    <span class="info">
+      <i class="ti ti-disc"></i>
+      <span><strong>Setup mode</strong> — ordered by artist, split into two blocks. Click the record to exit.</span>
+    </span>
+    <div class="search">
+      <i class="ti ti-search"></i>
+      <input type="text" id="setupSearchInput" placeholder="search artist or album...">
+    </div>
   </div>
 
   <!-- Dims the page behind the popover when it rises as a sheet on a phone. -->
@@ -2372,20 +2356,7 @@ function applyTheme(t) {
   localStorage.setItem('vinyl-theme', t);
 }
 
-// The finish is the second axis: it repaints the palette without touching the
-// tone, so the two buttons never fight and either is one click from anywhere.
-let finish = localStorage.getItem('vinyl-finish') || 'classic';
-if (finish !== 'classic' && finish !== 'wood') finish = 'classic';
-function applyFinish(f) {
-  finish = f;
-  document.documentElement.setAttribute('data-finish', f);
-  // lit like any other on/off control in the toolbar
-  document.getElementById('finishBtn').classList.toggle('btn-primary', f === 'wood');
-  localStorage.setItem('vinyl-finish', f);
-}
 applyTheme(theme);
-applyFinish(finish);
-document.getElementById('finishBtn').addEventListener('click', () => { applyFinish(finish === 'wood' ? 'classic' : 'wood'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
 document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
 
 // ── genre colours ──────────────────────────────────────────────────────────
@@ -2808,13 +2779,24 @@ function render() {
 // by clicking the spinning record next to the title. Not persisted — reloading
 // the page always comes back to the normal view.
 let setupMode = false;
+// A find-in-shelf box, not a filter: it narrows which cards show inside each
+// block but never moves the block boundaries — those stay fixed on the full
+// owned collection, because that's where the records actually sit.
+let setupQuery = '';
 
 function toggleSetupMode() {
   setupMode = !setupMode;
+  setupQuery = '';
+  document.getElementById('setupSearchInput').value = '';
   document.getElementById('vinylLogo').classList.toggle('active', setupMode);
   document.body.classList.toggle('setup-mode', setupMode);
   if (setupMode) switchTab('collection');
   render();
+}
+
+function onSetupSearch(value) {
+  setupQuery = value;
+  renderSetup();
 }
 
 function renderSetup() {
@@ -2827,25 +2809,33 @@ function renderSetup() {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>no records yet. add your first vinyl.</div>`;
     return;
   }
-  c.innerHTML = setupHTML(owned);
+  c.innerHTML = setupHTML(owned, setupQuery);
   c.querySelectorAll('[data-id]').forEach(el =>
     el.addEventListener('click', () => openDetail(Number(el.dataset.id)))
   );
   observeCardsForGlow();
 }
 
-function setupHTML(recs) {
+function setupHTML(recs, query) {
   const blocks = VinylGrouping.setupBlocks(recs);
+  const q = (query || '').trim().toLowerCase();
   return blocks.map(block => {
     const first = block.records[0], last = block.records[block.records.length - 1];
     const initial = r => (r.artist || '').trim().charAt(0).toUpperCase() || '#';
     const range = first ? `${initial(first)} – ${initial(last)}` : '';
+    const shown = q ? block.records.filter(r =>
+      (r.artist || '').toLowerCase().includes(q) || (r.album_name || '').toLowerCase().includes(q)
+    ) : block.records;
+    const count = q ? `${shown.length} / ${block.records.length}` :
+      `${block.records.length} ${block.records.length === 1 ? 'record' : 'records'}`;
+    const body = shown.length ? recordsHTML(shown)
+      : `<div class="empty" style="padding:12px 0"><i class="ti ti-disc"></i>no matches in this block</div>`;
     return `<section class="crate">
       <div class="crate-head" style="cursor:default">
         <span class="crate-label">${esc(block.label)}${range ? ` <span style="font-weight:400;opacity:.6">(${esc(range)})</span>` : ''}</span>
-        <span class="crate-count">${block.records.length} ${block.records.length === 1 ? 'record' : 'records'}</span>
+        <span class="crate-count">${count}</span>
       </div>
-      <div class="crate-body">${recordsHTML(block.records)}</div>
+      <div class="crate-body">${body}</div>
     </section>`;
   }).join('');
 }
@@ -4928,6 +4918,10 @@ document.getElementById('importInput').addEventListener('change',async e=>{
   }
 });
 document.getElementById('exportBtn').addEventListener('click',()=>{window.location.href='/api/export';});
+// Lets you see the idle screensaver on demand rather than waiting out the
+// real 2-minute timeout — fireIdleSpotlight() is the same function the idle
+// timer calls, so this is exactly what would happen anyway, just on request.
+document.getElementById('idleTriggerBtn').addEventListener('click', fireIdleSpotlight);
 
 // ── events ─────────────────────────────────────────────────────────────────
 function bindEvents(){
@@ -5064,6 +5058,8 @@ function bindEvents(){
   // the only caller that defers: the shelf keeps up with typing, the charts wait
   document.getElementById('searchInput').addEventListener('input',
     () => applyQueryChange({ defer: true }));
+  document.getElementById('setupSearchInput').addEventListener('input',
+    e => onSetupSearch(e.target.value));
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
   document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));

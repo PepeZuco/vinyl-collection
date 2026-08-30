@@ -528,72 +528,30 @@ test('the theme toggle redraws whatever is on screen', async () => {
   assert.deepStrictEqual(errors, [], 'toggling the theme threw:\n' + errors.join('\n'));
 });
 
-/* The wood finish — a palette taken from the photo of the actual setup: the
- * teak cabinet top, the walnut floor under it, and the AT-LP70XBT's green
- * VMN95E stylus standing in for the yellow accent.
- *
- * It is deliberately a SECOND AXIS rather than a third theme. data-theme keeps
- * meaning light-or-dark and nothing that reads it has to learn a new value;
- * data-finish carries classic-or-wood. That is what lets the wood-light
- * palette inherit all fourteen [data-theme="light"] component rules for free.
- * These tests pin the two axes staying independent. */
+/* The walnut trim and gold accent — a palette taken from the photo of the
+ * actual setup: the cabinet's border colour and the AT-LP70XBT's own gold.
+ * These tests pin the sampled values and their readability, independent of
+ * the light/dark tone the rest of the page is on. */
 
-test('a first visit opens on wood, in light', async () => {
-  const { doc } = await boot();          // a fresh origin: nothing in localStorage
-  assert.strictEqual(doc.documentElement.getAttribute('data-finish'), 'wood');
-  assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'light');
-});
-
-test('switching finish leaves the light/dark tone alone', async () => {
-  const { win, doc } = await boot();
-  win.applyTheme('light');
-  const before = doc.documentElement.getAttribute('data-finish');
-  $(doc, '#finishBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  assert.notStrictEqual(doc.documentElement.getAttribute('data-finish'), before,
-    'the finish button did not change the finish');
-  assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'light',
-    'toggling the finish also changed the tone');
-});
-
-test('switching tone leaves the wood finish alone', async () => {
-  const { win, doc } = await boot();
-  win.applyFinish('wood');
-  win.applyTheme('light');
-  $(doc, '#themeBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  assert.strictEqual(doc.documentElement.getAttribute('data-theme'), 'dark');
-  assert.strictEqual(doc.documentElement.getAttribute('data-finish'), 'wood',
-    'toggling the tone dropped the wood finish');
-});
-
-test('the finish is remembered separately from the tone', async () => {
+test('the tone still switches genre colours, dark then light', async () => {
   const { win, read } = await boot();
-  win.applyFinish('wood');
-  win.applyTheme('light');
-  assert.strictEqual(read("localStorage.getItem('vinyl-finish')"), 'wood');
-  assert.strictEqual(read("localStorage.getItem('vinyl-theme')"), 'light');
-});
-
-test('wood keeps the tone the colour logic sees', async () => {
-  const { win, read } = await boot();
-  win.applyFinish('wood');
   win.applyTheme('dark');
-  assert.strictEqual(read('isDark()'), true, 'wood-dark did not read as dark');
+  assert.strictEqual(read('isDark()'), true);
   assert.strictEqual(read("genreColor('Rock')"), '#E0453C');
   win.applyTheme('light');
-  assert.strictEqual(read('isDark()'), false, 'wood-light did not read as light');
+  assert.strictEqual(read('isDark()'), false);
   assert.strictEqual(read("genreColor('Rock')"), '#C0271F',
-    'wood-light got the dark-theme genre hue');
+    'light got the dark-theme genre hue');
 });
 
 /* token name -> value for one palette block in the template's <style>. */
-function palette(selector, label) {
+function palette(tone) {
   const css = fs.readFileSync(PAGE, 'utf8');
+  const selector = '[data-theme="' + tone + '"]';
   const m = css.match(new RegExp(selector.replace(/[[\]"]/g, '\\$&') + '\\{([^}]*)\\}'));
-  assert.ok(m, 'no ' + label + ' palette block in the template');
+  assert.ok(m, 'no ' + tone + ' palette block in the template');
   return new Map([...m[1].matchAll(/(--[\w-]+)\s*:\s*([^;}]+)/g)].map(x => [x[1], x[2].trim()]));
 }
-const CLASSIC = tone => palette('[data-theme="' + tone + '"]', 'classic ' + tone);
-const WOOD = tone => palette('[data-finish="wood"][data-theme="' + tone + '"]', 'wood ' + tone);
 
 // WCAG relative luminance, so the accent checks below are real numbers rather
 // than someone's opinion about whether a colour "looks readable".
@@ -609,34 +567,26 @@ function contrast(a, b) {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
-test('each wood palette defines every token its classic tone defines', async () => {
-  for (const tone of ['dark', 'light']) {
-    const missing = [...CLASSIC(tone).keys()].filter(t => !WOOD(tone).has(t));
-    assert.deepStrictEqual(missing, [],
-      'the wood ' + tone + ' palette is missing: ' + missing.join(', '));
-  }
-});
-
-test('the wood accent is the gold, not the stylus green', async () => {
-  assert.strictEqual(WOOD('dark').get('--accent'), '#f1c23f');
+test('the accent is the gold, dark and light', async () => {
+  assert.strictEqual(palette('dark').get('--accent'), '#f1c23f');
   // the light one has to be deepened to stay readable, but must stay gold:
-  // hue in the 30-60 degree band rather than green's ~145
-  const hex = WOOD('light').get('--accent');
+  // hue in the 30-60 degree band
+  const hex = palette('light').get('--accent');
   const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const hue = max === min ? 0
     : 60 * (max === r ? (((g - b) / (max - min)) % 6)
     : max === g ? ((b - r) / (max - min)) + 2 : ((r - g) / (max - min)) + 4);
   assert.ok(hue >= 30 && hue <= 60,
-    'the wood light accent ' + hex + ' is at hue ' + hue.toFixed(0) + ', outside gold');
+    'the light accent ' + hex + ' is at hue ' + hue.toFixed(0) + ', outside gold');
 });
 
-test('every wood accent stays readable on its own ground', async () => {
+test('the accent stays readable on its own ground, dark and light', async () => {
   for (const tone of ['dark', 'light']) {
-    const p = WOOD(tone);
+    const p = palette(tone);
     const ratio = contrast(p.get('--accent'), p.get('--bg'));
     assert.ok(ratio >= 4.5,
-      'wood ' + tone + ' accent ' + p.get('--accent') + ' on ' + p.get('--bg') +
+      tone + ' accent ' + p.get('--accent') + ' on ' + p.get('--bg') +
       ' is only ' + ratio.toFixed(2) + ':1');
   }
 });
@@ -810,6 +760,58 @@ test('outside setup mode, detail prev/next still walks the normal filtered order
   const { win, doc, read } = await boot();
   win.openDetail(RECORDS.find(r => r.have_it).id);
   assert.deepStrictEqual(read('detailNavRecords()').map(r => r.id), read('filtered()').map(r => r.id));
+});
+
+// setup search narrows which cards show inside each block without moving the
+// block boundary — the fixture's artist/album fields ("Artist 12", "Album 12")
+// make "12" match only record 12, which sorts into block 1 alongside 1-4.
+test('the setup search narrows a block to matching artist/album, without moving its boundary', async () => {
+  const { win, doc } = await boot();
+  press(win, $(doc, '#vinylLogo'));
+
+  const box = $(doc, '#setupSearchInput');
+  box.value = '12';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+  const crates = [...doc.querySelectorAll('#recordsContainer .crate')];
+  assert.strictEqual(crates.length, 2, 'searching should not add or remove blocks');
+  assert.ok(crates[0].querySelector('.crate-label').textContent.startsWith('Block 1'));
+  assert.ok(crates[1].querySelector('.crate-label').textContent.startsWith('Block 2'));
+
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), 1);
+  assert.deepStrictEqual(
+    [...doc.querySelectorAll('#recordsContainer [data-id]')].map(el => Number(el.dataset.id)),
+    [12]
+  );
+  assert.match(crates[1].textContent, /no matches in this block/);
+});
+
+test('the setup search matches on album name too, case-insensitively', async () => {
+  const { win, doc } = await boot();
+  press(win, $(doc, '#vinylLogo'));
+
+  const box = $(doc, '#setupSearchInput');
+  box.value = 'ALBUM 3';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+  assert.deepStrictEqual(
+    [...doc.querySelectorAll('#recordsContainer [data-id]')].map(el => Number(el.dataset.id)),
+    [3]
+  );
+});
+
+test('exiting and re-entering setup mode clears the search', async () => {
+  const { win, doc } = await boot();
+  press(win, $(doc, '#vinylLogo'));
+  const box = $(doc, '#setupSearchInput');
+  box.value = '12';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+  press(win, $(doc, '#vinylLogo'));  // exit
+  press(win, $(doc, '#vinylLogo'));  // re-enter
+
+  assert.strictEqual($(doc, '#setupSearchInput').value, '');
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), RECORDS.filter(r => r.have_it).length);
 });
 
 test('replay describes the same records the calendar scales do', async () => {
