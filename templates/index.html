@@ -312,24 +312,29 @@ select option{background:var(--surface);color:var(--text)}
 /* desktop cover carousel — a vertical take on the mobile dm-carousel below:
    the current record's cover sits centered and full-size, up to 3 neighbors
    on each side taper smaller and dimmer the farther they are, and anything
-   past that fades to the same minimal sliver. Scrolling — or clicking a
-   neighbor — swaps the current record in place, same as the mobile crate
-   tap, without the header's slide animation. */
-.dd-carousel{width:100%;height:460px;overflow-y:auto;scroll-snap-type:y mandatory;
+   past that fades to the same minimal sliver. flex:1 lets it fill however
+   tall the info column stretches it (grid's default align-items:stretch),
+   rather than leaving blank space below a short fixed-height strip.
+   Scrolling — or clicking a neighbor — swaps the current record in place,
+   same as the mobile crate tap, without the header's slide animation.
+   Wheel/touch are handled entirely in JS (ddBind): native scrolling here
+   would let one light swipe fly past several records, since most slides
+   are much shorter than a full scroll gesture's travel. */
+.dd-carousel{width:100%;flex:1 1 auto;min-height:520px;overflow-y:auto;overflow-x:hidden;
   scrollbar-width:none;position:sticky;top:0;display:flex;flex-direction:column;
-  align-items:center;gap:10px;padding:200px 0}
+  align-items:center;gap:14px;padding:280px 0;touch-action:none}
 .dd-carousel::-webkit-scrollbar{display:none}
 .dd-carousel .dm-slide{flex:0 0 auto;border-radius:8px;overflow:hidden;position:relative;
-  background:#0a0a0a;cursor:pointer;scroll-snap-align:center;
-  transition:width .25s,height .25s,opacity .25s;width:42px;height:42px;opacity:.18}
+  background:#0a0a0a;cursor:pointer;
+  transition:width .25s,height .25s,opacity .25s;width:48px;height:48px;opacity:.18}
 [data-theme="light"] .dd-carousel .dm-slide{background:#ddd8cd}
 .dd-carousel .dm-slide img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .dd-carousel .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
 [data-theme="light"] .dd-carousel .dm-slide-ph{color:#b0a99b}
-.dd-carousel .dm-slide[data-dist="3"]{width:58px;height:58px;opacity:.32}
-.dd-carousel .dm-slide[data-dist="2"]{width:80px;height:80px;opacity:.5}
-.dd-carousel .dm-slide[data-dist="1"]{width:106px;height:106px;opacity:.75}
-.dd-carousel .dm-slide[data-dist="0"]{width:140px;height:140px;opacity:1;
+.dd-carousel .dm-slide[data-dist="3"]{width:70px;height:70px;opacity:.32}
+.dd-carousel .dm-slide[data-dist="2"]{width:104px;height:104px;opacity:.5}
+.dd-carousel .dm-slide[data-dist="1"]{width:150px;height:150px;opacity:.75}
+.dd-carousel .dm-slide[data-dist="0"]{width:220px;height:220px;opacity:1;
   box-shadow:0 10px 30px rgba(0,0,0,.45);cursor:default;z-index:1}
 /* info-card styling shared by desktop drawer and mobile info sheet — built
    from the same dmInfoHTML() markup so both views stay in sync */
@@ -2051,8 +2056,8 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-foot">
       <span class="draft-flag" id="draftFlag" hidden><span class="d"></span>draft kept</span>
       <button class="btn" onclick="closeForm()">cancel</button>
-      <button class="btn" id="formBackBtn" onclick="setFormStep(formStep - 1)">back</button>
-      <button class="btn" id="formNextBtn" onclick="setFormStep(formStep + 1)">next</button>
+      <button class="btn" id="formBackBtn" onclick="setFormStep(formStep - 1)"><i class="ti ti-arrow-left"></i> back</button>
+      <button class="btn" id="formNextBtn" onclick="setFormStep(formStep + 1)">next <i class="ti ti-arrow-right"></i></button>
       <button class="btn btn-primary" id="formSaveBtn">save</button>
     </div>
   </div>
@@ -3199,27 +3204,52 @@ function ddCenterSlide(idx, smooth) {
   car.scrollTo({top: s.offsetTop + s.offsetHeight/2 - car.clientHeight/2, behavior: smooth ? 'smooth' : 'auto'});
 }
 
+// Driven entirely by JS, not native scrolling: most slides are far shorter
+// than a full scroll gesture's travel, so letting the browser map raw scroll
+// distance to position flew past several records on one light wheel tick or
+// swipe. Each gesture instead steps the index directly, and dmSetCurrent's
+// own ddCenterSlide call is what actually moves the strip.
 function ddBind() {
   const car = document.getElementById('ddCarousel');
   if (!car) return;
-  let raf;
-  car.addEventListener('scroll', () => {
-    cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      const mid = car.scrollTop + car.clientHeight/2;
-      let best = 0, bd = Infinity;
-      [...car.children].forEach((s,k) => {
-        const d = Math.abs(s.offsetTop + s.offsetHeight/2 - mid);
-        if (d < bd) { bd = d; best = k; }
-      });
-      if (best !== dmIdx) dmSetCurrent(best);
-    });
-  }, {passive: true});
+
   car.addEventListener('click', e => {
     const sl = e.target.closest('.dm-slide');
     if (!sl) return;
     const idx = dmList.findIndex(r => r.id === Number(sl.dataset.id));
     if (idx !== -1 && idx !== dmIdx) dmSetCurrent(idx);
+  });
+
+  // mouse wheel / trackpad: one record per tick, with a short lockout so a
+  // fast spin doesn't blow through several records before the eye can track
+  let wheelLocked = false;
+  car.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (wheelLocked || Math.abs(e.deltaY) < 4) return;
+    const next = dmIdx + (e.deltaY > 0 ? 1 : -1);
+    if (next < 0 || next >= dmList.length) return;
+    wheelLocked = true;
+    dmSetCurrent(next);
+    setTimeout(() => { wheelLocked = false; }, 260);
+  }, {passive: false});
+
+  // touch: drag distance decides how many records to move, applied once on
+  // release rather than tracking the finger continuously
+  let touchStartY = null, touchStartIdx = 0;
+  const DRAG_PER_RECORD = 70;
+  car.addEventListener('touchstart', e => {
+    touchStartY = e.touches[0].clientY;
+    touchStartIdx = dmIdx;
+  }, {passive: true});
+  car.addEventListener('touchmove', e => e.preventDefault(), {passive: false});
+  car.addEventListener('touchend', e => {
+    if (touchStartY === null) return;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    touchStartY = null;
+    const delta = -Math.round(dy / DRAG_PER_RECORD);
+    if (!delta) return;
+    const next = Math.max(0, Math.min(dmList.length - 1, touchStartIdx + delta));
+    if (next !== dmIdx) dmSetCurrent(next);
   });
 }
 
