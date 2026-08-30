@@ -266,6 +266,51 @@ select option{background:var(--surface);color:var(--text)}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
 .modal.modal-wide{max-width:920px}
 
+/* idle screensaver — a quiet spotlight on one owned record at a time */
+.idle-overlay{background:rgba(0,0,0,.86);z-index:400;flex-direction:column;cursor:pointer}
+.idle-eyebrow,.idle-hint{
+  position:absolute;left:0;right:0;text-align:center;font-family:var(--font-mono);
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(232,232,224,.45);
+}
+.idle-eyebrow{top:28px}
+.idle-card{display:flex;flex-direction:column;align-items:center;gap:22px;transition:opacity .5s ease;cursor:default}
+.idle-card.idle-fading{opacity:0}
+.idle-art{position:relative;width:220px;height:220px}
+.idle-disc{
+  position:absolute;inset:0;border-radius:50%;
+  background:repeating-radial-gradient(circle at 50% 50%,#1c1c1c 0 2px,#262626 2px 4px);
+  box-shadow:0 20px 50px rgba(0,0,0,.5);
+  animation:idle-spin 16s linear infinite;
+}
+.idle-disc::after{content:'';position:absolute;width:56px;height:56px;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--accent)}
+.idle-disc::before{content:'';position:absolute;width:7px;height:7px;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);background:#100b00;z-index:1}
+@keyframes idle-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.idle-disc{animation:none}}
+.idle-cover{
+  position:absolute;width:168px;height:168px;top:26px;left:26px;border-radius:4px;overflow:hidden;
+  box-shadow:0 18px 40px rgba(0,0,0,.45);background:#111;
+  display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:32px;
+}
+.idle-cover img{width:100%;height:100%;object-fit:cover}
+.idle-meta{text-align:center;color:var(--text)}
+.idle-artist{font-size:21px;font-weight:700;text-wrap:balance}
+.idle-album{font-size:14px;color:var(--label);font-style:italic;margin-top:3px}
+.idle-stats{display:flex;gap:26px;align-items:flex-start}
+.idle-stat{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:72px}
+.idle-num{font-family:var(--font-mono);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
+.idle-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.idle-rate{display:flex;flex-direction:column;gap:6px;align-items:center}
+.idle-rate-row{display:flex;align-items:center;gap:6px}
+.idle-who{font-size:10px;width:32px;text-align:right;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.idle-segs{display:flex;gap:2px}
+.idle-segs i{width:8px;height:11px;border-radius:1.5px;background:rgba(255,255,255,.14);display:block}
+.idle-rate-row.pepe .idle-segs i.on{background:var(--rate-pepe)}
+.idle-rate-row.jenni .idle-segs i.on{background:var(--rate-jenni)}
+.idle-dots{position:absolute;bottom:64px;left:0;right:0;display:flex;justify-content:center;gap:7px}
+.idle-dots i{width:5px;height:5px;border-radius:50%;background:rgba(232,232,224,.3);display:block;transition:background .3s,transform .3s}
+.idle-dots i.on{background:var(--accent);transform:scale(1.5)}
+.idle-hint{bottom:28px}
+
 /* detail drawer — desktop: docked to the right edge, collection stays visible behind it */
 #detailOverlay{justify-content:flex-end;padding:0;background:rgba(0,0,0,.6)}
 #detailOverlay .modal.modal-wide{
@@ -1872,6 +1917,7 @@ select option{background:var(--surface);color:var(--text)}
       <div class="detail-drawer-nav">
         <button class="detail-nav-btn prev" id="detailPrevBtn" title="previous record" onclick="navigateDetail(-1)"><i class="ti ti-chevron-left"></i></button>
         <button class="detail-nav-btn next" id="detailNextBtn" title="next record" onclick="navigateDetail(1)"><i class="ti ti-chevron-right"></i></button>
+        <button class="detail-nav-btn random" id="detailRandomBtn" title="random record" onclick="randomDetail()"><i class="ti ti-dice-5"></i></button>
         <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -2235,6 +2281,32 @@ select option{background:var(--surface);color:var(--text)}
   </div>
 </div>
 
+<!-- Idle screensaver: appears after a couple of minutes with no activity,
+     cycling one owned record at a time. Any interaction dismisses it. -->
+<div class="overlay hidden idle-overlay" id="idleOverlay">
+  <div class="idle-eyebrow">quiet for a while &mdash; from your collection</div>
+  <div class="idle-card" id="idleCard">
+    <div class="idle-art">
+      <div class="idle-disc"></div>
+      <div class="idle-cover" id="idleCover"></div>
+    </div>
+    <div class="idle-meta">
+      <div class="idle-artist" id="idleArtist"></div>
+      <div class="idle-album" id="idleAlbum"></div>
+    </div>
+    <div class="idle-stats">
+      <div class="idle-stat"><span class="idle-num" id="idlePlays"></span><span class="idle-lbl">plays</span></div>
+      <div class="idle-stat"><span class="idle-num" id="idleLast"></span><span class="idle-lbl">last played</span></div>
+      <div class="idle-rate">
+        <div class="idle-rate-row pepe"><span class="idle-who">pepe</span><span class="idle-segs" id="idleRatePepe"></span></div>
+        <div class="idle-rate-row jenni"><span class="idle-who">jenni</span><span class="idle-segs" id="idleRateJenni"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="idle-dots" id="idleDots"></div>
+  <div class="idle-hint">move to dismiss</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -2255,6 +2327,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/spend.js"></script>
+<script src="/static/idle-spotlight.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 let records = [];
@@ -3382,20 +3455,13 @@ function updateDetailNavVisibility() {
   const show = recs.length > 1;
   document.getElementById('detailPrevBtn').style.display = show ? '' : 'none';
   document.getElementById('detailNextBtn').style.display = show ? '' : 'none';
+  document.getElementById('detailRandomBtn').style.display = show ? '' : 'none';
 }
 
 let detailAnimating = false;
-function navigateDetail(delta) {
-  if (detailAnimating) return;
-  const recs = filtered();
-  if (recs.length < 2) return;
-  const idx = recs.findIndex(r => r.id === currentDetailId);
-  const nextIdx = idx === -1 ? 0 : (idx + delta + recs.length) % recs.length;
-  const nextRecord = recs[nextIdx];
-
+// delta > 0 slides the incoming record up; delta < 0 slides it down
+function goToDetailRecord(nextRecord, delta) {
   const body = document.getElementById('detailBody');
-
-  // delta > 0 means "next": slides up; delta < 0 means "prev": slides down
   const outClass = delta > 0 ? 'slide-out-up' : 'slide-out-down';
   const inClass  = delta > 0 ? 'slide-in-up'  : 'slide-in-down';
 
@@ -3419,6 +3485,25 @@ function navigateDetail(delta) {
     body.addEventListener('animationend', onInEnd);
   };
   body.addEventListener('animationend', onOutEnd);
+}
+
+function navigateDetail(delta) {
+  if (detailAnimating) return;
+  const recs = filtered();
+  if (recs.length < 2) return;
+  const idx = recs.findIndex(r => r.id === currentDetailId);
+  const nextIdx = idx === -1 ? 0 : (idx + delta + recs.length) % recs.length;
+  goToDetailRecord(recs[nextIdx], delta);
+}
+
+function randomDetail() {
+  if (detailAnimating) return;
+  const recs = filtered();
+  if (recs.length < 2) return;
+  const idx = recs.findIndex(r => r.id === currentDetailId);
+  let nextIdx = idx;
+  while (nextIdx === idx) nextIdx = Math.floor(Math.random() * recs.length);
+  goToDetailRecord(recs[nextIdx], Math.random() < 0.5 ? 1 : -1);
 }
 
 function renderDetailFoot(id) {
@@ -7111,7 +7196,109 @@ function calJumpToDate(dateStr) {
   renderCalendar();
 }
 
+// ── idle screensaver ─────────────────────────────────────────────────────
+// After a couple of minutes with no mouse, keyboard or touch activity,
+// spotlight one owned record at a time with its play stats, crossfading to
+// a new random one every 10s. Any interaction anywhere dismisses it and
+// restarts the idle clock. Queue order comes from idle-spotlight.js so it's
+// testable outside the browser; everything DOM/timer-shaped stays here.
+const IDLE_DELAY_MS = 2 * 60 * 1000;
+const IDLE_CYCLE_MS = 10 * 1000;
+
+let idleTimer = null;
+let idleCycleTimer = null;
+let idleQueue = [];
+let idleLastMouseX = null, idleLastMouseY = null;
+
+function idleOverlayEl() { return document.getElementById('idleOverlay'); }
+function idleShowing() { return !idleOverlayEl().classList.contains('hidden'); }
+
+// A modal already open (editing, a detail drawer, the date picker...) means
+// the user is busy, not idle — check back shortly rather than popping a
+// screensaver over whatever they're doing.
+function idleOtherOverlayOpen() {
+  return !!document.querySelector('.overlay:not(.hidden):not(#idleOverlay)');
+}
+
+function scheduleIdleTimer() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(fireIdleSpotlight, IDLE_DELAY_MS);
+}
+
+function fireIdleSpotlight() {
+  if (idleOtherOverlayOpen()) { idleTimer = setTimeout(fireIdleSpotlight, 5000); return; }
+  const pool = VinylIdleSpotlight.ownedPool(records);
+  if (!pool.length) { scheduleIdleTimer(); return; }
+  idleQueue = VinylIdleSpotlight.shuffle(pool);
+  renderIdleRecord(idleQueue[0], pool);
+  idleLastMouseX = null;
+  idleLastMouseY = null;
+  idleOverlayEl().classList.remove('hidden');
+  clearInterval(idleCycleTimer);
+  idleCycleTimer = setInterval(() => advanceIdleSpotlight(pool), IDLE_CYCLE_MS);
+}
+
+function advanceIdleSpotlight(pool) {
+  const card = document.getElementById('idleCard');
+  card.classList.add('idle-fading');
+  setTimeout(() => {
+    idleQueue = VinylIdleSpotlight.advance(idleQueue, pool);
+    renderIdleRecord(idleQueue[0], pool);
+    card.classList.remove('idle-fading');
+  }, 500);
+}
+
+function idleSegs(el, n) {
+  let s = '';
+  for (let i = 0; i < 5; i++) s += `<i class="${i < n ? 'on' : ''}"></i>`;
+  el.innerHTML = s;
+}
+
+function renderIdleRecord(r, pool) {
+  document.getElementById('idleArtist').textContent = r.artist || '';
+  document.getElementById('idleAlbum').textContent = r.album_name || '';
+  document.getElementById('idlePlays').textContent = r.play_count || 0;
+  document.getElementById('idleLast').textContent = momentOf(lastPlayed(r)).day || 'never';
+  idleSegs(document.getElementById('idleRatePepe'), Number(r.my_rating) || 0);
+  idleSegs(document.getElementById('idleRateJenni'), Number(r.wife_rating) || 0);
+
+  const cover = document.getElementById('idleCover');
+  cover.innerHTML = r.cover_url
+    ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+    : '<i class="ti ti-disc"></i>';
+
+  document.getElementById('idleDots').innerHTML =
+    pool.map(p => `<i class="${p.id === r.id ? 'on' : ''}"></i>`).join('');
+}
+
+function closeIdleSpotlight() {
+  idleOverlayEl().classList.add('hidden');
+  clearInterval(idleCycleTimer);
+  scheduleIdleTimer();
+}
+
+function initIdleSpotlight() {
+  ['mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'].forEach(evt => {
+    document.addEventListener(evt, () => {
+      if (idleShowing()) closeIdleSpotlight(); else scheduleIdleTimer();
+    }, { passive: true });
+  });
+  // mousemove gets its own handler: appearing under a stationary cursor
+  // makes Chrome (and others) fire a synthetic mousemove to recompute
+  // :hover, which would otherwise dismiss the popup the instant it shows.
+  // Real movement only counts once the coordinates differ from that first
+  // synthetic sample.
+  document.addEventListener('mousemove', e => {
+    if (!idleShowing()) { scheduleIdleTimer(); return; }
+    if (idleLastMouseX === null) { idleLastMouseX = e.clientX; idleLastMouseY = e.clientY; return; }
+    if (e.clientX !== idleLastMouseX || e.clientY !== idleLastMouseY) closeIdleSpotlight();
+  });
+  idleOverlayEl().addEventListener('click', closeIdleSpotlight);
+  scheduleIdleTimer();
+}
+
 init();
+initIdleSpotlight();
 </script>
 </body>
 </html>

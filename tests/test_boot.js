@@ -722,6 +722,58 @@ test('a dir=asc link shows an ascending arrow', async () => {
     'the arrow disagreed with the sort it is describing');
 });
 
+// ── setup mode ───────────────────────────────────────────────────────────
+
+test('clicking the vinyl logo enters setup mode: banner shown, bar hidden', async () => {
+  const { win, doc } = await boot();
+  assert.ok($(doc, '#setupBanner').classList.contains('hidden'));
+
+  press(win, $(doc, '#vinylLogo'));
+
+  assert.ok(!$(doc, '#setupBanner').classList.contains('hidden'));
+  assert.ok(doc.body.classList.contains('setup-mode'));
+  assert.ok($(doc, '#vinylLogo').classList.contains('active'));
+});
+
+test('setup mode switches to the Collection tab', async () => {
+  const { win, doc } = await boot();
+  win.switchTab('timeline');
+  press(win, $(doc, '#vinylLogo'));
+  assert.ok($(doc, '#tabCollection').classList.contains('active'));
+  assert.ok($(doc, '#collectionPage').classList.contains('hidden') === false);
+});
+
+test('setup mode splits the owned collection into two artist-ordered blocks', async () => {
+  const { win, doc } = await boot();
+  press(win, $(doc, '#vinylLogo'));
+
+  const labels = [...doc.querySelectorAll('#recordsContainer .crate-label')].map(el => el.textContent);
+  assert.ok(labels[0].startsWith('Block 1'));
+  assert.ok(labels[1].startsWith('Block 2'));
+
+  const owned = RECORDS.filter(r => r.have_it).length;
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), owned);
+});
+
+test('setup mode leaves out wishlist records — there is no physical copy to place', async () => {
+  const { win, doc } = await boot();
+  press(win, $(doc, '#vinylLogo'));
+  const shownIds = [...doc.querySelectorAll('#recordsContainer [data-id]')].map(el => Number(el.dataset.id));
+  const wishlistIds = RECORDS.filter(r => !r.have_it).map(r => r.id);
+  assert.ok(wishlistIds.every(id => !shownIds.includes(id)));
+});
+
+test('clicking the vinyl logo again exits setup mode and restores the normal view', async () => {
+  const { win, doc } = await boot();
+  press(win, $(doc, '#vinylLogo'));
+  press(win, $(doc, '#vinylLogo'));
+
+  assert.ok($(doc, '#setupBanner').classList.contains('hidden'));
+  assert.ok(!doc.body.classList.contains('setup-mode'));
+  assert.ok(!$(doc, '#vinylLogo').classList.contains('active'));
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), RECORDS.filter(r => r.have_it).length);
+});
+
 test('replay describes the same records the calendar scales do', async () => {
   const { win, read } = await boot();
   win.applySavedView('needs-cleaning');
