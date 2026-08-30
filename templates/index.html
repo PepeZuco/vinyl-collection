@@ -21,8 +21,6 @@ html,body{touch-action:pan-x pan-y}
   --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#242424;
   --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#F5C518;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
-  --rate-pepe:#F5C518;--rate-jenni:#D4608A;
-  --rate-pepe-rgb:245,197,24;--rate-jenni-rgb:212,96,138;--rate-glow:.85;--rate-flare:1.6;
   --sh-gray:rgba(100,100,100,0.35);
   --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☀'
@@ -31,13 +29,15 @@ html,body{touch-action:pan-x pan-y}
   --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#cbc5b8;
   --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#a07820;--danger:#c0392b;
   --card-hover:#e9e5dc;--search-bg:#f0ede6;
-  --rate-pepe:#a07820;--rate-jenni:#b03e6e;
-  --rate-pepe-rgb:160,120,32;--rate-jenni-rgb:176,62,110;--rate-glow:.34;--rate-flare:.82;
   --sh-gray:rgba(0,0,0,0.18);
   --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
   --toggle-icon:'☾'
 }
 
+/* Pepe and Jenni's colours. Deliberately the same in both themes: the bars are
+   shapes rather than text, and deepening them for light mode read as muddy. */
+:root{--rate-pepe:#F5C518;--rate-jenni:#D4608A;
+  --rate-pepe-rgb:245,197,24;--rate-jenni-rgb:212,96,138;--rate-glow:.85;--rate-flare:1.6}
 :root{--font:'Inter',system-ui,sans-serif;--font-mono:'Courier Prime',monospace;--radius:4px;--radius-sm:3px}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;letter-spacing:-.01em;transition:background .2s,color .2s}
 
@@ -204,9 +204,7 @@ select option{background:var(--surface);color:var(--text)}
 .score-sq.jenni-on{background:var(--rate-jenni);--glow-rgb:var(--rate-jenni-rgb)}
 .score-sq.full{box-shadow:0 0 4px rgba(var(--glow-rgb),var(--rate-glow))}
 .score-sq.full.in-view{animation:sq-glow 1.1s ease-out 1 forwards}
-/* The full-marks flare. On dark it blooms outward and brightens; on light a
-   bloom would only wash the bar into the paper, so --rate-flare dips below 1
-   and the halo thins out — the same beat, read as a deepening instead. */
+/* the full-marks flare: bloom outward, brighten, settle back */
 @keyframes sq-glow{
   0%{box-shadow:none;filter:brightness(1);transform:scale(1)}
   30%{box-shadow:0 0 6px rgba(var(--glow-rgb),calc(var(--rate-glow) * 1.18)),
@@ -2208,12 +2206,9 @@ function hexToRgb(hex) {
 }
 
 // ── rater colours ──────────────────────────────────────────────────────────
-// Pepe and Jenni, dark hue then the deeper light one — the same pairing as
-// GENRE_PALETTE, and the same values as --rate-pepe / --rate-jenni in the CSS.
-const RATER_PALETTE = { pepe: ['#F5C518', '#a07820'], jenni: ['#D4608A', '#b03e6e'] };
-function raterColors(dark = document.documentElement.getAttribute('data-theme') === 'dark') {
-  return { pepe: RATER_PALETTE.pepe[dark ? 0 : 1], jenni: RATER_PALETTE.jenni[dark ? 0 : 1] };
-}
+// Pepe and Jenni. Unlike GENRE_PALETTE these do not get a deeper light-theme
+// variant — same hues in both themes, matching --rate-pepe / --rate-jenni.
+const RATER = { pepe: '#F5C518', jenni: '#D4608A' };
 
 // same New/Used icon+label everywhere a record's condition renders
 function conditionBadgeHTML(r) {
@@ -2746,14 +2741,11 @@ function cardHTML(r) {
   const avgStyle = '';
 
   // glow on total score — stronger as it climbs toward 10
-  // Same gold as the bars below it, and much fainter on light — on paper a halo
-  // in the text's own colour only reads as a smudge.
   const isDarkCard = document.documentElement.getAttribute('data-theme') === 'dark';
-  const glow = hexToRgb(raterColors(isDarkCard).pepe);
   let totalGlow = '';
-  if      (total >= 9)   totalGlow = isDarkCard ? `0 0 10px rgba(${glow},0.95), 0 0 20px rgba(${glow},0.6)` : `0 0 8px rgba(${glow},0.35)`;
-  else if (total >= 7.5) totalGlow = isDarkCard ? `0 0 7px rgba(${glow},0.70)` : `0 0 6px rgba(${glow},0.22)`;
-  else if (total >= 6)   totalGlow = isDarkCard ? `0 0 5px rgba(${glow},0.40)` : `0 0 4px rgba(${glow},0.12)`;
+  if      (total >= 9)   totalGlow = isDarkCard ? '0 0 10px rgba(245,197,24,0.95), 0 0 20px rgba(245,197,24,0.6)' : '0 0 8px rgba(200,155,10,0.8)';
+  else if (total >= 7.5) totalGlow = isDarkCard ? '0 0 7px rgba(245,197,24,0.70)' : '0 0 6px rgba(200,155,10,0.55)';
+  else if (total >= 6)   totalGlow = isDarkCard ? '0 0 5px rgba(245,197,24,0.40)' : '0 0 4px rgba(200,155,10,0.30)';
   const totalStyle = totalGlow ? ` style="text-shadow:${totalGlow}"` : '';
 
   const scoresBlock = (myR > 0 || herR > 0) ? (() => {
@@ -6137,14 +6129,13 @@ function renderStats() {
   const radarJenni = genres.map(g => genreMap[g].jenni.length ? (genreMap[g].jenni.reduce((a,b)=>a+b,0)/genreMap[g].jenni.length) : 0);
 
   destroyChart('radar');
-  const RATE = raterColors();
   chartInstances['radar'] = new Chart(document.getElementById('radarChart'), {
     type: 'radar',
     data: {
       labels: genres,
       datasets: [
-        { label:'Pepe',  data:radarPepe,  borderColor:RATE.pepe,  backgroundColor:`rgba(${hexToRgb(RATE.pepe)},0.12)`,  pointBackgroundColor:RATE.pepe,  borderWidth:2 },
-        { label:'Jenni', data:radarJenni, borderColor:RATE.jenni, backgroundColor:`rgba(${hexToRgb(RATE.jenni)},0.12)`, pointBackgroundColor:RATE.jenni, borderWidth:2 },
+        { label:'Pepe',  data:radarPepe,  borderColor:RATER.pepe,  backgroundColor:`rgba(${hexToRgb(RATER.pepe)},0.12)`,  pointBackgroundColor:RATER.pepe,  borderWidth:2 },
+        { label:'Jenni', data:radarJenni, borderColor:RATER.jenni, backgroundColor:`rgba(${hexToRgb(RATER.jenni)},0.12)`, pointBackgroundColor:RATER.jenni, borderWidth:2 },
       ]
     },
     options: {
