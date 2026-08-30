@@ -187,11 +187,13 @@ test('the collection renders its records', async () => {
   assert.ok(count(doc, '#recordsContainer .vcard') > 0, 'no cards were drawn');
 });
 
-test('the record count and the match count agree with the data', async () => {
+/* One count, in the header. The filter bar used to carry a second one saying
+ * the same thing a few pixels lower. */
+test('the record count agrees with the data', async () => {
   const { doc } = await boot();
   const owned = RECORDS.filter(r => r.have_it).length;
-  assert.match($(doc, '#recordCount').textContent, new RegExp(String(owned)));
-  assert.match($(doc, '#matchCount').textContent, new RegExp(String(owned)));
+  assert.match($(doc, '#recordCount').textContent, new RegExp('^— ' + owned + '\\b'));
+  assert.strictEqual($(doc, '#matchCount'), null, 'the filter bar counts again');
 });
 
 // ── the filter bar ──────────────────────────────────────────────────────────
@@ -235,7 +237,7 @@ test('a saved view narrows the shelf and leaves a chip explaining it', async () 
   win.applySavedView('needs-cleaning');
   const expected = RECORDS.filter(r =>
     r.have_it && !(JSON.parse(r.cleaned_dates || '[]') || []).some(Boolean)).length;
-  assert.match($(doc, '#matchCount').textContent, new RegExp('^' + expected + '\\b'));
+  assert.match($(doc, '#recordCount').textContent, new RegExp('^— ' + expected + '\\b'));
   assert.match($(doc, '#filterChips').textContent, /cleaning/i);
 });
 
@@ -284,7 +286,7 @@ test('a link to a filter arrives already filtered', async () => {
   const { doc } = await boot('#f.cleaning=never');
   const expected = RECORDS.filter(r =>
     r.have_it && !(JSON.parse(r.cleaned_dates || '[]') || []).some(Boolean)).length;
-  assert.match($(doc, '#matchCount').textContent, new RegExp('^' + expected + '\\b'));
+  assert.match($(doc, '#recordCount').textContent, new RegExp('^— ' + expected + '\\b'));
 });
 
 test('a link to a tab arrives on it', async () => {
@@ -827,7 +829,7 @@ test('typing redraws the shelf at once but makes the charts wait', async () => {
   assert.notStrictEqual(read('heavyRenderTimer'), null,
     'the charts rebuilt synchronously on a keystroke');
   // the shelf still keeps up: nothing matches 'zzzz'
-  assert.match($(doc, '#matchCount').textContent, /^0\b/);
+  assert.match($(doc, '#recordCount').textContent, /^— 0\b/);
 });
 
 test('a queued rebuild does not fire into a tab you have left', async () => {

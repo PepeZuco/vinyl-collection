@@ -114,13 +114,12 @@ select option{background:var(--surface);color:var(--text)}
 .btn-danger{color:var(--danger);border-color:var(--border)}
 .btn-danger:hover{border-color:var(--danger)}
 .btn-icon{width:34px;padding:0;display:flex;align-items:center;justify-content:center;font-size:15px}
-/* disabled state — .btn and .cover-sheet-row hard-set colour and cursor, which
-   overrides the UA's disabled styling, so a control busy on a multi-second scan
-   still looked live. Opacity keeps this readable in both themes. */
-.btn:disabled,.cover-sheet-row:disabled,#spotifyUrlInput:disabled{opacity:.45;cursor:not-allowed}
+/* disabled state — .btn hard-sets colour and cursor, which overrides the UA's
+   disabled styling, so a control busy on a multi-second scan still looked
+   live. Opacity keeps this readable in both themes. */
+.btn:disabled,#spotifyUrlInput:disabled{opacity:.45;cursor:not-allowed}
 .btn:disabled:hover{border-color:var(--border);color:var(--muted)}
 .btn-primary:disabled:hover{background:transparent}
-.cover-sheet-row:disabled:hover{background:none}
 
 /* theme toggle */
 .theme-btn{font-size:16px;padding:0 10px}
@@ -302,17 +301,6 @@ select option{background:var(--surface);color:var(--text)}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surface);z-index:2}
-.cover-sheet{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
-.cover-sheet.hidden{display:none}
-.cover-sheet-row{display:flex;align-items:center;gap:10px;width:100%;padding:12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;cursor:pointer;text-align:left}
-.cover-sheet-row:last-child{border-bottom:none}
-.cover-sheet-row:hover{background:var(--card)}
-/* The price of the two ways in, at the top of the sheet that offers them.
-   :empty rather than a hidden class — the line is blank until the readout
-   loads, and an empty bordered strip reads as a broken row. */
-.cover-sheet-spend{padding:8px 12px;border-bottom:1px solid var(--border);
-  font-size:11px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
-.cover-sheet-spend:empty{display:none}
 .spotify-mark{width:24px;height:24px;flex-shrink:0;display:block}
 
 /* detail — split layout: cover left, info right */
@@ -634,6 +622,11 @@ select option{background:var(--surface);color:var(--text)}
 .cover-drop:hover{border-color:var(--accent)}
 .cover-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 .cover-preview{width:100%;max-height:130px;object-fit:contain;border-radius:var(--radius-sm);margin-top:8px;display:block}
+/* Choose file / take photo, always on screen next to the drop target rather
+   than behind a click — hidden by JS once a cover is on screen, since there
+   is nothing left to pick until it is cleared. */
+.cover-picker-row{display:flex;gap:6px;margin-top:8px}
+.cover-picker-row .btn{flex:1;justify-content:center}
 .check-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:4px}
 .check-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent)}
 .form-group .check-row label{font-size:12.5px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:0;display:inline;color:var(--label)}
@@ -1189,8 +1182,6 @@ select option{background:var(--surface);color:var(--text)}
 .chip-clear{background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;
   text-underline-offset:2px;cursor:pointer;padding:0 4px;font-family:var(--font)}
 .chip-clear:hover{color:var(--text)}
-.matchcount{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--label);
-  letter-spacing:.05em;white-space:nowrap;font-variant-numeric:tabular-nums;padding-left:10px}
 
 .trigger-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
   color:var(--muted)}
@@ -1390,10 +1381,16 @@ select option{background:var(--surface);color:var(--text)}
 .cal-title{font-family:var(--font-mono);font-weight:700;font-size:15px;margin-left:8px;white-space:nowrap}
 .cal-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
 .cal-types{display:flex;gap:6px}
-.cal-type-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;font-size:12px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s}
-.cal-type-btn .cal-dot{opacity:.45}
-.cal-type-btn.active{color:var(--text);border-color:color-mix(in srgb, var(--text) 30%, var(--border))}
-.cal-type-btn.active .cal-dot{opacity:1}
+/* icon-only pills — the icon is the label, so it carries the event's own
+   colour (the same colour its dots get in the grid) once the type is on. */
+.cal-type-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border-radius:999px;font-size:12px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s}
+.cal-type-btn i{font-size:15px;opacity:.45}
+.cal-type-btn.active{border-color:color-mix(in srgb, var(--text) 30%, var(--border))}
+.cal-type-btn.active i{opacity:1}
+.cal-type-btn.active[data-type="bought"] i{color:var(--accent)}
+.cal-type-btn.active[data-type="cleaned"] i{color:#4AA3C4}
+.cal-type-btn.active[data-type="played"] i{color:#5FBF7A}
+.cal-type-btn.active[data-type="note"] i{color:#9B7FD4}
 .cal-scale{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0}
 .cal-scale-btn{height:32px;padding:0 13px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .12s}
 .cal-scale-btn+.cal-scale-btn{border-left:1px solid var(--border)}
@@ -1579,7 +1576,6 @@ select option{background:var(--surface);color:var(--text)}
         </div>
       </div>
       <div class="chiprow" id="filterChips"></div>
-      <span class="matchcount" id="matchCount"></span>
       <div class="facet-pop hidden" id="facetPop"></div>
     </div>
 
@@ -1633,10 +1629,10 @@ select option{background:var(--surface);color:var(--text)}
       </div>
       <div class="cal-controls">
         <div class="cal-types" id="calTypesBar">
-          <button class="cal-type-btn active" data-type="bought" onclick="toggleCalType('bought')"><span class="cal-dot bought"></span>bought</button>
-          <button class="cal-type-btn active" data-type="cleaned" onclick="toggleCalType('cleaned')"><span class="cal-dot cleaned"></span>cleaned</button>
-          <button class="cal-type-btn active" data-type="played" onclick="toggleCalType('played')"><span class="cal-dot played"></span>played</button>
-          <button class="cal-type-btn active" data-type="note" onclick="toggleCalType('note')"><span class="cal-dot note"></span>notes</button>
+          <button class="cal-type-btn active" data-type="bought" onclick="toggleCalType('bought')" title="bought" aria-label="bought"><i class="ti ti-shopping-bag"></i></button>
+          <button class="cal-type-btn active" data-type="cleaned" onclick="toggleCalType('cleaned')" title="cleaned" aria-label="cleaned"><i class="ti ti-droplet"></i></button>
+          <button class="cal-type-btn active" data-type="played" onclick="toggleCalType('played')" title="played" aria-label="played"><i class="ti ti-headphones"></i></button>
+          <button class="cal-type-btn active" data-type="note" onclick="toggleCalType('note')" title="notes" aria-label="notes"><i class="ti ti-note"></i></button>
         </div>
         <div class="cal-scale" id="calScaleBar">
           <button class="cal-scale-btn active" data-scale="month" onclick="setCalScale('month')">month</button>
@@ -1853,15 +1849,27 @@ select option{background:var(--surface);color:var(--text)}
       <div class="form-step" data-step="1">
         <div class="form-layout">
         <div class="form-cover-col">
-          <div class="cover-drop" id="coverDrop" onclick="openCoverSheet()">
+          <div class="cover-drop" id="coverDrop">
             <div id="coverDropInner">
               <i class="ti ti-photo" style="font-size:26px;opacity:.3;display:block;margin-bottom:6px"></i>
-              <span style="font-size:12px;color:var(--label)">click to add album cover</span>
+              <span style="font-size:12px;color:var(--label)">album cover</span>
             </div>
             <img id="coverPreview" class="cover-preview" style="display:none">
           </div>
           <input type="file" accept="image/*" id="coverInput" style="display:none">
           <input type="file" accept="image/*" capture="environment" id="coverCaptureInput" style="display:none">
+
+          <!-- Open on screen rather than behind a click — hidden by JS once a
+               cover is picked, since there is nothing left to choose until it
+               is cleared. -->
+          <div class="cover-picker-row" id="coverPickerRow">
+            <button type="button" class="btn" id="coverPickerFile" onclick="pickCoverFile()">
+              <i class="ti ti-folder"></i> Choose file
+            </button>
+            <button type="button" class="btn" id="coverPickerCamera" onclick="openCamera()">
+              <i class="ti ti-camera"></i> Take photo
+            </button>
+          </div>
 
           <!-- Reopens the last scan's results without paying for a new one, so
                a wrong pick costs a tap rather than another vision call. -->
@@ -1878,7 +1886,7 @@ select option{background:var(--surface);color:var(--text)}
             <button type="button" class="scan-ai" id="analyseBtn" onclick="runPendingScan()" disabled>
               <span class="analyse-face" id="analyseFace"></span> Analyse
             </button>
-            <button type="button" class="scan-sp" id="scanSpotifyBtn" onclick="openScanSheet(true)">
+            <button type="button" class="scan-sp" id="scanSpotifyBtn" onclick="openSpotifyOverlay()">
               <i class="ti ti-brand-spotify"></i> Spotify
             </button>
           </div>
@@ -1891,34 +1899,6 @@ select option{background:var(--surface);color:var(--text)}
             <span class="scan-spinner"></span>
             <span>scanning… this can take up to a minute</span>
           </div>
-
-          <div class="cover-sheet hidden" id="coverSheet">
-            <div class="cover-sheet-spend" id="coverSheetSpend"></div>
-            <button type="button" class="cover-sheet-row" id="coverSheetFile" onclick="pickCoverFile()">
-              <i class="ti ti-folder"></i> Choose file
-            </button>
-            <button type="button" class="cover-sheet-row" id="coverSheetCamera" onclick="openCamera()">
-              <i class="ti ti-camera"></i> Take photo
-            </button>
-            <!-- Spotify brand rules require 12px clear space around the 24px mark
-                 (half its height) on every side. The gaps below are that exclusion
-                 zone, not arbitrary spacing — do not "harmonise" them down. -->
-            <div class="cover-sheet-row" style="flex-direction:column;align-items:stretch;gap:12px;cursor:default">
-              <span style="display:flex;align-items:center;gap:12px">
-                <img src="/static/spotify-logo.png" alt="Spotify" class="spotify-mark">
-                Paste Spotify link
-              </span>
-              <span style="display:flex;gap:6px">
-                <input type="text" id="spotifyUrlInput" placeholder="https://open.spotify.com/album/…"
-                       style="flex:1;min-width:0" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSpotifyUrl()}">
-                <button type="button" class="btn btn-sm" id="spotifySubmitBtn" onclick="submitSpotifyUrl()">
-                  <i class="ti ti-arrow-right"></i>
-                </button>
-              </span>
-              <span id="spotifyUrlErr" style="font-size:12px;color:var(--danger);display:none"></span>
-            </div>
-          </div>
-
         </div>
 
           <div class="form-section">
@@ -2086,6 +2066,35 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-foot">
       <button class="btn" onclick="closeCamera()">cancel</button>
       <button class="btn btn-primary" onclick="captureFrame()">capture</button>
+    </div>
+  </div>
+</div>
+
+<!-- Spotify link popup — submitting a valid link closes this and runs the
+     scan immediately; there is no separate "tap analyse" step for this path. -->
+<div class="overlay hidden" id="spotifyOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">paste spotify link</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeSpotifyOverlay()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <!-- Spotify brand rules require 12px clear space around the 24px mark
+           (half its height) on every side. The gap below is that exclusion
+           zone, not arbitrary spacing — do not "harmonise" it down. -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <img src="/static/spotify-logo.png" alt="Spotify" class="spotify-mark">
+        <span style="font-size:13px;color:var(--label)">album or single link</span>
+      </div>
+      <input type="text" id="spotifyUrlInput" placeholder="https://open.spotify.com/album/…"
+             style="width:100%" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSpotifyUrl()}">
+      <span id="spotifyUrlErr" style="font-size:12px;color:var(--danger);display:none;margin-top:6px"></span>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeSpotifyOverlay()">cancel</button>
+      <button class="btn btn-primary" id="spotifySubmitBtn" onclick="submitSpotifyUrl()">
+        <i class="ti ti-arrow-right"></i> analyse
+      </button>
     </div>
   </div>
 </div>
@@ -2624,7 +2633,7 @@ function render() {
   const recs = filtered();
   renderCount(recs.length);
   renderFilters();
-  renderChips(recs.length);
+  renderChips();
   const c = document.getElementById('recordsContainer');
   if (!recs.length) {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
@@ -2730,7 +2739,7 @@ function cratesHTML(recs) {
  * and an empty one always says why. Search and ownership used to leave no
  * trace at all, which is how you ended up staring at a grid unable to tell
  * what was hiding the rest of it. */
-function renderChips(matchCount) {
+function renderChips() {
   const chips = VinylFilters.chipsFor(currentQuery());
 
   const ownSeg = `<div class="own-seg" role="group" aria-label="show owned or wishlist">
@@ -2756,20 +2765,6 @@ function renderChips(matchCount) {
     ? `<button class="chip-clear" onclick="clearAllFilters()">clear</button>` : '';
 
   document.getElementById('filterChips').innerHTML = ownSeg + facetChips + add + clear;
-
-  const total = OWNERSHIP_TOTALS[filterState.ownership];
-  document.getElementById('matchCount').textContent =
-    matchCount === total ? `${matchCount} records` : `${matchCount} of ${total}`;
-}
-
-/* How many records the current ownership admits before any facet narrows it —
- * the denominator the match count reads against. */
-let OWNERSHIP_TOTALS = { owned: 0, wishlist: 0 };
-function countOwnership() {
-  OWNERSHIP_TOTALS = {
-    owned: records.filter(r => r.have_it).length,
-    wishlist: records.filter(r => !r.have_it).length,
-  };
 }
 
 // ── trigger square-shine animation only once a card is actually visible ────
@@ -2925,17 +2920,13 @@ function listRowHTML(r) {
 }
 
 function renderFilters() {
-  countOwnership();
   if (facetPopFor !== null) renderFacetPop();
 }
 
 // ── detail modal ───────────────────────────────────────────────────────────
 function renderDetailContent(r) {
-  const coverEl = r.cover_url
-    ? `<img src="${r.cover_url}" class="detail-cover" alt="${esc(r.album_name)}" onerror="this.style.display='none'">`
-    : `<div class="detail-cover-ph"><i class="ti ti-disc" style="font-size:48px"></i></div>`;
-
-  // mobile: crate carousel navigates the same filtered list as the desktop arrows
+  // mobile crate carousel + desktop vertical carousel both navigate the same
+  // filtered list as the header's prev/next arrows
   const dmRecs = filtered();
   dmList = dmRecs.length && dmRecs.some(x => x.id === r.id) ? dmRecs : [r];
   dmIdx = Math.max(0, dmList.findIndex(x => x.id === r.id));
@@ -2943,9 +2934,9 @@ function renderDetailContent(r) {
   document.getElementById('detailBody').innerHTML=`
     <div class="detail-layout">
       <div class="detail-cover-col">
-        ${coverEl}
+        <div class="dd-carousel" id="ddCarousel">${dmList.map(dmSlideHTML).join('')}</div>
       </div>
-      <div class="detail-info-col">
+      <div class="detail-info-col" id="ddInfo">
         ${dmInfoHTML(r)}
       </div>
     </div>
@@ -2962,6 +2953,7 @@ function renderDetailContent(r) {
     </div>`;
   dmBuildCrate();
   dmBind();
+  ddBind();
   dmSetCurrent(dmIdx);
   renderDetailFoot(r.id);
 }
@@ -3144,6 +3136,13 @@ function dmSetCurrent(idx) {
   if (count) count.innerHTML = `<b>${idx+1}</b> / ${dmList.length}`;
   const info = document.getElementById('dmInfo');
   if (info) info.innerHTML = dmInfoHTML(rec);
+  const ddCar = document.getElementById('ddCarousel');
+  if (ddCar) {
+    ddApplyDistance(idx);
+    ddCenterSlide(idx, true);
+  }
+  const ddInfo = document.getElementById('ddInfo');
+  if (ddInfo) ddInfo.innerHTML = dmInfoHTML(rec);
   renderDetailFoot(rec.id);
 }
 
@@ -3178,6 +3177,46 @@ function dmBind() {
   });
 }
 
+// ── desktop vertical cover carousel ─────────────────────────────────────────
+// each slide's data-dist (0 = current, capped at 4) drives its size/opacity
+// in CSS — the taper that shows the 3 nearest records on each side.
+function ddApplyDistance(idx) {
+  const car = document.getElementById('ddCarousel');
+  if (!car) return;
+  [...car.children].forEach((s,k) => { s.dataset.dist = Math.min(4, Math.abs(k - idx)); });
+}
+
+function ddCenterSlide(idx, smooth) {
+  const car = document.getElementById('ddCarousel');
+  const s = car && car.children[idx];
+  if (!s) return;
+  car.scrollTo({top: s.offsetTop + s.offsetHeight/2 - car.clientHeight/2, behavior: smooth ? 'smooth' : 'auto'});
+}
+
+function ddBind() {
+  const car = document.getElementById('ddCarousel');
+  if (!car) return;
+  let raf;
+  car.addEventListener('scroll', () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const mid = car.scrollTop + car.clientHeight/2;
+      let best = 0, bd = Infinity;
+      [...car.children].forEach((s,k) => {
+        const d = Math.abs(s.offsetTop + s.offsetHeight/2 - mid);
+        if (d < bd) { bd = d; best = k; }
+      });
+      if (best !== dmIdx) dmSetCurrent(best);
+    });
+  }, {passive: true});
+  car.addEventListener('click', e => {
+    const sl = e.target.closest('.dm-slide');
+    if (!sl) return;
+    const idx = dmList.findIndex(r => r.id === Number(sl.dataset.id));
+    if (idx !== -1 && idx !== dmIdx) dmSetCurrent(idx);
+  });
+}
+
 function openDetail(id) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
@@ -3189,6 +3228,8 @@ function openDetail(id) {
   if (window.matchMedia('(max-width:760px)').matches) {
     dmCenterSlide(dmIdx, false);
     dmCenterCrateThumb(dmIdx, false);
+  } else {
+    ddCenterSlide(dmIdx, false);
   }
 }
 
@@ -3365,15 +3406,6 @@ function populateWhereList(){
   const places = [...new Set(records.map(r=>r.bought_where).filter(Boolean))].sort();
   document.getElementById('whereList').innerHTML =
     places.map(p=>`<option value="${esc(p)}">`).join('');
-}
-
-// The Spotify button and the cover area open the same action sheet;
-// openCoverSheet toggles, so a click on one while the other had opened it would
-// close the sheet instead of switching to the row the user wanted.
-function openScanSheet(focusSpotify){
-  const sheet = document.getElementById('coverSheet');
-  if (sheet.classList.contains('hidden')) openCoverSheet();
-  if (focusSpotify) document.getElementById('spotifyUrlInput').focus();
 }
 
 function populateGenreSelect(current='') {
@@ -3869,7 +3901,7 @@ function closeForm(force){
   formBaseline = null;
   document.getElementById('draftFlag').hidden = true;
   document.getElementById('formOverlay').classList.add('hidden');
-  closeCoverSheet();
+  closeSpotifyOverlay();
   closeScanOverlay();
   scanToken++;
   setScanBusy(false);
@@ -3960,24 +3992,19 @@ async function submitForm(){
   closeForm(true);render();
 }
 
-// ── cover: action sheet, camera, resize ────────────────────────────────────
+// ── cover: picker, camera, resize ───────────────────────────────────────────
 let camStream = null;
 
-function openCoverSheet(){
-  const sheet = document.getElementById('coverSheet');
-  sheet.classList.toggle('hidden');
-  // Hide the camera row when no camera path can work at all.
-  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
-    || 'capture' in document.createElement('input');
-  document.getElementById('coverSheetCamera').style.display = hasCamera ? '' : 'none';
+function openSpotifyOverlay(){
+  document.getElementById('spotifyOverlay').classList.remove('hidden');
+  document.getElementById('spotifyUrlInput').focus();
 }
-function closeCoverSheet(){ document.getElementById('coverSheet').classList.add('hidden'); }
+function closeSpotifyOverlay(){ document.getElementById('spotifyOverlay').classList.add('hidden'); }
 
-function pickCoverFile(){ closeCoverSheet(); document.getElementById('coverInput').click(); }
-function fallbackCapture(){ closeCoverSheet(); document.getElementById('coverCaptureInput').click(); }
+function pickCoverFile(){ document.getElementById('coverInput').click(); }
+function fallbackCapture(){ document.getElementById('coverCaptureInput').click(); }
 
 async function openCamera(){
-  closeCoverSheet();
   if(camStream) return; // a request is already in flight or live
   // navigator.mediaDevices is undefined (not an error) outside a secure context.
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
@@ -4058,6 +4085,7 @@ function showCover(dataUri){
   preview.style.display = 'block';
   document.getElementById('coverDropInner').style.display = 'none';
   document.getElementById('coverDrop').classList.add('has-cover');
+  document.getElementById('coverPickerRow').style.display = 'none';
   updateScanControls();
 }
 
@@ -4068,6 +4096,11 @@ function clearCover(){
   preview.removeAttribute('src');
   document.getElementById('coverDropInner').style.display = '';
   document.getElementById('coverDrop').classList.remove('has-cover');
+  document.getElementById('coverPickerRow').style.display = '';
+  // Hide the camera button when no camera path can work at all.
+  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    || 'capture' in document.createElement('input');
+  document.getElementById('coverPickerCamera').style.display = hasCamera ? '' : 'none';
   updateScanControls();
 }
 
@@ -4091,8 +4124,6 @@ async function refreshScanUsage(){
 }
 
 function renderScanUsage(){
-  document.getElementById('coverSheetSpend').textContent =
-    VinylSpend.sheetSpendText(scanUsage);
   updateScanControls();
 }
 
@@ -4305,7 +4336,7 @@ function setScanBusy(busy){
   // window, error and abandoned-scan paths included.
   document.getElementById('scanStatus').style.display = busy ? 'flex' : 'none';
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
-   'coverSheetFile','coverSheetCamera'].forEach(id=>{
+   'coverPickerFile','coverPickerCamera'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.disabled = busy;
   });
@@ -4346,11 +4377,11 @@ async function runScan(body){
       const message = (data && data.error) || 'scan failed';
       if(myToken === scanToken) setScanSearch('');
       if(body.spotify_url){
-        // The sheet holding this error is closed by the time analyse runs — the
+        // The popup holding this error is closed by the time analyse runs — the
         // link was handed in earlier. Reopen it, or the message lands where
         // nobody can read it and a rejected link looks like a dead button.
         showSpotifyError(message);
-        document.getElementById('coverSheet').classList.remove('hidden');
+        document.getElementById('spotifyOverlay').classList.remove('hidden');
       } else toast(message);
       return;
     }
@@ -4415,7 +4446,7 @@ function applyScanResult(data){
   scanPhotoUri = data.source === 'photo' ? coverDataUri : '';
   updateScanControls();
 
-  closeCoverSheet();
+  closeSpotifyOverlay();
   openScanOverlay(data);
   formChanged();   // a scan fills fields without firing an input event
 }
@@ -4568,9 +4599,9 @@ function scanSearchString(year){
 
 const SPOTIFY_LINK = /open\.spotify\.com|^spotify:/;
 
-// Handing in a link no longer scans — it arms analyse and stops. The server
-// would reject a bad URL anyway, but only after a round trip, and the point of
-// arming is that nothing leaves the browser until the user taps analyse.
+// Submitting a link from the popup scans right away — there is no separate
+// "tap analyse" step for this path, unlike the cover-photo path where analyse
+// stays a deliberate second tap.
 function armSpotifyUrl(url){
   if(!SPOTIFY_LINK.test(url)){
     showSpotifyError('that does not look like a spotify link');
@@ -4578,9 +4609,9 @@ function armSpotifyUrl(url){
   }
   pendingSpotifyUrl = url;
   showSpotifyError('');
-  closeCoverSheet();
+  closeSpotifyOverlay();
   updateScanControls();
-  toast('spotify link ready — tap analyse');
+  runPendingScan();
 }
 
 function submitSpotifyUrl(){
