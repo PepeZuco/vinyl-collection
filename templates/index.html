@@ -292,6 +292,14 @@ select option{background:var(--surface);color:var(--text)}
   display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:32px;
 }
 .idle-cover img{width:100%;height:100%;object-fit:cover}
+/* Desktop has the screen real estate to let the record breathe; phones keep
+   the sizes above so the card still fits above the fold in portrait. */
+@media (min-width:761px){
+  .idle-art{width:360px;height:360px}
+  .idle-disc::after{width:92px;height:92px}
+  .idle-disc::before{width:12px;height:12px}
+  .idle-cover{width:280px;height:280px;top:40px;left:40px;font-size:52px}
+}
 .idle-meta{text-align:center;color:var(--text)}
 .idle-artist{font-size:21px;font-weight:700;text-wrap:balance}
 .idle-album{font-size:14px;color:var(--label);font-style:italic;margin-top:3px}
@@ -3115,10 +3123,19 @@ function renderFilters() {
 }
 
 // ── detail modal ───────────────────────────────────────────────────────────
+// The list prev/next, the swipe carousel and the crate-of-spines all walk. In
+// setup mode that's the shelf order the two blocks are drawn in, not whatever
+// the normal filter/sort is set to — the point of setup mode is browsing the
+// physical order, so its own click-through has to follow it too.
+function detailNavRecords() {
+  if (!setupMode) return filtered();
+  return VinylGrouping.setupBlocks(records.filter(r => r.have_it)).flatMap(b => b.records);
+}
+
 function renderDetailContent(r) {
   // mobile crate carousel + desktop vertical carousel both navigate the same
-  // filtered list as the header's prev/next arrows
-  const dmRecs = filtered();
+  // list as the header's prev/next arrows
+  const dmRecs = detailNavRecords();
   dmList = dmRecs.length && dmRecs.some(x => x.id === r.id) ? dmRecs : [r];
   dmIdx = Math.max(0, dmList.findIndex(x => x.id === r.id));
 
@@ -3451,7 +3468,7 @@ function openDetail(id) {
 
 // ── prev/next navigation through the currently filtered list ───────────────
 function updateDetailNavVisibility() {
-  const recs = filtered();
+  const recs = detailNavRecords();
   const show = recs.length > 1;
   document.getElementById('detailPrevBtn').style.display = show ? '' : 'none';
   document.getElementById('detailNextBtn').style.display = show ? '' : 'none';
@@ -3489,7 +3506,7 @@ function goToDetailRecord(nextRecord, delta) {
 
 function navigateDetail(delta) {
   if (detailAnimating) return;
-  const recs = filtered();
+  const recs = detailNavRecords();
   if (recs.length < 2) return;
   const idx = recs.findIndex(r => r.id === currentDetailId);
   const nextIdx = idx === -1 ? 0 : (idx + delta + recs.length) % recs.length;
@@ -3498,7 +3515,7 @@ function navigateDetail(delta) {
 
 function randomDetail() {
   if (detailAnimating) return;
-  const recs = filtered();
+  const recs = detailNavRecords();
   if (recs.length < 2) return;
   const idx = recs.findIndex(r => r.id === currentDetailId);
   let nextIdx = idx;
@@ -7220,13 +7237,20 @@ function idleOtherOverlayOpen() {
   return !!document.querySelector('.overlay:not(.hidden):not(#idleOverlay)');
 }
 
+// A real setTimeout/setInterval doubles as a Node Timeout in jsdom (the boot
+// tests never close their windows), which would otherwise keep the process
+// alive for as long as the longest pending idle timer. unref() tells Node
+// not to wait on it; real browsers hand back a plain number with no such
+// method, so this is a no-op there.
+function idleUnref(t) { if (t && typeof t.unref === 'function') t.unref(); return t; }
+
 function scheduleIdleTimer() {
   clearTimeout(idleTimer);
-  idleTimer = setTimeout(fireIdleSpotlight, IDLE_DELAY_MS);
+  idleTimer = idleUnref(setTimeout(fireIdleSpotlight, IDLE_DELAY_MS));
 }
 
 function fireIdleSpotlight() {
-  if (idleOtherOverlayOpen()) { idleTimer = setTimeout(fireIdleSpotlight, 5000); return; }
+  if (idleOtherOverlayOpen()) { idleTimer = idleUnref(setTimeout(fireIdleSpotlight, 5000)); return; }
   const pool = VinylIdleSpotlight.ownedPool(records);
   if (!pool.length) { scheduleIdleTimer(); return; }
   idleQueue = VinylIdleSpotlight.shuffle(pool);
@@ -7235,17 +7259,17 @@ function fireIdleSpotlight() {
   idleLastMouseY = null;
   idleOverlayEl().classList.remove('hidden');
   clearInterval(idleCycleTimer);
-  idleCycleTimer = setInterval(() => advanceIdleSpotlight(pool), IDLE_CYCLE_MS);
+  idleCycleTimer = idleUnref(setInterval(() => advanceIdleSpotlight(pool), IDLE_CYCLE_MS));
 }
 
 function advanceIdleSpotlight(pool) {
   const card = document.getElementById('idleCard');
   card.classList.add('idle-fading');
-  setTimeout(() => {
+  idleUnref(setTimeout(() => {
     idleQueue = VinylIdleSpotlight.advance(idleQueue, pool);
     renderIdleRecord(idleQueue[0], pool);
     card.classList.remove('idle-fading');
-  }, 500);
+  }, 500));
 }
 
 function idleSegs(el, n) {

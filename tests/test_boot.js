@@ -724,6 +724,17 @@ test('a dir=asc link shows an ascending arrow', async () => {
 
 // ── setup mode ───────────────────────────────────────────────────────────
 
+test('the stylesheet actually hides .setup-banner.hidden', async () => {
+  // getComputedStyle is avoided here — jsdom's CSS matching is painfully slow
+  // against this template's few-thousand-rule sheet. A direct text check on
+  // the <style> block is what actually caught the bug this test guards:
+  // .setup-banner had a display rule but no .hidden{display:none} pair, so
+  // toggling the class did nothing and the banner showed outside setup mode.
+  const { doc } = await boot();
+  const css = [...doc.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  assert.match(css, /\.setup-banner\.hidden\s*\{[^}]*display:\s*none/);
+});
+
 test('clicking the vinyl logo enters setup mode: banner shown, bar hidden', async () => {
   const { win, doc } = await boot();
   assert.ok($(doc, '#setupBanner').classList.contains('hidden'));
@@ -733,6 +744,9 @@ test('clicking the vinyl logo enters setup mode: banner shown, bar hidden', asyn
   assert.ok(!$(doc, '#setupBanner').classList.contains('hidden'));
   assert.ok(doc.body.classList.contains('setup-mode'));
   assert.ok($(doc, '#vinylLogo').classList.contains('active'));
+
+  press(win, $(doc, '#vinylLogo'));
+  assert.ok($(doc, '#setupBanner').classList.contains('hidden'));
 });
 
 test('setup mode switches to the Collection tab', async () => {
@@ -772,6 +786,30 @@ test('clicking the vinyl logo again exits setup mode and restores the normal vie
   assert.ok(!doc.body.classList.contains('setup-mode'));
   assert.ok(!$(doc, '#vinylLogo').classList.contains('active'));
   assert.strictEqual(count(doc, '#recordsContainer .vcard'), RECORDS.filter(r => r.have_it).length);
+});
+
+test('in setup mode, detail prev/next walks the shelf order, not the normal sort', async () => {
+  const { win, doc, read } = await boot();
+  const owned = RECORDS.filter(r => r.have_it);
+  const shelfOrder = [...owned].sort((a, b) =>
+    (a.artist || '').trim().toLowerCase().localeCompare((b.artist || '').trim().toLowerCase()));
+  // The fixture's own bought_date order (the default sort) differs from
+  // artist order, or this test would pass by accident.
+  assert.notDeepStrictEqual(shelfOrder.map(r => r.id), owned.map(r => r.id).slice().sort((a, b) => a - b));
+
+  press(win, $(doc, '#vinylLogo'));
+  win.openDetail(shelfOrder[0].id);
+
+  assert.deepStrictEqual(read('detailNavRecords()').map(r => r.id), shelfOrder.map(r => r.id));
+
+  win.navigateDetail(1);
+  assert.strictEqual(read('currentDetailId'), shelfOrder[1].id);
+});
+
+test('outside setup mode, detail prev/next still walks the normal filtered order', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(RECORDS.find(r => r.have_it).id);
+  assert.deepStrictEqual(read('detailNavRecords()').map(r => r.id), read('filtered()').map(r => r.id));
 });
 
 test('replay describes the same records the calendar scales do', async () => {
