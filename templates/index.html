@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light" data-finish="wood">
+<html lang="en" data-theme="dark" data-finish="classic">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -1551,7 +1551,7 @@ select option{background:var(--surface);color:var(--text)}
     </div>
     <div class="header-right">
       <button class="btn theme-btn btn-icon" id="themeBtn" title="Toggle theme">☀</button>
-      <button class="btn theme-btn btn-icon" id="finishBtn" title="Wood finish"><i class="ti ti-tree"></i></button>
+      <button class="btn theme-btn btn-icon" id="finishBtn" title="Wood finish" style="display:none"><i class="ti ti-tree"></i></button>
       <div class="auth-badge" id="authBadge" style="display:none"><i class="ti ti-lock"></i><span>visitor</span></div>
       <div class="more-menu" id="moreMenu">
         <button class="btn btn-icon" id="moreMenuBtn" title="more actions" onclick="toggleMoreMenu()"><i class="ti ti-dots"></i></button>
@@ -2252,8 +2252,8 @@ let confirmDeleteId = null;
 let currentDetailId = null;
 
 // ── theme ──────────────────────────────────────────────────────────────────
-let theme = localStorage.getItem('vinyl-theme') || 'light';
-if (theme !== 'dark' && theme !== 'light') theme = 'light';  // incl. the old 'wood'
+let theme = localStorage.getItem('vinyl-theme') || 'dark';
+if (theme !== 'dark' && theme !== 'light') theme = 'dark';  // incl. the old 'wood'
 function applyTheme(t) {
   theme = t;
   document.documentElement.setAttribute('data-theme', t);
@@ -2263,8 +2263,8 @@ function applyTheme(t) {
 
 // The finish is the second axis: it repaints the palette without touching the
 // tone, so the two buttons never fight and either is one click from anywhere.
-let finish = localStorage.getItem('vinyl-finish') || 'wood';
-if (finish !== 'classic' && finish !== 'wood') finish = 'wood';
+let finish = localStorage.getItem('vinyl-finish') || 'classic';
+if (finish !== 'classic' && finish !== 'wood') finish = 'classic';
 function applyFinish(f) {
   finish = f;
   document.documentElement.setAttribute('data-finish', f);
