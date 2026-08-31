@@ -280,6 +280,23 @@ test('insights draws the health row from the same records', async () => {
   assert.match(tiles[3].textContent, /Never cleaned/);
 });
 
+/* The map is stubbed out here (d3 is a chainable no-op), so this is really a
+   test of the list beside it — which is the half that has to be ordered. */
+test('the country list ranks countries beside the map', async () => {
+  const { win, doc } = await boot();
+  win.switchTab('stats');
+  const rows = [...doc.querySelectorAll('#countryRank .crank-row')];
+  assert.strictEqual(rows.length, 2, 'expected a row for Brazil and one for the US');
+  assert.match(rows[0].textContent, /Brazil/);
+  assert.match(rows[1].textContent, /United States/);
+  const counts = rows.map(r => Number(r.querySelector('.crank-count').textContent));
+  assert.ok(counts[0] > counts[1], 'not ordered by record count: ' + counts.join(','));
+  assert.match(rows[0].querySelector('img').getAttribute('src'), /\/br\.png$/,
+    'the row is missing its flag');
+  assert.strictEqual(rows[0].querySelector('.crank-bar').style.width, '100.0%',
+    'the biggest country did not get the full-width bar');
+});
+
 // ── the address bar ─────────────────────────────────────────────────────────
 
 test('a link to a filter arrives already filtered', async () => {
@@ -610,6 +627,34 @@ test('the accent is the gold, dark and light', async () => {
     : max === g ? ((b - r) / (max - min)) + 2 : ((r - g) / (max - min)) + 4);
   assert.ok(hue >= 30 && hue <= 60,
     'the light accent ' + hex + ' is at hue ' + hue.toFixed(0) + ', outside gold');
+});
+
+test('one palette answers for the four activities, dark and light', () => {
+  for (const tone of ['dark', 'light']) {
+    const p = palette(tone);
+    for (const t of ['bought', 'cleaned', 'played', 'note']) {
+      const v = p.get('--ev-' + t) || '';
+      assert.match(v, /^#[0-9a-fA-F]{6}$/, `--ev-${t} is not a colour in ${tone}: "${v}"`);
+    }
+    // bought used to BE the accent, which in light mode is a dark olive —
+    // not what "gold means bought" is trying to say.
+    assert.notStrictEqual(p.get('--ev-bought'), p.get('--accent'),
+      `bought is still riding the accent in ${tone}`);
+  }
+});
+
+test('nothing in the timeline paints an activity colour by hand', () => {
+  // Two palettes for one set of four facts is how they drifted apart the first
+  // time. The literals live in the theme blocks now, and only there.
+  const html = fs.readFileSync(PAGE, 'utf8');
+  const style = html.slice(html.indexOf('<style'), html.indexOf('</style>'));
+  const typed = [...style.matchAll(/(\.(?:cal|dm-hist)-[^{}]*)\{([^}]*)\}/g)]
+    .filter(m => /\b(bought|cleaned|played|note)\b/.test(m[1]));
+  assert.ok(typed.length >= 12,
+    'the scan matched too little of the stylesheet to mean anything: ' + typed.length);
+  const stray = typed.filter(m => /#[0-9a-f]{3,6}\b|rgba?\(|var\(--accent\)/i.test(m[2]));
+  assert.deepStrictEqual(stray.map(m => m[1].trim()), [],
+    'these still paint an activity colour by hand');
 });
 
 test('the accent stays readable on its own ground, dark and light', async () => {
