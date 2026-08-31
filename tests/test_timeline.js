@@ -164,3 +164,40 @@ test('type order beats album order for clockless events on the same day', () => 
   ];
   assert.deepStrictEqual(on(records, '2026-08-23').map(e => e.type), ['bought', 'note']);
 });
+
+// ── an event's name ─────────────────────────────────────────────────────────
+
+const { keyOf } = require('../static/timeline.js');
+
+test('bought keys carry no index, because bought_date is one column', () => {
+  assert.strictEqual(keyOf('bought', '2026-08-23'), 'bought:2026-08-23');
+});
+
+test('a list-backed event is named by its type, stamp and position', () => {
+  assert.strictEqual(keyOf('played', '2026-08-23T21:12:00', 0),
+    'played:2026-08-23T21:12:00:0');
+});
+
+test('two clockless cleanings on one day get different keys', () => {
+  // Rows written before times were kept carry a bare date, so the stamp alone
+  // would collide. This is why every list-backed type is indexed.
+  const r = rec({ cleaned_dates: json('2026-08-23', '2026-08-23') });
+  const got = on([r], '2026-08-23').map(e => e.key);
+  assert.strictEqual(new Set(got).size, 2, 'keys collided: ' + got.join(' '));
+});
+
+test('every event carries its key, its raw stamp and its day', () => {
+  const r = rec({ play_dates: json('2026-08-23T21:12:00') });
+  const ev = on([r], '2026-08-23')[0];
+  assert.strictEqual(ev.key, 'played:2026-08-23T21:12:00:0');
+  assert.strictEqual(ev.at, '2026-08-23T21:12:00');
+  assert.strictEqual(ev.day, '2026-08-23');
+});
+
+test('a note is indexed by its position in the raw notes array', () => {
+  // The empty note still occupies index 0, so the note that follows it is 1.
+  // Filtering first would renumber it and break the key the drawer expects.
+  const r = rec({ notes: json({ date: '2026-08-23', text: '' },
+                              { date: '2026-08-23', text: 'clicky side B' }) });
+  assert.strictEqual(on([r], '2026-08-23')[0].key, 'note:2026-08-23:1');
+});

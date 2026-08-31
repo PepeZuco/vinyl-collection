@@ -23,6 +23,22 @@ const VinylTimeline = (function (grouping) {
    * about it comes after the thing it describes. */
   const TYPE_ORDER = { bought: 0, cleaned: 1, played: 2, note: 3 };
 
+  /* An event's name.
+   *
+   * nowStamp() keeps seconds, so anything logged through the app is already
+   * unique on its stamp alone — but rows written before times were kept carry
+   * a bare 'YYYY-MM-DD', and two clockless cleanings on one day would collide.
+   * Indexing every list-backed type is uniform and costs nothing.
+   *
+   * bought takes no index: bought_date is one column and cannot hold two.
+   *
+   * `at` is the RAW stored string, not a normalised moment. The drawer builds
+   * its own history from the same parsers and must arrive at the same keys, so
+   * both sides pass what the parser handed them and nothing in between. */
+  function keyOf(type, at, i) {
+    return type === 'bought' ? 'bought:' + at : type + ':' + at + ':' + i;
+  }
+
   /* Map of 'YYYY-MM-DD' -> the day's events, each in the order it reads.
    *
    * Every event files under the day of its LOCAL clock. The stamps are local
@@ -39,15 +55,20 @@ const VinylTimeline = (function (grouping) {
       const moment = grouping.momentOf(date);
       if (!moment.day) return;            // undated, or a stamp no calendar holds
       if (!map.has(moment.day)) map.set(moment.day, []);
-      map.get(moment.day).push(Object.assign({ time: moment.time }, event));
+      map.get(moment.day).push(Object.assign(
+        { time: moment.time, day: moment.day, at: String(date),
+          key: keyOf(event.type, String(date), event.i) },
+        event));
     };
 
     (records || []).forEach(r => {
       if (on.bought) add(r.bought_date, { type: 'bought', r });
-      if (on.cleaned) parseCleans(r.cleaned_dates).forEach(d => add(d, { type: 'cleaned', r }));
-      if (on.played) parsePlays(r.play_dates).forEach(d => add(d, { type: 'played', r }));
-      if (on.note) parseNotes(r.notes, r.bought_date).forEach(n => {
-        if (n && n.text && n.text.trim()) add(n.date, { type: 'note', r, text: n.text });
+      if (on.cleaned) parseCleans(r.cleaned_dates).forEach((d, i) => add(d, { type: 'cleaned', r, i }));
+      if (on.played) parsePlays(r.play_dates).forEach((d, i) => add(d, { type: 'played', r, i }));
+      if (on.note) parseNotes(r.notes, r.bought_date).forEach((n, i) => {
+        // The index is the position in the RAW array: an empty note still holds
+        // its slot, so filtering first would renumber everything after it.
+        if (n && n.text && n.text.trim()) add(n.date, { type: 'note', r, i, text: n.text });
       });
     });
 
@@ -61,7 +82,7 @@ const VinylTimeline = (function (grouping) {
     return map;
   }
 
-  return { ALL_TYPES, TYPE_ORDER, eventsByDay };
+  return { ALL_TYPES, TYPE_ORDER, keyOf, eventsByDay };
 })(typeof module !== 'undefined' && module.exports
      ? require('./grouping.js') : VinylGrouping);
 
