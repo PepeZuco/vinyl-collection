@@ -103,9 +103,16 @@ def _reap_note_images(dropped_ids):
     """
     reaped = 0
     for image_id in dropped_ids:
-        still_used = (db.session.query(Record.id)
-                      .filter(Record.notes.like(f"%{image_id}%")).first())
-        if still_used is None:
+        # LIKE narrows the candidates cheaply; _note_image_ids then confirms
+        # exactly. The confirm matters because the ids come out of a
+        # client-supplied JSON blob, and a `%` or `_` in one would otherwise
+        # broaden the LIKE into matching notes that never mentioned this image
+        # — leaving it permanently unreapable.
+        still_used = any(
+            image_id in _note_image_ids(notes)
+            for (notes,) in db.session.query(Record.notes)
+                              .filter(Record.notes.like(f"%{image_id}%")).all())
+        if not still_used:
             NoteImage.query.filter(NoteImage.id == image_id).delete(
                 synchronize_session=False)
             reaped += 1
@@ -489,8 +496,15 @@ def note_image(image_id):
 @require_auth
 def delete_record(rid):
     r = get_record_or_404(rid)
+    # Read before the row goes: once it is deleted there is nothing left to ask
+    # what it used to point at.
+    images_before = _note_image_ids(r.notes)
     db.session.delete(r)
     db.session.commit()
+    # After the commit, so the reap's "is anyone still using this" query sees a
+    # world where this record is already gone.
+    if images_before:
+        _reap_note_images(images_before)
     return jsonify({"ok": True})
 
 # ── scan (photo / Spotify autofill) ───────────────────────────────────────────

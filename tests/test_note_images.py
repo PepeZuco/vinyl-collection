@@ -222,3 +222,41 @@ def test_ids_are_read_out_of_notes_json_forgivingly(vinyl_app):
     assert vinyl_app._note_image_ids('"a legacy string note"') == set()
     assert vinyl_app._note_image_ids('[{"date":"d","text":"t"}]') == set()
     assert vinyl_app._note_image_ids('[{"images":["a","b"]},{"images":["b","c"]}]') == {"a", "b", "c"}
+
+
+def test_deleting_a_record_reaps_its_images(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    rid = client.post("/api/records", json={"artist": "A", "notes": _note("shot", [iid])}).get_json()["id"]
+
+    assert client.delete(f"/api/records/{rid}").status_code == 200
+
+    with vinyl_app.app.app_context():
+        assert vinyl_app.NoteImage.query.count() == 0
+
+
+def test_deleting_a_record_spares_an_image_another_record_uses(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    keeper = client.post("/api/records", json={"artist": "Keeper", "notes": _note("mine too", [iid])}).get_json()["id"]
+    doomed = client.post("/api/records", json={"artist": "Doomed", "notes": _note("mine", [iid])}).get_json()["id"]
+
+    client.delete(f"/api/records/{doomed}")
+
+    with vinyl_app.app.app_context():
+        assert vinyl_app.NoteImage.query.count() == 1
+    assert client.get(f"/api/note-images/{iid}").status_code == 200
+
+
+def test_a_wildcard_id_cannot_make_an_image_look_used(client, vinyl_app):
+    """The images array is client-supplied, so an id can contain a LIKE wildcard.
+
+    A bare '%' as another record's image id would match every notes column under
+    a plain substring guard, making the real image permanently unreapable.
+    """
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    client.post("/api/records", json={"artist": "Noise", "notes": _note("wildcard", ["%"])})
+    rid = client.post("/api/records", json={"artist": "A", "notes": _note("shot", [iid])}).get_json()["id"]
+
+    client.put(f"/api/records/{rid}", json={"notes": _note("now none", [])})
+
+    with vinyl_app.app.app_context():
+        assert vinyl_app.NoteImage.query.count() == 0
