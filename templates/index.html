@@ -28,7 +28,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#f1c23f;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
-  --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
+  --ev-bought:#F5C518; --ev-cleaned:#4AA3C4; --ev-played:#5FBF7A; --ev-note:#9B7FD4;
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
@@ -36,7 +36,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#7A5A00;--danger:#c0392b;
   --card-hover:#e9e5dc;--search-bg:#f0ede6;
   --sh-gray:rgba(0,0,0,0.18);
-  --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
+  --ev-bought:#b39609; --ev-cleaned:#2b7f99; --ev-played:#3d8a55; --ev-note:#6f4fae;
   --toggle-icon:'☾'
 }
 
@@ -483,20 +483,21 @@ select option{background:var(--surface);color:var(--text)}
 /* individual events within a date group — each keeps its own type color via its dot */
 .dm-hist-entry{display:flex;align-items:flex-start;gap:7px;margin-bottom:6px}
 .dm-hist-entry:last-child{margin-bottom:0}
-.dm-hist-entry .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;background:#9B7FD4}
-.dm-hist-entry.bought .dot{background:var(--accent)}
-.dm-hist-entry.cleaned .dot{background:#4AA3C4}
-.dm-hist-entry.played .dot{background:#5FBF7A}
-.dm-hist-entry.note .dot{background:#9B7FD4}
+.dm-hist-entry .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;background:var(--ev-note)}
+.dm-hist-entry.bought .dot{background:var(--ev-bought)}
+.dm-hist-entry.cleaned .dot{background:var(--ev-cleaned)}
+.dm-hist-entry.played .dot{background:var(--ev-played)}
+.dm-hist-entry.note .dot{background:var(--ev-note)}
 .dm-hist-entry .ht{font-size:13px;line-height:1.5;flex:1;min-width:0}
 .dm-hist-entry .ht p{margin:0 0 4px}
 .dm-hist-entry .ht p:last-child{margin-bottom:0}
 .dm-hist-icon{font-size:13px}
 .dm-hist-time{font-size:11.5px;color:var(--label);font-variant-numeric:tabular-nums;margin-left:7px}
 .dm-hist-entry.note .dm-hist-time{display:block;margin:2px 0 0}
-.dm-hist-entry.bought .dm-hist-icon{color:var(--accent)}
-.dm-hist-entry.cleaned .dm-hist-icon{color:#4AA3C4}
-.dm-hist-entry.played .dm-hist-icon{color:#5FBF7A}
+.dm-hist-entry.bought .dm-hist-icon{color:var(--ev-bought)}
+.dm-hist-entry.cleaned .dm-hist-icon{color:var(--ev-cleaned)}
+.dm-hist-entry.played .dm-hist-icon{color:var(--ev-played)}
+.dm-hist-entry.note .dm-hist-icon{color:var(--ev-note)}
 
 /* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
 .detail-mobile-layout{display:none}
@@ -1502,19 +1503,19 @@ select option{background:var(--surface);color:var(--text)}
 .cal-type-btn i{font-size:15px;opacity:.45}
 .cal-type-btn.active{border-color:color-mix(in srgb, var(--text) 30%, var(--border))}
 .cal-type-btn.active i{opacity:1}
-.cal-type-btn.active[data-type="bought"] i{color:var(--accent)}
-.cal-type-btn.active[data-type="cleaned"] i{color:#4AA3C4}
-.cal-type-btn.active[data-type="played"] i{color:#5FBF7A}
-.cal-type-btn.active[data-type="note"] i{color:#9B7FD4}
+.cal-type-btn.active[data-type="bought"] i{color:var(--ev-bought)}
+.cal-type-btn.active[data-type="cleaned"] i{color:var(--ev-cleaned)}
+.cal-type-btn.active[data-type="played"] i{color:var(--ev-played)}
+.cal-type-btn.active[data-type="note"] i{color:var(--ev-note)}
 .cal-scale{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0}
 .cal-scale-btn{height:32px;padding:0 13px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .12s}
 .cal-scale-btn+.cal-scale-btn{border-left:1px solid var(--border)}
 .cal-scale-btn.active{background:var(--card);color:var(--accent);font-weight:600}
 .cal-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
-.cal-dot.bought{background:var(--accent)}
-.cal-dot.cleaned{background:#4AA3C4}
-.cal-dot.played{background:#5FBF7A}
-.cal-dot.note{background:#9B7FD4}
+.cal-dot.bought{background:var(--ev-bought)}
+.cal-dot.cleaned{background:var(--ev-cleaned)}
+.cal-dot.played{background:var(--ev-played)}
+.cal-dot.note{background:var(--ev-note)}
 /* month grid */
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .cal-dow{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:center;font-weight:600}
@@ -1542,10 +1543,10 @@ select option{background:var(--surface);color:var(--text)}
 .cal-event:last-child{border-bottom:none;padding-bottom:2px}
 .cal-event:first-of-type{margin-top:8px;border-top:1px solid var(--border);padding-top:11px}
 .cal-event:hover .cal-ev-title{color:var(--accent)}
-.cal-event.bought{border-left-color:var(--accent)}
-.cal-event.cleaned{border-left-color:#4AA3C4}
-.cal-event.played{border-left-color:#5FBF7A}
-.cal-event.note{border-left-color:#9B7FD4}
+.cal-event.bought{border-left-color:var(--ev-bought)}
+.cal-event.cleaned{border-left-color:var(--ev-cleaned)}
+.cal-event.played{border-left-color:var(--ev-played)}
+.cal-event.note{border-left-color:var(--ev-note)}
 .cal-ev-cover-wrap{width:48px;height:48px;border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--muted)}
 .cal-ev-cover-wrap img{width:100%;height:100%;object-fit:cover;display:block}
 .cal-ev-main{flex:1;min-width:0}
@@ -1556,10 +1557,10 @@ select option{background:var(--surface);color:var(--text)}
 .cal-ev-time{font-size:11px;font-weight:700;color:var(--label);font-variant-numeric:tabular-nums;
   flex-shrink:0;margin-top:3px;letter-spacing:.02em}
 .cal-badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;flex-shrink:0;margin-top:2px}
-.cal-badge.bought{color:var(--accent);border-color:color-mix(in srgb, var(--accent) 45%, transparent);background:rgba(245,197,24,.07)}
-.cal-badge.cleaned{color:#4AA3C4;border-color:rgba(74,163,196,.45);background:rgba(74,163,196,.07)}
-.cal-badge.played{color:#5FBF7A;border-color:rgba(95,191,122,.45);background:rgba(95,191,122,.07)}
-.cal-badge.note{color:#9B7FD4;border-color:rgba(155,127,212,.45);background:rgba(155,127,212,.07)}
+.cal-badge.bought{color:var(--ev-bought);border-color:color-mix(in srgb, var(--ev-bought) 45%, transparent);background:color-mix(in srgb, var(--ev-bought) 7%, transparent)}
+.cal-badge.cleaned{color:var(--ev-cleaned);border-color:color-mix(in srgb, var(--ev-cleaned) 45%, transparent);background:color-mix(in srgb, var(--ev-cleaned) 7%, transparent)}
+.cal-badge.played{color:var(--ev-played);border-color:color-mix(in srgb, var(--ev-played) 45%, transparent);background:color-mix(in srgb, var(--ev-played) 7%, transparent)}
+.cal-badge.note{color:var(--ev-note);border-color:color-mix(in srgb, var(--ev-note) 45%, transparent);background:color-mix(in srgb, var(--ev-note) 7%, transparent)}
 /* week grid (google-calendar-like columns of compact event chips) */
 .cal-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:start}
 .cal-week-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 6px;display:flex;flex-direction:column;gap:6px;min-height:150px;min-width:0}
@@ -1572,10 +1573,10 @@ select option{background:var(--surface);color:var(--text)}
 .cal-week-col-body{display:flex;flex-direction:column;gap:5px;min-width:0}
 .cal-week-chip{display:block;width:100%;aspect-ratio:1;padding:0;border-radius:5px;border:2px solid transparent;background:var(--card);cursor:pointer;transition:all .12s;font-family:var(--font)}
 .cal-week-chip:hover{filter:brightness(1.1)}
-.cal-week-chip.bought{border-color:var(--accent);background:rgba(245,197,24,.1)}
-.cal-week-chip.cleaned{border-color:#4AA3C4;background:rgba(74,163,196,.1)}
-.cal-week-chip.played{border-color:#5FBF7A;background:rgba(95,191,122,.1)}
-.cal-week-chip.note{border-color:#9B7FD4;background:rgba(155,127,212,.1)}
+.cal-week-chip.bought{border-color:var(--ev-bought);background:color-mix(in srgb, var(--ev-bought) 10%, transparent)}
+.cal-week-chip.cleaned{border-color:var(--ev-cleaned);background:color-mix(in srgb, var(--ev-cleaned) 10%, transparent)}
+.cal-week-chip.played{border-color:var(--ev-played);background:color-mix(in srgb, var(--ev-played) 10%, transparent)}
+.cal-week-chip.note{border-color:var(--ev-note);background:color-mix(in srgb, var(--ev-note) 10%, transparent)}
 .cal-week-chip-cover{width:100%;height:100%;border-radius:3px;overflow:hidden;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
 .cal-week-chip-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .cal-week-chip-txt{display:none}
@@ -3240,6 +3241,10 @@ function dmFormatNoteDate(dateStr) {
 }
 
 // merges bought/played/cleaned/notes into one chronological (oldest-first) timeline
+//
+// The keys have to be the ones eventsByDay produces, or a click in the Timeline
+// names an event this list does not recognise. Both sides run the same parsers
+// and hand keyOf what the parser gave them, so they agree by construction.
 function dmHistoryEvents(r) {
   const events = [];
   const add = (type, date, extra) => {
@@ -3247,13 +3252,17 @@ function dmHistoryEvents(r) {
     // a bought date or a note has no clock; it still needs a day to file under
     if (!m.day && !/^\d{4}-\d{2}-\d{2}/.test(date || '')) return;
     events.push(Object.assign({ type, day: m.day || String(date).slice(0,10),
-                                time: m.time, at: m.at || String(date).slice(0,10) }, extra));
+                                time: m.time, at: m.at || String(date).slice(0,10),
+                                key: VinylTimeline.keyOf(type, String(date),
+                                                         extra && extra.i) }, extra));
   };
   if (r.bought_date) add('bought', r.bought_date);
-  parseCleanedDates(r.cleaned_dates).forEach(dt => { if (dt) add('cleaned', dt); });
-  parsePlayDates(r.play_dates).forEach(dt => { if (dt) add('played', dt); });
-  if (r.notes) parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).forEach(n => {
-    add('note', n.date, { text: n.text });
+  parseCleanedDates(r.cleaned_dates).forEach((dt, i) => { if (dt) add('cleaned', dt, { i }); });
+  parsePlayDates(r.play_dates).forEach((dt, i) => { if (dt) add('played', dt, { i }); });
+  // The raw index again: an empty note holds its slot, so filtering first would
+  // renumber every note after it and break keys the Timeline already handed out.
+  if (r.notes) parseNotes(r.notes, r.bought_date||today()).forEach((n, i) => {
+    if (n.text) add('note', n.date, { i, text: n.text });
   });
   // by day AND time, so two plays on one evening read in the order they happened
   return events.sort((a,b) => a.at.localeCompare(b.at));
@@ -3270,21 +3279,53 @@ function dmHistoryGroups(events) {
   return groups;
 }
 
-const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned' };
-const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet' };
+const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned', note:'Note' };
+const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet', note:'ti-note' };
+
+/* Which event the Timeline sent us to, if any.
+ *
+ * This must be state the RENDER reads, never a class applied afterwards.
+ * openDetail centres the carousel, whose scroll handler calls dmSetCurrent,
+ * which rewrites #dmInfo and #ddInfo wholesale a frame later — anything
+ * stamped on after the fact is gone before you have finished reading it. */
+let detailFocus = null;
+
+/* Three widths of focus, narrowest first:
+ *   'note:2026-03-08:0'   one event
+ *   '2026-03-08~played'   one day's events of one kind
+ *   '2026-03-08'          the whole day
+ *
+ * The middle one earns its place: two plays cannot resolve to one play, but
+ * routing them to the whole day drags the cleaning in with them. */
+function focusMatches(focus, ev) {
+  if (!focus) return false;
+  const scoped = /^(\d{4}-\d{2}-\d{2})~(\w+)$/.exec(focus);
+  if (scoped) return ev.day === scoped[1] && ev.type === scoped[2];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(focus)) return ev.day === focus;
+  return ev.key === focus;
+}
 
 function dmHistoryEntryHTML(ev) {
   // no clock on entries recorded before times were kept — the icon or the note
   // just sits alone, rather than the timeline claiming it happened at midnight
   const clock = ev.time ? `<span class="dm-hist-time">${esc(ev.time)}</span>` : '';
   const body = ev.type === 'note'
-    ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}${clock}</div>`
+    ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}` +
+      `<span class="dm-hist-time"><i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
-  return `<div class="dm-hist-entry ${ev.type}"><span class="dot"></span>${body}</div>`;
+  const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
+  return `<div class="dm-hist-entry ${ev.type}${lit}" data-ev="${esc(ev.key)}" data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
 }
 
 function dmHistoryGroupHTML(group) {
-  return `<div class="dm-hist-group"><div class="hd">${dmFormatNoteDate(group.day)}</div>${group.items.map(dmHistoryEntryHTML).join('')}</div>`;
+  const hitTypes = [...new Set(group.items.filter(ev => focusMatches(detailFocus, ev))
+                                          .map(ev => ev.type))];
+  // One kind, one colour: a single event or a single type lets the date wear
+  // the colour of the thing that happened to it. A whole-day focus cannot —
+  // there is no one colour four kinds of fact could share — so it takes gold.
+  const lit = hitTypes.length === 0 ? ''
+            : hitTypes.length === 1 ? ` hit hit-${hitTypes[0]}` : ' hit';
+  return `<div class="dm-hist-group"><div class="hd${lit}" data-day="${esc(group.day)}">${dmFormatNoteDate(group.day)}</div>${group.items.map(dmHistoryEntryHTML).join('')}</div>`;
 }
 
 // 'YYYY-MM-DD' or 'YYYY-MM-DD · HH:MM' — no bare 'T' stamp reaches the screen
@@ -3530,10 +3571,11 @@ function ddBind() {
   car.addEventListener('touchcancel', () => { startY = null; });
 }
 
-function openDetail(id) {
+function openDetail(id, focus) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   currentDetailId = id;
+  detailFocus = focus || null;
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
@@ -3544,6 +3586,20 @@ function openDetail(id) {
   } else {
     ddCenterSlide(dmIdx, false);
   }
+  // .overlay.hidden is display:none, so there is no layout to scroll until the
+  // line above. Doing it here, in the same task, means the browser paints once
+  // with the entry already in view — rather than painting the top of a long
+  // history and then sliding it, which spends the first of the five seconds.
+  scrollFocusIntoView();
+}
+
+// The history sits below the cover carousel, the crate strip and the metadata
+// grid, which on a phone is a long way down. Both layouts are in the DOM at
+// once and CSS hides one, so scrolling the wrong one scrolls nothing.
+function scrollFocusIntoView() {
+  const pane = window.matchMedia('(max-width:760px)').matches ? '#dmInfo' : '#ddInfo';
+  const el = document.querySelector(pane + ' .dm-hist-entry.hit, ' + pane + ' .hd.hit');
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
 }
 
 // ── prev/next navigation through the currently filtered list ───────────────
@@ -3558,6 +3614,7 @@ function updateDetailNavVisibility() {
 let detailAnimating = false;
 // delta > 0 slides the incoming record up; delta < 0 slides it down
 function goToDetailRecord(nextRecord, delta) {
+  detailFocus = null;
   const body = document.getElementById('detailBody');
   const outClass = delta > 0 ? 'slide-out-up' : 'slide-out-down';
   const inClass  = delta > 0 ? 'slide-in-up'  : 'slide-in-down';
@@ -3620,7 +3677,7 @@ function renderDetailFoot(id) {
 
 function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
-  confirmDeleteId=null;currentDetailId=null;
+  confirmDeleteId=null;currentDetailId=null;detailFocus=null;
   syncUrl(true);
 }
 
