@@ -201,3 +201,66 @@ test('a note is indexed by its position in the raw notes array', () => {
                               { date: '2026-08-23', text: 'clicky side B' }) });
   assert.strictEqual(on([r], '2026-08-23')[0].key, 'note:2026-08-23:1');
 });
+
+// ── one entry per record, per day ───────────────────────────────────────────
+
+const { recordDays } = require('../static/timeline.js');
+
+const collapse = (records, day) => recordDays(on(records, day));
+
+test('four kinds on one day collapse to one entry with four acts', () => {
+  const r = rec({
+    bought_date: '2026-08-23',
+    cleaned_dates: json('2026-08-23T18:20:00'),
+    play_dates: json('2026-08-23T19:04:00'),
+    notes: json({ date: '2026-08-23', text: 'seam split' }),
+  });
+  const got = collapse([r], '2026-08-23');
+  assert.strictEqual(got.length, 1);
+  assert.deepStrictEqual(got[0].acts.map(a => a.type),
+    ['bought', 'cleaned', 'played', 'note']);
+  assert.strictEqual(got[0].r, r);
+  assert.strictEqual(got[0].day, '2026-08-23');
+});
+
+test('acts come back in type order however the day arrived', () => {
+  // Clocks put the note first; TYPE_ORDER must still win in the rail.
+  const r = rec({
+    notes: json({ date: '2026-08-23T08:00:00', text: 'early thought' }),
+    bought_date: '2026-08-23T20:00:00',
+  });
+  assert.deepStrictEqual(collapse([r], '2026-08-23')[0].acts.map(a => a.type),
+    ['bought', 'note']);
+});
+
+test('two plays on one day are one act holding two events', () => {
+  const r = rec({ play_dates: json('2026-08-23T19:04:00', '2026-08-23T21:47:00') });
+  const acts = collapse([r], '2026-08-23')[0].acts;
+  assert.strictEqual(acts.length, 1);
+  assert.strictEqual(acts[0].evs.length, 2);
+  assert.deepStrictEqual(acts[0].evs.map(e => e.time), ['19:04', '21:47']);
+});
+
+test('an entry keeps the day flat and chronological too', () => {
+  const r = rec({ bought_date: '2026-08-23',
+                  play_dates: json('2026-08-23T19:04:00') });
+  assert.strictEqual(collapse([r], '2026-08-23')[0].evs.length, 2);
+});
+
+test('two records on one day are two entries', () => {
+  const records = [rec({ bought_date: '2026-08-23' }), rec({ bought_date: '2026-08-23' })];
+  assert.strictEqual(collapse(records, '2026-08-23').length, 2);
+});
+
+test('entries follow the record whose day started earliest', () => {
+  const records = [
+    rec({ album_name: 'Later', play_dates: json('2026-08-23T21:00:00') }),
+    rec({ album_name: 'Earlier', play_dates: json('2026-08-23T09:00:00') }),
+  ];
+  assert.deepStrictEqual(collapse(records, '2026-08-23').map(g => g.r.album_name),
+    ['Earlier', 'Later']);
+});
+
+test('an empty day collapses to nothing', () => {
+  assert.deepStrictEqual(recordDays([]), []);
+});

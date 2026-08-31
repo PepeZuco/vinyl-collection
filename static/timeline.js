@@ -82,7 +82,38 @@ const VinylTimeline = (function (grouping) {
     return map;
   }
 
-  return { ALL_TYPES, TYPE_ORDER, keyOf, eventsByDay };
+  /* One day's events, collapsed to one entry per record.
+   *
+   * The Week grid drew one chip per event, so a record bought, cleaned, played
+   * twice and noted on one Sunday came out as five identical covers in one
+   * 150-pixel column — the column counting events while the eye counts records.
+   *
+   * Order is inherited, not recomputed: eventsByDay hands back a day already
+   * sorted by clock, then type, then album, so a record's FIRST appearance in
+   * that list is the moment its day started. Insertion order is therefore
+   * exactly "earliest event first", with the same tiebreaks the day already
+   * uses. Sorting again here would only be a second, disagreeing opinion. */
+  function recordDays(dayEvents) {
+    const out = [], byRecord = new Map();
+    (dayEvents || []).forEach(ev => {
+      let g = byRecord.get(ev.r.id);
+      if (!g) {
+        g = { r: ev.r, day: ev.day, acts: [], evs: [] };
+        byRecord.set(ev.r.id, g);
+        out.push(g);
+      }
+      g.evs.push(ev);
+      let a = g.acts.find(x => x.type === ev.type);
+      if (!a) { a = { type: ev.type, evs: [] }; g.acts.push(a); }
+      a.evs.push(ev);
+    });
+    // Within a record the rail reads bought, cleaned, played, note — the order
+    // the day happened in, not the order the clock reported it.
+    out.forEach(g => g.acts.sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]));
+    return out;
+  }
+
+  return { ALL_TYPES, TYPE_ORDER, keyOf, eventsByDay, recordDays };
 })(typeof module !== 'undefined' && module.exports
      ? require('./grouping.js') : VinylGrouping);
 
