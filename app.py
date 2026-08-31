@@ -4,7 +4,7 @@ import os, io, base64, csv, json, uuid, hashlib
 # photo-heavy row on import — an export that cannot be restored. The whole-upload
 # bound is MAX_CONTENT_LENGTH, not this.
 csv.field_size_limit(64 * 1024 * 1024)
-from flask import Flask, request, jsonify, send_file, session, render_template
+from flask import Flask, request, jsonify, send_file, session, render_template, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.exceptions import NotFound
 from sqlalchemy import func
@@ -703,6 +703,13 @@ def export_csv():
             d = r.to_dict()
             # to_dict() reports a URL now, but a backup has to carry the bytes.
             d["cover_image_base64"] = r.cover_data or ""
+            # Looked up per row rather than preloaded: this generator streams to
+            # keep a whole-collection export off the heap, and a dict of every
+            # image would put it straight back.
+            image_ids = sorted(_note_image_ids(r.notes))
+            images = dict(db.session.query(NoteImage.id, NoteImage.data)
+                          .filter(NoteImage.id.in_(image_ids)).all()) if image_ids else {}
+            d["note_images"] = json.dumps(images) if images else ""
             row = []
             for c in cols:
                 v = str(d.get(c,""))
@@ -711,13 +718,29 @@ def export_csv():
                 row.append(v)
             yield ",".join(row) + "\n"
 
-    return app.response_class(generate(), mimetype="text/csv",
+    return app.response_class(stream_with_context(generate()), mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=vinyl_collection.csv"})
 
 # Rows are inserted in batches so a large restore never holds the whole
 # collection on the heap at once. Covers are base64 data URIs, so a few hundred
 # rows is already tens of MB — this is the knob that bounds it.
 _IMPORT_BATCH_ROWS = 500
+
+
+def _row_note_images(row):
+    """{id: data uri} for one CSV row, or {} if the column is absent or broken.
+
+    A CSV written before this feature simply has no column, which is not an
+    error — and neither is a value that will not parse.
+    """
+    try:
+        parsed = json.loads(row.get("note_images", "") or "{}")
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {k: v for k, v in parsed.items()
+            if isinstance(k, str) and isinstance(v, str) and v.startswith("data:")}
 
 
 def _record_mapping(row):
@@ -757,18 +780,38 @@ def import_records_from_csv_rows(rows):
     and every batch commit together at the end. A failure part-way therefore
     rolls back to the existing collection rather than leaving it half-replaced
     — this wipes the table first, so a partial import would be data loss.
+
+    Note images are wiped and restored alongside: they are only reachable
+    through a note, so any that survived a restore that removed their note
+    would be unreachable rows nothing would ever collect.
     """
     Record.query.delete()
+    NoteImage.query.delete()
     count = 0
     batch = []
-    for row in rows:
-        batch.append(_record_mapping(row))
-        count += 1
-        if len(batch) >= _IMPORT_BATCH_ROWS:
+    image_batch = []
+    # Only ids, so this stays small however many rows name the same photo.
+    seen_images = set()
+    stamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+    def flush():
+        if batch:
             db.session.execute(db.insert(Record), batch)
             batch.clear()
-    if batch:
-        db.session.execute(db.insert(Record), batch)
+        if image_batch:
+            db.session.execute(db.insert(NoteImage), image_batch)
+            image_batch.clear()
+
+    for row in rows:
+        batch.append(_record_mapping(row))
+        for image_id, data in _row_note_images(row).items():
+            if image_id not in seen_images:
+                seen_images.add(image_id)
+                image_batch.append({"id": image_id, "data": data, "created": stamp})
+        count += 1
+        if len(batch) >= _IMPORT_BATCH_ROWS:
+            flush()
+    flush()
     db.session.commit()
     return count
 

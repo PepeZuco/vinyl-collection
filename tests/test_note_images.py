@@ -7,7 +7,10 @@ same photo twice is a no-op, and a broken payload is an absent image rather
 than a 500.
 """
 import base64
+import csv
 import importlib
+import io
+import json
 import os
 
 import pytest
@@ -269,3 +272,98 @@ def test_a_wildcard_id_cannot_make_an_image_look_used(client, vinyl_app):
 
     with vinyl_app.app.app_context():
         assert vinyl_app.db.session.get(vinyl_app.NoteImage, "%") is None
+
+
+def _exported_rows(client):
+    body = client.get("/api/export").get_data(as_text=True)
+    return list(csv.DictReader(io.StringIO(body)))
+
+
+def test_export_carries_the_images_a_row_refers_to(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    client.post("/api/records", json={"artist": "A", "notes": _note("shot", [iid])})
+
+    row = _exported_rows(client)[0]
+    assert json.loads(row["note_images"]) == {iid: JPEG_1PX}
+
+
+def test_export_leaves_the_column_empty_for_a_row_with_no_images(client):
+    client.post("/api/records", json={"artist": "A", "notes": _note("words only")})
+    assert _exported_rows(client)[0]["note_images"] == ""
+
+
+def test_a_full_backup_and_restore_keeps_note_images(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    client.post("/api/records", json={"artist": "A", "notes": _note("shot", [iid])})
+    backup = client.get("/api/export").get_data(as_text=True)
+
+    with vinyl_app.app.app_context():
+        vinyl_app.Record.query.delete()
+        vinyl_app.NoteImage.query.delete()
+        vinyl_app.db.session.commit()
+        vinyl_app.import_records_from_csv_rows(csv.DictReader(io.StringIO(backup)))
+        assert vinyl_app.NoteImage.query.count() == 1
+
+    assert client.get(f"/api/note-images/{iid}").status_code == 200
+
+
+def test_a_restore_drops_images_the_backup_does_not_carry(client, vinyl_app):
+    """Import replaces the whole collection; an image whose note is gone must go too."""
+    client.post("/api/note-images", json={"data": JPEG_1PX})
+    with vinyl_app.app.app_context():
+        vinyl_app.import_records_from_csv_rows([{"artist": "Fresh"}])
+        assert vinyl_app.NoteImage.query.count() == 0
+
+
+def test_a_csv_written_before_this_feature_imports_cleanly(vinyl_app):
+    with vinyl_app.app.app_context():
+        vinyl_app.import_records_from_csv_rows([{"artist": "Old", "notes": "a plain note"}])
+        assert vinyl_app.Record.query.count() == 1
+        assert vinyl_app.NoteImage.query.count() == 0
+
+
+def test_a_malformed_note_images_value_imports_as_no_images(vinyl_app):
+    with vinyl_app.app.app_context():
+        vinyl_app.import_records_from_csv_rows([{"artist": "A", "note_images": "{oops"}])
+        assert vinyl_app.Record.query.count() == 1
+        assert vinyl_app.NoteImage.query.count() == 0
+
+
+def test_an_image_shared_by_two_rows_is_inserted_once(vinyl_app):
+    """Dedupe means a backup can name the same id on many rows."""
+    image_id = vinyl_app._note_image_id(JPEG_1PX)
+    payload = json.dumps({image_id: JPEG_1PX})
+    notes = json.dumps([{"date": "2026-01-01", "text": "t", "images": [image_id]}])
+    with vinyl_app.app.app_context():
+        vinyl_app.import_records_from_csv_rows([
+            {"artist": "A", "notes": notes, "note_images": payload},
+            {"artist": "B", "notes": notes, "note_images": payload},
+        ])
+        assert vinyl_app.NoteImage.query.count() == 1
+
+
+def test_a_photo_heavy_row_survives_a_real_csv_round_trip(client, vinyl_app):
+    """note_images packs every photo on a record into ONE csv field.
+
+    csv.field_size_limit is per field. Sized for a single cover it rejects a
+    photo-heavy row on import, so the export would restore as an error rather
+    than a collection. This has to go through csv.DictReader — handing
+    import_records_from_csv_rows plain dicts skips the parser and proves nothing.
+    """
+    big = "data:image/jpeg;base64," + "A" * (11 * 1024 * 1024)
+    with vinyl_app.app.app_context():
+        iid = vinyl_app._note_image_id(big)
+        vinyl_app.db.session.add(vinyl_app.NoteImage(
+            id=iid, data=big, created="2026-01-01T00:00:00"))
+        vinyl_app.db.session.commit()
+    client.post("/api/records", json={"artist": "Heavy", "notes": _note("shot", [iid])})
+
+    backup = client.get("/api/export").get_data(as_text=True)
+
+    with vinyl_app.app.app_context():
+        vinyl_app.Record.query.delete()
+        vinyl_app.NoteImage.query.delete()
+        vinyl_app.db.session.commit()
+        vinyl_app.import_records_from_csv_rows(csv.DictReader(io.StringIO(backup)))
+        assert vinyl_app.NoteImage.query.count() == 1
+        assert vinyl_app.db.session.get(vinyl_app.NoteImage, iid).data == big
