@@ -1,5 +1,9 @@
 import os, io, base64, csv, json, uuid, hashlib
-csv.field_size_limit(10 * 1024 * 1024)
+# 64MB per field, not 10: note_images packs every photo on one record into a
+# single field, where the old ceiling (sized for one cover) would reject a
+# photo-heavy row on import — an export that cannot be restored. The whole-upload
+# bound is MAX_CONTENT_LENGTH, not this.
+csv.field_size_limit(64 * 1024 * 1024)
 from flask import Flask, request, jsonify, send_file, session, render_template
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.exceptions import NotFound
@@ -691,7 +695,7 @@ def scan_usage():
 def export_csv():
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country"]
+            "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images"]
 
     def generate():
         yield ",".join(cols) + "\n"
