@@ -3241,6 +3241,10 @@ function dmFormatNoteDate(dateStr) {
 }
 
 // merges bought/played/cleaned/notes into one chronological (oldest-first) timeline
+//
+// The keys have to be the ones eventsByDay produces, or a click in the Timeline
+// names an event this list does not recognise. Both sides run the same parsers
+// and hand keyOf what the parser gave them, so they agree by construction.
 function dmHistoryEvents(r) {
   const events = [];
   const add = (type, date, extra) => {
@@ -3248,13 +3252,17 @@ function dmHistoryEvents(r) {
     // a bought date or a note has no clock; it still needs a day to file under
     if (!m.day && !/^\d{4}-\d{2}-\d{2}/.test(date || '')) return;
     events.push(Object.assign({ type, day: m.day || String(date).slice(0,10),
-                                time: m.time, at: m.at || String(date).slice(0,10) }, extra));
+                                time: m.time, at: m.at || String(date).slice(0,10),
+                                key: VinylTimeline.keyOf(type, String(date),
+                                                         extra && extra.i) }, extra));
   };
   if (r.bought_date) add('bought', r.bought_date);
-  parseCleanedDates(r.cleaned_dates).forEach(dt => { if (dt) add('cleaned', dt); });
-  parsePlayDates(r.play_dates).forEach(dt => { if (dt) add('played', dt); });
-  if (r.notes) parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).forEach(n => {
-    add('note', n.date, { text: n.text });
+  parseCleanedDates(r.cleaned_dates).forEach((dt, i) => { if (dt) add('cleaned', dt, { i }); });
+  parsePlayDates(r.play_dates).forEach((dt, i) => { if (dt) add('played', dt, { i }); });
+  // The raw index again: an empty note holds its slot, so filtering first would
+  // renumber every note after it and break keys the Timeline already handed out.
+  if (r.notes) parseNotes(r.notes, r.bought_date||today()).forEach((n, i) => {
+    if (n.text) add('note', n.date, { i, text: n.text });
   });
   // by day AND time, so two plays on one evening read in the order they happened
   return events.sort((a,b) => a.at.localeCompare(b.at));
@@ -3271,21 +3279,53 @@ function dmHistoryGroups(events) {
   return groups;
 }
 
-const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned' };
-const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet' };
+const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned', note:'Note' };
+const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet', note:'ti-note' };
+
+/* Which event the Timeline sent us to, if any.
+ *
+ * This must be state the RENDER reads, never a class applied afterwards.
+ * openDetail centres the carousel, whose scroll handler calls dmSetCurrent,
+ * which rewrites #dmInfo and #ddInfo wholesale a frame later — anything
+ * stamped on after the fact is gone before you have finished reading it. */
+let detailFocus = null;
+
+/* Three widths of focus, narrowest first:
+ *   'note:2026-03-08:0'   one event
+ *   '2026-03-08~played'   one day's events of one kind
+ *   '2026-03-08'          the whole day
+ *
+ * The middle one earns its place: two plays cannot resolve to one play, but
+ * routing them to the whole day drags the cleaning in with them. */
+function focusMatches(focus, ev) {
+  if (!focus) return false;
+  const scoped = /^(\d{4}-\d{2}-\d{2})~(\w+)$/.exec(focus);
+  if (scoped) return ev.day === scoped[1] && ev.type === scoped[2];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(focus)) return ev.day === focus;
+  return ev.key === focus;
+}
 
 function dmHistoryEntryHTML(ev) {
   // no clock on entries recorded before times were kept — the icon or the note
   // just sits alone, rather than the timeline claiming it happened at midnight
   const clock = ev.time ? `<span class="dm-hist-time">${esc(ev.time)}</span>` : '';
   const body = ev.type === 'note'
-    ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}${clock}</div>`
+    ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}` +
+      `<span class="dm-hist-time"><i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
-  return `<div class="dm-hist-entry ${ev.type}"><span class="dot"></span>${body}</div>`;
+  const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
+  return `<div class="dm-hist-entry ${ev.type}${lit}" data-ev="${esc(ev.key)}" data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
 }
 
 function dmHistoryGroupHTML(group) {
-  return `<div class="dm-hist-group"><div class="hd">${dmFormatNoteDate(group.day)}</div>${group.items.map(dmHistoryEntryHTML).join('')}</div>`;
+  const hitTypes = [...new Set(group.items.filter(ev => focusMatches(detailFocus, ev))
+                                          .map(ev => ev.type))];
+  // One kind, one colour: a single event or a single type lets the date wear
+  // the colour of the thing that happened to it. A whole-day focus cannot —
+  // there is no one colour four kinds of fact could share — so it takes gold.
+  const lit = hitTypes.length === 0 ? ''
+            : hitTypes.length === 1 ? ` hit hit-${hitTypes[0]}` : ' hit';
+  return `<div class="dm-hist-group"><div class="hd${lit}" data-day="${esc(group.day)}">${dmFormatNoteDate(group.day)}</div>${group.items.map(dmHistoryEntryHTML).join('')}</div>`;
 }
 
 // 'YYYY-MM-DD' or 'YYYY-MM-DD · HH:MM' — no bare 'T' stamp reaches the screen
@@ -3531,10 +3571,11 @@ function ddBind() {
   car.addEventListener('touchcancel', () => { startY = null; });
 }
 
-function openDetail(id) {
+function openDetail(id, focus) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   currentDetailId = id;
+  detailFocus = focus || null;
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
@@ -3545,6 +3586,20 @@ function openDetail(id) {
   } else {
     ddCenterSlide(dmIdx, false);
   }
+  // .overlay.hidden is display:none, so there is no layout to scroll until the
+  // line above. Doing it here, in the same task, means the browser paints once
+  // with the entry already in view — rather than painting the top of a long
+  // history and then sliding it, which spends the first of the five seconds.
+  scrollFocusIntoView();
+}
+
+// The history sits below the cover carousel, the crate strip and the metadata
+// grid, which on a phone is a long way down. Both layouts are in the DOM at
+// once and CSS hides one, so scrolling the wrong one scrolls nothing.
+function scrollFocusIntoView() {
+  const pane = window.matchMedia('(max-width:760px)').matches ? '#dmInfo' : '#ddInfo';
+  const el = document.querySelector(pane + ' .dm-hist-entry.hit, ' + pane + ' .hd.hit');
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
 }
 
 // ── prev/next navigation through the currently filtered list ───────────────
@@ -3559,6 +3614,7 @@ function updateDetailNavVisibility() {
 let detailAnimating = false;
 // delta > 0 slides the incoming record up; delta < 0 slides it down
 function goToDetailRecord(nextRecord, delta) {
+  detailFocus = null;
   const body = document.getElementById('detailBody');
   const outClass = delta > 0 ? 'slide-out-up' : 'slide-out-down';
   const inClass  = delta > 0 ? 'slide-in-up'  : 'slide-in-down';
@@ -3621,7 +3677,7 @@ function renderDetailFoot(id) {
 
 function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
-  confirmDeleteId=null;currentDetailId=null;
+  confirmDeleteId=null;currentDetailId=null;detailFocus=null;
   syncUrl(true);
 }
 

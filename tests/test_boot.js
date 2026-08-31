@@ -1329,3 +1329,96 @@ test('a finger that rests before lifting is not treated as a flick', async () =>
   touchAt(win, car, 'touchend', 430, 900);        // ...then held for most of a second
   assert.strictEqual(read('dmIdx'), 1, 'a rested finger flung the strip anyway');
 });
+
+// ── the timeline sends you to an event, not just a record ───────────────────
+
+/* A record with a whole Sunday on it: bought, cleaned, played twice, noted.
+ * Built here rather than in the fixture so the sibling tests' counts stand. */
+function busySunday(read) {
+  const r = read('records').find(x => x.have_it);
+  r.bought_date = '2026-08-09';
+  r.cleaned_dates = JSON.stringify(['2026-08-09T18:20:11']);
+  r.play_dates = JSON.stringify(['2026-08-09T19:04:33', '2026-08-09T21:47:02']);
+  r.notes = JSON.stringify([{ date: '2026-08-09', text: 'seam split' }]);
+  return r;
+}
+
+// The drawer renders its history twice — #dmInfo (mobile) and #ddInfo
+// (desktop) both live inside #detailBody. The harness's matchMedia reports
+// matches:false, so openDetail takes the desktop branch; scope to #ddInfo so
+// counts are not doubled.
+const litKeys = doc => [...doc.querySelectorAll('#ddInfo .dm-hist-entry.hit')]
+  .map(el => el.dataset.ev);
+
+test('a focused note lights that note and its date, and nothing else', async () => {
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, 'note:2026-08-09:0');
+  assert.deepStrictEqual(litKeys(doc), ['note:2026-08-09:0']);
+  const heads = [...doc.querySelectorAll('#ddInfo .hd.hit')].map(el => el.dataset.day);
+  assert.deepStrictEqual(heads, ['2026-08-09']);
+});
+
+test('a repeated action lights its own kind, not the whole day', async () => {
+  // Two plays cannot resolve to one play — but they should not drag the
+  // cleaning and the purchase in with them either.
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, '2026-08-09~played');
+  assert.deepStrictEqual(litKeys(doc).sort(),
+    ['played:2026-08-09T19:04:33:0', 'played:2026-08-09T21:47:02:1']);
+});
+
+test('a focused day lights all five of its entries', async () => {
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, '2026-08-09');
+  assert.strictEqual(litKeys(doc).length, 5);
+});
+
+test('the whole history is still there, with one entry lit', async () => {
+  // The highlight is additive. The surrounding history is usually why the
+  // click was worth making.
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  r.play_dates = JSON.stringify(['2026-08-01T10:00:00', '2026-08-09T19:04:33']);
+  win.openDetail(r.id, 'played:2026-08-01T10:00:00:0');
+  assert.strictEqual(doc.querySelectorAll('#ddInfo .dm-hist-entry').length, 5);
+  assert.deepStrictEqual(litKeys(doc), ['played:2026-08-01T10:00:00:0']);
+});
+
+test('opening a record with no focus lights nothing', async () => {
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id);
+  assert.deepStrictEqual(litKeys(doc), []);
+});
+
+test('the highlight survives the re-render the carousel triggers', async () => {
+  // openDetail centres the carousel; its scroll handler calls dmSetCurrent,
+  // which rewrites #dmInfo and #ddInfo wholesale a frame later. A class
+  // stamped on after render would be gone.
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, 'note:2026-08-09:0');
+  win.dmSetCurrent(read('dmIdx'));
+  assert.deepStrictEqual(litKeys(doc), ['note:2026-08-09:0']);
+});
+
+test('walking to another record drops the highlight', async () => {
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, 'note:2026-08-09:0');
+  win.navigateDetail(1);
+  settleAnimations(win, doc);
+  assert.deepStrictEqual(litKeys(doc), []);
+  assert.strictEqual(read('detailFocus'), null);
+});
+
+test('closing the drawer clears the focus', async () => {
+  const { win, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, '2026-08-09');
+  win.closeDetail();
+  assert.strictEqual(read('detailFocus'), null);
+});
