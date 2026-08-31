@@ -491,6 +491,27 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry .ht{font-size:13px;line-height:1.5;flex:1;min-width:0}
 .dm-hist-entry .ht p{margin:0 0 4px}
 .dm-hist-entry .ht p:last-child{margin-bottom:0}
+/* The Timeline sent you here — say which event, for five seconds.
+   Additive on purpose: the history stays whole, nothing is filtered or dimmed,
+   because the surrounding history is usually why the click was worth making. */
+.dm-hist-entry.hit,.dm-hist-group .hd.hit{--hc:var(--accent);
+  background:color-mix(in srgb, var(--hc) 20%, transparent);
+  border-radius:3px;transition:background .8s ease,box-shadow .8s ease}
+.dm-hist-entry.hit{box-shadow:inset 3px 0 0 var(--hc);padding:2px 6px;margin:-2px -6px 4px}
+.dm-hist-group .hd.hit{padding:2px 5px;margin-left:-5px;display:inline-block}
+.dm-hist-entry.bought.hit{--hc:var(--ev-bought)}
+.dm-hist-entry.cleaned.hit{--hc:var(--ev-cleaned)}
+.dm-hist-entry.played.hit{--hc:var(--ev-played)}
+.dm-hist-entry.note.hit{--hc:var(--ev-note)}
+/* One kind of thing happened, so the date can wear its colour. A whole-day
+   focus carries no hit-<type> and keeps the gold above. */
+.hd.hit-bought{--hc:var(--ev-bought)} .hd.hit-cleaned{--hc:var(--ev-cleaned)}
+.hd.hit-played{--hc:var(--ev-played)} .hd.hit-note{--hc:var(--ev-note)}
+.dm-hist-entry.hit.letting-go,.dm-hist-group .hd.hit.letting-go{
+  background:transparent;box-shadow:inset 3px 0 0 transparent}
+@media(prefers-reduced-motion:reduce){
+  .dm-hist-entry.hit,.dm-hist-group .hd.hit{transition:none}
+}
 .dm-hist-icon{font-size:13px}
 .dm-hist-time{font-size:11.5px;color:var(--label);font-variant-numeric:tabular-nums;margin-left:7px}
 .dm-hist-entry.note .dm-hist-time{display:block;margin:2px 0 0}
@@ -3289,6 +3310,37 @@ const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned
  * which rewrites #dmInfo and #ddInfo wholesale a frame later — anything
  * stamped on after the fact is gone before you have finished reading it. */
 let detailFocus = null;
+let detailFocusTimer = null, detailFadeTimer = null;
+
+// Five seconds: held, then let go over the last 800ms.
+const FOCUS_HOLD_MS = 4200, FOCUS_FADE_MS = 800;
+
+/* Light the event, then stop lighting it.
+ *
+ * Letting go does NOT re-render. detailFocus is cleared so that any later
+ * render draws the history plain, and the nodes already on screen fade rather
+ * than snap — which is also why the fade is two steps and not one. */
+function focusDetail(focus) {
+  clearTimeout(detailFocusTimer); clearTimeout(detailFadeTimer);
+  detailFocusTimer = detailFadeTimer = null;
+  detailFocus = focus || null;
+  if (!detailFocus) return;
+  detailFocusTimer = idleUnref(setTimeout(focusLetGo, FOCUS_HOLD_MS));
+}
+
+function focusLetGo() {
+  detailFocus = null;
+  detailFocusTimer = null;
+  document.querySelectorAll('#detailBody .hit').forEach(el => el.classList.add('letting-go'));
+  detailFadeTimer = idleUnref(setTimeout(focusForget, FOCUS_FADE_MS));
+}
+
+function focusForget() {
+  detailFadeTimer = null;
+  document.querySelectorAll('#detailBody .hit').forEach(el =>
+    el.classList.remove('hit', 'letting-go',
+      'hit-bought', 'hit-cleaned', 'hit-played', 'hit-note'));
+}
 
 /* Three widths of focus, narrowest first:
  *   'note:2026-03-08:0'   one event
@@ -3575,7 +3627,7 @@ function openDetail(id, focus) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   currentDetailId = id;
-  detailFocus = focus || null;
+  focusDetail(focus);
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
@@ -3614,7 +3666,7 @@ function updateDetailNavVisibility() {
 let detailAnimating = false;
 // delta > 0 slides the incoming record up; delta < 0 slides it down
 function goToDetailRecord(nextRecord, delta) {
-  detailFocus = null;
+  focusDetail(null);
   const body = document.getElementById('detailBody');
   const outClass = delta > 0 ? 'slide-out-up' : 'slide-out-down';
   const inClass  = delta > 0 ? 'slide-in-up'  : 'slide-in-down';
@@ -3677,7 +3729,7 @@ function renderDetailFoot(id) {
 
 function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
-  confirmDeleteId=null;currentDetailId=null;detailFocus=null;
+  confirmDeleteId=null;currentDetailId=null;focusDetail(null);
   syncUrl(true);
 }
 

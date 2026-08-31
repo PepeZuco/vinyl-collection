@@ -1422,3 +1422,30 @@ test('closing the drawer clears the focus', async () => {
   win.closeDetail();
   assert.strictEqual(read('detailFocus'), null);
 });
+
+test('the highlight lets go after five seconds', async () => {
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, 'note:2026-08-09:0');
+  assert.strictEqual(litKeys(doc).length, 1);
+
+  // 4.2s held, then 800ms fading. Driven by hand: jsdom has no clock of its own
+  // worth waiting on, and a real five-second sleep in a unit test is a tax.
+  read('focusLetGo()');
+  assert.strictEqual(read('detailFocus'), null,
+    'the focus outlived its hold, so a later re-render would light it again');
+  assert.strictEqual(doc.querySelectorAll('#ddInfo .letting-go').length, 2,
+    'the entry and its date header both let go together');
+
+  read('focusForget()');
+  assert.deepStrictEqual(litKeys(doc), []);
+});
+
+test('a closed drawer leaves no timer pointing at a detached node', async () => {
+  const { win, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, '2026-08-09');
+  win.closeDetail();
+  assert.strictEqual(read('detailFocusTimer'), null);
+  assert.strictEqual(read('detailFadeTimer'), null);
+});
