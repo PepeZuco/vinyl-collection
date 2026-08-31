@@ -247,16 +247,25 @@ def test_deleting_a_record_spares_an_image_another_record_uses(client, vinyl_app
 
 
 def test_a_wildcard_id_cannot_make_an_image_look_used(client, vinyl_app):
-    """The images array is client-supplied, so an id can contain a LIKE wildcard.
+    """An image id is parsed out of client-supplied JSON, so it can be a wildcard.
 
-    A bare '%' as another record's image id would match every notes column under
-    a plain substring guard, making the real image permanently unreapable.
+    The guard prefilters candidate records with LIKE '%<id>%'. An id of '%'
+    expands that to '%%%', which matches every non-empty notes column — so a
+    guard that trusted the prefilter alone would conclude the image is still in
+    use by some other record and never reap it. The exact confirm is what stops
+    that, and this test fails without it.
     """
-    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
-    client.post("/api/records", json={"artist": "Noise", "notes": _note("wildcard", ["%"])})
-    rid = client.post("/api/records", json={"artist": "A", "notes": _note("shot", [iid])}).get_json()["id"]
+    with vinyl_app.app.app_context():
+        vinyl_app.db.session.add(vinyl_app.NoteImage(
+            id="%", data=JPEG_1PX, created="2026-01-01T00:00:00"))
+        vinyl_app.db.session.commit()
+
+    # A second record with notes, so the over-broad LIKE has something to match.
+    client.post("/api/records", json={"artist": "Noise", "notes": _note("unrelated")})
+    rid = client.post("/api/records",
+                      json={"artist": "A", "notes": _note("shot", ["%"])}).get_json()["id"]
 
     client.put(f"/api/records/{rid}", json={"notes": _note("now none", [])})
 
     with vinyl_app.app.app_context():
-        assert vinyl_app.NoteImage.query.count() == 0
+        assert vinyl_app.db.session.get(vinyl_app.NoteImage, "%") is None
