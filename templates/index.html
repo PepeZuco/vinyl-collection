@@ -378,22 +378,33 @@ select option{background:var(--surface);color:var(--text)}
    same as the mobile crate tap, without the header's slide animation.
    Wheel/touch are handled entirely in JS (ddBind): native scrolling here
    would let one light swipe fly past several records, since most slides
-   are much shorter than a full scroll gesture's travel. */
+   are much shorter than a full scroll gesture's travel.
+
+   The sizes below are JS's, not this stylesheet's. ddBind writes the ladder in
+   static/carousel.js out as --dd-s0..4, because centring has to know what a
+   slide is ABOUT to be while its width/height transition still reports what it
+   was; the literals here are only the fallbacks that render in the instant
+   before ddBind runs. --dd-pad is written the same way: it has to be half the
+   carousel's own height for the first and last records to reach the middle at
+   all, and the fixed 280px it replaced was only ever right for a 560px-tall
+   drawer — taller than that, scrollTop clamped at 0 with the first record
+   still sitting high and the whole collection below it. */
 .dd-carousel{width:100%;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
   scrollbar-width:none;display:flex;flex-direction:column;
-  align-items:center;gap:14px;padding:280px 0;touch-action:none}
+  align-items:center;gap:var(--dd-gap,14px);padding:var(--dd-pad,280px) 0;touch-action:none}
 .dd-carousel::-webkit-scrollbar{display:none}
 .dd-carousel .dm-slide{flex:0 0 auto;border-radius:8px;overflow:hidden;position:relative;
   background:#0a0a0a;cursor:pointer;
-  transition:width .25s,height .25s,opacity .25s;width:48px;height:48px;opacity:.18}
+  transition:width .25s,height .25s,opacity .25s;
+  width:var(--dd-s4,48px);height:var(--dd-s4,48px);opacity:.18}
 [data-theme="light"] .dd-carousel .dm-slide{background:#ddd8cd}
 .dd-carousel .dm-slide img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .dd-carousel .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
 [data-theme="light"] .dd-carousel .dm-slide-ph{color:#b0a99b}
-.dd-carousel .dm-slide[data-dist="3"]{width:70px;height:70px;opacity:.32}
-.dd-carousel .dm-slide[data-dist="2"]{width:104px;height:104px;opacity:.5}
-.dd-carousel .dm-slide[data-dist="1"]{width:150px;height:150px;opacity:.75}
-.dd-carousel .dm-slide[data-dist="0"]{width:220px;height:220px;opacity:1;
+.dd-carousel .dm-slide[data-dist="3"]{width:var(--dd-s3,70px);height:var(--dd-s3,70px);opacity:.32}
+.dd-carousel .dm-slide[data-dist="2"]{width:var(--dd-s2,104px);height:var(--dd-s2,104px);opacity:.5}
+.dd-carousel .dm-slide[data-dist="1"]{width:var(--dd-s1,150px);height:var(--dd-s1,150px);opacity:.75}
+.dd-carousel .dm-slide[data-dist="0"]{width:var(--dd-s0,220px);height:var(--dd-s0,220px);opacity:1;
   box-shadow:0 10px 30px rgba(0,0,0,.45);cursor:default;z-index:1}
 /* info-card styling shared by desktop drawer and mobile info sheet — built
    from the same dmInfoHTML() markup so both views stay in sync */
@@ -2312,6 +2323,7 @@ select option{background:var(--surface);color:var(--text)}
      taking every script after it down too. Order here is a dependency, not a
      preference. -->
 <script src="/static/grouping.js"></script>
+<script src="/static/carousel.js"></script>
 <script src="/static/filters.js"></script>
 <script src="/static/timeline.js"></script>
 <script src="/static/health.js"></script>
@@ -3386,11 +3398,24 @@ function ddApplyDistance(idx) {
   [...car.children].forEach((s,k) => { s.dataset.dist = Math.min(4, Math.abs(k - idx)); });
 }
 
+// Where the strip has to sit for `idx` to be in the middle.
+//
+// Worked out from the ladder rather than measured off the DOM, because
+// dmSetCurrent calls ddApplyDistance immediately before this and in that same
+// frame every slide still reports the size its transition is starting FROM.
+// Measuring here built the target out of the outgoing layout, so the record
+// landed off-centre by however much the slides above it were about to resize —
+// more records above than below, or the reverse, depending on which way you had
+// just moved. The padding is set here too: half the window, so the first and
+// last records can reach the middle at all. See static/carousel.js.
 function ddCenterSlide(idx, smooth) {
   const car = document.getElementById('ddCarousel');
-  const s = car && car.children[idx];
-  if (!s) return;
-  car.scrollTo({top: s.offsetTop + s.offsetHeight/2 - car.clientHeight/2, behavior: smooth ? 'smooth' : 'auto'});
+  if (!car || !car.children[idx]) return;
+  const clientHeight = car.clientHeight;
+  const padTop = VinylCarousel.centerPadding(clientHeight);
+  car.style.setProperty('--dd-pad', padTop + 'px');
+  const top = VinylCarousel.centerOffset(idx, car.children.length, {clientHeight, padTop});
+  car.scrollTo({top, behavior: smooth ? 'smooth' : 'auto'});
 }
 
 // Driven entirely by JS, not native scrolling: most slides are far shorter
@@ -3398,9 +3423,19 @@ function ddCenterSlide(idx, smooth) {
 // distance to position flew past several records on one light wheel tick or
 // swipe. Each gesture instead steps the index directly, and dmSetCurrent's
 // own ddCenterSlide call is what actually moves the strip.
+//
+// How FAR a gesture reaches is static/carousel.js's decision, and it reads the
+// power of the movement as well as its length. Before, it read only the length:
+// a swipe advanced by distance alone, so a hard flick and a slow drag of the
+// same size did the same thing, and the wheel advanced exactly one record per
+// event behind a lockout, so spinning hard did no more than nudging.
 function ddBind() {
   const car = document.getElementById('ddCarousel');
   if (!car) return;
+
+  // hand the stylesheet the ladder — see the .dd-carousel rules
+  VinylCarousel.LADDER.forEach((px, i) => car.style.setProperty('--dd-s' + i, px + 'px'));
+  car.style.setProperty('--dd-gap', VinylCarousel.GAP + 'px');
 
   car.addEventListener('click', e => {
     const sl = e.target.closest('.dm-slide');
@@ -3409,37 +3444,57 @@ function ddBind() {
     if (idx !== -1 && idx !== dmIdx) dmSetCurrent(idx);
   });
 
-  // mouse wheel / trackpad: one record per tick, with a short lockout so a
-  // fast spin doesn't blow through several records before the eye can track
-  let wheelLocked = false;
+  const walkTo = idx => {
+    const next = Math.max(0, Math.min(dmList.length - 1, idx));
+    if (next !== dmIdx) dmSetCurrent(next);
+  };
+
+  // mouse wheel / trackpad: spend whatever the gesture actually carries. One
+  // notch is one record, a hard spin is several, and a trackpad's dribble of
+  // small deltas banks up instead of being rounded away every event.
+  const wheel = VinylCarousel.createWheelStepper();
   car.addEventListener('wheel', e => {
     e.preventDefault();
-    if (wheelLocked || Math.abs(e.deltaY) < 4) return;
-    const next = dmIdx + (e.deltaY > 0 ? 1 : -1);
-    if (next < 0 || next >= dmList.length) return;
-    wheelLocked = true;
-    dmSetCurrent(next);
-    setTimeout(() => { wheelLocked = false; }, 260);
+    const n = wheel.step(e.deltaY, e.deltaMode, e.timeStamp);
+    if (n) walkTo(dmIdx + n);
   }, {passive: false});
 
-  // touch: drag distance decides how many records to move, applied once on
-  // release rather than tracking the finger continuously
-  let touchStartY = null, touchStartIdx = 0;
-  const DRAG_PER_RECORD = 70;
+  // touch: the strip follows the finger as it drags — a soft, deliberate pull
+  // of one slide-pitch moves one record and stops there — and then the speed
+  // the finger lifted at throws in the rest, so a hard flick carries on past
+  // where it let go. It used to do neither: nothing moved until release, and
+  // release looked only at how far the finger had come.
+  let startY = null, startIdx = 0, lastY = 0, lastT = 0, prevY = 0, prevT = 0;
+
   car.addEventListener('touchstart', e => {
-    touchStartY = e.touches[0].clientY;
-    touchStartIdx = dmIdx;
+    startY = lastY = prevY = e.touches[0].clientY;
+    lastT = prevT = e.timeStamp;
+    startIdx = dmIdx;
   }, {passive: true});
-  car.addEventListener('touchmove', e => e.preventDefault(), {passive: false});
+
+  car.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (startY === null) return;
+    // one sample back, so the release speed is what the finger was really
+    // doing rather than whatever a single jittery last frame reported
+    prevY = lastY; prevT = lastT;
+    lastY = e.touches[0].clientY; lastT = e.timeStamp;
+    walkTo(startIdx + VinylCarousel.dragSteps(startY - lastY));
+  }, {passive: false});
+
   car.addEventListener('touchend', e => {
-    if (touchStartY === null) return;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    touchStartY = null;
-    const delta = -Math.round(dy / DRAG_PER_RECORD);
-    if (!delta) return;
-    const next = Math.max(0, Math.min(dmList.length - 1, touchStartIdx + delta));
-    if (next !== dmIdx) dmSetCurrent(next);
+    if (startY === null) return;
+    startY = null;
+    const dt = lastT - prevT;
+    // a finger that came to rest before lifting is not a flick, however fast
+    // the last two move samples say it was travelling
+    const resting = e.timeStamp - lastT > 100;
+    const velocity = (dt > 0 && !resting) ? (prevY - lastY) / dt : 0;
+    const n = VinylCarousel.flingSteps(velocity);
+    if (n) walkTo(dmIdx + n);
   });
+
+  car.addEventListener('touchcancel', () => { startY = null; });
 }
 
 function openDetail(id) {

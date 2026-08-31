@@ -750,9 +750,14 @@ test('in setup mode, detail prev/next walks the shelf order, not the normal sort
   press(win, $(doc, '#vinylLogo'));
   win.openDetail(shelfOrder[0].id);
 
-  assert.deepStrictEqual(read('detailNavRecords()').map(r => r.id), shelfOrder.map(r => r.id));
+  // Spread first: an array read out of jsdom's realm carries jsdom's own
+  // Array constructor, and .map() on it inherits that species — comparing it
+  // straight against a main-realm array fails deepStrictEqual on identical
+  // content. Spreading into a plain array here sidesteps that.
+  assert.deepStrictEqual([...read('detailNavRecords()')].map(r => r.id), shelfOrder.map(r => r.id));
 
   win.navigateDetail(1);
+  settleAnimations(win, doc);   // the record swap completes on animationend, which jsdom never fires on its own
   assert.strictEqual(read('currentDetailId'), shelfOrder[1].id);
 });
 
@@ -1013,4 +1018,165 @@ test('a candidate that is not an album says which kind it is', async () => {
   assert.strictEqual(cards.length, 2);
   assert.doesNotMatch(cards[0], /album$|· album/i);   // the LP needs no label
   assert.match(cards[1], /single/i);
+});
+
+// ── the desktop cover carousel ──────────────────────────────────────────────
+//
+// The drawer's vertical strip of covers, driven through the real page. The
+// maths is unit-tested in tests/test_carousel.js; what these check is that the
+// page is actually wired to it — that a wheel event and a swipe reach the
+// handlers, that the strip reads the POWER of the gesture and not only its
+// length, and that the ladder JS owns is the one the stylesheet is given.
+//
+// jsdom lays nothing out, so there is no scroll position to assert on here.
+// The record these move to is the observable part, and it is the part that was
+// wrong: hard and soft gestures used to be indistinguishable.
+
+/* A wheel event carrying a real delta. jsdom's Event has no wheel fields and
+ * timeStamp is read-only, so both are defined onto the instance. */
+function wheelAt(win, el, deltaY, t, deltaMode) {
+  const e = new win.Event('wheel', { bubbles: true, cancelable: true });
+  Object.defineProperty(e, 'deltaY', { value: deltaY });
+  Object.defineProperty(e, 'deltaMode', { value: deltaMode || 0 });
+  Object.defineProperty(e, 'timeStamp', { value: t });
+  el.dispatchEvent(e);
+}
+
+/* One touch point at `y`, `t` milliseconds in. touchend reports its point in
+ * changedTouches and leaves touches empty, exactly as a browser does. */
+function touchAt(win, el, type, y, t) {
+  const e = new win.Event(type, { bubbles: true, cancelable: true });
+  const points = [{ clientX: 0, clientY: y }];
+  Object.defineProperty(e, 'touches', { value: type === 'touchend' ? [] : points });
+  Object.defineProperty(e, 'changedTouches', { value: points });
+  Object.defineProperty(e, 'timeStamp', { value: t });
+  el.dispatchEvent(e);
+}
+
+/* Drag `dy` pixels up (so, forward through the collection) over `ms`, in even
+ * steps, and lift. Returns the index it left the carousel on. */
+function swipe(win, read, car, dy, ms, steps = 6) {
+  const y0 = 500;
+  touchAt(win, car, 'touchstart', y0, 0);
+  for (let i = 1; i <= steps; i++) {
+    touchAt(win, car, 'touchmove', y0 - (dy * i) / steps, (ms * i) / steps);
+  }
+  touchAt(win, car, 'touchend', y0 - dy, ms);
+  return read('dmIdx');
+}
+
+/* The drawer, opened on the first record of the shelf, and its carousel. */
+async function openCarousel() {
+  const ctx = await boot();
+  const shelf = ctx.read('filtered()').map(r => r.id);
+  ctx.win.openDetail(shelf[0]);
+  ctx.car = $(ctx.doc, '#ddCarousel');
+  ctx.shelf = shelf;
+  assert.ok(ctx.car, 'the desktop carousel is not in the drawer');
+  assert.ok(shelf.length >= 6, 'the fixture is too short to scroll through');
+  return ctx;
+}
+
+test('the carousel hands the stylesheet the ladder JS centres on', async () => {
+  // The sizes have to agree or centring is computed for a strip that is not the
+  // one on screen — the slides would settle off-centre by the difference.
+  const { win, car } = await openCarousel();
+  const ladder = win.VinylCarousel
+    ? win.VinylCarousel.LADDER
+    : [220, 150, 104, 70, 48];
+  ladder.forEach((px, i) => {
+    assert.strictEqual(car.style.getPropertyValue('--dd-s' + i), px + 'px',
+      `--dd-s${i} does not match the ladder centring uses`);
+  });
+});
+
+test('the carousel sets its own centring padding rather than a fixed guess', async () => {
+  // A fixed 280px only centres the ends in a 560px-tall drawer; anywhere else
+  // the first record cannot reach the middle at all.
+  const { car } = await openCarousel();
+  assert.notStrictEqual(car.style.getPropertyValue('--dd-pad'), '',
+    'the padding was never computed, so the ends cannot centre');
+});
+
+test('one wheel notch moves one record', async () => {
+  const { read, car, win } = await openCarousel();
+  assert.strictEqual(read('dmIdx'), 0);
+  wheelAt(win, car, 100, 0);
+  assert.strictEqual(read('dmIdx'), 1, 'a notch did not move exactly one record');
+});
+
+test('a hard spin of the wheel moves further than a soft one', async () => {
+  // The whole complaint: this used to be capped at one record per event and
+  // then locked out for 260ms, so spinning hard did no more than nudging.
+  const soft = await openCarousel();
+  wheelAt(soft.win, soft.car, 100, 0);
+
+  const hard = await openCarousel();
+  wheelAt(hard.win, hard.car, 500, 0);
+
+  assert.ok(hard.read('dmIdx') > soft.read('dmIdx'),
+    `a hard spin reached record ${hard.read('dmIdx')}, a soft one ${soft.read('dmIdx')}`);
+});
+
+test('spinning hard is no longer rate-limited to one record per event', async () => {
+  const { read, car, win } = await openCarousel();
+  for (let i = 0; i < 4; i++) wheelAt(win, car, 100, i * 10);   // inside the old lockout
+  assert.strictEqual(read('dmIdx'), 4, 'events arriving quickly were dropped');
+});
+
+test('the wheel stops at the ends instead of running off the list', async () => {
+  const { read, car, win, shelf } = await openCarousel();
+  wheelAt(win, car, 100000, 0);
+  assert.strictEqual(read('dmIdx'), shelf.length - 1);
+  wheelAt(win, car, -100000, 1000);
+  assert.strictEqual(read('dmIdx'), 0);
+});
+
+test('the strip follows the finger during the drag, not only on release', async () => {
+  // It used to sit still until the finger lifted, which reads as a dead
+  // carousel on a touchscreen.
+  const { read, car, win } = await openCarousel();
+  touchAt(win, car, 'touchstart', 500, 0);
+  touchAt(win, car, 'touchmove', 430, 100);       // one slide-pitch up
+  assert.strictEqual(read('dmIdx'), 1, 'nothing moved while the finger was down');
+});
+
+test('a soft, deliberate swipe of one pitch lands on the next record', async () => {
+  const { read, car, win } = await openCarousel();
+  assert.strictEqual(swipe(win, read, car, 70, 700), 1,
+    'a gentle one-record swipe did not stop on the next record');
+});
+
+test('a hard flick travels further than the same swipe done slowly', async () => {
+  // Same distance, different speed. Distance alone cannot tell these apart —
+  // which is exactly what the old handler did.
+  const slow = await openCarousel();
+  const slowIdx = swipe(slow.win, slow.read, slow.car, 140, 900);
+
+  const fast = await openCarousel();
+  const fastIdx = swipe(fast.win, fast.read, fast.car, 140, 90);
+
+  assert.ok(fastIdx > slowIdx,
+    `the flick reached record ${fastIdx}, the slow drag of the same length ${slowIdx}`);
+});
+
+test('a swipe the other way walks back up the collection', async () => {
+  const { read, car, win } = await openCarousel();
+  swipe(win, read, car, 210, 600);
+  const forward = read('dmIdx');
+  assert.ok(forward >= 3, 'the forward swipe did not get far enough to come back from');
+  swipe(win, read, car, -140, 600);
+  assert.ok(read('dmIdx') < forward, 'swiping back did not move back');
+});
+
+test('a finger that rests before lifting is not treated as a flick', async () => {
+  // The last two move samples still report speed; the pause after them is what
+  // says the gesture was over. Without that a slow, careful placement would
+  // fling on release.
+  const { read, car, win } = await openCarousel();
+  touchAt(win, car, 'touchstart', 500, 0);
+  touchAt(win, car, 'touchmove', 460, 40);
+  touchAt(win, car, 'touchmove', 430, 70);        // still travelling fast
+  touchAt(win, car, 'touchend', 430, 900);        // ...then held for most of a second
+  assert.strictEqual(read('dmIdx'), 1, 'a rested finger flung the strip anyway');
 });
