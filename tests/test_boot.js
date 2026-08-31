@@ -652,6 +652,78 @@ test('the replay controls run without throwing', async () => {
   assert.deepStrictEqual(errors, [], 'the replay threw:\n' + errors.join('\n'));
 });
 
+/* ── one transport for the whole replay ─────────────────────────────────────
+ *
+ * The replay is two panels driven by one clock, but it used to carry two sets
+ * of transport controls — and the activity panel's set was inert: nothing ever
+ * bound #actPlayBtn or wrote to #actScrub, so it sat there looking like a
+ * second player that had never worked. These pin the single bar in its place.
+ */
+
+test('the replay has one transport, not one per panel', async () => {
+  const { doc } = await boot();
+  assert.strictEqual(doc.querySelectorAll('#replayBody .replay-transport').length, 1,
+    'the replay should carry exactly one transport');
+  for (const dead of ['#actPlayBtn', '#actScrub', '#actReplayBtn']) {
+    assert.strictEqual($(doc, dead), null, dead + ' is a control nothing drives');
+  }
+  assert.strictEqual(doc.querySelectorAll('.act-speed-btn').length, 0,
+    'the activity panel still has speed buttons nothing listens to');
+});
+
+test('the transport sits outside both panels, so it can follow the page', async () => {
+  const { doc } = await boot();
+  const bar = $(doc, '.replay-transport');
+  assert.ok(bar, 'there is no transport at all');
+  assert.strictEqual(bar.closest('.chart-box'), null,
+    'the transport is inside one panel, so it cannot span both');
+  assert.ok(bar.closest('#replayBody'), 'the transport is outside the replay');
+  const css = [...doc.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  assert.match(css, /\.replay-transport-slot\s*\{[^}]*position:\s*sticky/,
+    'the transport does not stick, so it scrolls away from the panel you are watching');
+});
+
+test('the transport shows the day the playhead is on', async () => {
+  const { win, doc, read } = await boot();
+  win.switchTab('timeline');
+  win.setCalScale('replay');
+
+  win.histSeek(0, true);
+  const first = $(doc, '#replayDate').textContent;
+  assert.match(first, /^\d{4}-\d{2}-\d{2}$/, 'the transport is not showing a date');
+
+  win.histSeek(read('actLast()'), true);
+  assert.notStrictEqual($(doc, '#replayDate').textContent, first,
+    'the date did not move with the playhead');
+});
+
+test('the transport keeps play and restart visible at every position', async () => {
+  const { win, doc, read } = await boot();
+  win.switchTab('timeline');
+  win.setCalScale('replay');
+
+  for (const at of [0, read('actLast()')]) {
+    win.histSeek(at, true);
+    for (const id of ['#racePlayBtn', '#raceReplayBtn']) {
+      assert.ok(!$(doc, id).classList.contains('hidden'),
+        id + ' vanished at day ' + at + '; the transport must not change shape as it plays');
+    }
+  }
+});
+
+test('restart returns the playhead to the beginning', async () => {
+  const { win, read } = await boot();
+  win.switchTab('timeline');
+  win.setCalScale('replay');
+
+  win.histSeek(read('actLast()') / 2, true);
+  assert.ok(read('actPos') > 0, 'the seek that sets this test up did nothing');
+
+  win.histReplay();
+  win.histPause();
+  assert.strictEqual(read('Math.floor(actPos)'), 0, 'restart did not go back to the start');
+});
+
 // ── what the review found ───────────────────────────────────────────────────
 
 test('reading the address bar never writes to it', async () => {
