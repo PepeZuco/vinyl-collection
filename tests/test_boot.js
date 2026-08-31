@@ -330,6 +330,37 @@ test('cleaned today adds a cleaning to the record', async () => {
   assert.strictEqual(after.length, before + 1);
 });
 
+/* A record you do not own has not been played and has not been cleaned — the
+ * form already refuses to take either for one, and the insight tiles refuse to
+ * count it. The drawer was the one place still offering both. */
+test('the drawer offers played and cleaned today for a record on the shelf', async () => {
+  const { win, doc } = await boot();
+  win.openDetail(RECORDS.find(r => r.have_it).id);
+  assert.ok($(doc, '#ddInfo .dm-qbtn.play'), 'no way to log a play on an owned record');
+  assert.ok($(doc, '#ddInfo .dm-qbtn.clean'), 'no way to log a cleaning on an owned record');
+});
+
+test('the drawer offers neither for a wishlist record, on both layouts', async () => {
+  const { win, doc } = await boot();
+  win.openDetail(RECORDS.find(r => !r.have_it).id);
+  assert.strictEqual(count(doc, '#detailBody .dm-qbtn'), 0,
+    'a record nobody owns was offered a play and a cleaning');
+});
+
+// The carousel re-renders both panes on its own, without reopening the drawer,
+// so it is a second place the decision has to hold.
+test('walking the wishlist shelf never brings the buttons back', async () => {
+  const { win, doc, read } = await boot();
+  press(win, $(doc, '#filterChips .own-opt.wishlist'));
+  const shelf = read('filtered()').map(r => r.id);
+  assert.ok(shelf.length > 1, 'the wishlist shelf is too short to walk');
+  win.openDetail(shelf[0]);
+  win.dmSetCurrent(1);
+  assert.strictEqual(read('currentDetailId'), shelf[1], 'the carousel did not move');
+  assert.strictEqual(count(doc, '#detailBody .dm-qbtn'), 0,
+    'the buttons came back on a record nobody owns');
+});
+
 // ── the add form ────────────────────────────────────────────────────────────
 
 test('the add form opens on step one with all three steps offered', async () => {
@@ -1080,10 +1111,11 @@ async function openCarousel() {
 test('the carousel hands the stylesheet the ladder JS centres on', async () => {
   // The sizes have to agree or centring is computed for a strip that is not the
   // one on screen — the slides would settle off-centre by the difference.
-  const { win, car } = await openCarousel();
-  const ladder = win.VinylCarousel
-    ? win.VinylCarousel.LADDER
-    : [220, 150, 104, 70, 48];
+  const { read, car } = await openCarousel();
+  // read(), not win.VinylCarousel: the module is a top-level const in a classic
+  // script, so it lives in the global lexical scope and never lands on window.
+  const ladder = [...read('VinylCarousel.LADDER')];
+  assert.ok(ladder.length, 'the carousel module did not load');
   ladder.forEach((px, i) => {
     assert.strictEqual(car.style.getPropertyValue('--dd-s' + i), px + 'px',
       `--dd-s${i} does not match the ladder centring uses`);

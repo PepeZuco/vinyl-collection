@@ -3304,6 +3304,12 @@ function dmInfoHTML(r) {
   const countryStr = r.country
     ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
   const conditionStr = conditionBadgeHTML(r);
+  // Played and cleaned are offered only for a record that is actually here. A
+  // wishlist entry is one nobody has yet, so logging either would be a claim
+  // about a copy that does not exist — the form already refuses both for one
+  // (applyOwnershipMode) and the insight tiles already leave it out of the play
+  // and cleaning counts. The drawer was the last place still asking.
+  const canLog = authed && r.have_it;
   return `
     <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
     <div class="dm-artist">${dmArtistHTML(r)}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
@@ -3324,7 +3330,7 @@ function dmInfoHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${lastCleanedLabel(r)}</span></div>
     </div>
-    ${authed ? `<div class="dm-quick">
+    ${canLog ? `<div class="dm-quick">
       <button class="dm-qbtn play" onclick="logPlayed(${r.id})">
         <i class="ti ti-headphones"></i>Played today
       </button>
@@ -3390,12 +3396,15 @@ function dmBind() {
 }
 
 // ── desktop vertical cover carousel ─────────────────────────────────────────
-// each slide's data-dist (0 = current, capped at 4) drives its size/opacity
-// in CSS — the taper that shows the 3 nearest records on each side.
+// each slide's data-dist (0 = current) drives its size/opacity in CSS — the
+// taper that shows the 3 nearest records on each side. The cap comes off the
+// ladder rather than being written out again here: past its last rung every
+// slide is the same sliver, and centring measures the same rungs.
 function ddApplyDistance(idx) {
   const car = document.getElementById('ddCarousel');
   if (!car) return;
-  [...car.children].forEach((s,k) => { s.dataset.dist = Math.min(4, Math.abs(k - idx)); });
+  const far = VinylCarousel.LADDER.length - 1;
+  [...car.children].forEach((s,k) => { s.dataset.dist = Math.min(far, Math.abs(k - idx)); });
 }
 
 // Where the strip has to sit for `idx` to be in the middle.

@@ -6,7 +6,7 @@ from werkzeug.exceptions import NotFound
 from sqlalchemy import func
 from sqlalchemy.orm import defer
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 import pricing
@@ -66,6 +66,74 @@ def _note_image_id(data):
     what makes two identical photos collapse to one row.
     """
     return hashlib.sha256((data or "").encode("utf-8")).hexdigest()[:32]
+
+_NOTE_IMAGE_GRACE_SECONDS = 6 * 3600
+
+
+def _note_image_ids(notes_json):
+    """Every image id a notes column refers to.
+
+    Forgiving on purpose: the column also holds legacy plain strings and notes
+    written before images existed, and neither is an error.
+    """
+    try:
+        parsed = json.loads(notes_json or "")
+    except (TypeError, ValueError):
+        return set()
+    if not isinstance(parsed, list):
+        return set()
+    found = set()
+    for note in parsed:
+        if isinstance(note, dict):
+            for image_id in note.get("images") or []:
+                if isinstance(image_id, str) and image_id:
+                    found.add(image_id)
+    return found
+
+
+def _reap_note_images(dropped_ids):
+    """Delete images from `dropped_ids` that no note refers to any more.
+
+    Call AFTER the record's own notes are committed, so the LIKE below sees the
+    new truth and the record cannot be its own stale reference.
+
+    The check is per-id rather than a blanket delete because content-hash ids
+    dedupe: an image dropped from one record may still be the same photo on
+    another, and deleting it would blank that one.
+    """
+    reaped = 0
+    for image_id in dropped_ids:
+        still_used = (db.session.query(Record.id)
+                      .filter(Record.notes.like(f"%{image_id}%")).first())
+        if still_used is None:
+            NoteImage.query.filter(NoteImage.id == image_id).delete(
+                synchronize_session=False)
+            reaped += 1
+    if reaped:
+        db.session.commit()
+    return reaped
+
+
+def _sweep_note_images():
+    """Delete images no note anywhere refers to, past the grace window.
+
+    Catches photos uploaded into a form that was never saved. The window is
+    what keeps it from deleting an image belonging to a form open right now.
+
+    Queries ids rather than rows: loading every image's blob to decide what to
+    delete would be the same mistake defer(Record.cover_data) exists to avoid.
+    """
+    referenced = set()
+    for (notes,) in db.session.query(Record.notes).all():
+        referenced |= _note_image_ids(notes)
+    cutoff = (datetime.now() - timedelta(seconds=_NOTE_IMAGE_GRACE_SECONDS)
+              ).strftime("%Y-%m-%dT%H:%M:%S")
+    candidates = db.session.query(NoteImage.id).filter(NoteImage.created < cutoff).all()
+    stale = [image_id for (image_id,) in candidates if image_id not in referenced]
+    if stale:
+        NoteImage.query.filter(NoteImage.id.in_(stale)).delete(synchronize_session=False)
+        db.session.commit()
+    return len(stale)
 
 # Every dated field on a record — bought_date, play_dates, cleaned_dates and a
 # note's date — holds the same two shapes, and the app only ever reads them, never
@@ -213,6 +281,11 @@ with app.app_context():
             db.session.commit()
             last_id = rows[-1][0]
 
+    # Photos uploaded into a form that was then abandoned have nothing pointing
+    # at them and nothing that will ever call the save-time reap. This is the
+    # only thing that collects them.
+    _sweep_note_images()
+
 # ── auth helpers ──────────────────────────────────────────────────────────────
 
 def is_authed():
@@ -304,6 +377,9 @@ def create_record():
 def update_record(rid):
     r = get_record_or_404(rid)
     d = request.get_json(silent=True) or {}
+    # Read before the assignment below overwrites it: what the record used to
+    # point at is the only way to know what it just stopped pointing at.
+    images_before = _note_image_ids(r.notes) if "notes" in d else set()
     for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by","condition"]:
         if field in d:
             setattr(r, field, d[field])
@@ -319,6 +395,10 @@ def update_record(rid):
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
     db.session.commit()
+    # After the commit, so the reap's "is anyone still using this" query sees
+    # the notes that were just written rather than the ones being replaced.
+    if images_before:
+        _reap_note_images(images_before - _note_image_ids(r.notes))
     return jsonify(r.to_dict())
 
 def _decode_data_uri(value):

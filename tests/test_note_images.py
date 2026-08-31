@@ -125,3 +125,100 @@ def test_a_malformed_stored_payload_is_an_absent_image(client, vinyl_app):
             id="f" * 32, data="not a data uri", created="2026-01-01T00:00:00"))
         vinyl_app.db.session.commit()
     assert client.get("/api/note-images/" + "f" * 32).status_code == 404
+
+
+def _note(text, images=None):
+    import json
+    return json.dumps([{"date": "2026-01-01", "text": text, "images": images or []}])
+
+
+def test_dropping_an_image_from_a_note_deletes_it(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    rid = client.post("/api/records", json={"artist": "A", "notes": _note("has one", [iid])}).get_json()["id"]
+
+    client.put(f"/api/records/{rid}", json={"notes": _note("now none", [])})
+
+    with vinyl_app.app.app_context():
+        assert vinyl_app.NoteImage.query.count() == 0
+
+
+def test_an_image_another_record_still_uses_survives(client, vinyl_app):
+    """Content-hash ids mean two records photographing the same thing share a row.
+
+    Deleting on the first record's say-so would blank the second — this guard is
+    load-bearing, not defensive.
+    """
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    keeper = client.post("/api/records", json={"artist": "Keeper", "notes": _note("mine too", [iid])}).get_json()["id"]
+    dropper = client.post("/api/records", json={"artist": "Dropper", "notes": _note("mine", [iid])}).get_json()["id"]
+
+    client.put(f"/api/records/{dropper}", json={"notes": _note("not any more", [])})
+
+    with vinyl_app.app.app_context():
+        assert vinyl_app.NoteImage.query.count() == 1
+    assert client.get(f"/api/note-images/{iid}").status_code == 200
+
+
+def test_deleting_the_whole_note_deletes_its_image(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    rid = client.post("/api/records", json={"artist": "A", "notes": _note("bye", [iid])}).get_json()["id"]
+
+    client.put(f"/api/records/{rid}", json={"notes": ""})
+
+    with vinyl_app.app.app_context():
+        assert vinyl_app.NoteImage.query.count() == 0
+
+
+def test_a_save_that_does_not_mention_notes_reaps_nothing(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    rid = client.post("/api/records", json={"artist": "A", "notes": _note("keep", [iid])}).get_json()["id"]
+
+    client.put(f"/api/records/{rid}", json={"my_rating": 5})
+
+    with vinyl_app.app.app_context():
+        assert vinyl_app.NoteImage.query.count() == 1
+
+
+def test_the_sweep_deletes_an_orphan_past_the_grace_window(client, vinyl_app):
+    """A photo uploaded into a form the user then abandoned."""
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    with vinyl_app.app.app_context():
+        vinyl_app.db.session.get(vinyl_app.NoteImage, iid).created = "2020-01-01T00:00:00"
+        vinyl_app.db.session.commit()
+        assert vinyl_app._sweep_note_images() == 1
+        assert vinyl_app.NoteImage.query.count() == 0
+
+
+def test_the_sweep_spares_an_orphan_inside_the_grace_window(client, vinyl_app):
+    """The window is what stops the sweep eating a form that is open right now."""
+    client.post("/api/note-images", json={"data": JPEG_1PX})
+    with vinyl_app.app.app_context():
+        assert vinyl_app._sweep_note_images() == 0
+        assert vinyl_app.NoteImage.query.count() == 1
+
+
+def test_the_sweep_spares_a_referenced_image_however_old(client, vinyl_app):
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    client.post("/api/records", json={"artist": "A", "notes": _note("keep", [iid])})
+    with vinyl_app.app.app_context():
+        vinyl_app.db.session.get(vinyl_app.NoteImage, iid).created = "2020-01-01T00:00:00"
+        vinyl_app.db.session.commit()
+        assert vinyl_app._sweep_note_images() == 0
+
+
+def test_the_record_list_never_carries_image_bytes(client):
+    """The regression guard the whole design exists for."""
+    iid = client.post("/api/note-images", json={"data": JPEG_1PX}).get_json()["id"]
+    client.post("/api/records", json={"artist": "A", "notes": _note("look", [iid])})
+
+    body = client.get("/api/records").get_data(as_text=True)
+    assert "base64" not in body
+    assert iid in body  # the id travels; the bytes do not
+
+
+def test_ids_are_read_out_of_notes_json_forgivingly(vinyl_app):
+    assert vinyl_app._note_image_ids("") == set()
+    assert vinyl_app._note_image_ids("not json") == set()
+    assert vinyl_app._note_image_ids('"a legacy string note"') == set()
+    assert vinyl_app._note_image_ids('[{"date":"d","text":"t"}]') == set()
+    assert vinyl_app._note_image_ids('[{"images":["a","b"]},{"images":["b","c"]}]') == {"a", "b", "c"}
