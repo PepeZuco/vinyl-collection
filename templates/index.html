@@ -1079,6 +1079,23 @@ select option{background:var(--surface);color:var(--text)}
 .chart-wrap{position:relative;height:240px}
 .chart-wrap-tall{position:relative;height:300px}
 
+/* records by country: the map says where the collection comes from, the list
+   beside it says in what order — a choropleth cannot tell you whether Germany
+   or Japan is ahead. Both read the same counts, biggest first, and the list
+   scrolls on its own so the map keeps its height. */
+.country-split{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}
+.country-rank{max-height:420px;overflow-y:auto;border:1px solid var(--border);
+  border-radius:var(--radius-sm);scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.crank-row{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr) auto;
+  gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px}
+.crank-row:last-child{border-bottom:none}
+/* the share bar sits behind the row; the cells are positioned so they stay on top */
+.crank-bar{position:absolute;left:0;top:0;bottom:0;background:var(--accent);opacity:.14}
+.crank-row .flag-wrap,.crank-name,.crank-count{position:relative}
+.crank-name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--text)}
+.crank-count{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.crank-empty{padding:14px 10px;font-size:12px;color:var(--muted)}
+
 /* shared hover tooltip for the year-distribution and country charts —
    lists the matching records (capped) instead of just a bare count */
 .chart-tooltip{position:absolute;pointer-events:none;opacity:0;z-index:20;
@@ -1114,6 +1131,9 @@ select option{background:var(--surface);color:var(--text)}
 .list-condition,.list-bought,.list-lastplayed{font-size:12px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 @media(max-width:700px){.charts-row{grid-template-columns:1fr}}
+/* under ~900px the map is too narrow to share a row, so the list drops below it */
+@media(max-width:900px){.country-split{grid-template-columns:1fr}
+  .country-rank{max-height:220px}}
 
 /* crate and sort dropdowns on the arrange row */
 .sort-dropdown,.group-dropdown{position:relative;flex-shrink:0}
@@ -1878,8 +1898,11 @@ select option{background:var(--surface);color:var(--text)}
           <span>more</span>
         </span>
       </div>
-      <div id="worldMapWrap" style="width:100%;height:420px;position:relative">
-        <div class="chart-tooltip" id="worldMapTooltip"></div>
+      <div class="country-split">
+        <div id="worldMapWrap" style="width:100%;height:420px;position:relative">
+          <div class="chart-tooltip" id="worldMapTooltip"></div>
+        </div>
+        <div class="country-rank" id="countryRank"></div>
       </div>
     </div>
     <div class="chart-box" style="margin-bottom:28px" id="statsTableBox">
@@ -2332,6 +2355,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/draft.js"></script>
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
+<script src="/static/notes.js"></script>
 <script src="/static/spend.js"></script>
 <script src="/static/idle-spotlight.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
@@ -3750,19 +3774,15 @@ let formPlayDates = []; // ditto for the play-date editor
 let formCleanedDates = []; // ditto for the cleaned-date editor
 let formArtists = []; // ditto for the multi-artist editor
 
+// Both delegate to static/notes.js, which is where these are tested. The
+// wrappers stay because FILTER_DEPS and TIMELINE_DEPS inject parseNotes by
+// name, and because the today() fallback belongs to the page, not the module.
 function parseNotes(raw, fallbackDate) {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-  } catch(e) {}
-  // plain string — legacy note, migrate it
-  return [{ date: fallbackDate || today(), text: raw }];
+  return VinylNotes.parseNotes(raw, fallbackDate || today());
 }
 
 function serializeNotes(arr) {
-  const clean = arr.filter(n => n.text && n.text.trim());
-  return clean.length ? JSON.stringify(clean) : '';
+  return VinylNotes.serializeNotes(arr);
 }
 
 // Local, not UTC. toISOString() rolls "today" over to tomorrow for anything
@@ -6903,12 +6923,19 @@ function renderWorldMap(all) {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
 
-  // group records per ISO numeric code (skip records without a country set)
+  // group records per ISO numeric code (skip records without a country set).
+  // The list beside the map groups by alpha-2 instead, so a country the atlas
+  // has no numeric code for is still ranked even though it cannot be painted.
   const recordsByCountry = {};
+  const recordsByCode = {};
   all.forEach(r => {
-    const num = ALPHA2_TO_NUMERIC[(r.country||'').toUpperCase()];
+    const code = (r.country||'').toUpperCase();
+    if (code.length !== 2) return;
+    (recordsByCode[code] = recordsByCode[code] || []).push(r);
+    const num = ALPHA2_TO_NUMERIC[code];
     if (num) (recordsByCountry[num] = recordsByCountry[num] || []).push(r);
   });
+  renderCountryRank(recordsByCode);
   const counts = Object.fromEntries(Object.entries(recordsByCountry).map(([k,v]) => [k, v.length]));
   const maxCount = Math.max(1, ...Object.values(counts));
 
@@ -6963,6 +6990,28 @@ function renderWorldMap(all) {
       tooltip.style.top = `${Math.max(y - 12, 0)}px`;
     })
     .on('mouseleave', () => { tooltip.style.opacity = '0'; });
+}
+
+// The ranked column beside the map: every country that has records, most
+// first, with its flag. The flag is the same picture the cards and list rows
+// use (image, emoji fallback), so a country looks the same everywhere.
+function renderCountryRank(recordsByCode) {
+  const box = document.getElementById('countryRank');
+  if (!box) return;
+
+  const rows = Object.entries(recordsByCode)
+    .map(([code, recs]) => ({ code, name: countryNameOf(code), n: recs.length }))
+    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+
+  if (!rows.length) { box.innerHTML = '<div class="crank-empty">no countries yet</div>'; return; }
+
+  const max = rows[0].n;
+  box.innerHTML = rows.map(r => `<div class="crank-row" title="${esc(r.name)}">
+      <div class="crank-bar" style="width:${(r.n / max * 100).toFixed(1)}%"></div>
+      ${flagImgHTML(r.code, 18) || '<span></span>'}
+      <span class="crank-name">${esc(r.name)}</span>
+      <span class="crank-count">${r.n}</span>
+    </div>`).join('');
 }
 
 // ── calendar ───────────────────────────────────────────────────────────────
