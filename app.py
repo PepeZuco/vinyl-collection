@@ -53,6 +53,20 @@ def _cover_hash(cover):
     """
     return hashlib.sha256((cover or "").encode("utf-8")).hexdigest()[:16]
 
+_NOTE_IMAGE_MAX_BYTES = 2 * 1024 * 1024
+
+
+def _note_image_id(data):
+    """A note image's primary key: the image is its own address.
+
+    Deliberately not _cover_hash. A cover's URL is keyed by a record, so it
+    changes meaning when the cover does and needs a ?v= buster. An image id is
+    keyed by content, so /api/note-images/<id> can never mean anything else —
+    which is what lets the response be immutably cached with no buster, and
+    what makes two identical photos collapse to one row.
+    """
+    return hashlib.sha256((data or "").encode("utf-8")).hexdigest()[:32]
+
 # Every dated field on a record — bought_date, play_dates, cleaned_dates and a
 # note's date — holds the same two shapes, and the app only ever reads them, never
 # computes on them, so they stay opaque strings here:
@@ -118,6 +132,17 @@ class Record(db.Model):
             "notes": self.notes or "",
             "country": self.country or "",
         }
+
+# One row per distinct note image, addressed by its own content hash.
+#
+# The bytes are here rather than in Record.notes because notes is NOT deferred
+# in the record-list query and six client-side consumers read it straight off
+# /api/records. Base64 in that column would rebuild the 45MB response the cover
+# arrangement above exists to prevent.
+class NoteImage(db.Model):
+    id      = db.Column(db.String(32), primary_key=True)  # _note_image_id(data)
+    data    = db.Column(db.Text)      # base64 data URI, same shape as cover_data
+    created = db.Column(db.String(50))  # a stamp — the sweep's grace window reads it
 
 # One row per Claude API call a scan made. Anthropic publishes no balance or
 # remaining-credits endpoint, so what this app spends is only knowable if this
@@ -296,16 +321,16 @@ def update_record(rid):
     db.session.commit()
     return jsonify(r.to_dict())
 
-def _decode_cover(cover):
-    """(bytes, mimetype) for a stored cover, or None if there is nothing to serve.
+def _decode_data_uri(value):
+    """(bytes, mimetype) for a stored data URI, or None if there is nothing to serve.
 
-    Covers are stored as `data:<mime>;base64,<payload>` data URIs. A row whose
-    payload is malformed is treated as having no cover rather than raising: a
-    single bad import should 404 one image, not 500 the page around it.
+    Shared by covers and note images. Anything that is absent, not a data URI,
+    or whose base64 payload is malformed is treated as having nothing to serve
+    rather than raising: a broken image is an absent image, not a 500.
     """
-    if not cover or not cover.startswith("data:"):
+    if not value or not value.startswith("data:"):
         return None
-    header, _, payload = cover.partition(",")
+    header, _, payload = value.partition(",")
     if not payload:
         return None
     mime = header[len("data:"):].split(";")[0] or "image/jpeg"
@@ -325,13 +350,58 @@ def record_cover(rid):
     read here — it only has to differ.
     """
     row = db.session.query(Record.cover_data).filter(Record.id == rid).first()
-    decoded = _decode_cover(row[0]) if row else None
+    decoded = _decode_data_uri(row[0]) if row else None
     if decoded is None:
         return jsonify({"error": "No cover"}), 404
     data, mime = decoded
     resp = app.response_class(data, mimetype=mime)
     resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     resp.set_etag(_cover_hash(row[0]))
+    return resp.make_conditional(request)
+
+
+@app.route("/api/note-images", methods=["POST"])
+@require_auth
+def create_note_image():
+    """Store one note image and return its id.
+
+    Idempotent by construction: the id is the content hash, so re-uploading the
+    same photo returns the id that already exists and writes nothing.
+    """
+    d = request.get_json(silent=True) or {}
+    data = d.get("data", "")
+    if not isinstance(data, str) or not data.startswith("data:"):
+        return jsonify({"error": "Not an image"}), 400
+    # Measured encoded, because that is what gets stored.
+    if len(data.encode("utf-8")) > _NOTE_IMAGE_MAX_BYTES:
+        return jsonify({"error": "Image too large"}), 413
+    if _decode_data_uri(data) is None:
+        return jsonify({"error": "Not an image"}), 400
+    image_id = _note_image_id(data)
+    if db.session.get(NoteImage, image_id) is None:
+        db.session.add(NoteImage(
+            id=image_id, data=data,
+            created=datetime.now().strftime("%Y-%m-%dT%H:%M:%S")))
+        db.session.commit()
+    return jsonify({"id": image_id}), 201
+
+
+@app.route("/api/note-images/<image_id>")
+def note_image(image_id):
+    """Serve one note image.
+
+    Immutable with no cache buster, unlike record_cover: the id IS the content
+    hash, so this URL's bytes can never change. A different image is a
+    different URL.
+    """
+    row = db.session.query(NoteImage.data).filter(NoteImage.id == image_id).first()
+    decoded = _decode_data_uri(row[0]) if row else None
+    if decoded is None:
+        return jsonify({"error": "No image"}), 404
+    data, mime = decoded
+    resp = app.response_class(data, mimetype=mime)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    resp.set_etag(image_id)
     return resp.make_conditional(request)
 
 
