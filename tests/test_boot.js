@@ -1488,3 +1488,77 @@ test('the per-activity header override beats the base .hd.hit rule on specificit
       `stylesheet, which puts the date header back to gold`);
   }
 });
+
+// ── the week grid: one cover per record per day, with an icon rail ──────────
+
+/* The Sunday is the first column of the week busyWeek jumps to. Scoped,
+ * because the fixture also buys record 12 on the Wednesday of that week — a
+ * whole-grid count would be measuring that too. */
+const sundayChips = doc =>
+  [...doc.querySelectorAll('#calBody .cal-week-col:first-child .cal-week-chip')];
+
+async function busyWeek() {
+  const b = await boot();
+  busySunday(b.read);
+  b.win.switchTab('timeline');
+  b.win.setCalScale('week');
+  b.win.calJumpToDate('2026-08-09');   // the Sunday itself
+  return b;
+}
+
+test('a record with five events on one day draws one chip', async () => {
+  const { doc } = await busyWeek();
+  assert.strictEqual(sundayChips(doc).length, 1);
+});
+
+test('the chip rails the day in bought-cleaned-played-note order', async () => {
+  const { doc } = await busyWeek();
+  const rail = [...sundayChips(doc)[0].querySelectorAll('.cal-act')];
+  assert.deepStrictEqual(rail.map(b => b.dataset.type),
+    ['bought', 'cleaned', 'played', 'note']);
+});
+
+test('a numeral appears only where the action happened more than once', async () => {
+  const { doc } = await busyWeek();
+  const rail = [...sundayChips(doc)[0].querySelectorAll('.cal-act')];
+  assert.deepStrictEqual(rail.map(b => b.querySelector('b') ? b.querySelector('b').textContent : ''),
+    ['', '', '2', '']);
+});
+
+test('nothing in the grid ever prints a 1', async () => {
+  const { doc } = await busyWeek();
+  const ones = [...doc.querySelectorAll('#calBody .cal-act b')]
+    .filter(b => b.textContent.trim() === '1');
+  assert.deepStrictEqual(ones, []);
+});
+
+test('every rail icon is one of the four the type bar draws', async () => {
+  const { doc } = await busyWeek();
+  const bar = [...doc.querySelectorAll('#calTypesBar .cal-type-btn i')]
+    .map(i => [...i.classList].find(c => c.startsWith('ti-')));
+  const rail = [...doc.querySelectorAll('#calBody .cal-act i')]
+    .map(i => [...i.classList].find(c => c.startsWith('ti-')));
+  rail.forEach(c => assert.ok(bar.includes(c), `${c} is not on the type bar`));
+});
+
+test('the cover opens the record on the whole day', async () => {
+  const { win, doc, read } = await busyWeek();
+  press(win, sundayChips(doc)[0].querySelector('.cal-week-chip-art'));
+  assert.strictEqual(read('detailFocus'), '2026-08-09');
+});
+
+test('a once-only icon opens the record on that one event', async () => {
+  const { win, doc, read } = await busyWeek();
+  const clean = [...sundayChips(doc)[0].querySelectorAll('.cal-act')]
+    .find(b => b.dataset.type === 'cleaned');
+  press(win, clean);
+  assert.strictEqual(read('detailFocus'), 'cleaned:2026-08-09T18:20:11:0');
+});
+
+test('a numeral icon opens the record on that day of that kind', async () => {
+  const { win, doc, read } = await busyWeek();
+  const played = [...sundayChips(doc)[0].querySelectorAll('.cal-act')]
+    .find(b => b.dataset.type === 'played');
+  press(win, played);
+  assert.strictEqual(read('detailFocus'), '2026-08-09~played');
+});

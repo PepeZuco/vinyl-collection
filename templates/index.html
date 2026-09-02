@@ -1437,6 +1437,7 @@ select option{background:var(--surface);color:var(--text)}
   color:var(--muted);cursor:pointer;font-size:10px;line-height:1;padding:0;
   display:flex;align-items:center;justify-content:center}
 .note-shot-drop:hover{color:var(--danger)}
+.note-shot.missing{background:var(--surface);border-style:dashed}
 .note-photo-row{grid-column:1 / -1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 /* ── play-date editor in form ──────────────────────────────────────────────── */
@@ -1490,7 +1491,9 @@ select option{background:var(--surface);color:var(--text)}
   #formOverlay .scan-actions button{height:42px;font-size:13px}
   #formOverlay .notes-add-row{grid-template-columns:1fr 1fr}
   #formOverlay .notes-add-row textarea{grid-column:1 / -1}
-  #formOverlay .notes-add-row .btn{grid-column:1 / -1;width:100%;justify-content:center}
+  /* Direct child only: the add button is a grid item, the photo buttons are
+     flex children of .note-photo-row and would just stretch. */
+  #formOverlay .notes-add-row > .btn{grid-column:1 / -1;width:100%;justify-content:center}
   #formOverlay .rating-row .segs button{height:20px}
   #formOverlay .playdate-add{height:38px}
   #formOverlay .playdate-row{padding:6px 8px 6px 13px}
@@ -1604,15 +1607,24 @@ select option{background:var(--surface);color:var(--text)}
 .cal-week-col-num{font-size:15px;font-weight:700;font-family:var(--font-mono);line-height:1.3;color:var(--text)}
 .cal-week-col.cal-today .cal-week-col-num{color:var(--accent)}
 .cal-week-col-body{display:flex;flex-direction:column;gap:5px;min-width:0}
-.cal-week-chip{display:block;width:100%;aspect-ratio:1;padding:0;border-radius:5px;border:2px solid transparent;background:var(--card);cursor:pointer;transition:all .12s;font-family:var(--font)}
-.cal-week-chip:hover{filter:brightness(1.1)}
-.cal-week-chip.bought{border-color:var(--ev-bought);background:color-mix(in srgb, var(--ev-bought) 10%, transparent)}
-.cal-week-chip.cleaned{border-color:var(--ev-cleaned);background:color-mix(in srgb, var(--ev-cleaned) 10%, transparent)}
-.cal-week-chip.played{border-color:var(--ev-played);background:color-mix(in srgb, var(--ev-played) 10%, transparent)}
-.cal-week-chip.note{border-color:var(--ev-note);background:color-mix(in srgb, var(--ev-note) 10%, transparent)}
-.cal-week-chip-cover{width:100%;height:100%;border-radius:3px;overflow:hidden;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
-.cal-week-chip-cover img{width:100%;height:100%;object-fit:cover;display:block}
-.cal-week-chip-txt{display:none}
+/* One record's day. The cover keeps a neutral border — it used to spend its
+   only channel saying which single event this was — and the day's actions
+   line up beneath it in the order the day reads. */
+.cal-week-chip{display:flex;flex-direction:column;gap:4px}
+.cal-week-chip-art{width:100%;aspect-ratio:1;padding:0;border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;background:var(--bg-alt);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--muted);
+  font-size:14px;transition:border-color .12s,filter .12s}
+.cal-week-chip-art:hover{filter:brightness(1.1);border-color:var(--accent)}
+.cal-week-chip-art img{width:100%;height:100%;object-fit:cover;display:block}
+.cal-rail{display:flex;gap:2px;align-items:center;justify-content:center;flex-wrap:wrap}
+.cal-act{display:inline-flex;align-items:center;gap:1px;padding:2px 3px;border:0;
+  border-radius:3px;background:none;cursor:pointer;font-family:var(--font-mono);
+  font-size:9.5px;font-weight:700;line-height:1;transition:background .12s}
+.cal-act:hover{background:color-mix(in srgb, currentColor 16%, transparent)}
+.cal-act i{font-size:15px}
+.cal-act.bought{color:var(--ev-bought)} .cal-act.cleaned{color:var(--ev-cleaned)}
+.cal-act.played{color:var(--ev-played)} .cal-act.note{color:var(--ev-note)}
 .cal-week-empty{font-size:10.5px;color:var(--muted);text-align:center;opacity:.5;padding:6px 0}
 
 /* date picker modal */
@@ -1642,7 +1654,14 @@ select option{background:var(--surface);color:var(--text)}
   .cal-week-col-dow{font-size:8.5px;letter-spacing:.03em}
   .cal-week-col-num{font-size:13px}
   .cal-week-col-body{gap:3px}
-  .cal-week-chip-cover{border-radius:2px}
+  .cal-week-chip{gap:2px}
+  /* 46px of column leaves about 40 for the rail: four icons at 10px each.
+     Readable, and nowhere near tappable. So the rail becomes a legend and the
+     cover takes the tap, through to the day list where each action is a row. */
+  .cal-rail{gap:1px;pointer-events:none}
+  .cal-act{padding:0}
+  .cal-act i{font-size:10px}
+  .cal-act b{display:none}
   .cal-week-empty{font-size:9px;padding:4px 0}
 }
 </style>
@@ -4112,7 +4131,12 @@ function toggleMultiArtist() {
   }
 }
 
-function addNote() {
+async function addNote() {
+  // Let a photo picked a moment ago finish arriving before composing the note,
+  // so it is filed with the note the user attached it to.
+  if (notePhotoUploads.length) {
+    await Promise.all(notePhotoUploads.map(p => p.catch(()=>{})));
+  }
   const dateEl = document.getElementById('fNoteDate');
   const timeEl = document.getElementById('fNoteTime');
   const textEl = document.getElementById('fNoteText');
@@ -4144,6 +4168,9 @@ function deleteNote(idx) {
 // than at save so the record's own payload stays small: several photos plus a
 // dirty cover would otherwise be megabytes of base64 on every save.
 async function addNoteImage(dataUri){
+  // Same guard handleCoverFile uses: the upload is a network round trip, and
+  // the form can be closed and another record opened while it is in flight.
+  const myToken = scanToken;
   let res;
   try{
     res = await fetch('/api/note-images', {
@@ -4157,6 +4184,7 @@ async function addNoteImage(dataUri){
     return;
   }
   const {id} = await res.json();
+  if(myToken !== scanToken) return;   // a different record is on screen now
   noteImagePreview[id] = dataUri;
   if(formNoteImages.indexOf(id) === -1) formNoteImages.push(id);  // same photo twice
   renderNoteShots();
@@ -4168,11 +4196,20 @@ function noteImageSrc(id){
   return noteImagePreview[id] || `/api/note-images/${id}`;
 }
 
-// One thumbnail, with the × that drops it. `onerror` removes it rather than
-// leaving a broken-image icon sitting inside a note.
+// One thumbnail, with the × that drops it.
+//
+// `id` goes into an inline handler, where esc() is no defence — it does not
+// touch the apostrophe that would close the string and run the rest as code.
+// Ids reaching here through parseNotes are already vetted; this is the second
+// lock, so that no future caller can open the hole by passing one that is not.
+//
+// A shot that will not load keeps its wrapper rather than removing it: the ×
+// has to stay reachable, or a bad id sits in the note with no way to take it
+// out. It is marked, not dropped, because a failed GET may only be the network.
 function noteShotHTML(id, onRemove){
+  if(!VinylNotes.isImageId(id)) return '';
   return `<span class="note-shot-wrap">
-    <img class="note-shot" src="${esc(noteImageSrc(id))}" onerror="this.parentNode.remove()">
+    <img class="note-shot" alt="" src="${esc(noteImageSrc(id))}" onerror="this.classList.add('missing')">
     <button type="button" class="note-shot-drop" title="remove photo" onclick="${onRemove}"><i class="ti ti-x"></i></button>
   </span>`;
 }
@@ -4195,6 +4232,9 @@ function removeNoteImage(idx, id){
   const note = formNotes[idx];
   if(!note) return;
   note.images = (note.images || []).filter(x => x !== id);
+  // serializeNotes drops a note with neither text nor photo, so leaving this
+  // one on screen would show an entry that silently vanishes on save.
+  if(!VinylNotes.hasContent(note)) formNotes.splice(idx, 1);
   renderNotesForm();
 }
 
@@ -4282,6 +4322,7 @@ function openAdd(){
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteTime').value=nowStamp().slice(11,16);
   document.getElementById('fNoteText').value='';
+  scanToken++;   // strand any note-photo upload still in the air
   formNoteImages=[];
   renderNoteShots();
   renderNotesForm();
@@ -4346,6 +4387,7 @@ function openEdit(id){
   document.getElementById('fCondition').value=r.condition||'';
   renderCondSwitch();
   formNotes=parseNotes(r.notes, r.bought_date||today());
+  scanToken++;   // strand any note-photo upload still in the air
   formNoteImages=[];
   renderNoteShots();
   // keep the recorded time — slicing to 10 chars used to wipe it off every play
@@ -4425,7 +4467,10 @@ function formIsDirty(){
  * something to lose. A scan is the case that matters: it has already been
  * billed by the time it fills the form, and re-doing it is charged again. */
 function closeForm(force){
-  if (force !== true && formIsDirty()) {
+  // formNoteImages is deliberately not part of formValues -- that is "what
+  // would be saved", and a pending photo is not on the record yet. It is still
+  // work the user would lose, so it gets a say in the prompt.
+  if (force !== true && (formIsDirty() || formNoteImages.length)) {
     const scanned = coverDirty || scanWrote && Object.keys(scanWrote).length;
     if (!confirm(scanned
       ? 'Discard this record? The scan that filled it would have to be paid for again.'
@@ -4545,14 +4590,33 @@ function pickCoverFile(){ photoTarget = 'cover'; document.getElementById('coverI
 function pickNotePhoto(){ photoTarget = 'note';  document.getElementById('coverInput').click(); }
 function fallbackCapture(){ document.getElementById('coverCaptureInput').click(); }
 
-// The one place that knows where a finished data URI goes.
-function applyPhoto(dataUri){
-  if(photoTarget === 'note') addNoteImage(dataUri); else applyCover(dataUri);
+// The one place that knows where a finished data URI goes. `target` is the
+// destination captured when the file was picked; without it the read happens
+// after the decode, and tapping the other picker mid-decode sent an album
+// cover to a note, or a note photo over the cover.
+function applyPhoto(dataUri, target){
+  if((target || photoTarget) === 'note') trackNoteUpload(addNoteImage(dataUri));
+  else applyCover(dataUri);
+}
+
+// Uploads still in the air. addNote waits on these, because a photo that has
+// not come back yet is not in formNoteImages, and filing the note now would
+// save it with no images and strand the photo on the next note.
+let notePhotoUploads = [];
+function trackNoteUpload(p){
+  notePhotoUploads.push(p);
+  // Settled either way: addNoteImage reports its own failures, and a rejection
+  // left in this list would stall every later addNote.
+  p.catch(()=>{}).then(()=>{ notePhotoUploads = notePhotoUploads.filter(x => x !== p); });
+  return p;
 }
 
 async function openCamera(target){
-  photoTarget = target || 'cover';   // the cover button calls openCamera()
   if(camStream) return; // a request is already in flight or live
+  // Only once the open is going ahead. Setting it above the guard meant a
+  // refused open still retargeted, so a capture from the live cover camera
+  // was filed as a note photo.
+  photoTarget = target || 'cover';   // the cover button calls openCamera()
   // navigator.mediaDevices is undefined (not an error) outside a secure context.
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
   let stream;
@@ -4791,6 +4855,9 @@ async function handleCoverFile(e){
   if(!file) return;
   e.target.value = '';
   const myToken = scanToken;
+  // Captured with the token and for the same reason: both are read after the
+  // decode, which on a phone photo is about a second of the user's time.
+  const target = photoTarget;
   let dataUri;
   try{
     dataUri = await resizeImage(file);
@@ -4805,7 +4872,7 @@ async function handleCoverFile(e){
   // different record opened; applying the cover now would stamp it onto that
   // record. No ++ here — runScan takes its own token when the scan starts.
   if(myToken !== scanToken) return;
-  applyPhoto(dataUri);
+  applyPhoto(dataUri, target);
 }
 document.getElementById('coverInput').addEventListener('change', handleCoverFile);
 document.getElementById('coverCaptureInput').addEventListener('change', handleCoverFile);
@@ -7396,17 +7463,48 @@ function calEventRow(ev, fullNote) {
   </div>`;
 }
 
-// compact event chip — used by the week grid (cover art + type color, no detail text)
-function calWeekChip(ev) {
-  const r = ev.r;
-  const label = esc(r.album_name) || esc(artistDisplay(r)) || 'untitled';
-  const cover = r.cover_url
-    ? `<img src="${r.cover_url}" alt="" loading="lazy" onerror="this.remove()">`
+// The four glyphs are the ones the type bar already draws, so the icon on a
+// chip and the icon on the switch that hides it are the same shape.
+const CAL_TYPE_ICON = { bought:'ti-shopping-bag', cleaned:'ti-droplet',
+                        played:'ti-headphones', note:'ti-note' };
+
+function calActsLabel(g) {
+  return g.acts.map(a => CAL_TYPE_LABEL[a.type] + (a.evs.length > 1 ? ' ×' + a.evs.length : ''))
+               .join(', ');
+}
+
+/* One activity, as a button.
+ *
+ * The icon is always drawn; a numeral joins it only when that action happened
+ * more than once. A lone icon means once — nothing in the grid prints a 1, and
+ * bought needs no exception because bought_date is one column and its count
+ * cannot reach two.
+ *
+ * The focus is a data attribute rather than an inline onclick argument: keys
+ * are built from stored date strings, and esc() does not escape single quotes. */
+function calActBtn(g, a, cls) {
+  const n = a.evs.length;
+  const focus = n > 1 ? g.day + '~' + a.type : a.evs[0].key;
+  const when = a.evs[0].time ? ' · ' + a.evs[0].time : '';
+  return `<button type="button" class="${cls} ${a.type}" data-rec="${g.r.id}"
+    data-type="${a.type}" data-focus="${esc(focus)}"
+    title="${CAL_TYPE_LABEL[a.type]}${n > 1 ? ' ×' + n : ''}${esc(when)}">
+    <i class="ti ${CAL_TYPE_ICON[a.type]}"></i>${n > 1 ? `<b>${n}</b>` : ''}</button>`;
+}
+
+// one record's day — the cover, then what happened to it
+function calRecordDayChip(g) {
+  const label = esc(g.r.album_name) || esc(artistDisplay(g.r)) || 'untitled';
+  const cover = g.r.cover_url
+    ? `<img src="${g.r.cover_url}" alt="" loading="lazy" onerror="this.remove()">`
     : `<i class="ti ti-disc"></i>`;
-  return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(artistDisplay(r))} — ${label} (${CAL_TYPE_LABEL[ev.type]}${ev.time ? ' ' + esc(ev.time) : ''})">
-    <span class="cal-week-chip-cover">${cover}</span>
-    <span class="cal-week-chip-txt">${label}</span>
-  </button>`;
+  return `<div class="cal-week-chip">
+    <button type="button" class="cal-week-chip-art" data-rec="${g.r.id}"
+      data-day="${esc(g.day)}" data-focus="${esc(g.day)}"
+      title="${esc(artistDisplay(g.r))} — ${label} (${esc(calActsLabel(g))})">
+      ${cover}</button>
+    <span class="cal-rail">${g.acts.map(a => calActBtn(g, a, 'cal-act')).join('')}</span>
+  </div>`;
 }
 
 function renderCalMonth(events) {
@@ -7462,7 +7560,7 @@ function renderCalWeek(events) {
         <span class="cal-week-col-num">${cur.getDate()}</span>
       </button>
       <div class="cal-week-col-body">
-        ${evs.length ? evs.map(ev => calWeekChip(ev)).join('') : '<div class="cal-week-empty">—</div>'}
+        ${evs.length ? VinylTimeline.recordDays(evs).map(calRecordDayChip).join('') : '<div class="cal-week-empty">—</div>'}
       </div>
     </div>`;
     cur.setDate(cur.getDate() + 1);
@@ -7497,9 +7595,9 @@ function closeCalDay() {
   document.getElementById('calDayOverlay').classList.add('hidden');
 }
 
-function openDetailFromCal(id) {
+function openDetailFromCal(id, focus) {
   closeCalDay();
-  openDetail(id);
+  openDetail(id, focus);
 }
 
 // date picker modal
@@ -7549,6 +7647,33 @@ function calJumpToDate(dateStr) {
   closeCalDatePicker();
   renderCalendar();
 }
+
+/* One listener for every chip, pill and row the calendar draws.
+ *
+ * Delegated rather than inline: an event key is built from stored date strings
+ * and esc() leaves single quotes alone, so a key must never be interpolated
+ * into an onclick argument.
+ *
+ * Registered on the CAPTURE phase. A month cell carries its own inline
+ * onclick="openCalDay('<k>')" and the act buttons sit inside it, so a
+ * bubble-phase listener would run after the cell's handler: the day modal
+ * would open and then be closed again a line later by openDetailFromCal.
+ * Capture runs before the event ever reaches the cell. */
+['calBody', 'calDayBody'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    const hit = e.target.closest('[data-rec][data-focus]');
+    if (!hit) return;
+    e.stopPropagation();
+    // On a phone the week rail is a legend rather than a row of targets — four
+    // icons across a 46px column is about 10px each. So the cover leads to the
+    // day list instead, where every action is a full-size row.
+    if (hit.dataset.day && window.matchMedia('(max-width:760px)').matches) {
+      openCalDay(hit.dataset.day);
+      return;
+    }
+    openDetailFromCal(Number(hit.dataset.rec), hit.dataset.focus);
+  }, true);
+});
 
 // ── idle screensaver ─────────────────────────────────────────────────────
 // After a couple of minutes with no mouse, keyboard or touch activity,
