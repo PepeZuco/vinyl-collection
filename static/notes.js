@@ -14,6 +14,15 @@
 
 const VinylNotes = (function () {
 
+  /* An id is sha256(data_uri)[:32] -- 32 lowercase hex characters, and nothing
+   * else can name a row that /api/note-images will serve. Anything else got
+   * into this column through a hand-edited PUT or an imported CSV, and it is
+   * interpolated downstream into markup AND into inline onclick handlers, where
+   * a quote in an id would run as code. Refuse it once here, at the gate every
+   * consumer comes through, rather than at each place that renders one. */
+  const IMAGE_ID = /^[0-9a-f]{32}$/;
+  function isImageId(id) { return typeof id === 'string' && IMAGE_ID.test(id); }
+
   function hasContent(note) {
     if (!note) return false;
     if (note.text && note.text.trim()) return true;
@@ -26,7 +35,15 @@ const VinylNotes = (function () {
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        // Drop unusable ids here so no caller has to remember to. A note left
+        // with no text and no valid image fails hasContent and stops existing,
+        // which is right: it referred to nothing that could ever be shown.
+        parsed.forEach(function (n) {
+          if (n && n.images) n.images = n.images.filter(isImageId);
+        });
+        return parsed;
+      }
     } catch (e) {}
     return [{ date: fallbackDate, text: raw }];
   }
@@ -44,13 +61,13 @@ const VinylNotes = (function () {
     const seen = [];
     (notes || []).forEach(function (n) {
       ((n && n.images) || []).forEach(function (id) {
-        if (id && seen.indexOf(id) === -1) seen.push(id);
+        if (isImageId(id) && seen.indexOf(id) === -1) seen.push(id);
       });
     });
     return seen;
   }
 
-  return { parseNotes, serializeNotes, noteImageIds, hasContent };
+  return { parseNotes, serializeNotes, noteImageIds, hasContent, isImageId };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylNotes;
