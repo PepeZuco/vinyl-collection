@@ -505,8 +505,8 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry.note.hit{--hc:var(--ev-note)}
 /* One kind of thing happened, so the date can wear its colour. A whole-day
    focus carries no hit-<type> and keeps the gold above. */
-.dm-hist-group .hd.hit-bought{--hc:var(--ev-bought)} .dm-hist-group .hd.hit-cleaned{--hc:var(--ev-cleaned)}
-.dm-hist-group .hd.hit-played{--hc:var(--ev-played)} .dm-hist-group .hd.hit-note{--hc:var(--ev-note)}
+.hd.hit-bought{--hc:var(--ev-bought)} .hd.hit-cleaned{--hc:var(--ev-cleaned)}
+.hd.hit-played{--hc:var(--ev-played)} .hd.hit-note{--hc:var(--ev-note)}
 .dm-hist-entry.hit.letting-go,.dm-hist-group .hd.hit.letting-go{
   background:transparent;box-shadow:inset 3px 0 0 transparent}
 @media(prefers-reduced-motion:reduce){
@@ -3949,10 +3949,15 @@ function renderNotesForm() {
   const list = document.getElementById('fNotesList');
   if (!formNotes.length) { list.innerHTML = ''; return; }
   // oldest first by date AND time, matching the detail view
-  const sorted = [...formNotes].sort((a,b) => momentAt(a.date).localeCompare(momentAt(b.date)));
-  list.innerHTML = sorted.map((n, i) => {
-    // find original index for delete
-    const origIdx = formNotes.indexOf(formNotes.find(x => x.date===n.date && x.text===n.text));
+  // Walk the ORIGINAL indices in date order instead of matching a sorted copy
+  // back by value. Two photo-only notes added in the same sitting are identical
+  // by date and text (both ''), so the old lookup pointed every one of them at
+  // the first: the delete button removed the wrong note, and the x on a photo
+  // addressed a note that did not hold it and so did nothing at all.
+  const order = formNotes.map((n, i) => i)
+    .sort((a,b) => momentAt(formNotes[a].date).localeCompare(momentAt(formNotes[b].date)));
+  list.innerHTML = order.map(origIdx => {
+    const n = formNotes[origIdx];
     const shots = (n.images || []).length
       ? `<div class="note-shots">${n.images.map(id =>
            noteShotHTML(id, `removeNoteImage(${origIdx}, '${id}')`)).join('')}</div>`
