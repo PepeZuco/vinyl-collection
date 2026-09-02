@@ -293,8 +293,9 @@ test('the country list ranks countries beside the map', async () => {
   assert.ok(counts[0] > counts[1], 'not ordered by record count: ' + counts.join(','));
   assert.match(rows[0].querySelector('img').getAttribute('src'), /\/br\.png$/,
     'the row is missing its flag');
-  assert.strictEqual(rows[0].querySelector('.crank-bar').style.width, '100.0%',
-    'the biggest country did not get the full-width bar');
+  const bars = rows.map(r => parseFloat(r.querySelector('.crank-bar').style.width));
+  assert.strictEqual(bars[0], 100, 'the biggest country did not get the full-width bar');
+  assert.ok(bars[1] < bars[0], 'the bars do not follow the counts: ' + bars.join(','));
 });
 
 // ── the address bar ─────────────────────────────────────────────────────────
@@ -1421,4 +1422,63 @@ test('closing the drawer clears the focus', async () => {
   win.openDetail(r.id, '2026-08-09');
   win.closeDetail();
   assert.strictEqual(read('detailFocus'), null);
+});
+
+test('the highlight lets go after five seconds', async () => {
+  const { win, doc, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, 'note:2026-08-09:0');
+  assert.strictEqual(litKeys(doc).length, 1);
+
+  // 4.2s held, then 800ms fading. Driven by hand: jsdom has no clock of its own
+  // worth waiting on, and a real five-second sleep in a unit test is a tax.
+  read('focusLetGo()');
+  assert.strictEqual(read('detailFocus'), null,
+    'the focus outlived its hold, so a later re-render would light it again');
+  assert.strictEqual(doc.querySelectorAll('#ddInfo .letting-go').length, 2,
+    'the entry and its date header both let go together');
+
+  read('focusForget()');
+  assert.deepStrictEqual(litKeys(doc), []);
+});
+
+test('a closed drawer leaves no timer pointing at a detached node', async () => {
+  const { win, read } = await boot();
+  const r = busySunday(read);
+  win.openDetail(r.id, '2026-08-09');
+  win.closeDetail();
+  assert.strictEqual(read('detailFocusTimer'), null);
+  assert.strictEqual(read('detailFadeTimer'), null);
+});
+
+test('the per-activity header override beats the base .hd.hit rule on specificity, not just source order', () => {
+  // dmHistoryGroupHTML emits class="hd hit hit-bought" — the base
+  // ".dm-hist-group .hd.hit" rule and a "hit-<type>" override both match
+  // that one element at once, so CSS specificity decides which wins, never
+  // which rule comes later in the stylesheet. If an override selector is
+  // less specific than the base arm it must beat, the base rule always
+  // wins the cascade and a single-kind day's date header stays gold
+  // instead of wearing that activity's colour.
+  const html = fs.readFileSync(PAGE, 'utf8');
+  const style = html.slice(html.indexOf('<style'), html.indexOf('</style>'))
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+
+  const rules = [...style.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(m => m[1].trim());
+  const arms = rules.flatMap(sel => sel.split(',').map(s => s.trim()));
+  const classCount = sel => (sel.match(/\.[\w-]+/g) || []).length;
+
+  const baseArm = arms.find(a => a === '.dm-hist-group .hd.hit');
+  assert.ok(baseArm, 'could not find the base ".dm-hist-group .hd.hit" rule to compare against');
+  const baseSpecificity = classCount(baseArm);
+
+  for (const type of ['bought', 'cleaned', 'played', 'note']) {
+    const overrideArm = arms.find(a => a === '.dm-hist-group .hd.hit-' + type
+      || a === '.hd.hit-' + type);
+    assert.ok(overrideArm, `no header override rule found for hit-${type}`);
+    assert.ok(classCount(overrideArm) >= baseSpecificity,
+      `"${overrideArm}" (specificity ${classCount(overrideArm)} class selector(s)) loses to ` +
+      `the base ".dm-hist-group .hd.hit" rule (specificity ${baseSpecificity}) whenever both ` +
+      `match the same header — the date header for a single-kind day would stay gold instead ` +
+      `of wearing its activity's colour`);
+  }
 });

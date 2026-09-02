@@ -491,6 +491,27 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry .ht{font-size:13px;line-height:1.5;flex:1;min-width:0}
 .dm-hist-entry .ht p{margin:0 0 4px}
 .dm-hist-entry .ht p:last-child{margin-bottom:0}
+/* The Timeline sent you here — say which event, for five seconds.
+   Additive on purpose: the history stays whole, nothing is filtered or dimmed,
+   because the surrounding history is usually why the click was worth making. */
+.dm-hist-entry.hit,.dm-hist-group .hd.hit{--hc:var(--accent);
+  background:color-mix(in srgb, var(--hc) 20%, transparent);
+  border-radius:3px;transition:background .8s ease,box-shadow .8s ease}
+.dm-hist-entry.hit{box-shadow:inset 3px 0 0 var(--hc);padding:2px 6px;margin:-2px -6px 4px}
+.dm-hist-group .hd.hit{padding:2px 5px;margin-left:-5px;display:inline-block}
+.dm-hist-entry.bought.hit{--hc:var(--ev-bought)}
+.dm-hist-entry.cleaned.hit{--hc:var(--ev-cleaned)}
+.dm-hist-entry.played.hit{--hc:var(--ev-played)}
+.dm-hist-entry.note.hit{--hc:var(--ev-note)}
+/* One kind of thing happened, so the date can wear its colour. A whole-day
+   focus carries no hit-<type> and keeps the gold above. */
+.dm-hist-group .hd.hit-bought{--hc:var(--ev-bought)} .dm-hist-group .hd.hit-cleaned{--hc:var(--ev-cleaned)}
+.dm-hist-group .hd.hit-played{--hc:var(--ev-played)} .dm-hist-group .hd.hit-note{--hc:var(--ev-note)}
+.dm-hist-entry.hit.letting-go,.dm-hist-group .hd.hit.letting-go{
+  background:transparent;box-shadow:inset 3px 0 0 transparent}
+@media(prefers-reduced-motion:reduce){
+  .dm-hist-entry.hit,.dm-hist-group .hd.hit{transition:none}
+}
 .dm-hist-icon{font-size:13px}
 .dm-hist-time{font-size:11.5px;color:var(--label);font-variant-numeric:tabular-nums;margin-left:7px}
 .dm-hist-entry.note .dm-hist-time{display:block;margin:2px 0 0}
@@ -1406,6 +1427,18 @@ select option{background:var(--surface);color:var(--text)}
 .note-delete{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1}
 .note-delete:hover{color:var(--danger)}
 
+/* thumbnails on a note, in the form and in the detail history */
+.note-shots{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.note-shot{width:52px;height:52px;object-fit:cover;border-radius:var(--radius-sm);
+  border:1px solid var(--border);cursor:pointer;display:block}
+.note-shot-wrap{position:relative;line-height:0}
+.note-shot-drop{position:absolute;top:-5px;right:-5px;width:17px;height:17px;
+  border-radius:50%;border:1px solid var(--border);background:var(--card);
+  color:var(--muted);cursor:pointer;font-size:10px;line-height:1;padding:0;
+  display:flex;align-items:center;justify-content:center}
+.note-shot-drop:hover{color:var(--danger)}
+.note-photo-row{grid-column:1 / -1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
 /* ── play-date editor in form ──────────────────────────────────────────────── */
 .playdates-section{display:flex;flex-direction:column;gap:8px}
 .playdates-list{display:flex;flex-wrap:wrap;gap:8px}
@@ -2163,6 +2196,17 @@ select option{background:var(--surface);color:var(--text)}
               <div class="field"><i class="ti ti-clock"></i><input type="time" id="fNoteTime" title="time of the note — leave blank if it does not matter"></div>
               <textarea id="fNoteText" placeholder="Add a note…"></textarea>
               <button type="button" class="btn btn-primary btn-sm" style="height:34px;align-self:start" onclick="addNote()"><i class="ti ti-plus"></i> add</button>
+              <!-- Photos attach to the note being composed and are uploaded as
+                   they are picked, so the record save stays small. -->
+              <div class="note-photo-row">
+                <button type="button" class="btn btn-sm" id="notePickerFile" onclick="pickNotePhoto()">
+                  <i class="ti ti-folder"></i> photo
+                </button>
+                <button type="button" class="btn btn-sm" id="notePickerCamera" onclick="openCamera('note')">
+                  <i class="ti ti-camera"></i> take photo
+                </button>
+                <div class="note-shots" id="fNoteShots"></div>
+              </div>
             </div>
             <div class="notes-list" id="fNotesList"></div>
           </div>
@@ -3289,6 +3333,37 @@ const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned
  * which rewrites #dmInfo and #ddInfo wholesale a frame later — anything
  * stamped on after the fact is gone before you have finished reading it. */
 let detailFocus = null;
+let detailFocusTimer = null, detailFadeTimer = null;
+
+// Five seconds: held, then let go over the last 800ms.
+const FOCUS_HOLD_MS = 4200, FOCUS_FADE_MS = 800;
+
+/* Light the event, then stop lighting it.
+ *
+ * Letting go does NOT re-render. detailFocus is cleared so that any later
+ * render draws the history plain, and the nodes already on screen fade rather
+ * than snap — which is also why the fade is two steps and not one. */
+function focusDetail(focus) {
+  clearTimeout(detailFocusTimer); clearTimeout(detailFadeTimer);
+  detailFocusTimer = detailFadeTimer = null;
+  detailFocus = focus || null;
+  if (!detailFocus) return;
+  detailFocusTimer = idleUnref(setTimeout(focusLetGo, FOCUS_HOLD_MS));
+}
+
+function focusLetGo() {
+  detailFocus = null;
+  detailFocusTimer = null;
+  document.querySelectorAll('#detailBody .hit').forEach(el => el.classList.add('letting-go'));
+  detailFadeTimer = idleUnref(setTimeout(focusForget, FOCUS_FADE_MS));
+}
+
+function focusForget() {
+  detailFadeTimer = null;
+  document.querySelectorAll('#detailBody .hit').forEach(el =>
+    el.classList.remove('hit', 'letting-go',
+      'hit-bought', 'hit-cleaned', 'hit-played', 'hit-note'));
+}
 
 /* Three widths of focus, narrowest first:
  *   'note:2026-03-08:0'   one event
@@ -3575,7 +3650,7 @@ function openDetail(id, focus) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   currentDetailId = id;
-  detailFocus = focus || null;
+  focusDetail(focus);
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
@@ -3614,7 +3689,7 @@ function updateDetailNavVisibility() {
 let detailAnimating = false;
 // delta > 0 slides the incoming record up; delta < 0 slides it down
 function goToDetailRecord(nextRecord, delta) {
-  detailFocus = null;
+  focusDetail(null);
   const body = document.getElementById('detailBody');
   const outClass = delta > 0 ? 'slide-out-up' : 'slide-out-down';
   const inClass  = delta > 0 ? 'slide-in-up'  : 'slide-in-down';
@@ -3677,7 +3752,7 @@ function renderDetailFoot(id) {
 
 function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
-  confirmDeleteId=null;currentDetailId=null;detailFocus=null;
+  confirmDeleteId=null;currentDetailId=null;focusDetail(null);
   syncUrl(true);
 }
 
@@ -3827,6 +3902,10 @@ function countryCodeFromInput(value) {
 // Migration: if raw value is plain string (not JSON array), convert it once
 // using the record's bought_date (or today) as the date.
 let formNotes = []; // in-memory list while the form is open
+let formNoteImages = [];    // ids attached to the note being composed
+// Data URIs for photos uploaded in this session, so a just-added thumbnail
+// paints immediately instead of round-tripping through its own URL.
+let noteImagePreview = {};
 let formPlayDates = []; // ditto for the play-date editor
 let formCleanedDates = []; // ditto for the cleaned-date editor
 let formArtists = []; // ditto for the multi-artist editor
@@ -3870,13 +3949,23 @@ function renderNotesForm() {
   const list = document.getElementById('fNotesList');
   if (!formNotes.length) { list.innerHTML = ''; return; }
   // oldest first by date AND time, matching the detail view
-  const sorted = [...formNotes].sort((a,b) => momentAt(a.date).localeCompare(momentAt(b.date)));
-  list.innerHTML = sorted.map((n, i) => {
-    // find original index for delete
-    const origIdx = formNotes.indexOf(formNotes.find(x => x.date===n.date && x.text===n.text));
+  // Walk the ORIGINAL indices in date order instead of matching a sorted copy
+  // back by value. Two photo-only notes added in the same sitting are identical
+  // by date and text (both ''), so the old lookup pointed every one of them at
+  // the first: the delete button removed the wrong note, and the x on a photo
+  // addressed a note that did not hold it and so did nothing at all.
+  const order = formNotes.map((n, i) => i)
+    .sort((a,b) => momentAt(formNotes[a].date).localeCompare(momentAt(formNotes[b].date)));
+  list.innerHTML = order.map(origIdx => {
+    const n = formNotes[origIdx];
+    const shots = (n.images || []).length
+      ? `<div class="note-shots">${n.images.map(id =>
+           noteShotHTML(id, `removeNoteImage(${origIdx}, '${id}')`)).join('')}</div>`
+      : '';
     return `<div class="note-entry">
       <div class="note-entry-date">${noteDateLabel(n.date)}</div>
-      <div class="note-entry-body">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div>
+      <div class="note-entry-body">${typeof marked !== 'undefined' ? marked.parse(n.text || '') : esc(n.text || '')}</div>
+      ${shots}
       <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
@@ -4030,10 +4119,15 @@ function addNote() {
   const date = joinStamp(dateEl.value, timeEl.value);
   const text = textEl.value.trim();
   if (!date) { dateEl.focus(); dateEl.style.borderColor='var(--danger)'; return; }
-  if (!text) { textEl.focus(); textEl.style.borderColor='var(--danger)'; return; }
+  // Text OR a photo. A note that is just a picture of the sleeve is a note.
+  if (!text && !formNoteImages.length) {
+    textEl.focus(); textEl.style.borderColor='var(--danger)'; return;
+  }
   dateEl.style.borderColor='';
   textEl.style.borderColor='';
-  formNotes.push({ date, text });
+  formNotes.push({ date, text, images: formNoteImages });
+  formNoteImages = [];
+  renderNoteShots();
   textEl.value = '';
   // reset to now, so a second note written in the same sitting is stamped for it
   dateEl.value = today();
@@ -4043,6 +4137,64 @@ function addNote() {
 
 function deleteNote(idx) {
   formNotes.splice(idx, 1);
+  renderNotesForm();
+}
+
+// A photo just picked or captured, on its way to a note. Uploaded now rather
+// than at save so the record's own payload stays small: several photos plus a
+// dirty cover would otherwise be megabytes of base64 on every save.
+async function addNoteImage(dataUri){
+  let res;
+  try{
+    res = await fetch('/api/note-images', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({data: dataUri})});
+  }catch(e){ toast('could not save that photo'); return; }
+  if(!res.ok){
+    toast(res.status === 401 ? 'session expired — unlock and save again'
+        : res.status === 413 ? 'that photo is too large'
+        : 'could not save that photo');
+    return;
+  }
+  const {id} = await res.json();
+  noteImagePreview[id] = dataUri;
+  if(formNoteImages.indexOf(id) === -1) formNoteImages.push(id);  // same photo twice
+  renderNoteShots();
+}
+
+// A photo uploaded in this session paints from the bytes already in hand; a
+// stored one comes from its own immutable URL.
+function noteImageSrc(id){
+  return noteImagePreview[id] || `/api/note-images/${id}`;
+}
+
+// One thumbnail, with the × that drops it. `onerror` removes it rather than
+// leaving a broken-image icon sitting inside a note.
+function noteShotHTML(id, onRemove){
+  return `<span class="note-shot-wrap">
+    <img class="note-shot" src="${esc(noteImageSrc(id))}" onerror="this.parentNode.remove()">
+    <button type="button" class="note-shot-drop" title="remove photo" onclick="${onRemove}"><i class="ti ti-x"></i></button>
+  </span>`;
+}
+
+// The strip under the add-row: photos on the note not yet added.
+function renderNoteShots(){
+  document.getElementById('fNoteShots').innerHTML =
+    formNoteImages.map(id => noteShotHTML(id, `removePendingNoteImage('${id}')`)).join('');
+}
+
+function removePendingNoteImage(id){
+  formNoteImages = formNoteImages.filter(x => x !== id);
+  renderNoteShots();
+}
+
+// Removing a photo from a note already in the list. The image row itself is
+// not deleted here — the server reaps it on save, once it knows nothing else
+// refers to it.
+function removeNoteImage(idx, id){
+  const note = formNotes[idx];
+  if(!note) return;
+  note.images = (note.images || []).filter(x => x !== id);
   renderNotesForm();
 }
 
@@ -4130,6 +4282,8 @@ function openAdd(){
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteTime').value=nowStamp().slice(11,16);
   document.getElementById('fNoteText').value='';
+  formNoteImages=[];
+  renderNoteShots();
   renderNotesForm();
   populateGenreSelect();
   populateCountryList();
@@ -4192,6 +4346,8 @@ function openEdit(id){
   document.getElementById('fCondition').value=r.condition||'';
   renderCondSwitch();
   formNotes=parseNotes(r.notes, r.bought_date||today());
+  formNoteImages=[];
+  renderNoteShots();
   // keep the recorded time — slicing to 10 chars used to wipe it off every play
   // on the record the moment the form was saved
   formPlayDates=parsePlayDates(r.play_dates)
@@ -4379,10 +4535,23 @@ function openSpotifyOverlay(){
 }
 function closeSpotifyOverlay(){ document.getElementById('spotifyOverlay').classList.add('hidden'); }
 
-function pickCoverFile(){ document.getElementById('coverInput').click(); }
+// Which half of the form the next photo belongs to. The picker, the camera
+// overlay and the resize path are shared; only the destination differs, and
+// captureFrame used to hardcode applyCover so the camera could only ever
+// produce a cover.
+let photoTarget = 'cover';
+
+function pickCoverFile(){ photoTarget = 'cover'; document.getElementById('coverInput').click(); }
+function pickNotePhoto(){ photoTarget = 'note';  document.getElementById('coverInput').click(); }
 function fallbackCapture(){ document.getElementById('coverCaptureInput').click(); }
 
-async function openCamera(){
+// The one place that knows where a finished data URI goes.
+function applyPhoto(dataUri){
+  if(photoTarget === 'note') addNoteImage(dataUri); else applyCover(dataUri);
+}
+
+async function openCamera(target){
+  photoTarget = target || 'cover';   // the cover button calls openCamera()
   if(camStream) return; // a request is already in flight or live
   // navigator.mediaDevices is undefined (not an error) outside a secure context.
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
@@ -4418,7 +4587,7 @@ function captureFrame(){
   cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
   const dataUri = cv.toDataURL('image/jpeg', .85);
   closeCamera();
-  applyCover(dataUri);
+  applyPhoto(dataUri);
 }
 
 async function resizeImage(file, maxEdge=1000){
@@ -4636,7 +4805,7 @@ async function handleCoverFile(e){
   // different record opened; applying the cover now would stamp it onto that
   // record. No ++ here — runScan takes its own token when the scan starts.
   if(myToken !== scanToken) return;
-  applyCover(dataUri);
+  applyPhoto(dataUri);
 }
 document.getElementById('coverInput').addEventListener('change', handleCoverFile);
 document.getElementById('coverCaptureInput').addEventListener('change', handleCoverFile);
@@ -4714,7 +4883,7 @@ function setScanBusy(busy){
   // window, error and abandoned-scan paths included.
   document.getElementById('scanStatus').style.display = busy ? 'flex' : 'none';
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
-   'coverPickerFile','coverPickerCamera'].forEach(id=>{
+   'coverPickerFile','coverPickerCamera','notePickerFile','notePickerCamera'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.disabled = busy;
   });
