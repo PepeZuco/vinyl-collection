@@ -1480,5 +1480,11 @@ test('the per-activity header override beats the base .hd.hit rule on specificit
       `the base ".dm-hist-group .hd.hit" rule (specificity ${baseSpecificity}) whenever both ` +
       `match the same header — the date header for a single-kind day would stay gold instead ` +
       `of wearing its activity's colour`);
+    // Specificity alone is not enough: the override only ties the base arm, so
+    // it wins on source order. Reorder the stylesheet and the bug is back.
+    assert.ok(arms.indexOf(overrideArm) > arms.indexOf(baseArm),
+      `"${overrideArm}" is only as specific as the base ".dm-hist-group .hd.hit" rule, ` +
+      `so it has to come after it to win the cascade — but it appears before it in the ` +
+      `stylesheet, which puts the date header back to gold`);
   }
 });
