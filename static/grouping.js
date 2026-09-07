@@ -221,10 +221,20 @@ const VinylGrouping = (function () {
    * shelf. Every record sorts by artist, then the sorted list is cut in half
    * by COUNT rather than by letter, so an alphabet-heavy range (lots of "The
    * ...") doesn't leave one block overflowing while the other sits half
-   * empty. An odd record count gives the extra record to block 1. */
+   * empty. An odd record count gives the extra record to block 1.
+   *
+   * Compilations have no single artist: they're stored with every performer
+   * semicolon-separated, so sorting them by name alone files each one under
+   * whoever happens to be listed first and scatters them through the shelf.
+   * They rank last instead, alphabetical among themselves, which is where
+   * they sit on the shelf. A "/" is not the same signal -- it separates the
+   * two names of one credit ("Edu Lobo / Chico Buarque"), so it sorts by
+   * letter like any other artist. */
   function setupBlocks(records) {
+    const rank = r => ((r.artist || '').includes(';') ? 1 : 0);
+    const name = r => (r.artist || '').trim().toLowerCase();
     const sorted = [...records].sort((a, b) =>
-      (a.artist || '').trim().toLowerCase().localeCompare((b.artist || '').trim().toLowerCase()));
+      rank(a) - rank(b) || name(a).localeCompare(name(b)));
     const cut = Math.ceil(sorted.length / 2);
     return [
       { label: 'Block 1', records: sorted.slice(0, cut) },

@@ -459,3 +459,39 @@ test('setupBlocks of an empty collection gives two empty blocks', () => {
   assert.deepStrictEqual(block1.records, []);
   assert.deepStrictEqual(block2.records, []);
 });
+
+// ── setupBlocks: various-artists compilations ───────────────────────────────
+// Compilations are stored with every performer semicolon-separated in `artist`,
+// so alphabetical order alone scatters them through the shelf under whichever
+// name happens to be first. On the shelf they live together at the end.
+
+test('a semicolon-separated compilation sorts after every named artist', () => {
+  const list = [rec({ id: 1, artist: 'Amaro Ochoa; Pablo Milanés; Quilla Huasi' }),
+                rec({ id: 2, artist: 'Zeca Pagodinho' })];
+  const [block1, block2] = setupBlocks(list);
+  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.id), [2, 1]);
+});
+
+test('compilations stay alphabetical among themselves at the end', () => {
+  const list = [rec({ id: 1, artist: 'Duke Ellington; Artie Shaw' }),
+                rec({ id: 2, artist: 'Wilco' }),
+                rec({ id: 3, artist: 'Chubb Rocky; Time Klub' }),
+                rec({ id: 4, artist: 'ABBA' })];
+  const [block1, block2] = setupBlocks(list);
+  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.id), [4, 2, 3, 1]);
+});
+
+test('a slash in an artist name is not a compilation and still sorts by letter', () => {
+  const list = [rec({ id: 1, artist: 'Wilco' }),
+                rec({ id: 2, artist: 'Edu Lobo / Chico Buarque' })];
+  const [block1, block2] = setupBlocks(list);
+  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.id), [2, 1]);
+});
+
+test('compilations at the end do not change the count-based split', () => {
+  const list = [rec({ id: 1, artist: 'A; B' }), rec({ id: 2, artist: 'C; D' }),
+                rec({ id: 3, artist: 'Wilco' })];
+  const [block1, block2] = setupBlocks(list);
+  assert.deepStrictEqual(block1.records.map(r => r.id), [3, 1]);
+  assert.deepStrictEqual(block2.records.map(r => r.id), [2]);
+});
