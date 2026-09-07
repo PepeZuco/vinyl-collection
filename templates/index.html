@@ -2262,6 +2262,19 @@ select option{background:var(--surface);color:var(--text)}
   </div>
 </div>
 
+<!-- One note photo, full size. There was no lightbox before this. -->
+<div class="overlay hidden" id="shotOverlay" onclick="closeShot()">
+  <div class="modal" style="max-width:min(90vw,720px)">
+    <div class="modal-head">
+      <span class="modal-title">photo</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeShot()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="text-align:center">
+      <img id="shotImage" alt="" style="max-width:100%;max-height:70vh;border-radius:var(--radius)">
+    </div>
+  </div>
+</div>
+
 <!-- Spotify link popup — submitting a valid link closes this and runs the
      scan immediately; there is no separate "tap analyse" step for this path. -->
 <div class="overlay hidden" id="spotifyOverlay">
@@ -3325,7 +3338,11 @@ function dmHistoryEvents(r) {
   // The raw index again: an empty note holds its slot, so filtering first would
   // renumber every note after it and break keys the Timeline already handed out.
   if (r.notes) parseNotes(r.notes, r.bought_date||today()).forEach((n, i) => {
-    if (n.text) add('note', n.date, { i, text: n.text });
+    // hasContent, not n.text — a note that is only a photo still happened, and
+    // testing the text alone hid it from the history completely.
+    if (VinylNotes.hasContent(n)) {
+      add('note', n.date, { i, text: n.text || '', images: n.images || [] });
+    }
   });
   // by day AND time, so two plays on one evening read in the order they happened
   return events.sort((a,b) => a.at.localeCompare(b.at));
@@ -3403,8 +3420,14 @@ function dmHistoryEntryHTML(ev) {
   // no clock on entries recorded before times were kept — the icon or the note
   // just sits alone, rather than the timeline claiming it happened at midnight
   const clock = ev.time ? `<span class="dm-hist-time">${esc(ev.time)}</span>` : '';
+  const shotIds = (ev.images || []).filter(VinylNotes.isImageId);
+  const shots = shotIds.length
+    ? `<div class="note-shots">${shotIds.map(id =>
+         `<img class="note-shot" alt="" src="${esc(noteImageSrc(id))}" ` +
+         `onclick="openShot('${id}')" onerror="this.remove()">`).join('')}</div>`
+    : '';
   const body = ev.type === 'note'
-    ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}` +
+    ? `<div class="ht detail-notes-body">${ev.text ? (typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)) : ''}${shots}` +
       `<span class="dm-hist-time"><i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
   const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
@@ -4639,6 +4662,18 @@ function closeCamera(){
   const video = document.getElementById('camVideo');
   video.srcObject = null;
   document.getElementById('cameraOverlay').classList.add('hidden');
+}
+
+function openShot(id){
+  if(!VinylNotes.isImageId(id)) return;
+  document.getElementById('shotImage').src = noteImageSrc(id);
+  document.getElementById('shotOverlay').classList.remove('hidden');
+}
+
+function closeShot(){
+  document.getElementById('shotOverlay').classList.add('hidden');
+  // An empty src attribute resolves to the page URL and fetches it again.
+  document.getElementById('shotImage').removeAttribute('src');
 }
 
 function captureFrame(){
