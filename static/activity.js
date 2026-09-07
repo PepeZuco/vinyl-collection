@@ -90,7 +90,11 @@ const VinylActivity = (function (grouping) {
     try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
     if (!Array.isArray(parsed)) parsed = [{ date: fallbackDate, text: String(raw) }];
     return parsed.filter(function (n) {
-      return n && typeof n.text === 'string' && n.text.trim();
+      // Text OR a photo. A note that is only a picture of the sleeve happened
+      // on its day like any other, and dropping it hides an event.
+      if (!n) return false;
+      if (typeof n.text === 'string' && n.text.trim()) return true;
+      return !!(n.images && n.images.length);
     });
   }
 
@@ -102,7 +106,12 @@ const VinylActivity = (function (grouping) {
       plays:  parseList(r.play_dates).map(dayOf).filter(isDay).sort(asc),
       cleans: parseList(r.cleaned_dates).map(dayOf).filter(isDay).sort(asc),
       notes:  parseNoteList(r.notes, r.bought_date)
-                .map(function (n) { return { day: dayOf(n.date), text: n.text }; })
+                .map(function (n) {
+                  // Ids only. This runs on the /api/records payload, which is
+                  // exactly why the bytes had to leave the notes column.
+                  return { day: dayOf(n.date), text: n.text || '',
+                           images: n.images || [] };
+                })
                 .filter(function (n) { return isDay(n.day); })
                 .sort(function (a, b) { return a.day - b.day; }),
     };
@@ -155,7 +164,7 @@ const VinylActivity = (function (grouping) {
 
       const noteDays = e.notes.map(function (n) {
         const day = shift(n.day);
-        noteList.push({ day: day, text: n.text, id: e.r.id,
+        noteList.push({ day: day, text: n.text, images: n.images, id: e.r.id,
                         artist: e.r.artist || '', album: e.r.album_name || '' });
         count(day, 'n');
         return day;

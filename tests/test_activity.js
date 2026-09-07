@@ -192,7 +192,38 @@ test('notes come back ascending and name their record', () => {
   ]);
   assert.deepStrictEqual(a.notes.map(n => n.text), ['earlier', 'later']);
   assert.deepStrictEqual(a.notes[1], { day: 8, text: 'later', id: 4,
-                                       artist: 'X', album: 'Y' });
+                                       artist: 'X', album: 'Y', images: [] });
+});
+
+// Real ids are sha256(data_uri)[:32]; anything else is refused upstream.
+const IMG_A = 'a'.repeat(32), IMG_B = 'b'.repeat(32);
+
+test('a note carries its image ids, never any bytes', () => {
+  const a = buildActivity([
+    rec({ id: 7, bought_date: '2026-01-01',
+          notes: JSON.stringify([{ date: '2026-01-04', text: 'seam split',
+                                   images: [IMG_A, IMG_B] }]) }),
+  ]);
+  assert.deepStrictEqual(a.notes[0].images, [IMG_A, IMG_B]);
+});
+
+test('a note that is only a photo still reaches the strip', () => {
+  // parseNoteList used to require text, which would drop this note entirely.
+  const a = buildActivity([
+    rec({ id: 8, bought_date: '2026-01-01',
+          notes: JSON.stringify([{ date: '2026-01-04', text: '', images: [IMG_A] }]) }),
+  ]);
+  assert.strictEqual(a.notes.length, 1);
+  assert.deepStrictEqual(a.notes[0].images, [IMG_A]);
+  assert.deepStrictEqual(a.lanes[0].notes, [3]);
+});
+
+test('a note with neither text nor photos is still dropped', () => {
+  const a = buildActivity([
+    rec({ id: 9, bought_date: '2026-01-01',
+          notes: JSON.stringify([{ date: '2026-01-04', text: '   ' }]) }),
+  ]);
+  assert.strictEqual(a.notes.length, 0);
 });
 
 // ── playedOn ────────────────────────────────────────────────────────────────

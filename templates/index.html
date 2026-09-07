@@ -980,8 +980,13 @@ select option{background:var(--surface);color:var(--text)}
 
 .act-note{margin-top:10px;background:var(--card);border:1px solid var(--border);
   border-left:2px solid var(--ev-note);padding:7px 10px;font-size:12px;
-  line-height:1.45;color:var(--text);opacity:0;transition:opacity .3s;min-height:44px}
+  line-height:1.45;color:var(--text);opacity:0;transition:opacity .3s;min-height:44px;
+  display:flex;align-items:flex-start;gap:9px}
 .act-note.on{opacity:1}
+/* min-width:0 or a long note refuses to shrink and pushes the thumbnail out. */
+.act-note .body{flex:1;min-width:0}
+.act-note .shot{width:38px;height:38px;object-fit:cover;border-radius:var(--radius-sm);
+  border:1px solid var(--border);flex-shrink:0;display:none}
 .act-note .who{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.09em;
   text-transform:uppercase;color:var(--ev-note);display:block;margin-bottom:3px}
 .act-note .txt{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1865,7 +1870,10 @@ select option{background:var(--surface);color:var(--text)}
             <div class="act-pin" id="actPin"></div>
           </div>
           <div class="act-axis" id="actBandAxis"></div>
-          <div class="act-note" id="actNote"><span class="who"></span><span class="txt"></span></div>
+          <div class="act-note" id="actNote">
+            <span class="body"><span class="who"></span><span class="txt"></span></span>
+            <img class="shot" alt="">
+          </div>
 
           <div class="act-strip">
             <div class="act-grp"><span>zoom</span>
@@ -6705,6 +6713,16 @@ function actPaintNote(day) {
   card.querySelector('.who').textContent =
     n.artist + ' — ' + n.album + ' · ' + VinylActivity.dayAt(act.d0, n.day);
   card.querySelector('.txt').textContent = n.text;
+  // The first photo only — this is a hover card, not a gallery.
+  const shot = card.querySelector('.shot');
+  const first = (n.images || []).filter(VinylNotes.isImageId)[0];
+  if(first){
+    shot.src = noteImageSrc(first);
+    shot.style.display = 'block';
+  }else{
+    shot.removeAttribute('src');   // '' would resolve to the page URL and refetch it
+    shot.style.display = 'none';
+  }
   card.classList.add('on');
 }
 
