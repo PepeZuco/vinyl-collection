@@ -23,6 +23,22 @@ const VinylTimeline = (function (grouping) {
    * about it comes after the thing it describes. */
   const TYPE_ORDER = { bought: 0, cleaned: 1, played: 2, note: 3 };
 
+  /* An event's name.
+   *
+   * nowStamp() keeps seconds, so anything logged through the app is already
+   * unique on its stamp alone — but rows written before times were kept carry
+   * a bare 'YYYY-MM-DD', and two clockless cleanings on one day would collide.
+   * Indexing every list-backed type is uniform and costs nothing.
+   *
+   * bought takes no index: bought_date is one column and cannot hold two.
+   *
+   * `at` is the RAW stored string, not a normalised moment. The drawer builds
+   * its own history from the same parsers and must arrive at the same keys, so
+   * both sides pass what the parser handed them and nothing in between. */
+  function keyOf(type, at, i) {
+    return type === 'bought' ? 'bought:' + at : type + ':' + at + ':' + i;
+  }
+
   /* Map of 'YYYY-MM-DD' -> the day's events, each in the order it reads.
    *
    * Every event files under the day of its LOCAL clock. The stamps are local
@@ -39,15 +55,20 @@ const VinylTimeline = (function (grouping) {
       const moment = grouping.momentOf(date);
       if (!moment.day) return;            // undated, or a stamp no calendar holds
       if (!map.has(moment.day)) map.set(moment.day, []);
-      map.get(moment.day).push(Object.assign({ time: moment.time }, event));
+      map.get(moment.day).push(Object.assign(
+        { time: moment.time, day: moment.day, at: String(date),
+          key: keyOf(event.type, String(date), event.i) },
+        event));
     };
 
     (records || []).forEach(r => {
       if (on.bought) add(r.bought_date, { type: 'bought', r });
-      if (on.cleaned) parseCleans(r.cleaned_dates).forEach(d => add(d, { type: 'cleaned', r }));
-      if (on.played) parsePlays(r.play_dates).forEach(d => add(d, { type: 'played', r }));
-      if (on.note) parseNotes(r.notes, r.bought_date).forEach(n => {
-        if (n && n.text && n.text.trim()) add(n.date, { type: 'note', r, text: n.text });
+      if (on.cleaned) parseCleans(r.cleaned_dates).forEach((d, i) => add(d, { type: 'cleaned', r, i }));
+      if (on.played) parsePlays(r.play_dates).forEach((d, i) => add(d, { type: 'played', r, i }));
+      if (on.note) parseNotes(r.notes, r.bought_date).forEach((n, i) => {
+        // The index is the position in the RAW array: an empty note still holds
+        // its slot, so filtering first would renumber everything after it.
+        if (n && n.text && n.text.trim()) add(n.date, { type: 'note', r, i, text: n.text });
       });
     });
 
@@ -61,7 +82,38 @@ const VinylTimeline = (function (grouping) {
     return map;
   }
 
-  return { ALL_TYPES, TYPE_ORDER, eventsByDay };
+  /* One day's events, collapsed to one entry per record.
+   *
+   * The Week grid drew one chip per event, so a record bought, cleaned, played
+   * twice and noted on one Sunday came out as five identical covers in one
+   * 150-pixel column — the column counting events while the eye counts records.
+   *
+   * Order is inherited, not recomputed: eventsByDay hands back a day already
+   * sorted by clock, then type, then album, so a record's FIRST appearance in
+   * that list is the moment its day started. Insertion order is therefore
+   * exactly "earliest event first", with the same tiebreaks the day already
+   * uses. Sorting again here would only be a second, disagreeing opinion. */
+  function recordDays(dayEvents) {
+    const out = [], byRecord = new Map();
+    (dayEvents || []).forEach(ev => {
+      let g = byRecord.get(ev.r.id);
+      if (!g) {
+        g = { r: ev.r, day: ev.day, acts: [], evs: [] };
+        byRecord.set(ev.r.id, g);
+        out.push(g);
+      }
+      g.evs.push(ev);
+      let a = g.acts.find(x => x.type === ev.type);
+      if (!a) { a = { type: ev.type, evs: [] }; g.acts.push(a); }
+      a.evs.push(ev);
+    });
+    // Within a record the rail reads bought, cleaned, played, note — the order
+    // the day happened in, not the order the clock reported it.
+    out.forEach(g => g.acts.sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]));
+    return out;
+  }
+
+  return { ALL_TYPES, TYPE_ORDER, keyOf, eventsByDay, recordDays };
 })(typeof module !== 'undefined' && module.exports
      ? require('./grouping.js') : VinylGrouping);
 

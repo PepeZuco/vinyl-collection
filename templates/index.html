@@ -28,7 +28,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#f1c23f;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
-  --ev-bought:#ac9008; --ev-cleaned:#0b9d9d; --ev-played:#2171cc; --ev-note:#a5397e;
+  --ev-bought:#F5C518; --ev-cleaned:#4AA3C4; --ev-played:#5FBF7A; --ev-note:#9B7FD4;
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
@@ -36,7 +36,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#7A5A00;--danger:#c0392b;
   --card-hover:#e9e5dc;--search-bg:#f0ede6;
   --sh-gray:rgba(0,0,0,0.18);
-  --ev-bought:#b39609; --ev-cleaned:#07a4a4; --ev-played:#2171cc; --ev-note:#a5397e;
+  --ev-bought:#b39609; --ev-cleaned:#2b7f99; --ev-played:#3d8a55; --ev-note:#6f4fae;
   --toggle-icon:'☾'
 }
 
@@ -483,20 +483,42 @@ select option{background:var(--surface);color:var(--text)}
 /* individual events within a date group — each keeps its own type color via its dot */
 .dm-hist-entry{display:flex;align-items:flex-start;gap:7px;margin-bottom:6px}
 .dm-hist-entry:last-child{margin-bottom:0}
-.dm-hist-entry .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;background:#9B7FD4}
-.dm-hist-entry.bought .dot{background:var(--accent)}
-.dm-hist-entry.cleaned .dot{background:#4AA3C4}
-.dm-hist-entry.played .dot{background:#5FBF7A}
-.dm-hist-entry.note .dot{background:#9B7FD4}
+.dm-hist-entry .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;background:var(--ev-note)}
+.dm-hist-entry.bought .dot{background:var(--ev-bought)}
+.dm-hist-entry.cleaned .dot{background:var(--ev-cleaned)}
+.dm-hist-entry.played .dot{background:var(--ev-played)}
+.dm-hist-entry.note .dot{background:var(--ev-note)}
 .dm-hist-entry .ht{font-size:13px;line-height:1.5;flex:1;min-width:0}
 .dm-hist-entry .ht p{margin:0 0 4px}
 .dm-hist-entry .ht p:last-child{margin-bottom:0}
+/* The Timeline sent you here — say which event, for five seconds.
+   Additive on purpose: the history stays whole, nothing is filtered or dimmed,
+   because the surrounding history is usually why the click was worth making. */
+.dm-hist-entry.hit,.dm-hist-group .hd.hit{--hc:var(--accent);
+  background:color-mix(in srgb, var(--hc) 20%, transparent);
+  border-radius:3px;transition:background .8s ease,box-shadow .8s ease}
+.dm-hist-entry.hit{box-shadow:inset 3px 0 0 var(--hc);padding:2px 6px;margin:-2px -6px 4px}
+.dm-hist-group .hd.hit{padding:2px 5px;margin-left:-5px;display:inline-block}
+.dm-hist-entry.bought.hit{--hc:var(--ev-bought)}
+.dm-hist-entry.cleaned.hit{--hc:var(--ev-cleaned)}
+.dm-hist-entry.played.hit{--hc:var(--ev-played)}
+.dm-hist-entry.note.hit{--hc:var(--ev-note)}
+/* One kind of thing happened, so the date can wear its colour. A whole-day
+   focus carries no hit-<type> and keeps the gold above. */
+.dm-hist-group .hd.hit-bought{--hc:var(--ev-bought)} .dm-hist-group .hd.hit-cleaned{--hc:var(--ev-cleaned)}
+.dm-hist-group .hd.hit-played{--hc:var(--ev-played)} .dm-hist-group .hd.hit-note{--hc:var(--ev-note)}
+.dm-hist-entry.hit.letting-go,.dm-hist-group .hd.hit.letting-go{
+  background:transparent;box-shadow:inset 3px 0 0 transparent}
+@media(prefers-reduced-motion:reduce){
+  .dm-hist-entry.hit,.dm-hist-group .hd.hit{transition:none}
+}
 .dm-hist-icon{font-size:13px}
 .dm-hist-time{font-size:11.5px;color:var(--label);font-variant-numeric:tabular-nums;margin-left:7px}
 .dm-hist-entry.note .dm-hist-time{display:block;margin:2px 0 0}
-.dm-hist-entry.bought .dm-hist-icon{color:var(--accent)}
-.dm-hist-entry.cleaned .dm-hist-icon{color:#4AA3C4}
-.dm-hist-entry.played .dm-hist-icon{color:#5FBF7A}
+.dm-hist-entry.bought .dm-hist-icon{color:var(--ev-bought)}
+.dm-hist-entry.cleaned .dm-hist-icon{color:var(--ev-cleaned)}
+.dm-hist-entry.played .dm-hist-icon{color:var(--ev-played)}
+.dm-hist-entry.note .dm-hist-icon{color:var(--ev-note)}
 
 /* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
 .detail-mobile-layout{display:none}
@@ -1079,6 +1101,23 @@ select option{background:var(--surface);color:var(--text)}
 .chart-wrap{position:relative;height:240px}
 .chart-wrap-tall{position:relative;height:300px}
 
+/* records by country: the map says where the collection comes from, the list
+   beside it says in what order — a choropleth cannot tell you whether Germany
+   or Japan is ahead. Both read the same counts, biggest first, and the list
+   scrolls on its own so the map keeps its height. */
+.country-split{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}
+.country-rank{max-height:420px;overflow-y:auto;border:1px solid var(--border);
+  border-radius:var(--radius-sm);scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.crank-row{position:relative;display:grid;grid-template-columns:18px minmax(0,1fr) auto;
+  gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px}
+.crank-row:last-child{border-bottom:none}
+/* the share bar sits behind the row; the cells are positioned so they stay on top */
+.crank-bar{position:absolute;left:0;top:0;bottom:0;background:var(--accent);opacity:.14}
+.crank-row .flag-wrap,.crank-name,.crank-count{position:relative}
+.crank-name{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--text)}
+.crank-count{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.crank-empty{padding:14px 10px;font-size:12px;color:var(--muted)}
+
 /* shared hover tooltip for the year-distribution and country charts —
    lists the matching records (capped) instead of just a bare count */
 .chart-tooltip{position:absolute;pointer-events:none;opacity:0;z-index:20;
@@ -1114,6 +1153,9 @@ select option{background:var(--surface);color:var(--text)}
 .list-condition,.list-bought,.list-lastplayed{font-size:12px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 @media(max-width:700px){.charts-row{grid-template-columns:1fr}}
+/* under ~900px the map is too narrow to share a row, so the list drops below it */
+@media(max-width:900px){.country-split{grid-template-columns:1fr}
+  .country-rank{max-height:220px}}
 
 /* crate and sort dropdowns on the arrange row */
 .sort-dropdown,.group-dropdown{position:relative;flex-shrink:0}
@@ -1385,6 +1427,19 @@ select option{background:var(--surface);color:var(--text)}
 .note-delete{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1}
 .note-delete:hover{color:var(--danger)}
 
+/* thumbnails on a note, in the form and in the detail history */
+.note-shots{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.note-shot{width:52px;height:52px;object-fit:cover;border-radius:var(--radius-sm);
+  border:1px solid var(--border);cursor:pointer;display:block}
+.note-shot-wrap{position:relative;line-height:0}
+.note-shot-drop{position:absolute;top:-5px;right:-5px;width:17px;height:17px;
+  border-radius:50%;border:1px solid var(--border);background:var(--card);
+  color:var(--muted);cursor:pointer;font-size:10px;line-height:1;padding:0;
+  display:flex;align-items:center;justify-content:center}
+.note-shot-drop:hover{color:var(--danger)}
+.note-shot.missing{background:var(--surface);border-style:dashed}
+.note-photo-row{grid-column:1 / -1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
 /* ── play-date editor in form ──────────────────────────────────────────────── */
 .playdates-section{display:flex;flex-direction:column;gap:8px}
 .playdates-list{display:flex;flex-wrap:wrap;gap:8px}
@@ -1436,7 +1491,9 @@ select option{background:var(--surface);color:var(--text)}
   #formOverlay .scan-actions button{height:42px;font-size:13px}
   #formOverlay .notes-add-row{grid-template-columns:1fr 1fr}
   #formOverlay .notes-add-row textarea{grid-column:1 / -1}
-  #formOverlay .notes-add-row .btn{grid-column:1 / -1;width:100%;justify-content:center}
+  /* Direct child only: the add button is a grid item, the photo buttons are
+     flex children of .note-photo-row and would just stretch. */
+  #formOverlay .notes-add-row > .btn{grid-column:1 / -1;width:100%;justify-content:center}
   #formOverlay .rating-row .segs button{height:20px}
   #formOverlay .playdate-add{height:38px}
   #formOverlay .playdate-row{padding:6px 8px 6px 13px}
@@ -1482,19 +1539,19 @@ select option{background:var(--surface);color:var(--text)}
 .cal-type-btn i{font-size:15px;opacity:.45}
 .cal-type-btn.active{border-color:color-mix(in srgb, var(--text) 30%, var(--border))}
 .cal-type-btn.active i{opacity:1}
-.cal-type-btn.active[data-type="bought"] i{color:var(--accent)}
-.cal-type-btn.active[data-type="cleaned"] i{color:#4AA3C4}
-.cal-type-btn.active[data-type="played"] i{color:#5FBF7A}
-.cal-type-btn.active[data-type="note"] i{color:#9B7FD4}
+.cal-type-btn.active[data-type="bought"] i{color:var(--ev-bought)}
+.cal-type-btn.active[data-type="cleaned"] i{color:var(--ev-cleaned)}
+.cal-type-btn.active[data-type="played"] i{color:var(--ev-played)}
+.cal-type-btn.active[data-type="note"] i{color:var(--ev-note)}
 .cal-scale{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0}
 .cal-scale-btn{height:32px;padding:0 13px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .12s}
 .cal-scale-btn+.cal-scale-btn{border-left:1px solid var(--border)}
 .cal-scale-btn.active{background:var(--card);color:var(--accent);font-weight:600}
 .cal-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
-.cal-dot.bought{background:var(--accent)}
-.cal-dot.cleaned{background:#4AA3C4}
-.cal-dot.played{background:#5FBF7A}
-.cal-dot.note{background:#9B7FD4}
+.cal-dot.bought{background:var(--ev-bought)}
+.cal-dot.cleaned{background:var(--ev-cleaned)}
+.cal-dot.played{background:var(--ev-played)}
+.cal-dot.note{background:var(--ev-note)}
 /* month grid */
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .cal-dow{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:center;font-weight:600}
@@ -1522,10 +1579,10 @@ select option{background:var(--surface);color:var(--text)}
 .cal-event:last-child{border-bottom:none;padding-bottom:2px}
 .cal-event:first-of-type{margin-top:8px;border-top:1px solid var(--border);padding-top:11px}
 .cal-event:hover .cal-ev-title{color:var(--accent)}
-.cal-event.bought{border-left-color:var(--accent)}
-.cal-event.cleaned{border-left-color:#4AA3C4}
-.cal-event.played{border-left-color:#5FBF7A}
-.cal-event.note{border-left-color:#9B7FD4}
+.cal-event.bought{border-left-color:var(--ev-bought)}
+.cal-event.cleaned{border-left-color:var(--ev-cleaned)}
+.cal-event.played{border-left-color:var(--ev-played)}
+.cal-event.note{border-left-color:var(--ev-note)}
 .cal-ev-cover-wrap{width:48px;height:48px;border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--muted)}
 .cal-ev-cover-wrap img{width:100%;height:100%;object-fit:cover;display:block}
 .cal-ev-main{flex:1;min-width:0}
@@ -1536,10 +1593,10 @@ select option{background:var(--surface);color:var(--text)}
 .cal-ev-time{font-size:11px;font-weight:700;color:var(--label);font-variant-numeric:tabular-nums;
   flex-shrink:0;margin-top:3px;letter-spacing:.02em}
 .cal-badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;flex-shrink:0;margin-top:2px}
-.cal-badge.bought{color:var(--accent);border-color:color-mix(in srgb, var(--accent) 45%, transparent);background:rgba(245,197,24,.07)}
-.cal-badge.cleaned{color:#4AA3C4;border-color:rgba(74,163,196,.45);background:rgba(74,163,196,.07)}
-.cal-badge.played{color:#5FBF7A;border-color:rgba(95,191,122,.45);background:rgba(95,191,122,.07)}
-.cal-badge.note{color:#9B7FD4;border-color:rgba(155,127,212,.45);background:rgba(155,127,212,.07)}
+.cal-badge.bought{color:var(--ev-bought);border-color:color-mix(in srgb, var(--ev-bought) 45%, transparent);background:color-mix(in srgb, var(--ev-bought) 7%, transparent)}
+.cal-badge.cleaned{color:var(--ev-cleaned);border-color:color-mix(in srgb, var(--ev-cleaned) 45%, transparent);background:color-mix(in srgb, var(--ev-cleaned) 7%, transparent)}
+.cal-badge.played{color:var(--ev-played);border-color:color-mix(in srgb, var(--ev-played) 45%, transparent);background:color-mix(in srgb, var(--ev-played) 7%, transparent)}
+.cal-badge.note{color:var(--ev-note);border-color:color-mix(in srgb, var(--ev-note) 45%, transparent);background:color-mix(in srgb, var(--ev-note) 7%, transparent)}
 /* week grid (google-calendar-like columns of compact event chips) */
 .cal-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:start}
 .cal-week-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 6px;display:flex;flex-direction:column;gap:6px;min-height:150px;min-width:0}
@@ -1550,15 +1607,24 @@ select option{background:var(--surface);color:var(--text)}
 .cal-week-col-num{font-size:15px;font-weight:700;font-family:var(--font-mono);line-height:1.3;color:var(--text)}
 .cal-week-col.cal-today .cal-week-col-num{color:var(--accent)}
 .cal-week-col-body{display:flex;flex-direction:column;gap:5px;min-width:0}
-.cal-week-chip{display:block;width:100%;aspect-ratio:1;padding:0;border-radius:5px;border:2px solid transparent;background:var(--card);cursor:pointer;transition:all .12s;font-family:var(--font)}
-.cal-week-chip:hover{filter:brightness(1.1)}
-.cal-week-chip.bought{border-color:var(--accent);background:rgba(245,197,24,.1)}
-.cal-week-chip.cleaned{border-color:#4AA3C4;background:rgba(74,163,196,.1)}
-.cal-week-chip.played{border-color:#5FBF7A;background:rgba(95,191,122,.1)}
-.cal-week-chip.note{border-color:#9B7FD4;background:rgba(155,127,212,.1)}
-.cal-week-chip-cover{width:100%;height:100%;border-radius:3px;overflow:hidden;background:var(--bg-alt);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
-.cal-week-chip-cover img{width:100%;height:100%;object-fit:cover;display:block}
-.cal-week-chip-txt{display:none}
+/* One record's day. The cover keeps a neutral border — it used to spend its
+   only channel saying which single event this was — and the day's actions
+   line up beneath it in the order the day reads. */
+.cal-week-chip{display:flex;flex-direction:column;gap:4px}
+.cal-week-chip-art{width:100%;aspect-ratio:1;padding:0;border:1px solid var(--border);
+  border-radius:4px;overflow:hidden;background:var(--bg-alt);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--muted);
+  font-size:14px;transition:border-color .12s,filter .12s}
+.cal-week-chip-art:hover{filter:brightness(1.1);border-color:var(--accent)}
+.cal-week-chip-art img{width:100%;height:100%;object-fit:cover;display:block}
+.cal-rail{display:flex;gap:2px;align-items:center;justify-content:center;flex-wrap:wrap}
+.cal-act{display:inline-flex;align-items:center;gap:1px;padding:2px 3px;border:0;
+  border-radius:3px;background:none;cursor:pointer;font-family:var(--font-mono);
+  font-size:9.5px;font-weight:700;line-height:1;transition:background .12s}
+.cal-act:hover{background:color-mix(in srgb, currentColor 16%, transparent)}
+.cal-act i{font-size:15px}
+.cal-act.bought{color:var(--ev-bought)} .cal-act.cleaned{color:var(--ev-cleaned)}
+.cal-act.played{color:var(--ev-played)} .cal-act.note{color:var(--ev-note)}
 .cal-week-empty{font-size:10.5px;color:var(--muted);text-align:center;opacity:.5;padding:6px 0}
 
 /* date picker modal */
@@ -1588,7 +1654,14 @@ select option{background:var(--surface);color:var(--text)}
   .cal-week-col-dow{font-size:8.5px;letter-spacing:.03em}
   .cal-week-col-num{font-size:13px}
   .cal-week-col-body{gap:3px}
-  .cal-week-chip-cover{border-radius:2px}
+  .cal-week-chip{gap:2px}
+  /* 46px of column leaves about 40 for the rail: four icons at 10px each.
+     Readable, and nowhere near tappable. So the rail becomes a legend and the
+     cover takes the tap, through to the day list where each action is a row. */
+  .cal-rail{gap:1px;pointer-events:none}
+  .cal-act{padding:0}
+  .cal-act i{font-size:10px}
+  .cal-act b{display:none}
   .cal-week-empty{font-size:9px;padding:4px 0}
 }
 </style>
@@ -1878,8 +1951,11 @@ select option{background:var(--surface);color:var(--text)}
           <span>more</span>
         </span>
       </div>
-      <div id="worldMapWrap" style="width:100%;height:420px;position:relative">
-        <div class="chart-tooltip" id="worldMapTooltip"></div>
+      <div class="country-split">
+        <div id="worldMapWrap" style="width:100%;height:420px;position:relative">
+          <div class="chart-tooltip" id="worldMapTooltip"></div>
+        </div>
+        <div class="country-rank" id="countryRank"></div>
       </div>
     </div>
     <div class="chart-box" style="margin-bottom:28px" id="statsTableBox">
@@ -2139,6 +2215,17 @@ select option{background:var(--surface);color:var(--text)}
               <div class="field"><i class="ti ti-clock"></i><input type="time" id="fNoteTime" title="time of the note — leave blank if it does not matter"></div>
               <textarea id="fNoteText" placeholder="Add a note…"></textarea>
               <button type="button" class="btn btn-primary btn-sm" style="height:34px;align-self:start" onclick="addNote()"><i class="ti ti-plus"></i> add</button>
+              <!-- Photos attach to the note being composed and are uploaded as
+                   they are picked, so the record save stays small. -->
+              <div class="note-photo-row">
+                <button type="button" class="btn btn-sm" id="notePickerFile" onclick="pickNotePhoto()">
+                  <i class="ti ti-folder"></i> photo
+                </button>
+                <button type="button" class="btn btn-sm" id="notePickerCamera" onclick="openCamera('note')">
+                  <i class="ti ti-camera"></i> take photo
+                </button>
+                <div class="note-shots" id="fNoteShots"></div>
+              </div>
             </div>
             <div class="notes-list" id="fNotesList"></div>
           </div>
@@ -2171,6 +2258,19 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-foot">
       <button class="btn" onclick="closeCamera()">cancel</button>
       <button class="btn btn-primary" onclick="captureFrame()">capture</button>
+    </div>
+  </div>
+</div>
+
+<!-- One note photo, full size. There was no lightbox before this. -->
+<div class="overlay hidden" id="shotOverlay" onclick="closeShot()">
+  <div class="modal" style="max-width:min(90vw,720px)">
+    <div class="modal-head">
+      <span class="modal-title">photo</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeShot()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="text-align:center">
+      <img id="shotImage" alt="" style="max-width:100%;max-height:70vh;border-radius:var(--radius)">
     </div>
   </div>
 </div>
@@ -2332,6 +2432,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/draft.js"></script>
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
+<script src="/static/notes.js"></script>
 <script src="/static/spend.js"></script>
 <script src="/static/idle-spotlight.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
@@ -3216,6 +3317,10 @@ function dmFormatNoteDate(dateStr) {
 }
 
 // merges bought/played/cleaned/notes into one chronological (oldest-first) timeline
+//
+// The keys have to be the ones eventsByDay produces, or a click in the Timeline
+// names an event this list does not recognise. Both sides run the same parsers
+// and hand keyOf what the parser gave them, so they agree by construction.
 function dmHistoryEvents(r) {
   const events = [];
   const add = (type, date, extra) => {
@@ -3223,13 +3328,21 @@ function dmHistoryEvents(r) {
     // a bought date or a note has no clock; it still needs a day to file under
     if (!m.day && !/^\d{4}-\d{2}-\d{2}/.test(date || '')) return;
     events.push(Object.assign({ type, day: m.day || String(date).slice(0,10),
-                                time: m.time, at: m.at || String(date).slice(0,10) }, extra));
+                                time: m.time, at: m.at || String(date).slice(0,10),
+                                key: VinylTimeline.keyOf(type, String(date),
+                                                         extra && extra.i) }, extra));
   };
   if (r.bought_date) add('bought', r.bought_date);
-  parseCleanedDates(r.cleaned_dates).forEach(dt => { if (dt) add('cleaned', dt); });
-  parsePlayDates(r.play_dates).forEach(dt => { if (dt) add('played', dt); });
-  if (r.notes) parseNotes(r.notes, r.bought_date||today()).filter(n=>n.text).forEach(n => {
-    add('note', n.date, { text: n.text });
+  parseCleanedDates(r.cleaned_dates).forEach((dt, i) => { if (dt) add('cleaned', dt, { i }); });
+  parsePlayDates(r.play_dates).forEach((dt, i) => { if (dt) add('played', dt, { i }); });
+  // The raw index again: an empty note holds its slot, so filtering first would
+  // renumber every note after it and break keys the Timeline already handed out.
+  if (r.notes) parseNotes(r.notes, r.bought_date||today()).forEach((n, i) => {
+    // hasContent, not n.text — a note that is only a photo still happened, and
+    // testing the text alone hid it from the history completely.
+    if (VinylNotes.hasContent(n)) {
+      add('note', n.date, { i, text: n.text || '', images: n.images || [] });
+    }
   });
   // by day AND time, so two plays on one evening read in the order they happened
   return events.sort((a,b) => a.at.localeCompare(b.at));
@@ -3246,21 +3359,90 @@ function dmHistoryGroups(events) {
   return groups;
 }
 
-const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned' };
-const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet' };
+const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned', note:'Note' };
+const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet', note:'ti-note' };
+
+/* Which event the Timeline sent us to, if any.
+ *
+ * This must be state the RENDER reads, never a class applied afterwards.
+ * openDetail centres the carousel, whose scroll handler calls dmSetCurrent,
+ * which rewrites #dmInfo and #ddInfo wholesale a frame later — anything
+ * stamped on after the fact is gone before you have finished reading it. */
+let detailFocus = null;
+let detailFocusTimer = null, detailFadeTimer = null;
+
+// Five seconds: held, then let go over the last 800ms.
+const FOCUS_HOLD_MS = 4200, FOCUS_FADE_MS = 800;
+
+/* Light the event, then stop lighting it.
+ *
+ * Letting go does NOT re-render. detailFocus is cleared so that any later
+ * render draws the history plain, and the nodes already on screen fade rather
+ * than snap — which is also why the fade is two steps and not one. */
+function focusDetail(focus) {
+  clearTimeout(detailFocusTimer); clearTimeout(detailFadeTimer);
+  detailFocusTimer = detailFadeTimer = null;
+  detailFocus = focus || null;
+  if (!detailFocus) return;
+  detailFocusTimer = idleUnref(setTimeout(focusLetGo, FOCUS_HOLD_MS));
+}
+
+function focusLetGo() {
+  detailFocus = null;
+  detailFocusTimer = null;
+  document.querySelectorAll('#detailBody .hit').forEach(el => el.classList.add('letting-go'));
+  detailFadeTimer = idleUnref(setTimeout(focusForget, FOCUS_FADE_MS));
+}
+
+function focusForget() {
+  detailFadeTimer = null;
+  document.querySelectorAll('#detailBody .hit').forEach(el =>
+    el.classList.remove('hit', 'letting-go',
+      'hit-bought', 'hit-cleaned', 'hit-played', 'hit-note'));
+}
+
+/* Three widths of focus, narrowest first:
+ *   'note:2026-03-08:0'   one event
+ *   '2026-03-08~played'   one day's events of one kind
+ *   '2026-03-08'          the whole day
+ *
+ * The middle one earns its place: two plays cannot resolve to one play, but
+ * routing them to the whole day drags the cleaning in with them. */
+function focusMatches(focus, ev) {
+  if (!focus) return false;
+  const scoped = /^(\d{4}-\d{2}-\d{2})~(\w+)$/.exec(focus);
+  if (scoped) return ev.day === scoped[1] && ev.type === scoped[2];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(focus)) return ev.day === focus;
+  return ev.key === focus;
+}
 
 function dmHistoryEntryHTML(ev) {
   // no clock on entries recorded before times were kept — the icon or the note
   // just sits alone, rather than the timeline claiming it happened at midnight
   const clock = ev.time ? `<span class="dm-hist-time">${esc(ev.time)}</span>` : '';
+  const shotIds = (ev.images || []).filter(VinylNotes.isImageId);
+  const shots = shotIds.length
+    ? `<div class="note-shots">${shotIds.map(id =>
+         `<img class="note-shot" alt="" src="${esc(noteImageSrc(id))}" ` +
+         `onclick="openShot('${id}')" onerror="this.remove()">`).join('')}</div>`
+    : '';
   const body = ev.type === 'note'
-    ? `<div class="ht detail-notes-body">${typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)}${clock}</div>`
+    ? `<div class="ht detail-notes-body">${ev.text ? (typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)) : ''}${shots}` +
+      `<span class="dm-hist-time"><i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
-  return `<div class="dm-hist-entry ${ev.type}"><span class="dot"></span>${body}</div>`;
+  const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
+  return `<div class="dm-hist-entry ${ev.type}${lit}" data-ev="${esc(ev.key)}" data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
 }
 
 function dmHistoryGroupHTML(group) {
-  return `<div class="dm-hist-group"><div class="hd">${dmFormatNoteDate(group.day)}</div>${group.items.map(dmHistoryEntryHTML).join('')}</div>`;
+  const hitTypes = [...new Set(group.items.filter(ev => focusMatches(detailFocus, ev))
+                                          .map(ev => ev.type))];
+  // One kind, one colour: a single event or a single type lets the date wear
+  // the colour of the thing that happened to it. A whole-day focus cannot —
+  // there is no one colour four kinds of fact could share — so it takes gold.
+  const lit = hitTypes.length === 0 ? ''
+            : hitTypes.length === 1 ? ` hit hit-${hitTypes[0]}` : ' hit';
+  return `<div class="dm-hist-group"><div class="hd${lit}" data-day="${esc(group.day)}">${dmFormatNoteDate(group.day)}</div>${group.items.map(dmHistoryEntryHTML).join('')}</div>`;
 }
 
 // 'YYYY-MM-DD' or 'YYYY-MM-DD · HH:MM' — no bare 'T' stamp reaches the screen
@@ -3506,10 +3688,11 @@ function ddBind() {
   car.addEventListener('touchcancel', () => { startY = null; });
 }
 
-function openDetail(id) {
+function openDetail(id, focus) {
   const r = records.find(x=>x.id===id); if(!r)return;
   confirmDeleteId = null;
   currentDetailId = id;
+  focusDetail(focus);
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
@@ -3520,6 +3703,20 @@ function openDetail(id) {
   } else {
     ddCenterSlide(dmIdx, false);
   }
+  // .overlay.hidden is display:none, so there is no layout to scroll until the
+  // line above. Doing it here, in the same task, means the browser paints once
+  // with the entry already in view — rather than painting the top of a long
+  // history and then sliding it, which spends the first of the five seconds.
+  scrollFocusIntoView();
+}
+
+// The history sits below the cover carousel, the crate strip and the metadata
+// grid, which on a phone is a long way down. Both layouts are in the DOM at
+// once and CSS hides one, so scrolling the wrong one scrolls nothing.
+function scrollFocusIntoView() {
+  const pane = window.matchMedia('(max-width:760px)').matches ? '#dmInfo' : '#ddInfo';
+  const el = document.querySelector(pane + ' .dm-hist-entry.hit, ' + pane + ' .hd.hit');
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
 }
 
 // ── prev/next navigation through the currently filtered list ───────────────
@@ -3534,6 +3731,7 @@ function updateDetailNavVisibility() {
 let detailAnimating = false;
 // delta > 0 slides the incoming record up; delta < 0 slides it down
 function goToDetailRecord(nextRecord, delta) {
+  focusDetail(null);
   const body = document.getElementById('detailBody');
   const outClass = delta > 0 ? 'slide-out-up' : 'slide-out-down';
   const inClass  = delta > 0 ? 'slide-in-up'  : 'slide-in-down';
@@ -3596,7 +3794,7 @@ function renderDetailFoot(id) {
 
 function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
-  confirmDeleteId=null;currentDetailId=null;
+  confirmDeleteId=null;currentDetailId=null;focusDetail(null);
   syncUrl(true);
 }
 
@@ -3746,23 +3944,23 @@ function countryCodeFromInput(value) {
 // Migration: if raw value is plain string (not JSON array), convert it once
 // using the record's bought_date (or today) as the date.
 let formNotes = []; // in-memory list while the form is open
+let formNoteImages = [];    // ids attached to the note being composed
+// Data URIs for photos uploaded in this session, so a just-added thumbnail
+// paints immediately instead of round-tripping through its own URL.
+let noteImagePreview = {};
 let formPlayDates = []; // ditto for the play-date editor
 let formCleanedDates = []; // ditto for the cleaned-date editor
 let formArtists = []; // ditto for the multi-artist editor
 
+// Both delegate to static/notes.js, which is where these are tested. The
+// wrappers stay because FILTER_DEPS and TIMELINE_DEPS inject parseNotes by
+// name, and because the today() fallback belongs to the page, not the module.
 function parseNotes(raw, fallbackDate) {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-  } catch(e) {}
-  // plain string — legacy note, migrate it
-  return [{ date: fallbackDate || today(), text: raw }];
+  return VinylNotes.parseNotes(raw, fallbackDate || today());
 }
 
 function serializeNotes(arr) {
-  const clean = arr.filter(n => n.text && n.text.trim());
-  return clean.length ? JSON.stringify(clean) : '';
+  return VinylNotes.serializeNotes(arr);
 }
 
 // Local, not UTC. toISOString() rolls "today" over to tomorrow for anything
@@ -3793,13 +3991,23 @@ function renderNotesForm() {
   const list = document.getElementById('fNotesList');
   if (!formNotes.length) { list.innerHTML = ''; return; }
   // oldest first by date AND time, matching the detail view
-  const sorted = [...formNotes].sort((a,b) => momentAt(a.date).localeCompare(momentAt(b.date)));
-  list.innerHTML = sorted.map((n, i) => {
-    // find original index for delete
-    const origIdx = formNotes.indexOf(formNotes.find(x => x.date===n.date && x.text===n.text));
+  // Walk the ORIGINAL indices in date order instead of matching a sorted copy
+  // back by value. Two photo-only notes added in the same sitting are identical
+  // by date and text (both ''), so the old lookup pointed every one of them at
+  // the first: the delete button removed the wrong note, and the x on a photo
+  // addressed a note that did not hold it and so did nothing at all.
+  const order = formNotes.map((n, i) => i)
+    .sort((a,b) => momentAt(formNotes[a].date).localeCompare(momentAt(formNotes[b].date)));
+  list.innerHTML = order.map(origIdx => {
+    const n = formNotes[origIdx];
+    const shots = (n.images || []).length
+      ? `<div class="note-shots">${n.images.map(id =>
+           noteShotHTML(id, `removeNoteImage(${origIdx}, '${id}')`)).join('')}</div>`
+      : '';
     return `<div class="note-entry">
       <div class="note-entry-date">${noteDateLabel(n.date)}</div>
-      <div class="note-entry-body">${typeof marked !== 'undefined' ? marked.parse(n.text) : esc(n.text)}</div>
+      <div class="note-entry-body">${typeof marked !== 'undefined' ? marked.parse(n.text || '') : esc(n.text || '')}</div>
+      ${shots}
       <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
@@ -3946,17 +4154,27 @@ function toggleMultiArtist() {
   }
 }
 
-function addNote() {
+async function addNote() {
+  // Let a photo picked a moment ago finish arriving before composing the note,
+  // so it is filed with the note the user attached it to.
+  if (notePhotoUploads.length) {
+    await Promise.all(notePhotoUploads.map(p => p.catch(()=>{})));
+  }
   const dateEl = document.getElementById('fNoteDate');
   const timeEl = document.getElementById('fNoteTime');
   const textEl = document.getElementById('fNoteText');
   const date = joinStamp(dateEl.value, timeEl.value);
   const text = textEl.value.trim();
   if (!date) { dateEl.focus(); dateEl.style.borderColor='var(--danger)'; return; }
-  if (!text) { textEl.focus(); textEl.style.borderColor='var(--danger)'; return; }
+  // Text OR a photo. A note that is just a picture of the sleeve is a note.
+  if (!text && !formNoteImages.length) {
+    textEl.focus(); textEl.style.borderColor='var(--danger)'; return;
+  }
   dateEl.style.borderColor='';
   textEl.style.borderColor='';
-  formNotes.push({ date, text });
+  formNotes.push({ date, text, images: formNoteImages });
+  formNoteImages = [];
+  renderNoteShots();
   textEl.value = '';
   // reset to now, so a second note written in the same sitting is stamped for it
   dateEl.value = today();
@@ -3966,6 +4184,80 @@ function addNote() {
 
 function deleteNote(idx) {
   formNotes.splice(idx, 1);
+  renderNotesForm();
+}
+
+// A photo just picked or captured, on its way to a note. Uploaded now rather
+// than at save so the record's own payload stays small: several photos plus a
+// dirty cover would otherwise be megabytes of base64 on every save.
+async function addNoteImage(dataUri){
+  // Same guard handleCoverFile uses: the upload is a network round trip, and
+  // the form can be closed and another record opened while it is in flight.
+  const myToken = scanToken;
+  let res;
+  try{
+    res = await fetch('/api/note-images', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({data: dataUri})});
+  }catch(e){ toast('could not save that photo'); return; }
+  if(!res.ok){
+    toast(res.status === 401 ? 'session expired — unlock and save again'
+        : res.status === 413 ? 'that photo is too large'
+        : 'could not save that photo');
+    return;
+  }
+  const {id} = await res.json();
+  if(myToken !== scanToken) return;   // a different record is on screen now
+  noteImagePreview[id] = dataUri;
+  if(formNoteImages.indexOf(id) === -1) formNoteImages.push(id);  // same photo twice
+  renderNoteShots();
+}
+
+// A photo uploaded in this session paints from the bytes already in hand; a
+// stored one comes from its own immutable URL.
+function noteImageSrc(id){
+  return noteImagePreview[id] || `/api/note-images/${id}`;
+}
+
+// One thumbnail, with the × that drops it.
+//
+// `id` goes into an inline handler, where esc() is no defence — it does not
+// touch the apostrophe that would close the string and run the rest as code.
+// Ids reaching here through parseNotes are already vetted; this is the second
+// lock, so that no future caller can open the hole by passing one that is not.
+//
+// A shot that will not load keeps its wrapper rather than removing it: the ×
+// has to stay reachable, or a bad id sits in the note with no way to take it
+// out. It is marked, not dropped, because a failed GET may only be the network.
+function noteShotHTML(id, onRemove){
+  if(!VinylNotes.isImageId(id)) return '';
+  return `<span class="note-shot-wrap">
+    <img class="note-shot" alt="" src="${esc(noteImageSrc(id))}" onerror="this.classList.add('missing')">
+    <button type="button" class="note-shot-drop" title="remove photo" onclick="${onRemove}"><i class="ti ti-x"></i></button>
+  </span>`;
+}
+
+// The strip under the add-row: photos on the note not yet added.
+function renderNoteShots(){
+  document.getElementById('fNoteShots').innerHTML =
+    formNoteImages.map(id => noteShotHTML(id, `removePendingNoteImage('${id}')`)).join('');
+}
+
+function removePendingNoteImage(id){
+  formNoteImages = formNoteImages.filter(x => x !== id);
+  renderNoteShots();
+}
+
+// Removing a photo from a note already in the list. The image row itself is
+// not deleted here — the server reaps it on save, once it knows nothing else
+// refers to it.
+function removeNoteImage(idx, id){
+  const note = formNotes[idx];
+  if(!note) return;
+  note.images = (note.images || []).filter(x => x !== id);
+  // serializeNotes drops a note with neither text nor photo, so leaving this
+  // one on screen would show an entry that silently vanishes on save.
+  if(!VinylNotes.hasContent(note)) formNotes.splice(idx, 1);
   renderNotesForm();
 }
 
@@ -4053,6 +4345,9 @@ function openAdd(){
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteTime').value=nowStamp().slice(11,16);
   document.getElementById('fNoteText').value='';
+  scanToken++;   // strand any note-photo upload still in the air
+  formNoteImages=[];
+  renderNoteShots();
   renderNotesForm();
   populateGenreSelect();
   populateCountryList();
@@ -4115,6 +4410,9 @@ function openEdit(id){
   document.getElementById('fCondition').value=r.condition||'';
   renderCondSwitch();
   formNotes=parseNotes(r.notes, r.bought_date||today());
+  scanToken++;   // strand any note-photo upload still in the air
+  formNoteImages=[];
+  renderNoteShots();
   // keep the recorded time — slicing to 10 chars used to wipe it off every play
   // on the record the moment the form was saved
   formPlayDates=parsePlayDates(r.play_dates)
@@ -4192,7 +4490,10 @@ function formIsDirty(){
  * something to lose. A scan is the case that matters: it has already been
  * billed by the time it fills the form, and re-doing it is charged again. */
 function closeForm(force){
-  if (force !== true && formIsDirty()) {
+  // formNoteImages is deliberately not part of formValues -- that is "what
+  // would be saved", and a pending photo is not on the record yet. It is still
+  // work the user would lose, so it gets a say in the prompt.
+  if (force !== true && (formIsDirty() || formNoteImages.length)) {
     const scanned = coverDirty || scanWrote && Object.keys(scanWrote).length;
     if (!confirm(scanned
       ? 'Discard this record? The scan that filled it would have to be paid for again.'
@@ -4302,11 +4603,43 @@ function openSpotifyOverlay(){
 }
 function closeSpotifyOverlay(){ document.getElementById('spotifyOverlay').classList.add('hidden'); }
 
-function pickCoverFile(){ document.getElementById('coverInput').click(); }
+// Which half of the form the next photo belongs to. The picker, the camera
+// overlay and the resize path are shared; only the destination differs, and
+// captureFrame used to hardcode applyCover so the camera could only ever
+// produce a cover.
+let photoTarget = 'cover';
+
+function pickCoverFile(){ photoTarget = 'cover'; document.getElementById('coverInput').click(); }
+function pickNotePhoto(){ photoTarget = 'note';  document.getElementById('coverInput').click(); }
 function fallbackCapture(){ document.getElementById('coverCaptureInput').click(); }
 
-async function openCamera(){
+// The one place that knows where a finished data URI goes. `target` is the
+// destination captured when the file was picked; without it the read happens
+// after the decode, and tapping the other picker mid-decode sent an album
+// cover to a note, or a note photo over the cover.
+function applyPhoto(dataUri, target){
+  if((target || photoTarget) === 'note') trackNoteUpload(addNoteImage(dataUri));
+  else applyCover(dataUri);
+}
+
+// Uploads still in the air. addNote waits on these, because a photo that has
+// not come back yet is not in formNoteImages, and filing the note now would
+// save it with no images and strand the photo on the next note.
+let notePhotoUploads = [];
+function trackNoteUpload(p){
+  notePhotoUploads.push(p);
+  // Settled either way: addNoteImage reports its own failures, and a rejection
+  // left in this list would stall every later addNote.
+  p.catch(()=>{}).then(()=>{ notePhotoUploads = notePhotoUploads.filter(x => x !== p); });
+  return p;
+}
+
+async function openCamera(target){
   if(camStream) return; // a request is already in flight or live
+  // Only once the open is going ahead. Setting it above the guard meant a
+  // refused open still retargeted, so a capture from the live cover camera
+  // was filed as a note photo.
+  photoTarget = target || 'cover';   // the cover button calls openCamera()
   // navigator.mediaDevices is undefined (not an error) outside a secure context.
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
   let stream;
@@ -4331,6 +4664,18 @@ function closeCamera(){
   document.getElementById('cameraOverlay').classList.add('hidden');
 }
 
+function openShot(id){
+  if(!VinylNotes.isImageId(id)) return;
+  document.getElementById('shotImage').src = noteImageSrc(id);
+  document.getElementById('shotOverlay').classList.remove('hidden');
+}
+
+function closeShot(){
+  document.getElementById('shotOverlay').classList.add('hidden');
+  // An empty src attribute resolves to the page URL and fetches it again.
+  document.getElementById('shotImage').removeAttribute('src');
+}
+
 function captureFrame(){
   const video = document.getElementById('camVideo');
   if(!video.videoWidth || !video.videoHeight){ toast('camera still starting — try again'); return; }
@@ -4341,7 +4686,7 @@ function captureFrame(){
   cv.getContext('2d').drawImage(video, 0, 0, cv.width, cv.height);
   const dataUri = cv.toDataURL('image/jpeg', .85);
   closeCamera();
-  applyCover(dataUri);
+  applyPhoto(dataUri);
 }
 
 async function resizeImage(file, maxEdge=1000){
@@ -4545,6 +4890,9 @@ async function handleCoverFile(e){
   if(!file) return;
   e.target.value = '';
   const myToken = scanToken;
+  // Captured with the token and for the same reason: both are read after the
+  // decode, which on a phone photo is about a second of the user's time.
+  const target = photoTarget;
   let dataUri;
   try{
     dataUri = await resizeImage(file);
@@ -4559,7 +4907,7 @@ async function handleCoverFile(e){
   // different record opened; applying the cover now would stamp it onto that
   // record. No ++ here — runScan takes its own token when the scan starts.
   if(myToken !== scanToken) return;
-  applyCover(dataUri);
+  applyPhoto(dataUri, target);
 }
 document.getElementById('coverInput').addEventListener('change', handleCoverFile);
 document.getElementById('coverCaptureInput').addEventListener('change', handleCoverFile);
@@ -4637,7 +4985,7 @@ function setScanBusy(busy){
   // window, error and abandoned-scan paths included.
   document.getElementById('scanStatus').style.display = busy ? 'flex' : 'none';
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
-   'coverPickerFile','coverPickerCamera'].forEach(id=>{
+   'coverPickerFile','coverPickerCamera','notePickerFile','notePickerCamera'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.disabled = busy;
   });
@@ -6903,12 +7251,19 @@ function renderWorldMap(all) {
   const wrap = document.getElementById('worldMapWrap');
   if (!wrap) return;
 
-  // group records per ISO numeric code (skip records without a country set)
+  // group records per ISO numeric code (skip records without a country set).
+  // The list beside the map groups by alpha-2 instead, so a country the atlas
+  // has no numeric code for is still ranked even though it cannot be painted.
   const recordsByCountry = {};
+  const recordsByCode = {};
   all.forEach(r => {
-    const num = ALPHA2_TO_NUMERIC[(r.country||'').toUpperCase()];
+    const code = (r.country||'').toUpperCase();
+    if (code.length !== 2) return;
+    (recordsByCode[code] = recordsByCode[code] || []).push(r);
+    const num = ALPHA2_TO_NUMERIC[code];
     if (num) (recordsByCountry[num] = recordsByCountry[num] || []).push(r);
   });
+  renderCountryRank(recordsByCode);
   const counts = Object.fromEntries(Object.entries(recordsByCountry).map(([k,v]) => [k, v.length]));
   const maxCount = Math.max(1, ...Object.values(counts));
 
@@ -6963,6 +7318,28 @@ function renderWorldMap(all) {
       tooltip.style.top = `${Math.max(y - 12, 0)}px`;
     })
     .on('mouseleave', () => { tooltip.style.opacity = '0'; });
+}
+
+// The ranked column beside the map: every country that has records, most
+// first, with its flag. The flag is the same picture the cards and list rows
+// use (image, emoji fallback), so a country looks the same everywhere.
+function renderCountryRank(recordsByCode) {
+  const box = document.getElementById('countryRank');
+  if (!box) return;
+
+  const rows = Object.entries(recordsByCode)
+    .map(([code, recs]) => ({ code, name: countryNameOf(code), n: recs.length }))
+    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+
+  if (!rows.length) { box.innerHTML = '<div class="crank-empty">no countries yet</div>'; return; }
+
+  const max = rows[0].n;
+  box.innerHTML = rows.map(r => `<div class="crank-row" title="${esc(r.name)}">
+      <div class="crank-bar" style="width:${(r.n / max * 100).toFixed(1)}%"></div>
+      ${flagImgHTML(r.code, 18) || '<span></span>'}
+      <span class="crank-name">${esc(r.name)}</span>
+      <span class="crank-count">${r.n}</span>
+    </div>`).join('');
 }
 
 // ── calendar ───────────────────────────────────────────────────────────────
@@ -7121,17 +7498,48 @@ function calEventRow(ev, fullNote) {
   </div>`;
 }
 
-// compact event chip — used by the week grid (cover art + type color, no detail text)
-function calWeekChip(ev) {
-  const r = ev.r;
-  const label = esc(r.album_name) || esc(artistDisplay(r)) || 'untitled';
-  const cover = r.cover_url
-    ? `<img src="${r.cover_url}" alt="" loading="lazy" onerror="this.remove()">`
+// The four glyphs are the ones the type bar already draws, so the icon on a
+// chip and the icon on the switch that hides it are the same shape.
+const CAL_TYPE_ICON = { bought:'ti-shopping-bag', cleaned:'ti-droplet',
+                        played:'ti-headphones', note:'ti-note' };
+
+function calActsLabel(g) {
+  return g.acts.map(a => CAL_TYPE_LABEL[a.type] + (a.evs.length > 1 ? ' ×' + a.evs.length : ''))
+               .join(', ');
+}
+
+/* One activity, as a button.
+ *
+ * The icon is always drawn; a numeral joins it only when that action happened
+ * more than once. A lone icon means once — nothing in the grid prints a 1, and
+ * bought needs no exception because bought_date is one column and its count
+ * cannot reach two.
+ *
+ * The focus is a data attribute rather than an inline onclick argument: keys
+ * are built from stored date strings, and esc() does not escape single quotes. */
+function calActBtn(g, a, cls) {
+  const n = a.evs.length;
+  const focus = n > 1 ? g.day + '~' + a.type : a.evs[0].key;
+  const when = a.evs[0].time ? ' · ' + a.evs[0].time : '';
+  return `<button type="button" class="${cls} ${a.type}" data-rec="${g.r.id}"
+    data-type="${a.type}" data-focus="${esc(focus)}"
+    title="${CAL_TYPE_LABEL[a.type]}${n > 1 ? ' ×' + n : ''}${esc(when)}">
+    <i class="ti ${CAL_TYPE_ICON[a.type]}"></i>${n > 1 ? `<b>${n}</b>` : ''}</button>`;
+}
+
+// one record's day — the cover, then what happened to it
+function calRecordDayChip(g) {
+  const label = esc(g.r.album_name) || esc(artistDisplay(g.r)) || 'untitled';
+  const cover = g.r.cover_url
+    ? `<img src="${g.r.cover_url}" alt="" loading="lazy" onerror="this.remove()">`
     : `<i class="ti ti-disc"></i>`;
-  return `<button type="button" class="cal-week-chip ${ev.type}" onclick="event.stopPropagation();openDetailFromCal(${r.id})" title="${esc(artistDisplay(r))} — ${label} (${CAL_TYPE_LABEL[ev.type]}${ev.time ? ' ' + esc(ev.time) : ''})">
-    <span class="cal-week-chip-cover">${cover}</span>
-    <span class="cal-week-chip-txt">${label}</span>
-  </button>`;
+  return `<div class="cal-week-chip">
+    <button type="button" class="cal-week-chip-art" data-rec="${g.r.id}"
+      data-day="${esc(g.day)}" data-focus="${esc(g.day)}"
+      title="${esc(artistDisplay(g.r))} — ${label} (${esc(calActsLabel(g))})">
+      ${cover}</button>
+    <span class="cal-rail">${g.acts.map(a => calActBtn(g, a, 'cal-act')).join('')}</span>
+  </div>`;
 }
 
 function renderCalMonth(events) {
@@ -7187,7 +7595,7 @@ function renderCalWeek(events) {
         <span class="cal-week-col-num">${cur.getDate()}</span>
       </button>
       <div class="cal-week-col-body">
-        ${evs.length ? evs.map(ev => calWeekChip(ev)).join('') : '<div class="cal-week-empty">—</div>'}
+        ${evs.length ? VinylTimeline.recordDays(evs).map(calRecordDayChip).join('') : '<div class="cal-week-empty">—</div>'}
       </div>
     </div>`;
     cur.setDate(cur.getDate() + 1);
@@ -7222,9 +7630,9 @@ function closeCalDay() {
   document.getElementById('calDayOverlay').classList.add('hidden');
 }
 
-function openDetailFromCal(id) {
+function openDetailFromCal(id, focus) {
   closeCalDay();
-  openDetail(id);
+  openDetail(id, focus);
 }
 
 // date picker modal
@@ -7274,6 +7682,33 @@ function calJumpToDate(dateStr) {
   closeCalDatePicker();
   renderCalendar();
 }
+
+/* One listener for every chip, pill and row the calendar draws.
+ *
+ * Delegated rather than inline: an event key is built from stored date strings
+ * and esc() leaves single quotes alone, so a key must never be interpolated
+ * into an onclick argument.
+ *
+ * Registered on the CAPTURE phase. A month cell carries its own inline
+ * onclick="openCalDay('<k>')" and the act buttons sit inside it, so a
+ * bubble-phase listener would run after the cell's handler: the day modal
+ * would open and then be closed again a line later by openDetailFromCal.
+ * Capture runs before the event ever reaches the cell. */
+['calBody', 'calDayBody'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    const hit = e.target.closest('[data-rec][data-focus]');
+    if (!hit) return;
+    e.stopPropagation();
+    // On a phone the week rail is a legend rather than a row of targets — four
+    // icons across a 46px column is about 10px each. So the cover leads to the
+    // day list instead, where every action is a full-size row.
+    if (hit.dataset.day && window.matchMedia('(max-width:760px)').matches) {
+      openCalDay(hit.dataset.day);
+      return;
+    }
+    openDetailFromCal(Number(hit.dataset.rec), hit.dataset.focus);
+  }, true);
+});
 
 // ── idle screensaver ─────────────────────────────────────────────────────
 // After a couple of minutes with no mouse, keyboard or touch activity,
