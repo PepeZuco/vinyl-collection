@@ -1527,9 +1527,11 @@ test('a numeral appears only where the action happened more than once', async ()
 
 test('nothing in the grid ever prints a 1', async () => {
   const { doc } = await busyWeek();
-  const ones = [...doc.querySelectorAll('#calBody .cal-act b')]
-    .filter(b => b.textContent.trim() === '1');
-  assert.deepStrictEqual(ones, []);
+  // An absence guard passes just as happily when the rail is gone entirely,
+  // so pin that there is something here to be wrong about.
+  const numerals = [...doc.querySelectorAll('#calBody .cal-act b')];
+  assert.ok(numerals.length >= 1, 'no numerals at all — the guard would be vacuous');
+  assert.deepStrictEqual(numerals.filter(b => b.textContent.trim() === '1'), []);
 });
 
 test('every rail icon is one of the four the type bar draws', async () => {
@@ -1538,6 +1540,9 @@ test('every rail icon is one of the four the type bar draws', async () => {
     .map(i => [...i.classList].find(c => c.startsWith('ti-')));
   const rail = [...doc.querySelectorAll('#calBody .cal-act i')]
     .map(i => [...i.classList].find(c => c.startsWith('ti-')));
+  // Subset guards are vacuously true of the empty set: assert the rail exists
+  // before asserting what it is made of.
+  assert.ok(rail.length >= 4, 'no rail icons at all — the guard would be vacuous');
   rail.forEach(c => assert.ok(bar.includes(c), `${c} is not on the type bar`));
 });
 
@@ -1561,4 +1566,25 @@ test('a numeral icon opens the record on that day of that kind', async () => {
     .find(b => b.dataset.type === 'played');
   press(win, played);
   assert.strictEqual(read('detailFocus'), '2026-08-09~played');
+});
+
+test('a repeated action does not pin its count to one clock', async () => {
+  // "played ×2 · 19:04" reads as if both plays were at 19:04; the second was
+  // at 21:47. A once-only action still names its time, which is unambiguous.
+  const { doc } = await busyWeek();
+  const rail = [...sundayChips(doc)[0].querySelectorAll('.cal-act')];
+  const title = t => rail.find(b => b.dataset.type === t).title;
+  assert.strictEqual(title('played'), 'played ×2');
+  assert.strictEqual(title('cleaned'), 'cleaned · 18:20');
+});
+
+test('on a phone the whole chip taps through to the day list, not just the cover', async () => {
+  // The rail is pointer-events:none at ≤760px, so a tap on the rail strip
+  // lands on the chip itself. Without the day on the wrapper that tap is dead
+  // space — a third of the chip's height doing nothing.
+  const { win, doc, read } = await busyWeek();
+  win.matchMedia = q => ({ matches: /760/.test(q), addListener() {}, removeListener() {} });
+  press(win, sundayChips(doc)[0]);
+  assert.strictEqual(read('detailFocus'), null, 'the drawer opened instead of the day list');
+  assert.strictEqual(doc.getElementById('calDayOverlay').hidden, false);
 });

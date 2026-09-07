@@ -7538,7 +7538,9 @@ function calActsLabel(g) {
 function calActBtn(g, a, cls) {
   const n = a.evs.length;
   const focus = n > 1 ? g.day + '~' + a.type : a.evs[0].key;
-  const when = a.evs[0].time ? ' · ' + a.evs[0].time : '';
+  // A repeated action has no one clock to name — "played ×2 · 19:04" reads as
+  // if both plays were at 19:04. The times are one zoom away, in Day.
+  const when = n === 1 && a.evs[0].time ? ' · ' + a.evs[0].time : '';
   return `<button type="button" class="${cls} ${a.type}" data-rec="${g.r.id}"
     data-type="${a.type}" data-focus="${esc(focus)}"
     title="${CAL_TYPE_LABEL[a.type]}${n > 1 ? ' ×' + n : ''}${esc(when)}">
@@ -7551,7 +7553,13 @@ function calRecordDayChip(g) {
   const cover = g.r.cover_url
     ? `<img src="${g.r.cover_url}" alt="" loading="lazy" onerror="this.remove()">`
     : `<i class="ti ti-disc"></i>`;
-  return `<div class="cal-week-chip">
+  /* The wrapper carries the day too, so the spec's "the whole chip taps
+     through" holds: on a phone .cal-rail is pointer-events:none, so a tap on
+     the rail strip lands on this div rather than falling into dead space.
+     closest() prefers the inner cover button and the act buttons wherever
+     they take the event themselves, so desktop behaviour is unchanged. */
+  return `<div class="cal-week-chip" data-rec="${g.r.id}"
+    data-day="${esc(g.day)}" data-focus="${esc(g.day)}">
     <button type="button" class="cal-week-chip-art" data-rec="${g.r.id}"
       data-day="${esc(g.day)}" data-focus="${esc(g.day)}"
       title="${esc(artistDisplay(g.r))} — ${label} (${esc(calActsLabel(g))})">
