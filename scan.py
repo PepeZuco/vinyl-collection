@@ -669,6 +669,63 @@ def classify_genre(artist: str, album: str, genres: list[str],
     return genre if genre in genres else None
 
 
+SEARCH_MODEL = "claude-haiku-4-5"
+
+_SEARCH_SYSTEM = (
+    "You turn a record collector's loose search into a lookup key.\n"
+    "Rules:\n"
+    "1. Correct obvious misspellings to the artist's usual spelling.\n"
+    "2. If the query names only an album, name the artist who recorded it.\n"
+    "3. If the query names only an artist, return null for the album.\n"
+    "4. Never invent a year, a country, or a list of releases. Those are "
+    "looked up from a music database afterwards."
+)
+
+_SEARCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "artist": {"type": ["string", "null"]},
+        "album": {"type": ["string", "null"]},
+    },
+    "required": ["artist", "album"],
+    "additionalProperties": False,
+}
+
+
+def parse_search_query(query: str, usage_out: list | None = None) -> dict:
+    """A loose query to {"artist": str, "album": str | None}.
+
+    Unlike classify_genre this DOES raise: an unparsed query has no useful
+    degraded form — there is nothing to search MusicBrainz for.
+    """
+    query = (query or "").strip()
+    if not query:
+        raise ValueError("Type an artist or album name")
+
+    client = _anthropic_client()
+    response = client.messages.create(
+        model=SEARCH_MODEL,
+        max_tokens=256,
+        system=_SEARCH_SYSTEM,
+        output_config={
+            "format": {"type": "json_schema", "schema": _SEARCH_SCHEMA},
+        },
+        messages=[{"role": "user", "content": query}],
+    )
+    _record_usage(usage_out, SEARCH_MODEL, response)
+    try:
+        text = next(b.text for b in response.content if b.type == "text")
+        parsed = json.loads(text)
+    except (StopIteration, ValueError) as e:
+        raise RuntimeError(f"Could not parse the search response: {e}") from e
+
+    artist = (parsed.get("artist") or "").strip()
+    if not artist:
+        raise ValueError(f"Couldn't tell what artist {query!r} means")
+    album = (parsed.get("album") or "").strip() or None
+    return {"artist": artist, "album": album}
+
+
 SPOTIFY_API = "https://api.spotify.com/v1"
 SPOTIFY_TIMEOUT = 5.0
 
