@@ -611,7 +611,7 @@ def scan_record():
 # What one scan costs before any has been measured. Both are replaced by the
 # running average as soon as the ledger has a scan of that source in it, so
 # these only ever show on a fresh collection.
-SEED_ESTIMATE_USD = {"photo": 0.006, "spotify": 0.0004}
+SEED_ESTIMATE_USD = {"photo": 0.006, "spotify": 0.0004, "search": 0.0005}
 
 # How many past scans the estimate averages. Short enough that switching model
 # or photo size shows up in the number within a few scans.
@@ -686,8 +686,78 @@ def scan_usage():
         "total_usd": total_usd,
         "total_scans": total_scans,
         "estimate": {"photo": _scan_estimate("photo"),
-                     "spotify": _scan_estimate("spotify")},
+                     "spotify": _scan_estimate("spotify"),
+                     "search": _scan_estimate("search")},
     })
+
+# ── search by name ────────────────────────────────────────────────────────────
+
+@app.route("/api/search", methods=["POST"])
+@require_auth
+def search_records():
+    """Releases matching a loose artist/album query.
+
+    Unlike /api/scan this returns a LIST of releases rather than one record's
+    fields, which is why it is its own route.
+    """
+    d = request.get_json(silent=True) or {}
+    query = (d.get("query") or "").strip()
+
+    rows = db.session.query(
+        Record.id, Record.artist, Record.album_name, Record.genre
+    ).all()
+
+    spent = []
+    try:
+        parsed = scan.parse_search_query(query, usage_out=spent)
+        artist = scan.lookup_artist(parsed["artist"])
+        if artist is None:
+            results = []
+        else:
+            results = scan.lookup_discography(artist["mbid"], parsed["album"])
+            scan.search_covers(results)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except scan.MusicBrainzUnavailable:
+        app.logger.warning("MusicBrainz unavailable for search %r", query)
+        return jsonify({"error": "Couldn't reach MusicBrainz — try again in "
+                                 "a moment"}), 502
+    except RuntimeError as e:
+        message = str(e)
+        return jsonify({"error": message}), 503 if "not set" in message else 502
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+    finally:
+        _record_scan_spend("search", spent)
+
+    existing = [{"id": r.id, "artist": r.artist or "",
+                 "album_name": r.album_name or ""} for r in rows]
+    for row in results:
+        row["duplicate_of"] = _search_duplicate(row, existing)
+
+    return jsonify({
+        "query": query,
+        "artist": artist["name"] if artist else None,
+        "album": parsed["album"],
+        "results": results,
+    })
+
+
+def _search_duplicate(row, existing):
+    """The collection row this release is already in, under either spelling.
+
+    MusicBrainz canonicalises the artist ("Jorge Ben Jor") while the sleeve and
+    the collection use the credited name ("Jorge Ben"). find_duplicate needs an
+    exact normalised match, so both are tried or nothing is ever flagged.
+    """
+    for name in (row.get("credited"), row.get("canonical")):
+        if not name:
+            continue
+        found = scan.find_duplicate(name, row.get("album_name", ""), existing)
+        if found:
+            return {"id": found["id"], "artist": found["artist"],
+                    "album_name": found["album_name"]}
+    return None
 
 # ── CSV import / export ───────────────────────────────────────────────────────
 
