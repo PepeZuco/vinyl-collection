@@ -1698,7 +1698,8 @@ test('nothing is selected until you tick something', async () => {
   const { win } = await boot();
   await searched(win);
 
-  assert.strictEqual(win.searchPicked.size, 0);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-pick.on').length, 0);
+  assert.match(win.document.getElementById('searchSelected').textContent, /nothing selected/);
   assert.ok(win.document.getElementById('searchAddBtn').disabled);
 });
 
@@ -1711,12 +1712,14 @@ test('ticking cards moves the count and the button label', async () => {
                /add 1 record\b/);
 
   win.toggleSearchPick(1);
-  assert.strictEqual(win.searchPicked.size, 2);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-pick.on').length, 2);
+  assert.match(win.document.getElementById('searchSelected').textContent, /2 selected/);
   assert.match(win.document.getElementById('searchAddBtn').textContent,
                /add 2 records/);
 
   win.toggleSearchPick(0);   // untick
-  assert.strictEqual(win.searchPicked.size, 1);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-pick.on').length, 1);
+  assert.match(win.document.getElementById('searchAddBtn').textContent, /add 1 record\b/);
 });
 
 test('a record already in the collection is badged, not hidden', async () => {

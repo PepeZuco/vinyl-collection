@@ -5172,9 +5172,7 @@ async function runSearch(query){
   }
 }
 
-// var, not let: the boot tests read win.searchPicked directly, and a
-// top-level let binding is script-scoped rather than a window property.
-var searchPicked = new Set();
+let searchPicked = new Set();
 
 function openSearchResults(data){
   searchPicked = new Set();
