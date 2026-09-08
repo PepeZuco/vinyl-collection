@@ -1615,3 +1615,58 @@ test('moving the mouse leaves the spotlight up, so the record stays reachable', 
   assert.ok(!$(doc, '#idleOverlay').classList.contains('hidden'),
     'movement dismissed the screensaver');
 });
+
+test('the form offers a third way in, and it needs nothing handed over', async () => {
+  const { win } = await boot();
+  win.openAdd();
+
+  const btn = win.document.getElementById('searchNameBtn');
+  assert.ok(btn, 'the search button is in the form');
+  // Analyse is dead until a cover or a link is handed in; search never is,
+  // because needing nothing is the whole point of it.
+  assert.ok(win.document.getElementById('analyseBtn').disabled);
+  assert.ok(!btn.disabled);
+  assert.ok(btn.closest('.scan-actions'), 'it sits in the scan-actions row');
+});
+
+test('the search popup opens with the price on it and closes again', async () => {
+  const { win } = await boot();
+  win.openAdd();
+  win.openSearchOverlay();
+
+  const overlay = win.document.getElementById('searchOverlay');
+  assert.ok(!overlay.classList.contains('hidden'));
+  assert.match(win.document.getElementById('searchHint').textContent,
+               /nothing is sent/);
+
+  win.closeSearchOverlay();
+  assert.ok(overlay.classList.contains('hidden'));
+});
+
+test('a search fills the results screen from what the server sent', async () => {
+  const { win } = await boot();
+  win.openAdd();
+  win.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      query: 'jorge ben', artist: 'Jorge Ben Jor', album: null,
+      results: [
+        { mbid: 'm1', artist: 'Jorge Ben', album_name: 'Força bruta',
+          year: '1970', country: 'BR', type: 'Album',
+          cover_data: null, duplicate_of: null },
+        { mbid: 'm2', artist: 'Jorge Ben', album_name: 'África Brasil',
+          year: '1976', country: 'BR', type: 'Album',
+          cover_data: null,
+          duplicate_of: { id: 7, artist: 'Jorge Ben',
+                          album_name: 'África Brasil' } },
+      ],
+    }),
+  });
+
+  await win.runSearch('jorge ben');
+
+  assert.ok(!win.document.getElementById('scanOverlay').classList.contains('hidden'));
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-card').length, 2);
+  // The one already in the collection wears the same red bar the scan uses.
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-badge-dup').length, 1);
+});
