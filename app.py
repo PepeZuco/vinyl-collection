@@ -743,6 +743,40 @@ def search_records():
     })
 
 
+@app.route("/api/search/genres", methods=["POST"])
+@require_auth
+def search_genres():
+    """Classify the releases picked from a search, in one round trip.
+
+    One request rather than one per record, so the genre work for a whole
+    queue lands under a single scan_id and is priced as the single act it is.
+    """
+    d = request.get_json(silent=True) or {}
+    releases = d.get("releases") or []
+    if not isinstance(releases, list):
+        return jsonify({"error": "releases must be a list"}), 400
+    if len(releases) > scan.MB_SEARCH_LIMIT:
+        return jsonify({"error": f"At most {scan.MB_SEARCH_LIMIT} at a time"}), 400
+    if not releases:
+        return jsonify({"genres": []})
+
+    vocabulary = sorted({g for (g,) in db.session.query(Record.genre).distinct()
+                         if g})
+
+    spent = []
+    try:
+        genres = [
+            scan.classify_genre((r or {}).get("artist") or "",
+                                (r or {}).get("album_name") or "",
+                                vocabulary, usage_out=spent)
+            for r in releases
+        ]
+    finally:
+        _record_scan_spend("search", spent)
+
+    return jsonify({"genres": genres})
+
+
 def _search_duplicate(row, existing):
     """The collection row this release is already in, under either spelling.
 
