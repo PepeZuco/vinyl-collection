@@ -1,5 +1,6 @@
 """Record identification: sleeve photos and Spotify links to record fields."""
 import base64
+import concurrent.futures
 import json
 import logging
 import os
@@ -576,6 +577,44 @@ def fetch_cover(candidate: dict, spotify_image_url: str | None = None) -> str | 
     if spotify_image_url:
         return _download_image(spotify_image_url)
     return None
+
+
+# Cover art is the only part of a search that fans out. The pool touches no
+# MusicBrainz endpoint — Cover Art Archive is a different host and
+# _download_image does not throttle — so it never contends with _mb_lock.
+COVER_WORKERS = 8
+
+# fetch_cover's iTunes fallback is one HTTP call per miss, and forty of those
+# inside a few seconds is what gets an IP throttled. A row nobody scrolls to
+# also does not need its bytes paid for.
+COVER_FETCH_LIMIT = 24
+
+
+def search_covers(rows: list[dict]) -> None:
+    """Fill `cover_data` on each row, in parallel, in place.
+
+    Never raises: a search that found the releases is still worth showing
+    when the artwork does not arrive.
+    """
+    for row in rows:
+        row["cover_data"] = None
+    wanted = rows[:COVER_FETCH_LIMIT]
+    if not wanted:
+        return
+
+    def one(row):
+        try:
+            return fetch_cover(row)
+        except Exception:
+            logger.warning("Cover fetch failed for %r", row.get("album_name"),
+                           exc_info=True)
+            return None
+
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=COVER_WORKERS) as pool:
+        # Map preserves input order regardless of completion order.
+        for row, cover in zip(wanted, pool.map(one, wanted)):
+            row["cover_data"] = cover
 
 
 VISION_MODEL = "claude-sonnet-5"
