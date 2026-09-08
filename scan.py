@@ -439,6 +439,84 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
     return candidates
 
 
+# A full discography for a prolific artist is about thirty release groups;
+# forty leaves headroom without turning the results grid into a scroll marathon.
+MB_SEARCH_LIMIT = 40
+
+
+def lookup_artist(name: str) -> dict | None:
+    """Top artist match as {"mbid", "name", "country"}, or None.
+
+    Raises MusicBrainzUnavailable, like every other _mb_get caller.
+    """
+    if not name:
+        return None
+    payload = _mb_get("/artist/", {"query": f"artist:({_lucene_escape(name)})",
+                                   "limit": 3})
+    artists = (payload or {}).get("artists") or []
+    if not artists:
+        return None
+    best = artists[0]
+    if (best.get("score") or 0) < MB_MIN_SCORE:
+        return None
+    return {"mbid": best.get("id"), "name": best.get("name") or name,
+            "country": best.get("country")}
+
+
+def lookup_discography(mbid: str, album: str | None = None) -> list[dict]:
+    """Release groups for one artist, chronological, undated last.
+
+    Rows match lookup_musicbrainz's shape so the client renders them with the
+    same card, plus `credited`/`canonical` for duplicate matching.
+
+    The search is by arid rather than by artist name: `artist:(Jorge Ben)`
+    returns thousands of groups all scoring 100, because the parenthesised
+    fuzzy match only discriminates when it is paired with a release title.
+    """
+    if not mbid:
+        return []
+
+    query = (f"arid:{mbid} AND primarytype:Album"
+             " AND -secondarytype:Compilation AND -secondarytype:Live")
+    if album:
+        query += f" AND releasegroup:({_lucene_escape(album)})"
+
+    payload = _mb_get("/release-group/", {"query": query,
+                                          "limit": MB_SEARCH_LIMIT})
+    groups = (payload or {}).get("release-groups") or []
+
+    rows = []
+    country_cache: dict = {}
+    for group in groups:
+        credit = (group.get("artist-credit") or [{}])[0]
+        artist = credit.get("artist") or {}
+        canonical = artist.get("name") or ""
+        # The name printed on THIS release. MusicBrainz canonicalises the
+        # artist ("Jorge Ben Jor") but the sleeve — and the collection — say
+        # "Jorge Ben". Using the canonical name here would split the artist
+        # across two crates on the shelf and defeat find_duplicate.
+        credited = credit.get("name") or canonical
+        released = group.get("first-release-date") or ""
+        rows.append({
+            "mbid": group.get("id"),
+            "year": released[:4] if len(released) >= 4 else None,
+            "country": _artist_country(artist.get("id"), country_cache)
+                       if artist.get("id") else None,
+            "label": None,
+            "artist": credited,
+            "credited": credited,
+            "canonical": canonical,
+            "album_name": group.get("title") or "",
+            "type": group.get("primary-type"),
+        })
+
+    # Chronological, with undated groups last rather than first: "" sorts
+    # before every real year, and a compilation MusicBrainz never dated is not
+    # what the collector is looking for at the top of the grid.
+    rows.sort(key=lambda r: (r["year"] is None, r["year"] or ""))
+    return rows
+
+
 COVER_TIMEOUT = 4.0
 
 

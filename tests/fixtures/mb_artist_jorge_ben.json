@@ -1,0 +1,17 @@
+{
+  "created": "2026-09-07T18:00:00.000Z",
+  "count": 3,
+  "offset": 0,
+  "country": "BR",
+  "artists": [
+    {"id": "19499124-36d4-4ccc-b28d-04dde3d2076f", "type": "Person",
+     "score": 100, "name": "Jorge Ben Jor", "sort-name": "Ben Jor, Jorge",
+     "country": "BR"},
+    {"id": "e28c0b26-3bdb-45dc-b4f5-f309c7c35ec4", "type": "Person",
+     "score": 91, "name": "Ben Webster", "sort-name": "Webster, Ben",
+     "country": "US"},
+    {"id": "837555ba-012e-45f1-9a9c-9628da13ee54", "type": "Person",
+     "score": 86, "name": "Ben E. King", "sort-name": "King, Ben E.",
+     "country": "US"}
+  ]
+}

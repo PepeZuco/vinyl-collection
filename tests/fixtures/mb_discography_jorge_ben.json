@@ -1,0 +1,30 @@
+{
+  "created": "2026-09-07T18:00:00.000Z",
+  "count": 4,
+  "offset": 0,
+  "release-groups": [
+    {"id": "9c1f0f1e-0a1b-4c2d-8e3f-1a2b3c4d5e6f", "score": 100,
+     "title": "África Brasil", "first-release-date": "1976",
+     "primary-type": "Album",
+     "artist-credit": [{"name": "Jorge Ben",
+       "artist": {"id": "19499124-36d4-4ccc-b28d-04dde3d2076f",
+                  "name": "Jorge Ben Jor", "sort-name": "Ben Jor, Jorge"}}]},
+    {"id": "01ecd040-de09-3fec-85cd-13c240b12dba", "score": 100,
+     "title": "Ben é samba bom", "first-release-date": "1964",
+     "primary-type": "Album",
+     "artist-credit": [{"name": "Jorge Ben",
+       "artist": {"id": "19499124-36d4-4ccc-b28d-04dde3d2076f",
+                  "name": "Jorge Ben Jor", "sort-name": "Ben Jor, Jorge"}}]},
+    {"id": "2b3c4d5e-6f70-4819-a2b3-c4d5e6f70819", "score": 100,
+     "title": "Força bruta", "first-release-date": "1970",
+     "primary-type": "Album",
+     "artist-credit": [{"name": "Jorge Ben",
+       "artist": {"id": "19499124-36d4-4ccc-b28d-04dde3d2076f",
+                  "name": "Jorge Ben Jor", "sort-name": "Ben Jor, Jorge"}}]},
+    {"id": "3c4d5e6f-7081-492a-b3c4-d5e6f708192a", "score": 100,
+     "title": "Grandes nomes", "primary-type": "Album",
+     "artist-credit": [{"name": "Jorge Ben Jor",
+       "artist": {"id": "19499124-36d4-4ccc-b28d-04dde3d2076f",
+                  "name": "Jorge Ben Jor", "sort-name": "Ben Jor, Jorge"}}]}
+  ]
+}
