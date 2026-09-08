@@ -2078,6 +2078,9 @@ select option{background:var(--surface);color:var(--text)}
             <button type="button" class="scan-sp" id="scanSpotifyBtn" onclick="openSpotifyOverlay()">
               <i class="ti ti-brand-spotify"></i> Spotify
             </button>
+            <button type="button" class="scan-find" id="searchNameBtn" onclick="openSearchOverlay()">
+              <i class="ti ti-list-search"></i> Search
+            </button>
           </div>
           <div class="scan-hint" id="scanHint"></div>
 
@@ -2307,6 +2310,34 @@ select option{background:var(--surface);color:var(--text)}
       <button class="btn" onclick="closeSpotifyOverlay()">cancel</button>
       <button class="btn btn-primary" id="spotifySubmitBtn" onclick="submitSpotifyUrl()">
         <i class="ti ti-arrow-right"></i> analyse
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Search by name — the way in when there is no sleeve to photograph and no
+     link to paste. Same chrome as the Spotify popup because it does the same
+     job: one field, hand it in, the results screen takes over. -->
+<div class="overlay hidden" id="searchOverlay">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">search by name</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeSearchOverlay()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <i class="ti ti-list-search" style="font-size:22px;color:var(--accent)"></i>
+        <span style="font-size:13px;color:var(--label)">artist, album, or both</span>
+      </div>
+      <input type="text" id="searchQueryInput" placeholder="jorge ben"
+             style="width:100%" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSearch()}">
+      <span id="searchErr" style="font-size:12px;color:var(--danger);display:none;margin-top:6px"></span>
+      <div class="scan-hint" id="searchHint"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeSearchOverlay()">cancel</button>
+      <button class="btn btn-primary" id="searchSubmitBtn" onclick="submitSearch()">
+        <i class="ti ti-arrow-right"></i> search
       </button>
     </div>
   </div>
@@ -5059,6 +5090,73 @@ async function runScan(body){
 
 function scanFromImage(dataUri){ runScan({image:dataUri}); }
 function scanFromSpotify(url){ runScan({spotify_url:url}); }
+
+// ── search by name ──────────────────────────────────────────────────────────
+
+let searchInFlight = false;
+let searchResults = [];
+let searchQuery = '';
+
+function openSearchOverlay(){
+  document.getElementById('searchErr').style.display = 'none';
+  document.getElementById('searchHint').textContent =
+    VinylSpend.scanHintText({armed: true, source: 'search', usage: scanUsage});
+  document.getElementById('searchOverlay').classList.remove('hidden');
+  document.getElementById('searchQueryInput').focus();
+}
+
+function closeSearchOverlay(){
+  document.getElementById('searchOverlay').classList.add('hidden');
+}
+
+function submitSearch(){
+  const query = document.getElementById('searchQueryInput').value.trim();
+  if(!query){ showSearchError('type an artist or album name'); return; }
+  runSearch(query);
+}
+
+function showSearchError(message){
+  const el = document.getElementById('searchErr');
+  el.textContent = message || '';
+  el.style.display = message ? '' : 'none';
+}
+
+function setSearchBusy(busy){
+  searchInFlight = busy;
+  document.getElementById('searchSubmitBtn').disabled = busy;
+  document.getElementById('searchQueryInput').disabled = busy;
+}
+
+async function runSearch(query){
+  // Same guard, same reason, as runScan's: every call costs real credits and
+  // Enter-then-click is two of them.
+  if(searchInFlight) return;
+  setSearchBusy(true);
+  showSearchError('');
+  try{
+    let res, data;
+    try{
+      res = await fetch('/api/search', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({query})});
+      data = await res.json();
+    }catch(e){
+      showSearchError('search failed — try again');
+      return;
+    }
+    if(!res.ok){
+      showSearchError((data && data.error) || 'search failed');
+      return;
+    }
+    searchQuery = query;
+    searchResults = data.results || [];
+    closeSearchOverlay();
+    openSearchResults(data);
+  } finally {
+    setSearchBusy(false);
+    refreshScanUsage();
+  }
+}
 
 function applyScanResult(data){
   // populateGenreSelect rebuilds the whole <select>, dropping the selection
