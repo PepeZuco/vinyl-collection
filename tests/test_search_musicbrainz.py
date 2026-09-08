@@ -25,7 +25,7 @@ def _response(payload, status=200):
 
 def test_resolves_the_top_scoring_artist():
     with patch.object(scan.requests, "get",
-                      return_value=_response(load_fixture("mb_artist_jorge_ben"))):
+                      return_value=_response(load_fixture("mb_artist_search_jorge_ben"))):
         found = scan.lookup_artist("jorge ben")
 
     assert found == {"mbid": "19499124-36d4-4ccc-b28d-04dde3d2076f",
