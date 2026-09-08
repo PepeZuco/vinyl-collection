@@ -772,6 +772,10 @@ select option{background:var(--surface);color:var(--text)}
 .scan-count{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
 .scan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 @media(max-width:760px){.scan-grid{grid-template-columns:repeat(2,1fr);gap:14px}}
+/* A scan returns four or five alternates and three columns suit them. A
+   discography is twelve to thirty, where 242px is still a legible sleeve. */
+.scan-grid.wide{grid-template-columns:repeat(4,1fr)}
+@media(max-width:760px){.scan-grid.wide{grid-template-columns:repeat(2,1fr)}}
 .scan-card{padding:0;text-align:left;background:var(--card);border:1px solid var(--border);
   border-radius:var(--radius);overflow:hidden;color:var(--text);display:flex;flex-direction:column;
   cursor:pointer;font-family:var(--font);transition:border-color .15s,transform .15s}
@@ -786,6 +790,13 @@ select option{background:var(--surface);color:var(--text)}
 .scan-card-meta{font-size:12px;color:var(--label);font-variant-numeric:tabular-nums}
 .scan-badge-best{position:absolute;top:9px;right:9px;background:var(--accent);color:#111;border-radius:4px;
   padding:4px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+/* The tick sits on the artwork, so it needs its own ground to stay legible
+   over a light sleeve. */
+.scan-pick{position:absolute;top:9px;left:9px;width:26px;height:26px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-size:15px;
+  background:rgba(0,0,0,.55);border:1px solid rgba(232,232,224,.45);color:transparent}
+.scan-pick.on{background:var(--accent);border-color:var(--accent);color:#0c0c0c}
+.scan-card.picked{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
 .scan-badge-dup{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;
   background:rgba(192,57,43,.92);color:#fff;padding:6px 10px;font-size:10.5px;font-weight:700;
   text-transform:uppercase;letter-spacing:.04em}
@@ -2370,6 +2381,9 @@ select option{background:var(--surface);color:var(--text)}
         <i class="ti ti-search"></i> none of these fit — search Google Images
         <i class="ti ti-external-link ext"></i>
       </a>
+      <span class="spacer"></span>
+      <span id="searchSelected" style="font-size:12px;color:var(--label)"></span>
+      <button class="btn btn-primary" id="searchAddBtn" onclick="addPickedRecords()" disabled>add records</button>
     </div>
   </div>
 </div>
@@ -5158,6 +5172,74 @@ async function runSearch(query){
   }
 }
 
+// var, not let: the boot tests read win.searchPicked directly, and a
+// top-level let binding is script-scoped rather than a window property.
+var searchPicked = new Set();
+
+function openSearchResults(data){
+  searchPicked = new Set();
+  document.getElementById('scanReadoutLabel').textContent = 'you searched for';
+  document.getElementById('scanReadoutTitle').textContent = data.query || '';
+  const thumb = document.getElementById('scanReadoutThumb');
+  document.getElementById('scanReadoutImg').removeAttribute('src');
+  thumb.style.display = 'none';
+  const genre = document.getElementById('scanReadoutGenre');
+  genre.textContent = data.artist || '';
+  genre.style.display = data.artist ? '' : 'none';
+  document.getElementById('scanGoogleLink').style.display = 'none';
+
+  // Search mode: pick several, no Google fallback — the releases came from
+  // MusicBrainz, so "none of these fit" means the query was wrong, not the art.
+  document.getElementById('searchSelected').style.display = '';
+  document.getElementById('searchAddBtn').style.display = '';
+
+  renderSearchResults();
+  document.getElementById('scanOverlay').classList.remove('hidden');
+}
+
+function renderSearchResults(){
+  const body = document.getElementById('scanBody');
+  if(!searchResults.length){
+    body.innerHTML =
+      `<div class="scan-empty">
+         <i class="ti ti-user-question"></i>
+         <div class="scan-empty-title">no artist matched</div>
+         <div class="scan-empty-text">MusicBrainz has nobody by that name. Check the
+           spelling, or type the album title instead — the search can work back to
+           the artist from it.</div>
+       </div>`;
+    renderSearchFoot();
+    return;
+  }
+  const owned = searchResults.filter(r => r.duplicate_of).length;
+  const cards = searchResults.map((c,i) => scanCardHtml(c, {
+    selectable: true,
+    selected: searchPicked.has(i),
+    duplicate: !!c.duplicate_of,
+    onclick: `toggleSearchPick(${i})`,
+  })).join('');
+  const count = `${searchResults.length} release${searchResults.length===1?'':'s'}`
+    + (owned ? ` · ${owned} already yours` : '')
+    + ' · tick the ones you have';
+  body.innerHTML = `<div class="scan-count">${esc(count)}</div>
+     <div class="scan-grid wide">${cards}</div>`;
+  renderSearchFoot();
+}
+
+function toggleSearchPick(i){
+  if(searchPicked.has(i)) searchPicked.delete(i); else searchPicked.add(i);
+  renderSearchResults();
+}
+
+function renderSearchFoot(){
+  const n = searchPicked.size;
+  const btn = document.getElementById('searchAddBtn');
+  btn.disabled = n === 0;
+  btn.textContent = n === 1 ? 'add 1 record' : `add ${n} records`;
+  document.getElementById('searchSelected').textContent =
+    n ? `${n} selected` : 'nothing selected yet';
+}
+
 function applyScanResult(data){
   // populateGenreSelect rebuilds the whole <select>, dropping the selection
   // unless it is handed back; without this the edit form's genre would reset
@@ -5222,6 +5304,10 @@ let scanPhotoUri = '';
 function setScanSearch(text){ scanSearchQuery = text || ''; }
 
 function openScanOverlay(data){
+  // Scan mode: the Google fallback, no picking.
+  document.getElementById('searchSelected').style.display = 'none';
+  document.getElementById('searchAddBtn').style.display = 'none';
+
   const fromPhoto = data.source === 'photo';
   document.getElementById('scanReadoutLabel').textContent =
     fromPhoto ? 'read from your photo' : 'read from the Spotify link';
@@ -5273,6 +5359,36 @@ function sameAlbumTitle(a, b){
   return !!a && !!b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
+/* One release as a card. Shared by the scan's alternates and the search's
+ * results: the two screens differ in how a card is chosen, not in what a
+ * release looks like. `opts.selectable` adds the checkbox, `opts.selected`
+ * marks it, and `opts.onclick` is the handler name to bind. */
+function scanCardHtml(c, opts){
+  opts = opts || {};
+  const art = c.cover_data
+    ? `<img src="${esc(c.cover_data)}" alt="${esc(c.album_name||'')}">`
+    : `<i class="ti ti-disc"></i><span class="no-art">no artwork found</span>`;
+  const dup = opts.duplicate
+    ? '<span class="scan-badge-dup"><i class="ti ti-alert-triangle"></i> already in your collection</span>'
+    : '';
+  const best = opts.best ? '<span class="scan-badge-best">best match</span>' : '';
+  const box = opts.selectable
+    ? `<span class="scan-pick${opts.selected ? ' on' : ''}"><i class="ti ti-check"></i></span>`
+    : '';
+  const meta = [c.year || '?', c.country ? countryLabelFromCode(c.country) : null,
+                (c.type && c.type !== 'Album') ? c.type.toLowerCase() : null]
+    .filter(Boolean).join(' · ');
+  return `<button type="button" class="scan-card${opts.selected ? ' picked' : ''}"
+     onclick="${opts.onclick}">
+     <div class="scan-card-cover">${art}${best}${box}${dup}</div>
+     <div class="scan-card-body">
+       <div class="scan-card-album">${esc(c.album_name||'')}</div>
+       <div class="scan-card-meta">${esc(c.artist||'')}</div>
+       <div class="scan-card-meta">${esc(meta)}</div>
+     </div>
+   </button>`;
+}
+
 function renderScanCandidates(){
   const body = document.getElementById('scanBody');
   if(!scanCandidates.length){
@@ -5295,28 +5411,11 @@ function renderScanCandidates(){
          </div>`;
     return;
   }
-  const cards = scanCandidates.map((c,i)=>{
-    const art = c.cover_data
-      ? `<img src="${esc(c.cover_data)}" alt="${esc(c.album_name||'')}">`
-      : `<i class="ti ti-disc"></i><span class="no-art">no artwork found</span>`;
-    const best = i === 0 ? '<span class="scan-badge-best">best match</span>' : '';
-    const dup = (scanDuplicateOf && sameAlbumTitle(c.album_name, scanDuplicateOf.album_name))
-      ? '<span class="scan-badge-dup"><i class="ti ti-alert-triangle"></i> already in your collection</span>'
-      : '';
-    // A single or an EP carries a different year from the LP with the same
-    // name, so say which one this is rather than letting it pass for the album.
-    const meta = [c.year || '?', c.country ? countryLabelFromCode(c.country) : null,
-                  (c.type && c.type !== 'Album') ? c.type.toLowerCase() : null]
-      .filter(Boolean).join(' · ');
-    return `<button type="button" class="scan-card" onclick="pickCandidate(${i})">
-       <div class="scan-card-cover">${art}${best}${dup}</div>
-       <div class="scan-card-body">
-         <div class="scan-card-album">${esc(c.album_name||'')}</div>
-         <div class="scan-card-meta">${esc(c.artist||'')}</div>
-         <div class="scan-card-meta">${esc(meta)}</div>
-       </div>
-     </button>`;
-  }).join('');
+  const cards = scanCandidates.map((c,i) => scanCardHtml(c, {
+    best: i === 0,
+    duplicate: scanDuplicateOf && sameAlbumTitle(c.album_name, scanDuplicateOf.album_name),
+    onclick: `pickCandidate(${i})`,
+  })).join('');
   const n = scanCandidates.length;
   body.innerHTML =
     `<div class="scan-count">${n} match${n>1?'es':''} · tap one to use it</div>

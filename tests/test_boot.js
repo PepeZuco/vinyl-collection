@@ -1670,3 +1670,79 @@ test('a search fills the results screen from what the server sent', async () => 
   // The one already in the collection wears the same red bar the scan uses.
   assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-badge-dup').length, 1);
 });
+
+async function searched(win) {
+  win.openAdd();
+  win.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      query: 'jorge ben', artist: 'Jorge Ben Jor', album: null,
+      results: [
+        { mbid: 'm1', artist: 'Jorge Ben', album_name: 'Força bruta',
+          year: '1970', country: 'BR', type: 'Album', cover_data: null,
+          duplicate_of: null },
+        { mbid: 'm2', artist: 'Jorge Ben', album_name: 'Negro é lindo',
+          year: '1971', country: 'BR', type: 'Album', cover_data: null,
+          duplicate_of: null },
+        { mbid: 'm3', artist: 'Jorge Ben', album_name: 'África Brasil',
+          year: '1976', country: 'BR', type: 'Album', cover_data: null,
+          duplicate_of: { id: 7, artist: 'Jorge Ben', album_name: 'África Brasil' } },
+      ],
+    }),
+  });
+  await win.runSearch('jorge ben');
+  return win;
+}
+
+test('nothing is selected until you tick something', async () => {
+  const { win } = await boot();
+  await searched(win);
+
+  assert.strictEqual(win.searchPicked.size, 0);
+  assert.ok(win.document.getElementById('searchAddBtn').disabled);
+});
+
+test('ticking cards moves the count and the button label', async () => {
+  const { win } = await boot();
+  await searched(win);
+
+  win.toggleSearchPick(0);
+  assert.match(win.document.getElementById('searchAddBtn').textContent,
+               /add 1 record\b/);
+
+  win.toggleSearchPick(1);
+  assert.strictEqual(win.searchPicked.size, 2);
+  assert.match(win.document.getElementById('searchAddBtn').textContent,
+               /add 2 records/);
+
+  win.toggleSearchPick(0);   // untick
+  assert.strictEqual(win.searchPicked.size, 1);
+});
+
+test('a record already in the collection is badged, not hidden', async () => {
+  const { win } = await boot();
+  await searched(win);
+
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-card').length, 3);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-badge-dup').length, 1);
+});
+
+test('the search grid is wider than the scan grid', async () => {
+  const { win } = await boot();
+  await searched(win);
+  // Three columns suit a scan's four alternates; a discography is twelve to
+  // thirty and wants four.
+  assert.ok(win.document.querySelector('#scanBody .scan-grid.wide'));
+});
+
+test('a search that matched no artist explains itself', async () => {
+  const { win } = await boot();
+  win.openAdd();
+  win.fetch = async () => ({
+    ok: true,
+    json: async () => ({ query: 'zzz', artist: null, album: null, results: [] }),
+  });
+  await win.runSearch('zzz');
+
+  assert.match(win.document.getElementById('scanBody').textContent, /no artist/i);
+});
