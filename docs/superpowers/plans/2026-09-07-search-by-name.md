@@ -718,8 +718,8 @@ import scan
 def client():
     app_module.app.config["TESTING"] = True
     with app_module.app.test_client() as c:
-        with c.session_transaction() as s:
-            s["can_edit"] = True
+        with c.session_transaction() as session:
+            session["authed"] = True
         yield c
 
 
@@ -746,20 +746,6 @@ DISCOGRAPHY = [
      "credited": "Jorge Ben", "canonical": "Jorge Ben Jor",
      "album_name": "África Brasil", "type": "Album", "label": None},
 ]
-
-
-def _patches(**overrides):
-    base = {
-        "parse_search_query": lambda q, usage_out=None: {
-            "artist": "Jorge Ben", "album": None},
-        "lookup_artist": lambda name: {
-            "mbid": "19499124", "name": "Jorge Ben Jor", "country": "BR"},
-        "lookup_discography": lambda mbid, album=None: [dict(r) for r in DISCOGRAPHY],
-        "search_covers": lambda rows: None,
-    }
-    base.update(overrides)
-    return [patch.object(scan, name, side_effect=fn) if callable(fn) else fn
-            for name, fn in base.items()]
 
 
 def test_returns_the_discography(client):
@@ -1016,8 +1002,8 @@ import scan
 def client():
     app_module.app.config["TESTING"] = True
     with app_module.app.test_client() as c:
-        with c.session_transaction() as s:
-            s["can_edit"] = True
+        with c.session_transaction() as session:
+            session["authed"] = True
         yield c
 
 
@@ -1810,7 +1796,28 @@ Add the footer controls to `#scanOverlay`'s `.scan-foot`, hidden in scan mode:
       <button class="btn btn-primary" id="searchAddBtn" onclick="addPickedRecords()" disabled>add records</button>
 ```
 
-`openScanOverlay` hides `#searchSelected` and `#searchAddBtn`; `openSearchResults` shows them and hides `#scanGoogleLink`.
+The two modes share the footer, so each one owns what it shows. Add to
+`openScanOverlay`, before `renderScanCandidates()`:
+
+```javascript
+  // Scan mode: the Google fallback, no picking.
+  document.getElementById('searchSelected').style.display = 'none';
+  document.getElementById('searchAddBtn').style.display = 'none';
+```
+
+and to `openSearchResults`, before `renderSearchResults()`:
+
+```javascript
+  // Search mode: pick several, no Google fallback — the releases came from
+  // MusicBrainz, so "none of these fit" means the query was wrong, not the art.
+  document.getElementById('searchSelected').style.display = '';
+  document.getElementById('searchAddBtn').style.display = '';
+```
+
+`addPickedRecords` is bound by the footer button here but implemented in
+Task 9. Between the two tasks the button is inert rather than broken — an
+`onclick` naming an undefined function throws only when clicked, and no test
+in this task clicks it.
 
 - [ ] **Step 6: Run the boot tests to verify they pass**
 

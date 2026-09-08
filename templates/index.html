@@ -253,7 +253,7 @@ select option{background:var(--surface);color:var(--text)}
   font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(232,232,224,.45);
 }
 .idle-eyebrow{top:28px}
-.idle-card{display:flex;flex-direction:column;align-items:center;gap:22px;transition:opacity .5s ease;cursor:default}
+.idle-card{display:flex;flex-direction:column;align-items:center;gap:22px;transition:opacity .5s ease;cursor:pointer}
 .idle-card.idle-fading{opacity:0}
 .idle-art{position:relative;width:220px;height:220px}
 .idle-disc{
@@ -2417,7 +2417,7 @@ select option{background:var(--surface);color:var(--text)}
     </div>
   </div>
   <div class="idle-dots" id="idleDots"></div>
-  <div class="idle-hint">move to dismiss</div>
+  <div class="idle-hint">click the record to open &middot; anywhere to dismiss</div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -7740,7 +7740,9 @@ const IDLE_CYCLE_MS = 10 * 1000;
 let idleTimer = null;
 let idleCycleTimer = null;
 let idleQueue = [];
-let idleLastMouseX = null, idleLastMouseY = null;
+// The record currently painted on the card, so pressing it opens that one and
+// not whatever the queue has moved on to mid-crossfade.
+let idleCurrentId = null;
 
 function idleOverlayEl() { return document.getElementById('idleOverlay'); }
 function idleShowing() { return !idleOverlayEl().classList.contains('hidden'); }
@@ -7770,8 +7772,6 @@ function fireIdleSpotlight() {
   if (!pool.length) { scheduleIdleTimer(); return; }
   idleQueue = VinylIdleSpotlight.shuffle(pool);
   renderIdleRecord(idleQueue[0], pool);
-  idleLastMouseX = null;
-  idleLastMouseY = null;
   idleOverlayEl().classList.remove('hidden');
   clearInterval(idleCycleTimer);
   idleCycleTimer = idleUnref(setInterval(() => advanceIdleSpotlight(pool), IDLE_CYCLE_MS));
@@ -7794,6 +7794,7 @@ function idleSegs(el, n) {
 }
 
 function renderIdleRecord(r, pool) {
+  idleCurrentId = r.id;
   document.getElementById('idleArtist').textContent = r.artist || '';
   document.getElementById('idleAlbum').textContent = r.album_name || '';
   document.getElementById('idlePlays').textContent = r.play_count || 0;
@@ -7811,9 +7812,20 @@ function renderIdleRecord(r, pool) {
 }
 
 function closeIdleSpotlight() {
+  idleCurrentId = null;
   idleOverlayEl().classList.add('hidden');
   clearInterval(idleCycleTimer);
   scheduleIdleTimer();
+}
+
+// Read the id before closing, which clears it. The same press goes on to the
+// document handler afterwards, but by then the spotlight is already down, so
+// all it does there is restart the idle clock -- which is what you want.
+function openIdleRecord() {
+  if (!idleShowing()) return;
+  const id = idleCurrentId;
+  closeIdleSpotlight();
+  if (id !== null) openDetail(id);
 }
 
 function initIdleSpotlight() {
@@ -7822,16 +7834,18 @@ function initIdleSpotlight() {
       if (idleShowing()) closeIdleSpotlight(); else scheduleIdleTimer();
     }, { passive: true });
   });
-  // mousemove gets its own handler: appearing under a stationary cursor
-  // makes Chrome (and others) fire a synthetic mousemove to recompute
-  // :hover, which would otherwise dismiss the popup the instant it shows.
-  // Real movement only counts once the coordinates differ from that first
-  // synthetic sample.
-  document.addEventListener('mousemove', e => {
-    if (!idleShowing()) { scheduleIdleTimer(); return; }
-    if (idleLastMouseX === null) { idleLastMouseX = e.clientX; idleLastMouseY = e.clientY; return; }
-    if (e.clientX !== idleLastMouseX || e.clientY !== idleLastMouseY) closeIdleSpotlight();
+  // Movement alone never dismisses. It used to, and the card could not be
+  // reached with a mouse because of it: the spotlight was gone before the
+  // pointer arrived. Coming back to the machine now costs a click or a key.
+  document.addEventListener('mousemove', () => {
+    if (!idleShowing()) scheduleIdleTimer();
   });
+  // On the card, before the dismissal above: press the record you are being
+  // shown and it opens, the same as pressing its cover on the shelf. Bound to
+  // mousedown rather than click because the dismissal hides the card, and a
+  // click never lands on an element that stopped being displayed under it.
+  const card = document.getElementById('idleCard');
+  ['mousedown', 'touchstart'].forEach(evt => card.addEventListener(evt, openIdleRecord));
   idleOverlayEl().addEventListener('click', closeIdleSpotlight);
   scheduleIdleTimer();
 }

@@ -1562,3 +1562,56 @@ test('a numeral icon opens the record on that day of that kind', async () => {
   press(win, played);
   assert.strictEqual(read('detailFocus'), '2026-08-09~played');
 });
+
+// ── the idle screensaver ────────────────────────────────────────────────────
+//
+// The spotlight is the one screen you arrive at by doing nothing, so no other
+// test in this file ever reaches it. What matters here is how you leave it:
+// pressing the record opens that record, pressing the dark around it just
+// dismisses, and moving the mouse does neither — dismissing on movement would
+// take the card away before the pointer could ever land on it.
+
+async function spotlight() {
+  const ctx = await boot();
+  ctx.win.fireIdleSpotlight();
+  assert.ok(!$(ctx.doc, '#idleOverlay').classList.contains('hidden'),
+    'the screensaver never came up');
+  return ctx;
+}
+
+function pressDown(win, el) {
+  el.dispatchEvent(new win.MouseEvent('mousedown', { bubbles: true }));
+}
+
+test('pressing the spotlighted record opens that record', async () => {
+  const { win, doc, read } = await spotlight();
+  const shown = read('idleQueue')[0];
+  pressDown(win, $(doc, '#idleCard'));
+  assert.ok($(doc, '#idleOverlay').classList.contains('hidden'),
+    'the screensaver stayed up over the drawer');
+  assert.ok(!$(doc, '#detailOverlay').classList.contains('hidden'), 'the drawer stayed shut');
+  assert.strictEqual(read('currentDetailId'), shown.id);
+});
+
+test('tapping the spotlighted record opens that record', async () => {
+  const { win, doc, read } = await spotlight();
+  const shown = read('idleQueue')[0];
+  $(doc, '#idleCard').dispatchEvent(new win.Event('touchstart', { bubbles: true }));
+  assert.ok($(doc, '#idleOverlay').classList.contains('hidden'), 'the screensaver stayed up');
+  assert.strictEqual(read('currentDetailId'), shown.id);
+});
+
+test('pressing the dark around the record dismisses without opening anything', async () => {
+  const { win, doc } = await spotlight();
+  pressDown(win, $(doc, '#idleOverlay'));
+  assert.ok($(doc, '#idleOverlay').classList.contains('hidden'), 'the screensaver stayed up');
+  assert.ok($(doc, '#detailOverlay').classList.contains('hidden'), 'the drawer opened anyway');
+});
+
+test('moving the mouse leaves the spotlight up, so the record stays reachable', async () => {
+  const { win, doc } = await spotlight();
+  [[10, 10], [300, 220]].forEach(([clientX, clientY]) =>
+    doc.dispatchEvent(new win.MouseEvent('mousemove', { bubbles: true, clientX, clientY })));
+  assert.ok(!$(doc, '#idleOverlay').classList.contains('hidden'),
+    'movement dismissed the screensaver');
+});
