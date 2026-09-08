@@ -1749,3 +1749,107 @@ test('a search that matched no artist explains itself', async () => {
 
   assert.match(win.document.getElementById('scanBody').textContent, /no artist/i);
 });
+
+async function queued(win) {
+  await searched(win);
+  win.toggleSearchPick(0);
+  win.toggleSearchPick(1);
+  win.fetch = async () => ({ ok: true, json: async () => ({ genres: ['MPB & Samba', 'MPB & Samba'] }) });
+  await win.addPickedRecords();
+  return win;
+}
+
+test('picking two records opens the form on the first, counting', async () => {
+  const { win } = await boot();
+  await queued(win);
+
+  assert.strictEqual(win.document.getElementById('formOverlay').classList.contains('hidden'), false);
+  assert.strictEqual(win.document.getElementById('queueCounter').textContent, '1 of 2');
+  assert.strictEqual(win.document.getElementById('fAlbum').value, 'Força bruta');
+  assert.strictEqual(win.document.getElementById('fArtist').value, 'Jorge Ben');
+  assert.strictEqual(win.document.getElementById('fYear').value, '1970');
+});
+
+test('the save button says save and next until the last record', async () => {
+  const { win } = await boot();
+  await queued(win);
+  assert.strictEqual(win.document.getElementById('formSaveBtn').textContent, 'save & next');
+});
+
+test('the ownership switch does not clobber the queue save label', async () => {
+  // setHaveIt -> renderOwnSwitch -> applyOwnershipMode resets formSaveBtn
+  // .textContent on every toggle.
+  const { win } = await boot();
+  await queued(win);
+  win.setHaveIt(false);
+  assert.strictEqual(win.document.getElementById('formSaveBtn').textContent, 'save & next');
+  win.setHaveIt(true);
+  assert.strictEqual(win.document.getElementById('formSaveBtn').textContent, 'save & next');
+});
+
+test('saving advances to the next record without offering the last one back', async () => {
+  const { win } = await boot();
+  await queued(win);
+  win.fetch = async () => ({ ok: true, json: async () => ({ id: 99, artist: 'Jorge Ben', album_name: 'Força bruta' }) });
+
+  await win.submitForm();
+
+  assert.strictEqual(win.document.getElementById('queueCounter').textContent, '2 of 2');
+  assert.strictEqual(win.document.getElementById('fAlbum').value, 'Negro é lindo');
+  // The draft banner must not be showing the record that was just saved.
+  assert.ok(win.document.getElementById('draftFlag').hidden);
+  assert.strictEqual(win.document.getElementById('formSaveBtn').textContent, 'save');
+});
+
+test('saving the last record closes the form and empties the queue', async () => {
+  const { win } = await boot();
+  await queued(win);
+  win.fetch = async () => ({ ok: true, json: async () => ({ id: 99, artist: 'a', album_name: 'b' }) });
+
+  await win.submitForm();
+  await win.submitForm();
+
+  assert.ok(win.document.getElementById('formOverlay').classList.contains('hidden'));
+  assert.ok(win.document.getElementById('queueStrip').hidden, 'the queue strip is gone');
+});
+
+test('skipping drops one record and shortens the count', async () => {
+  const { win } = await boot();
+  await queued(win);
+
+  win.skipQueued();
+
+  assert.strictEqual(win.document.getElementById('queueCounter').textContent, '1 of 1');
+  assert.strictEqual(win.document.getElementById('fAlbum').value, 'Negro é lindo');
+});
+
+test('cancelling the form drops the rest of the queue', async () => {
+  const { win } = await boot();
+  await queued(win);
+
+  win.confirm = () => true;
+  win.closeForm();
+
+  assert.ok(win.document.getElementById('queueStrip').hidden, 'the queue strip is gone');
+  assert.ok(win.document.getElementById('formOverlay').classList.contains('hidden'));
+});
+
+test('the reopen-results button survives advancing', async () => {
+  // openAdd clears scanCandidates, which is what used to kill this button.
+  const { win } = await boot();
+  await queued(win);
+  win.fetch = async () => ({ ok: true, json: async () => ({ id: 99, artist: 'a', album_name: 'b' }) });
+
+  await win.submitForm();
+
+  assert.ok(win.document.getElementById('scanRepickBtn').classList.contains('on'));
+});
+
+test('the queue strip marks what is done, current and waiting', async () => {
+  const { win } = await boot();
+  await queued(win);
+  const chips = win.document.querySelectorAll('#queueStrip .qchip');
+  assert.strictEqual(chips.length, 2);
+  assert.ok(chips[0].classList.contains('current'));
+  assert.ok(chips[1].classList.contains('pending'));
+});

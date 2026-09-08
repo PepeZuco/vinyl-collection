@@ -1482,6 +1482,19 @@ select option{background:var(--surface);color:var(--text)}
   font-size:12px;font-family:var(--font);font-weight:600;cursor:pointer;transition:all .12s}
 .playdate-add:hover{border-color:var(--accent);color:var(--accent)}
 
+/* ── the add-queue strip ─────────────────────────────────────────────────── */
+.queue-strip{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--bg);
+  border-bottom:1px solid var(--border);flex-wrap:wrap}
+.queue-label{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
+.queue-chips{display:flex;gap:8px;flex:1;min-width:0;flex-wrap:wrap}
+.qchip{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:7px;
+  border:1px solid var(--border);background:var(--card);font-size:12px;color:var(--label);white-space:nowrap}
+.qchip.done{opacity:.55}
+.qchip.current{border-color:var(--accent);color:var(--accent);font-weight:600;
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.queue-counter{font-family:var(--font-mono);font-size:11px;color:var(--accent);
+  border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:4px;padding:4px 9px}
+
 /* ── form on a phone ───────────────────────────────────────────────────────
    The form had no mobile rules at all: it rendered as the desktop's floating
    92vh box, so `save` sat below the fold behind the whole scroll. Full screen,
@@ -2032,6 +2045,12 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-head">
       <span class="modal-title" id="formTitle">add record</span>
       <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="queue-strip" id="queueStrip" hidden>
+      <span class="queue-label">from your search</span>
+      <div class="queue-chips" id="queueChips"></div>
+      <span class="queue-counter" id="queueCounter"></span>
+      <button type="button" class="btn btn-sm" onclick="skipQueued()">skip this one</button>
     </div>
     <div class="modal-body">
       <div id="scanDupWarning" style="display:none;margin-bottom:12px;padding:10px;
@@ -3949,8 +3968,14 @@ function applyOwnershipMode(){
   });
   // Saving a wishlist entry is the whole act — there is nothing else to fill
   // in — so the button says so.
-  document.getElementById('formSaveBtn').textContent =
-    (!editingId && !owned) ? 'add to wishlist' : 'save';
+  //
+  // The queue's "save & next" outranks this, or the first ownership toggle
+  // would silently put the label back to "save" mid-queue. renderOwnSwitch
+  // calls this on every toggle, which is why the guard lives here and not there.
+  if(!syncSaveLabel()){
+    document.getElementById('formSaveBtn').textContent =
+      (!editingId && !owned) ? 'add to wishlist' : 'save';
+  }
 }
 
 // ── bought at ───────────────────────────────────────────────────────────────
@@ -4547,18 +4572,27 @@ function closeForm(force){
   // formNoteImages is deliberately not part of formValues -- that is "what
   // would be saved", and a pending photo is not on the record yet. It is still
   // work the user would lose, so it gets a say in the prompt.
+  const queued = addQueue ? VinylQueue.remaining(addQueue) - 1 : 0;
   if (force !== true && (formIsDirty() || formNoteImages.length)) {
     const scanned = coverDirty || scanWrote && Object.keys(scanWrote).length;
-    if (!confirm(scanned
+    let message = scanned
       ? 'Discard this record? The scan that filled it would have to be paid for again.'
-      : 'Discard this record? What you typed will be lost.')) return;
+      : 'Discard this record? What you typed will be lost.';
+    if (queued > 0) {
+      message += `\n\n${queued} more record${queued===1?'':'s'} from your search `
+               + `${queued===1?'is':'are'} still waiting, and will be dropped too.`;
+    }
+    if (!confirm(message)) return;
   }
+  addQueue = null;
+  document.getElementById('queueStrip').hidden = true;
   VinylDraft.clear(draftStore());
   formBaseline = null;
   document.getElementById('draftFlag').hidden = true;
   document.getElementById('formOverlay').classList.add('hidden');
   closeSpotifyOverlay();
   closeScanOverlay();
+  closeSearchOverlay();
   scanToken++;
   setScanBusy(false);
 }
@@ -4645,7 +4679,11 @@ async function submitForm(){
   const rec=await res.json();
   if(editingId){records=records.map(x=>x.id===editingId?rec:x);toast('changes saved');}
   else{records.push(rec);toast('record added');}
-  closeForm(true);render();
+  render();
+  // A queue with more in it re-opens the form instead of closing it.
+  if(addQueue && !VinylQueue.isLast(addQueue)){ advanceQueue(); return; }
+  addQueue = null;
+  closeForm(true);
 }
 
 // ── cover: picker, camera, resize ───────────────────────────────────────────
@@ -5236,6 +5274,88 @@ function renderSearchFoot(){
   btn.textContent = n === 1 ? 'add 1 record' : `add ${n} records`;
   document.getElementById('searchSelected').textContent =
     n ? `${n} selected` : 'nothing selected yet';
+}
+
+// ── the add queue ───────────────────────────────────────────────────────────
+// Lives outside everything openAdd resets, because it has to survive the
+// openAdd that starts the next record.
+let addQueue = null;
+
+async function addPickedRecords(){
+  const picked = [...searchPicked].sort((a,b) => a-b).map(i => searchResults[i]);
+  if(!picked.length) return;
+
+  // One request for the whole queue: the genre work is a single act and is
+  // priced as one in the ledger.
+  let genres = [];
+  try{
+    const res = await fetch('/api/search/genres', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({releases: picked.map(r => (
+        {artist: r.artist, album_name: r.album_name}))})});
+    if(res.ok) genres = (await res.json()).genres || [];
+  }catch(e){ /* a record with no genre is a record you set the genre on */ }
+  picked.forEach((r,i) => { r.genre = genres[i] || ''; });
+
+  addQueue = VinylQueue.create(picked);
+  closeScanOverlay();
+  startQueuedRecord();
+  refreshScanUsage();
+}
+
+/* Open the form on the queue's current record. Also the advance path, so the
+ * draft is cleared BEFORE openAdd runs — openAdd ends in offerDraft(), which
+ * would otherwise offer back the record that was just saved. */
+function startQueuedRecord(){
+  const release = VinylQueue.current(addQueue);
+  if(!release){ addQueue = null; closeForm(true); return; }
+
+  VinylDraft.clear(draftStore());
+  openAdd();
+
+  setScanField('fArtist', release.artist);
+  setScanField('fAlbum', release.album_name);
+  setScanField('fGenre', release.genre);
+  applyCandidate(release);
+
+  // openAdd cleared scanCandidates, which is what drives the reopen button.
+  // Rebind it: reopening costs nothing, because the search was paid for once
+  // and covers every record in the queue.
+  scanCandidates = searchResults;
+  updateScanControls();
+
+  renderQueueStrip();
+  formBaseline = formValues();
+  formChanged();
+}
+
+function advanceQueue(){
+  addQueue = VinylQueue.advance(addQueue);
+  startQueuedRecord();
+}
+
+function skipQueued(){
+  if(!addQueue) return;
+  addQueue = VinylQueue.skip(addQueue);
+  startQueuedRecord();
+}
+
+function renderQueueStrip(){
+  const strip = document.getElementById('queueStrip');
+  if(!addQueue || !VinylQueue.total(addQueue)){ strip.hidden = true; return; }
+  strip.hidden = false;
+  document.getElementById('queueCounter').textContent = VinylQueue.counter(addQueue);
+  document.getElementById('queueChips').innerHTML =
+    VinylQueue.chips(addQueue).map(c =>
+      `<span class="qchip ${c.status}">${esc(c.release.album_name || '')}</span>`).join('');
+  syncSaveLabel();
+}
+
+/* The queue's label, applied wherever applyOwnershipMode would otherwise win. */
+function syncSaveLabel(){
+  if(!addQueue) return false;
+  document.getElementById('formSaveBtn').textContent = VinylQueue.saveLabel(addQueue);
+  return true;
 }
 
 function applyScanResult(data){
