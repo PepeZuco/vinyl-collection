@@ -48,12 +48,36 @@ test('advancing past the last record empties the queue', () => {
   assert.strictEqual(VinylQueue.remaining(q), 0);
 });
 
+test('a finished queue never counts past its own length', () => {
+  let q = VinylQueue.create(THREE);
+  for (let i = 0; i < 3; i++) q = VinylQueue.advance(q);
+  // Without the clamp this reads "4 of 3" in the header for the moment
+  // between the last save and the form closing.
+  assert.strictEqual(VinylQueue.position(q), 3);
+  assert.strictEqual(VinylQueue.counter(q), '3 of 3');
+});
+
 test('skipping drops the record without counting it as done', () => {
   let q = VinylQueue.create(THREE);
   q = VinylQueue.skip(q);
   assert.strictEqual(VinylQueue.current(q).album_name, 'Negro é lindo');
   assert.strictEqual(VinylQueue.total(q), 2);
   assert.strictEqual(VinylQueue.counter(q), '1 of 2');
+});
+
+test('skipping does not mutate the queue it was given', () => {
+  const q = VinylQueue.create(THREE);
+  VinylQueue.skip(q);
+  assert.strictEqual(VinylQueue.total(q), 3);
+  assert.strictEqual(VinylQueue.current(q).album_name, 'Força bruta');
+});
+
+test('skipping the last one left finishes the queue cleanly', () => {
+  let q = VinylQueue.create([THREE[0]]);
+  q = VinylQueue.skip(q);
+  assert.strictEqual(VinylQueue.current(q), null);
+  assert.strictEqual(VinylQueue.total(q), 0);
+  assert.strictEqual(VinylQueue.remaining(q), 0);
 });
 
 test('chips report which record is done, current and still waiting', () => {
