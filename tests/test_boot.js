@@ -1802,7 +1802,7 @@ test('saving advances to the next record without offering the last one back', as
 });
 
 test('saving the last record closes the form and empties the queue', async () => {
-  const { win } = await boot();
+  const { win, read } = await boot();
   await queued(win);
   win.fetch = async () => ({ ok: true, json: async () => ({ id: 99, artist: 'a', album_name: 'b' }) });
 
@@ -1810,6 +1810,7 @@ test('saving the last record closes the form and empties the queue', async () =>
   await win.submitForm();
 
   assert.ok(win.document.getElementById('formOverlay').classList.contains('hidden'));
+  assert.strictEqual(read('addQueue'), null);
   assert.ok(win.document.getElementById('queueStrip').hidden, 'the queue strip is gone');
 });
 
@@ -1824,12 +1825,13 @@ test('skipping drops one record and shortens the count', async () => {
 });
 
 test('cancelling the form drops the rest of the queue', async () => {
-  const { win } = await boot();
+  const { win, read } = await boot();
   await queued(win);
 
   win.confirm = () => true;
   win.closeForm();
 
+  assert.strictEqual(read('addQueue'), null);
   assert.ok(win.document.getElementById('queueStrip').hidden, 'the queue strip is gone');
   assert.ok(win.document.getElementById('formOverlay').classList.contains('hidden'));
 });
@@ -1843,6 +1845,19 @@ test('the reopen-results button survives advancing', async () => {
   await win.submitForm();
 
   assert.ok(win.document.getElementById('scanRepickBtn').classList.contains('on'));
+});
+
+test('reopening from a queued record shows the search results again', async () => {
+  const { win } = await boot();
+  await queued(win);
+  win.fetch = async () => ({ ok: true, json: async () => ({ id: 99, artist: 'a', album_name: 'b' }) });
+  await win.submitForm();
+
+  win.reopenScanOverlay();
+  assert.ok(!win.document.getElementById('scanOverlay').classList.contains('hidden'));
+  // The search grid, not the scan grid — proves it did not fall through to
+  // the lastScanData branch, which is null here.
+  assert.ok(win.document.querySelector('#scanBody .scan-grid.wide'));
 });
 
 test('the queue strip marks what is done, current and waiting', async () => {

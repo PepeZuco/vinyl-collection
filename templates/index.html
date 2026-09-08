@@ -5202,6 +5202,7 @@ async function runSearch(query){
     }
     searchQuery = query;
     searchResults = data.results || [];
+    lastSearchData = data;
     closeSearchOverlay();
     openSearchResults(data);
   } finally {
@@ -5412,6 +5413,12 @@ function applyScanResult(data){
 let scanDuplicateOf = null;
 let scanSearchQuery = '';
 let lastScanData = null;
+// The search that filled the queue, remembered the way lastScanData
+// remembers a scan. openAdd clears lastScanData on every record, so a
+// queued record has no scan to reopen — but it does have a search, and
+// that search is still worth reopening: it was paid for once and covers
+// every record in the queue.
+let lastSearchData = null;
 // The photo the scan actually read. Kept apart from coverDataUri because
 // picking a candidate replaces the cover, and the readout should still show
 // what was scanned rather than the artwork that came back.
@@ -5467,6 +5474,9 @@ function closeScanOverlay(){
 }
 
 function reopenScanOverlay(){
+  // A queued record came from a search, not a scan — openAdd cleared
+  // lastScanData but the search results are still the right thing to show.
+  if(addQueue && lastSearchData){ openSearchResults(lastSearchData); return; }
   if(lastScanData) openScanOverlay(lastScanData);
 }
 
