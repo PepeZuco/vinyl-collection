@@ -8,7 +8,15 @@ import scan
 
 @pytest.fixture
 def client():
+    """An authed client over an empty ledger.
+
+    The database is session-scoped, so rows left by another test would land in
+    this module's scan ledger.
+    """
     app_module.app.config["TESTING"] = True
+    with app_module.app.app_context():
+        app_module.ScanSpend.query.delete()
+        app_module.db.session.commit()
     with app_module.app.test_client() as c:
         with c.session_transaction() as session:
             session["authed"] = True
