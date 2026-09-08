@@ -719,10 +719,26 @@ def parse_search_query(query: str, usage_out: list | None = None) -> dict:
     except (StopIteration, ValueError) as e:
         raise RuntimeError(f"Could not parse the search response: {e}") from e
 
-    artist = (parsed.get("artist") or "").strip()
+    # Second line of defence: even though the schema constrains the model's
+    # output, don't trust it blindly. Verify each field is a string or None;
+    # any schema violation is treated as an absent field, degrading to
+    # ValueError, not AttributeError on .strip().
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    artist_value = parsed.get("artist")
+    if not isinstance(artist_value, str) and artist_value is not None:
+        artist_value = None
+
+    artist = (artist_value or "").strip()
     if not artist:
         raise ValueError(f"Couldn't tell what artist {query!r} means")
-    album = (parsed.get("album") or "").strip() or None
+
+    album_value = parsed.get("album")
+    if not isinstance(album_value, str) and album_value is not None:
+        album_value = None
+
+    album = (album_value or "").strip() or None
     return {"artist": artist, "album": album}
 
 

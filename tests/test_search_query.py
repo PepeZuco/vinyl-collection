@@ -80,3 +80,15 @@ def test_an_artistless_answer_is_rejected():
     with patch.object(scan, "_anthropic_client", return_value=client):
         with pytest.raises(ValueError):
             scan.parse_search_query("asdfghjkl")
+
+
+def test_a_response_that_violates_the_schema_is_rejected_cleanly():
+    """Structured output should make this impossible; classify_genre still
+    re-checks, and so does this."""
+    client = Mock()
+    client.messages.create.return_value = _claude_response(
+        {"artist": ["Jorge", "Ben"], "album": 1971})
+
+    with patch.object(scan, "_anthropic_client", return_value=client):
+        with pytest.raises(ValueError):
+            scan.parse_search_query("jorge ben")
