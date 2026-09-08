@@ -102,6 +102,28 @@ def test_a_collection_filed_under_the_canonical_name_is_also_matched(client):
     assert body["results"][0]["duplicate_of"]["album_name"] == "Força bruta"
 
 
+def test_the_credited_name_is_tried_before_the_canonical_one(client):
+    """The same album sits in the collection under BOTH spellings. If
+    _search_duplicate tried the canonical name first, it would report the
+    canonical row here instead — this only fails if that order is reversed."""
+    _seed("Jorge Ben", "Força bruta")
+    _seed("Jorge Ben Jor", "Força bruta")
+
+    with patch.object(scan, "parse_search_query",
+                      return_value={"artist": "Jorge Ben", "album": None}), \
+         patch.object(scan, "lookup_artist",
+                      return_value={"mbid": "19499124", "name": "Jorge Ben Jor",
+                                    "country": "BR"}), \
+         patch.object(scan, "lookup_discography",
+                      return_value=[dict(r) for r in DISCOGRAPHY]), \
+         patch.object(scan, "search_covers"):
+        body = client.post("/api/search", json={"query": "jorge ben"}).get_json()
+
+    dup = body["results"][0]["duplicate_of"]
+    assert dup is not None
+    assert dup["artist"] == "Jorge Ben"
+
+
 def test_no_such_artist_is_an_empty_list_not_an_error(client):
     with patch.object(scan, "parse_search_query",
                       return_value={"artist": "Zzz", "album": None}), \

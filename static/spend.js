@@ -29,9 +29,14 @@ const VinylSpend = (function () {
    * last thing on screen before the money is spent.
    *
    * `usage` is null until the readout has loaded — the hint then says exactly
-   * what it always said, rather than flashing a placeholder price. */
-  function scanHintText({ armed, source, usage }) {
-    const base = armed ? 'nothing is sent until you tap analyse'
+   * what it always said, rather than flashing a placeholder price.
+   *
+   * `verb` names the button this hint sits under — "analyse" by default, so
+   * every existing caller reads the same as before. The search popup passes
+   * 'search': its button is not labelled analyse, and saying so under it was
+   * just wrong. */
+  function scanHintText({ armed, source, usage, verb }) {
+    const base = armed ? 'nothing is sent until you tap ' + (verb || 'analyse')
                        : 'add a cover or a spotify link first';
     if (!usage) return base;
     const month = formatMoney(usage.month_usd) + ' this month';

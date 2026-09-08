@@ -67,6 +67,18 @@ test('the idle hint still reports the month so far', () => {
                      'add a cover or a spotify link first · 4.2¢ this month');
 });
 
+test('a verb replaces "analyse" for a button that is not labelled that', () => {
+  assert.strictEqual(
+    scanHintText({ armed: true, source: 'search', usage: null, verb: 'search' }),
+    'nothing is sent until you tap search');
+});
+
+test('no verb still means analyse, for every caller that never passed one', () => {
+  assert.strictEqual(
+    scanHintText({ armed: true, source: 'photo', usage: null }),
+    'nothing is sent until you tap analyse');
+});
+
 // ── sheetSpendText ──────────────────────────────────────────────────────────
 
 test('the sheet quotes both ways in before either is picked', () => {

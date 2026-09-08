@@ -757,6 +757,12 @@ def search_genres():
         return jsonify({"error": "releases must be a list"}), 400
     if len(releases) > scan.MB_SEARCH_LIMIT:
         return jsonify({"error": f"At most {scan.MB_SEARCH_LIMIT} at a time"}), 400
+    # (r or {}).get("artist") below assumes each entry is falsy or a dict; a
+    # truthy non-dict (a bare string, say) raises AttributeError uncaught,
+    # turning a bad request into a 500. Same class of bug as
+    # parse_search_query's, and the same fix: reject it before the try.
+    if not all(isinstance(r, dict) for r in releases):
+        return jsonify({"error": "each release must be an object"}), 400
     if not releases:
         return jsonify({"genres": []})
 

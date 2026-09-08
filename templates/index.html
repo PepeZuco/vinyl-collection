@@ -2363,6 +2363,14 @@ select option{background:var(--surface);color:var(--text)}
              style="width:100%" onkeydown="if(event.key==='Enter'){event.preventDefault();submitSearch()}">
       <span id="searchErr" style="font-size:12px;color:var(--danger);display:none;margin-top:6px"></span>
       <div class="scan-hint" id="searchHint"></div>
+
+      <!-- Measured against live MusicBrainz, a real search takes about 30
+           seconds — load-shedding retries pay a one-second throttle each —
+           far longer than a disabled button explains on its own. -->
+      <div id="searchStatus" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--label)">
+        <span class="scan-spinner"></span>
+        <span>searching… can take up to 30 seconds — MusicBrainz sheds load and each retry waits a beat</span>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeSearchOverlay()">cancel</button>
@@ -2374,12 +2382,14 @@ select option{background:var(--surface);color:var(--text)}
 </div>
 
 <!-- Scan results — a screen of its own, on both breakpoints. Picking here is
-     what fills the form; nothing is written to it until one is chosen. -->
+     what fills the form; nothing is written to it until one is chosen. Also
+     serves the search results, hence the title text is set per mode rather
+     than baked into the markup. -->
 <div class="overlay hidden" id="scanOverlay">
   <div class="modal">
     <div class="modal-head">
       <button class="btn btn-sm" onclick="closeScanOverlay()"><i class="ti ti-arrow-left"></i> back to the form</button>
-      <span class="modal-title" style="flex:1;text-align:right">scan results</span>
+      <span class="modal-title" id="scanResultsTitle" style="flex:1;text-align:right">scan results</span>
     </div>
 
     <div class="scan-readout">
@@ -2395,13 +2405,20 @@ select option{background:var(--surface);color:var(--text)}
 
     <div class="scan-foot">
       <button class="btn" onclick="closeScanOverlay()"><i class="ti ti-keyboard"></i> skip — I'll type it in</button>
+      <!-- One spacer, not two: with the Google link hidden in search mode
+           this is the only thing right-aligning the search controls, and a
+           second one used to shove the link itself into the middle of the
+           scan footer. -->
       <span class="spacer"></span>
       <a class="scan-google" id="scanGoogleLink" target="_blank" rel="noopener">
         <i class="ti ti-search"></i> none of these fit — search Google Images
         <i class="ti ti-external-link ext"></i>
       </a>
-      <span class="spacer"></span>
       <span id="searchSelected" style="font-size:12px;color:var(--label)"></span>
+      <span id="searchAddStatus" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--label)">
+        <span class="scan-spinner"></span>
+        <span>classifying…</span>
+      </span>
       <button class="btn btn-primary" id="searchAddBtn" onclick="addPickedRecords()" disabled>add records</button>
     </div>
   </div>
@@ -4573,14 +4590,27 @@ function closeForm(force){
   // would be saved", and a pending photo is not on the record yet. It is still
   // work the user would lose, so it gets a say in the prompt.
   const queued = addQueue ? VinylQueue.remaining(addQueue) - 1 : 0;
-  if (force !== true && (formIsDirty() || formNoteImages.length)) {
+  // A pending queue is itself work to lose: startQueuedRecord sets the
+  // baseline AFTER filling the record, so an untouched queued record is never
+  // "dirty" even though closing here drops every release still waiting.
+  const dirty = formIsDirty() || formNoteImages.length;
+  if (force !== true && (dirty || queued > 0)) {
     const scanned = coverDirty || scanWrote && Object.keys(scanWrote).length;
-    let message = scanned
-      ? 'Discard this record? The scan that filled it would have to be paid for again.'
-      : 'Discard this record? What you typed will be lost.';
-    if (queued > 0) {
-      message += `\n\n${queued} more record${queued===1?'':'s'} from your search `
-               + `${queued===1?'is':'are'} still waiting, and will be dropped too.`;
+    let message;
+    if (!dirty) {
+      // Nothing was typed or scanned onto THIS record, so the only thing at
+      // stake is the rest of the queue -- lead with that instead of claiming
+      // lost work that never happened.
+      message = `Drop the rest of this search? ${queued} more record${queued===1?'':'s'} `
+               + `${queued===1?'is':'are'} still waiting.`;
+    } else {
+      message = scanned
+        ? 'Discard this record? The scan that filled it would have to be paid for again.'
+        : 'Discard this record? What you typed will be lost.';
+      if (queued > 0) {
+        message += `\n\n${queued} more record${queued===1?'':'s'} from your search `
+                 + `${queued===1?'is':'are'} still waiting, and will be dropped too.`;
+      }
     }
     if (!confirm(message)) return;
   }
@@ -5152,7 +5182,7 @@ let searchQuery = '';
 function openSearchOverlay(){
   document.getElementById('searchErr').style.display = 'none';
   document.getElementById('searchHint').textContent =
-    VinylSpend.scanHintText({armed: true, source: 'search', usage: scanUsage});
+    VinylSpend.scanHintText({armed: true, source: 'search', usage: scanUsage, verb: 'search'});
   document.getElementById('searchOverlay').classList.remove('hidden');
   document.getElementById('searchQueryInput').focus();
 }
@@ -5177,6 +5207,7 @@ function setSearchBusy(busy){
   searchInFlight = busy;
   document.getElementById('searchSubmitBtn').disabled = busy;
   document.getElementById('searchQueryInput').disabled = busy;
+  document.getElementById('searchStatus').style.display = busy ? 'flex' : 'none';
 }
 
 async function runSearch(query){
@@ -5214,6 +5245,7 @@ async function runSearch(query){
 let searchPicked = new Set();
 
 function openSearchResults(data){
+  document.getElementById('scanResultsTitle').textContent = 'search results';
   searchPicked = new Set();
   document.getElementById('scanReadoutLabel').textContent = 'you searched for';
   document.getElementById('scanReadoutTitle').textContent = data.query || '';
@@ -5271,10 +5303,21 @@ function toggleSearchPick(i){
 function renderSearchFoot(){
   const n = searchPicked.size;
   const btn = document.getElementById('searchAddBtn');
-  btn.disabled = n === 0;
+  const label = document.getElementById('searchSelected');
+  if (addQueue) {
+    // Reopening (or searching again) while a queue is running is for looking,
+    // not picking: a search card only ever toggles a pick for a fresh queue —
+    // it never calls applyCandidate, so it cannot swap the pressing on the
+    // record already open in the form. Offering "add N records" here would
+    // promise something this screen cannot do.
+    btn.style.display = 'none';
+    label.textContent = 'looking only — you are part-way through adding these';
+    return;
+  }
+  btn.style.display = '';
+  btn.disabled = n === 0 || addPickInFlight;
   btn.textContent = n === 1 ? 'add 1 record' : `add ${n} records`;
-  document.getElementById('searchSelected').textContent =
-    n ? `${n} selected` : 'nothing selected yet';
+  label.textContent = n ? `${n} selected` : 'nothing selected yet';
 }
 
 // ── the add queue ───────────────────────────────────────────────────────────
@@ -5282,26 +5325,46 @@ function renderSearchFoot(){
 // openAdd that starts the next record.
 let addQueue = null;
 
+// Every call costs real credits (a genre classification per record, under one
+// scan_id) — same reason searchInFlight and scanInFlight exist.
+let addPickInFlight = false;
+
 async function addPickedRecords(){
   const picked = [...searchPicked].sort((a,b) => a-b).map(i => searchResults[i]);
   if(!picked.length) return;
 
-  // One request for the whole queue: the genre work is a single act and is
-  // priced as one in the ledger.
-  let genres = [];
-  try{
-    const res = await fetch('/api/search/genres', {method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({releases: picked.map(r => (
-        {artist: r.artist, album_name: r.album_name}))})});
-    if(res.ok) genres = (await res.json()).genres || [];
-  }catch(e){ /* a record with no genre is a record you set the genre on */ }
-  picked.forEach((r,i) => { r.genre = genres[i] || ''; });
+  // Replacing a live queue destroys whatever is left of it: the half-filled
+  // record already on screen and every release still waiting. That is worth
+  // losing only with a confirmation, the same as closing the form is.
+  const live = addQueue ? VinylQueue.remaining(addQueue) : 0;
+  if (live && !confirm(`Start over with these? The ${live} record${live===1?'':'s'} `
+                      + `still in the current queue will be dropped.`)) return;
 
-  addQueue = VinylQueue.create(picked);
-  closeScanOverlay();
-  startQueuedRecord();
-  refreshScanUsage();
+  if (addPickInFlight) return;
+  addPickInFlight = true;
+  document.getElementById('searchAddBtn').disabled = true;
+  document.getElementById('searchAddStatus').style.display = 'flex';
+  try {
+    // One request for the whole queue: the genre work is a single act and is
+    // priced as one in the ledger.
+    let genres = [];
+    try{
+      const res = await fetch('/api/search/genres', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({releases: picked.map(r => (
+          {artist: r.artist, album_name: r.album_name}))})});
+      if(res.ok) genres = (await res.json()).genres || [];
+    }catch(e){ /* a record with no genre is a record you set the genre on */ }
+    picked.forEach((r,i) => { r.genre = genres[i] || ''; });
+
+    addQueue = VinylQueue.create(picked);
+    closeScanOverlay();
+    startQueuedRecord();
+    refreshScanUsage();
+  } finally {
+    addPickInFlight = false;
+    document.getElementById('searchAddStatus').style.display = 'none';
+  }
 }
 
 /* Open the form on the queue's current record. Also the advance path, so the
@@ -5337,6 +5400,9 @@ function advanceQueue(){
 
 function skipQueued(){
   if(!addQueue) return;
+  // Same rule as closeForm: skipping throws the current record away, and
+  // that is worth a prompt exactly when there is something typed to lose.
+  if (formIsDirty() && !confirm('Skip this one? What you typed will be lost.')) return;
   addQueue = VinylQueue.skip(addQueue);
   startQueuedRecord();
 }
@@ -5429,6 +5495,7 @@ let scanPhotoUri = '';
 function setScanSearch(text){ scanSearchQuery = text || ''; }
 
 function openScanOverlay(data){
+  document.getElementById('scanResultsTitle').textContent = 'scan results';
   // Scan mode: the Google fallback, no picking.
   document.getElementById('searchSelected').style.display = 'none';
   document.getElementById('searchAddBtn').style.display = 'none';
@@ -5476,7 +5543,12 @@ function closeScanOverlay(){
 function reopenScanOverlay(){
   // A queued record came from a search, not a scan — openAdd cleared
   // lastScanData but the search results are still the right thing to show.
-  if(addQueue && lastSearchData){ openSearchResults(lastSearchData); return; }
+  // Unless a scan HAS since run on this record (applyCandidate's artwork
+  // arms Analyse mid-queue): then that scan was just paid for and reopening
+  // must surface it, not the stale search behind it. openAdd nulls
+  // lastScanData per record, so "!lastScanData" reads as "no scan has run
+  // for this record".
+  if(addQueue && lastSearchData && !lastScanData){ openSearchResults(lastSearchData); return; }
   if(lastScanData) openScanOverlay(lastScanData);
 }
 
@@ -5503,6 +5575,8 @@ function scanCardHtml(c, opts){
   const box = opts.selectable
     ? `<span class="scan-pick${opts.selected ? ' on' : ''}"><i class="ti ti-check"></i></span>`
     : '';
+  // A single or an EP carries a different year from the LP with the same
+  // name, so say which one this is rather than letting it pass for the album.
   const meta = [c.year || '?', c.country ? countryLabelFromCode(c.country) : null,
                 (c.type && c.type !== 'Album') ? c.type.toLowerCase() : null]
     .filter(Boolean).join(' · ');

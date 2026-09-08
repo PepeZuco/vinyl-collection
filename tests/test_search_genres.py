@@ -81,3 +81,17 @@ def test_an_empty_list_costs_nothing(client):
 
     assert body["genres"] == []
     classify.assert_not_called()
+
+
+def test_a_malformed_item_is_400_not_a_500(client):
+    """(r or {}).get("artist") assumes each entry is falsy or a dict. A bare
+    string is truthy and has no .get, so it must be rejected before the try
+    that would otherwise let AttributeError escape as a raw 500."""
+    with patch.object(scan, "classify_genre") as classify:
+        res = client.post("/api/search/genres", json={"releases": [
+            {"artist": "A", "album_name": "1"},
+            "not a release",
+        ]})
+
+    assert res.status_code == 400
+    classify.assert_not_called()
