@@ -280,6 +280,38 @@ test('insights draws the health row from the same records', async () => {
   assert.match(tiles[3].textContent, /Never cleaned/);
 });
 
+test('the Plays tile tracks the week by weekday, Monday to Sunday', async () => {
+  const { win, doc } = await boot();
+  win.switchTab('stats');
+  const plays = [...doc.querySelectorAll('#statsCards .kpi-tile')]
+    .find(t => /Plays/.test(t.textContent));
+  assert.ok(plays, 'no Plays tile rendered');
+  assert.strictEqual(plays.querySelectorAll('.kpi-bars .b').length, 7);
+  assert.deepStrictEqual(
+    [...plays.querySelectorAll('.kpi-daylabels span')].map(s => s.textContent),
+    ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
+  // the initials repeat, so the hover text is what tells Saturday from Sunday
+  assert.match(plays.querySelectorAll('.kpi-bars .b')[6].getAttribute('title'),
+    /^Sunday · /);
+});
+
+/* Condition used to be a doughnut of its own; it is bands inside the release
+   year distribution now. d3 is a chainable no-op in this harness, so what can
+   be asserted here is that the old chart is gone, the merged one still has a
+   key saying what the bands mean, and rendering the stats tab throws nothing —
+   the bands themselves are checked by hand in the running app. */
+test('condition folds into the year distribution rather than its own chart', async () => {
+  const { win, doc } = await boot();
+  win.switchTab('stats');
+  assert.strictEqual(doc.querySelector('#conditionChart'), null,
+    'the condition doughnut is still on the page');
+  const legend = doc.querySelector('#yearLegend');
+  assert.ok(legend, 'the year distribution lost its legend');
+  assert.match(legend.textContent, /New/);
+  assert.match(legend.textContent, /Used/);
+  assert.match(legend.textContent, /Unknown/);
+});
+
 /* The map is stubbed out here (d3 is a chainable no-op), so this is really a
    test of the list beside it — which is the half that has to be ordered. */
 test('the country list ranks countries beside the map', async () => {
@@ -1834,6 +1866,36 @@ test('cancelling the form drops the rest of the queue', async () => {
   assert.strictEqual(read('addQueue'), null);
   assert.ok(win.document.getElementById('queueStrip').hidden, 'the queue strip is gone');
   assert.ok(win.document.getElementById('formOverlay').classList.contains('hidden'));
+});
+
+test('closing on a freshly-advanced queued record still asks first', async () => {
+  // startQueuedRecord sets formBaseline AFTER filling the record, so a queued
+  // record that nobody has touched yet is never "dirty" -- a stub that just
+  // returns true would let this pass whether or not confirm ever ran. Count
+  // the calls instead of trusting the outcome alone.
+  const { win, read } = await boot();
+  await queued(win);
+
+  let calls = 0;
+  win.confirm = (msg) => { calls++; return true; };
+  win.closeForm();
+
+  assert.strictEqual(calls, 1, 'confirm was never actually called');
+  assert.strictEqual(read('addQueue'), null);
+});
+
+test('declining the prompt on an untouched queued record keeps the queue', async () => {
+  const { win, read } = await boot();
+  await queued(win);
+
+  let calls = 0;
+  win.confirm = () => { calls++; return false; };
+  win.closeForm();
+
+  assert.strictEqual(calls, 1, 'confirm was never actually called');
+  assert.notStrictEqual(read('addQueue'), null, 'the queue was dropped with no way back');
+  assert.ok(!win.document.getElementById('formOverlay').classList.contains('hidden'),
+    'the form closed anyway');
 });
 
 test('the reopen-results button survives advancing', async () => {

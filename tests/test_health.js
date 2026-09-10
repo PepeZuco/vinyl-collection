@@ -150,22 +150,63 @@ test('play dates that are not valid JSON leave the record out of rotation', () =
 // ── last-7-days trends ───────────────────────────────────────────────────────
 // TODAY is 2026-08-29, so the trend window (trendDays: 7) runs 08-23..08-29.
 
-test('playsByDay buckets plays by calendar day, oldest first, over the window', () => {
-  const h = health([rec({ play_dates: json('2026-08-29T21:00:00', '2026-08-23', '2026-08-29T08:00:00') })],
-                   { trendDays: 7 });
-  assert.deepStrictEqual(h.playsByDay.map(p => p.day),
-    ['2026-08-23', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']);
-  assert.deepStrictEqual(h.playsByDay.map(p => p.n), [1, 0, 0, 0, 0, 0, 2]);
+// ── plays by weekday ───────────────────────────────────────────────
+// Monday first, so index 0 is Monday and index 6 is Sunday. TODAY is a
+// Saturday, which is index 5.
+
+test('playsByWeekday files a play under its weekday, Monday first', () => {
+  // 2026-08-24 is a Monday, and it is the only Monday between it and TODAY.
+  const h = health([rec({ play_dates: json('2026-08-24T21:00:00') })]);
+  assert.deepStrictEqual(h.playsByWeekday, [1, 0, 0, 0, 0, 0, 0]);
 });
 
-test('a play outside the trend window is not bucketed', () => {
-  const h = health([rec({ play_dates: json('2026-08-01') })], { trendDays: 7 });
-  assert.strictEqual(h.playsByDay.reduce((a, p) => a + p.n, 0), 0);
+test('playsByWeekday adds up two plays that land on the same weekday', () => {
+  // Both on TODAY, a Saturday, which has come round once since the first play.
+  const h = health([rec({ play_dates: json('2026-08-29T09:00:00', '2026-08-29T21:00:00') })]);
+  assert.deepStrictEqual(h.playsByWeekday, [0, 0, 0, 0, 0, 2, 0]);
 });
 
-test('a wishlist record contributes nothing to playsByDay', () => {
-  const h = health([rec({ have_it: false, play_dates: json('2026-08-29') })], { trendDays: 7 });
-  assert.strictEqual(h.playsByDay.reduce((a, p) => a + p.n, 0), 0);
+test('playsByWeekday divides by how often the weekday has come round', () => {
+  // Two Saturday plays two weeks apart: 08-15, 08-22 and 08-29 are three
+  // Saturdays in that span, so two plays average two thirds of a play each.
+  const h = health([rec({ play_dates: json('2026-08-15', '2026-08-29') })]);
+  assert.ok(Math.abs(h.playsByWeekday[5] - 2 / 3) < 1e-9,
+    'expected 2/3 on Saturday, got ' + h.playsByWeekday[5]);
+});
+
+test('a weekday that has not come round since the first play averages zero', () => {
+  // The window opens on Saturday 08-29 and TODAY is that same day, so no
+  // Sunday has happened inside it — that must read as zero, not divide by it.
+  const h = health([rec({ play_dates: json('2026-08-29') })]);
+  assert.strictEqual(h.playsByWeekday[6], 0);
+});
+
+test('playsByWeekday measures from the first play, not from a fixed window', () => {
+  // A play well outside the 7-day trend window still counts, and still opens
+  // the window it is averaged over.
+  const h = health([rec({ play_dates: json('2026-08-03') })]);   // a Monday
+  assert.ok(h.playsByWeekday[0] > 0, 'a play older than the trend window was dropped');
+});
+
+test('a wishlist record contributes nothing to playsByWeekday', () => {
+  const h = health([rec({ have_it: false, play_dates: json('2026-08-24') })]);
+  assert.deepStrictEqual(h.playsByWeekday, [0, 0, 0, 0, 0, 0, 0]);
+});
+
+test('a collection with no plays reports seven zeros rather than dividing by none', () => {
+  assert.deepStrictEqual(health([rec({})]).playsByWeekday, [0, 0, 0, 0, 0, 0, 0]);
+});
+
+test('play dates that are not valid JSON leave playsByWeekday untouched', () => {
+  assert.deepStrictEqual(health([rec({ play_dates: 'not json' })]).playsByWeekday,
+    [0, 0, 0, 0, 0, 0, 0]);
+});
+
+test('a play dated after today still averages over at least its own weekday', () => {
+  // Clock skew across timezones can file a play a day ahead; it must not
+  // divide by a window that closed before the play happened.
+  const h = health([rec({ play_dates: json('2026-08-30') })]);   // tomorrow, a Sunday
+  assert.strictEqual(h.playsByWeekday[6], 1);
 });
 
 test('rotationByDay\'s last entry matches today\'s rotation figure', () => {
@@ -208,7 +249,7 @@ test('addsThisWeek ignores a wishlist record\'s purchase date', () => {
 
 test('an empty collection reports empty trends rather than throwing', () => {
   const h = health([]);
-  assert.strictEqual(h.playsByDay.length, 7);
+  assert.deepStrictEqual(h.playsByWeekday, [0, 0, 0, 0, 0, 0, 0]);
   assert.deepStrictEqual(h.rotationByDay, [0, 0, 0, 0, 0, 0, 0]);
   assert.deepStrictEqual(h.neverCleanedByDay, [0, 0, 0, 0, 0, 0, 0]);
   assert.strictEqual(h.addsThisWeek, 0);
@@ -216,7 +257,7 @@ test('an empty collection reports empty trends rather than throwing', () => {
 
 test('with no today, the trend fields come back empty rather than throwing', () => {
   const h = collectionHealth([rec({})], {});
-  assert.deepStrictEqual(h.playsByDay, []);
+  assert.deepStrictEqual(h.playsByWeekday, []);
   assert.deepStrictEqual(h.rotationByDay, []);
   assert.deepStrictEqual(h.neverCleanedByDay, []);
   assert.strictEqual(h.addsThisWeek, 0);

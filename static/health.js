@@ -50,20 +50,58 @@ const VinylHealth = (function (grouping) {
     return keys;
   }
 
-  // Plays per calendar day across the window — a play with an unparseable
-  // date, or one outside the window, simply doesn't land in any bucket.
-  function playsByDayOf(owned, days) {
-    const counts = new Map(days.map(k => [k, 0]));
+  // The Monday-first weekday index of a day number: 0 is Monday, 6 is Sunday.
+  // Day 0 of the epoch, 1970-01-01, was a Thursday — index 3.
+  function weekdayOf(n) {
+    return ((n + 3) % 7 + 7) % 7;
+  }
+
+  // How many times weekday `w` falls in the inclusive day-number range a..b.
+  // Whole weeks contribute one each; the remainder contributes one more only
+  // if `w` is among the days it actually reaches.
+  function weekdayCount(w, a, b) {
+    if (b < a) return 0;
+    const span = b - a + 1;
+    const untilFirst = ((w - weekdayOf(a)) % 7 + 7) % 7;
+    return Math.floor(span / 7) + (untilFirst < span % 7 ? 1 : 0);
+  }
+
+  /* The average number of plays on each weekday, Monday first.
+   *
+   * This replaced a tracker of the last seven calendar days, which could not
+   * answer the question the shape invited: seven days hold one sample of each
+   * weekday, so a quiet week and a quiet Tuesday looked identical. Averaging
+   * over every week on record makes a weekend habit visible.
+   *
+   * Each weekday's plays are divided by how many times that weekday has come
+   * round since the first play was logged. The window opens at that first play
+   * rather than at some fixed span because the silence before there was
+   * anything to play is not evidence about when this listener listens. A play
+   * dated after today — clock skew across timezones files one a day ahead —
+   * extends the window rather than falling outside it.
+   */
+  function playsByWeekdayOf(owned, today) {
+    const totals = [0, 0, 0, 0, 0, 0, 0];
+    let earliest = null, latest = null;
     owned.forEach(r => {
       let dates;
       try { dates = JSON.parse(r.play_dates || '[]'); } catch { return; }
       if (!Array.isArray(dates)) return;
       dates.forEach(raw => {
         const day = grouping.momentOf(raw).day;
-        if (day && counts.has(day)) counts.set(day, counts.get(day) + 1);
+        if (!day) return;                       // a stamp no calendar holds
+        const n = dayNumber(day);
+        totals[weekdayOf(n)]++;
+        if (earliest === null || n < earliest) earliest = n;
+        if (latest === null || n > latest) latest = n;
       });
     });
-    return days.map(day => ({ day, n: counts.get(day) }));
+    if (earliest === null) return totals;       // nothing played: seven zeros
+    const end = Math.max(dayNumber(today), latest);
+    return totals.map((sum, w) => {
+      const occurrences = weekdayCount(w, earliest, end);
+      return occurrences ? sum / occurrences : 0;
+    });
   }
 
   // The rotation count as it stood at the end of each day in the window — the
@@ -163,7 +201,7 @@ const VinylHealth = (function (grouping) {
       neverCleaned: owned.length - cleanedAtLeastOnce,
       adds: window.map(month => ({ month, n: counts.get(month) })),
       addsThisWeek,
-      playsByDay: days.length ? playsByDayOf(owned, days) : [],
+      playsByWeekday: today ? playsByWeekdayOf(owned, today) : [],
       rotationByDay: days.length ? rotationByDayOf(owned, days, withinDays) : [],
       neverCleanedByDay: days.length ? neverCleanedByDayOf(owned, days) : [],
     };
