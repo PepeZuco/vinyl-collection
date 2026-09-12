@@ -68,7 +68,11 @@ const VinylTimeline = (function (grouping) {
       if (on.note) parseNotes(r.notes, r.bought_date).forEach((n, i) => {
         // The index is the position in the RAW array: an empty note still holds
         // its slot, so filtering first would renumber everything after it.
-        if (n && n.text && n.text.trim()) add(n.date, { type: 'note', r, i, text: n.text });
+        // `private` rides along so the calendar can mark the notes a visitor is
+        // not being shown. It is always a boolean here, never absent: the
+        // consumers read it off the event, not off the note.
+        if (n && n.text && n.text.trim())
+          add(n.date, { type: 'note', r, i, text: n.text, private: !!n.private });
       });
     });
 

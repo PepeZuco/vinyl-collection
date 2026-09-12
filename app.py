@@ -95,6 +95,48 @@ def _note_image_ids(notes_json):
     return found
 
 
+def _public_notes(notes_json):
+    """The notes column with every note marked private removed.
+
+    The stripping lives here, on the server, because /api/records is public and
+    ships this column verbatim: a private note hidden only by the browser is
+    one View Source away from being read.
+
+    Forgiving in the same way _note_image_ids is — a legacy plain-string column
+    is not JSON and holds no flags, so it comes back untouched rather than
+    being destroyed by a parse it was never meant to survive. Returns "" when
+    nothing public is left, because "" is this column's empty value and every
+    reader already treats it that way.
+    """
+    try:
+        parsed = json.loads(notes_json or "")
+    except (TypeError, ValueError):
+        return notes_json or ""
+    if not isinstance(parsed, list):
+        return notes_json or ""
+    # `is True` rather than truthiness: the flag is written by the client, and
+    # a note is public unless it explicitly says otherwise.
+    public = [n for n in parsed
+              if not (isinstance(n, dict) and n.get("private") is True)]
+    if len(public) == len(parsed):
+        return notes_json or ""
+    return json.dumps(public) if public else ""
+
+
+def _image_is_public(image_id):
+    """Is `image_id` held by at least one note a visitor is allowed to see?
+
+    The LIKE narrows the candidates cheaply and _note_image_ids then confirms
+    exactly, for the same reason the reaper does it that way: the id arrives
+    from a URL, and a `%` or `_` in one would otherwise broaden the match. The
+    confirm is exact, so a broadened LIKE can only cost work, never access.
+    """
+    return any(
+        image_id in _note_image_ids(_public_notes(notes))
+        for (notes,) in db.session.query(Record.notes)
+                          .filter(Record.notes.like(f"%{image_id}%")).all())
+
+
 def _reap_note_images(dropped_ids):
     """Delete images from `dropped_ids` that no note refers to any more.
 
@@ -188,7 +230,14 @@ class Record(db.Model):
     notes       = db.Column(db.Text)      # JSON array of {date: stamp, text: markdown}
     country     = db.Column(db.String(2)) # ISO 3166-1 alpha-2 country code, e.g. "BR", "US"
 
-    def to_dict(self):
+    def to_dict(self, private=True):
+        """The record as the API sends it.
+
+        `private=False` strips the notes marked admin-only — what a visitor
+        gets. It defaults to True because every other caller (the write
+        endpoints' responses, the CSV backup) is already behind auth and needs
+        the whole truth.
+        """
         return {
             "id": self.id,
             "artist": self.artist or "",
@@ -208,7 +257,7 @@ class Record(db.Model):
             # Deliberately a URL, not the bytes. Inlining every cover as base64
             # made this endpoint a 45MB response that blocked the first paint.
             "cover_url": f"/api/records/{self.id}/cover?v={self.cover_hash}" if self.cover_hash else "",
-            "notes": self.notes or "",
+            "notes": (self.notes or "") if private else _public_notes(self.notes),
             "country": self.country or "",
         }
 
@@ -344,7 +393,10 @@ def list_records():
     # therefore never touch cover_data, or each row lazy-loads it right back.
     recs = (Record.query.options(defer(Record.cover_data))
             .order_by(Record.artist).all())
-    return jsonify([r.to_dict() for r in recs])
+    # The only public read of the notes column. POST/PUT answer behind auth and
+    # there is no GET for a single record, so this is the whole boundary.
+    private = is_authed()
+    return jsonify([r.to_dict(private=private) for r in recs])
 
 def get_record_or_404(rid):
     """A record by id, or a 404 — through Session.get rather than the legacy
@@ -485,6 +537,12 @@ def note_image(image_id):
     hash, so this URL's bytes can never change. A different image is a
     different URL.
     """
+    # A visitor may only see a photo some public note still holds. Not blanket
+    # auth: photos on public notes have to keep loading for everyone. An image
+    # no note holds yet — the form uploads before the note is saved — is
+    # therefore edit-mode only, which is exactly who is composing it.
+    if not is_authed() and not _image_is_public(image_id):
+        return jsonify({"error": "No image"}), 404
     row = db.session.query(NoteImage.data).filter(NoteImage.id == image_id).first()
     decoded = _decode_data_uri(row[0]) if row else None
     if decoded is None:
@@ -802,7 +860,11 @@ def _search_duplicate(row, existing):
 # ── CSV import / export ───────────────────────────────────────────────────────
 
 @app.route("/api/export")
+@require_auth
 def export_csv():
+    # Behind auth because this is a backup: it carries covers, note photos and
+    # the private notes verbatim, and one that silently dropped them would not
+    # be a backup you could restore from.
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
             "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images"]

@@ -1930,3 +1930,142 @@ test('the queue strip marks what is done, current and waiting', async () => {
   assert.ok(chips[0].classList.contains('current'));
   assert.ok(chips[1].classList.contains('pending'));
 });
+
+// ── notes only the owner can read ───────────────────────────────────────────
+
+/* The server strips private notes from /api/records for a visitor, so these
+ * tests are about the other half: composing one, seeing which is which, and —
+ * the dangerous one — never writing back a note list the page was never sent.
+ */
+
+/* Unlocking mid-session is the data-loss case. The page loaded as a visitor
+ * holds notes with the private ones already stripped out; if editing a record
+ * now PUT that list, the notes it never received would be deleted. */
+test('unlocking reloads the collection, so an edit cannot save over notes it never saw', async () => {
+  const { win, doc } = await boot();
+  let reloads = 0;
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => {
+    if (String(url).includes('/api/records') && (!opts || !opts.method || opts.method === 'GET')) reloads++;
+    return realFetch(url, opts);
+  };
+  $(doc, '#pwInput').value = 'whatever';
+  await win.doLogin();
+  assert.strictEqual(reloads, 1, 'the collection was not reloaded after unlocking');
+});
+
+test('locking reloads too, so the private notes leave the page with you', async () => {
+  const { win } = await boot();
+  let reloads = 0;
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => {
+    if (String(url).includes('/api/records') && (!opts || !opts.method || opts.method === 'GET')) reloads++;
+    return realFetch(url, opts);
+  };
+  await win.doLogout();
+  assert.strictEqual(reloads, 1, 'private notes stayed in memory after locking');
+});
+
+test('a note added with the lock on is private', async () => {
+  const { win, doc, read } = await boot();
+  win.openAdd();
+  $(doc, '#fNoteText').value = 'paid far too much for this';
+  $(doc, '#fNotePrivate').checked = true;
+  await win.addNote();
+  assert.strictEqual(read('formNotes')[0].private, true);
+});
+
+/* Not `private: false` — no key at all. Every note ever written is public, and
+ * the absent flag is what makes them stay that way. */
+test('a note added with the lock off carries no flag at all', async () => {
+  const { win, doc, read } = await boot();
+  win.openAdd();
+  $(doc, '#fNoteText').value = 'first pressing, Brazilian';
+  await win.addNote();
+  assert.ok(!('private' in read('formNotes')[0]), 'a public note was flagged');
+});
+
+/* Sticky on purpose. Resetting the lock after each note would publish the
+ * second of two private notes, which is the failure that cannot be undone. */
+test('the lock stays on for the next note', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  $(doc, '#fNoteText').value = 'one';
+  $(doc, '#fNotePrivate').checked = true;
+  await win.addNote();
+  assert.strictEqual($(doc, '#fNotePrivate').checked, true, 'the lock reset itself');
+});
+
+test('a fresh form starts public', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  $(doc, '#fNotePrivate').checked = true;
+  win.closeForm(true);
+  win.openAdd();
+  assert.strictEqual($(doc, '#fNotePrivate').checked, false, 'the last form decided this one');
+});
+
+test('a note already in the list can be flipped either way', async () => {
+  const { win, doc, read } = await boot();
+  win.openAdd();
+  $(doc, '#fNoteText').value = 'a thought';
+  await win.addNote();
+  win.toggleNotePrivate(0);
+  assert.strictEqual(read('formNotes')[0].private, true);
+  win.toggleNotePrivate(0);
+  assert.ok(!('private' in read('formNotes')[0]), 'flipping back left the flag behind');
+});
+
+test('the form marks which notes a visitor cannot read', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  $(doc, '#fNoteText').value = 'public one';
+  await win.addNote();
+  $(doc, '#fNoteText').value = 'private one';
+  $(doc, '#fNotePrivate').checked = true;
+  await win.addNote();
+  assert.strictEqual(count(doc, '#fNotesList .note-entry.private'), 1);
+});
+
+test('the drawer marks a private note in the history', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  r.notes = JSON.stringify([
+    { date: '2026-08-09', text: 'seam split' },
+    { date: '2026-08-10', text: 'paid too much', private: true },
+  ]);
+  win.openDetail(r.id);
+  assert.strictEqual(count(doc, '#ddInfo .dm-hist-entry.note.private'), 1,
+    'a private note looks exactly like a public one in the drawer');
+});
+
+/* The round trip that matters: serializeNotes rebuilds the column from
+ * formNotes, and a flag it dropped would quietly publish the note. */
+test('saving an edited record keeps the private flag on the note', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  r.notes = JSON.stringify([{ date: '2026-08-10', text: 'paid too much', private: true }]);
+  win.openEdit(r.id);
+  let sent = null;
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => {
+    if (opts && opts.method === 'PUT') sent = JSON.parse(opts.body);
+    return realFetch(url, opts);
+  };
+  await win.submitForm();
+  assert.ok(sent, 'nothing was sent');
+  assert.deepStrictEqual(JSON.parse(sent.notes),
+    [{ date: '2026-08-10', text: 'paid too much', private: true }]);
+});
+
+/* Export carries the private notes, so it is behind auth now. The button has
+ * to go with it: it navigates rather than fetches, so a visitor pressing it
+ * would leave the app standing on a bare {"error":"Unauthorized"} page. */
+test('export is offered only in edit mode, like import', async () => {
+  const { win, doc } = await boot();
+  win.setAuthed(false);
+  assert.strictEqual($(doc, '#exportBtn').style.display, 'none',
+    'a visitor is offered an export that will refuse them');
+  win.setAuthed(true);
+  assert.notStrictEqual($(doc, '#exportBtn').style.display, 'none');
+});

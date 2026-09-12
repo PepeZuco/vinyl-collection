@@ -62,6 +62,19 @@ test('a note with text puts a note event on its day, carrying the text', () => {
   assert.strictEqual(got[0].text, 'clicky side B');
 });
 
+/* The calendar marks a private note so the owner can see which of their notes
+ * a visitor is not being shown. It can only do that if the flag survives the
+ * trip from the column into the event. */
+test('a note event says whether the note was private', () => {
+  const r = rec({ notes: json({ date: '2026-08-23', text: 'paid too much', private: true }) });
+  assert.strictEqual(on([r], '2026-08-23')[0].private, true);
+});
+
+test('a note event without the flag is not private', () => {
+  const r = rec({ notes: json({ date: '2026-08-23', text: 'first pressing' }) });
+  assert.strictEqual(on([r], '2026-08-23')[0].private, false);
+});
+
 test('a note with no text is not an event', () => {
   const r = rec({ notes: json({ date: '2026-08-23', text: '   ' }) });
   assert.strictEqual(days([r]).size, 0);

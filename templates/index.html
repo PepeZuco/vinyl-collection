@@ -1451,6 +1451,31 @@ select option{background:var(--surface);color:var(--text)}
 .note-delete{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1}
 .note-delete:hover{color:var(--danger)}
 
+/* A note only edit mode can read. The mark is the same everywhere it shows —
+   a lock glyph and a dashed warm edge — because the one question it answers is
+   always the same: can a visitor read this? */
+.note-lock{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+  font-family:var(--font-mono);color:var(--ev-note);display:inline-flex;
+  align-items:center;gap:3px;white-space:nowrap}
+.note-entry.private{border-style:dashed;border-color:color-mix(in srgb, var(--ev-note) 45%, var(--border));
+  background:color-mix(in srgb, var(--ev-note) 5%, var(--card))}
+.note-entry-head{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.note-entry-head .note-entry-date{margin-bottom:0}
+/* Sits left of the delete button, which is absolutely positioned at the corner. */
+.note-private-toggle{position:absolute;top:8px;right:30px;background:transparent;
+  border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;
+  border-radius:3px;line-height:1}
+.note-private-toggle:hover{color:var(--ev-note)}
+.note-entry.private .note-private-toggle{color:var(--ev-note)}
+/* The add row's own switch. */
+.note-private-check{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
+  color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
+.note-private-check input{accent-color:var(--ev-note);margin:0;cursor:pointer}
+.note-private-check:has(input:checked){color:var(--ev-note)}
+.dm-hist-entry.note.private .ht{border-left:2px dashed color-mix(in srgb, var(--ev-note) 55%, transparent);
+  padding-left:8px}
+.cal-event.note.private{border-left-style:dashed}
+
 /* thumbnails on a note, in the form and in the detail history */
 .note-shots{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .note-shot{width:52px;height:52px;object-fit:cover;border-radius:var(--radius-sm);
@@ -2272,6 +2297,11 @@ select option{background:var(--surface);color:var(--text)}
                 <button type="button" class="btn btn-sm" id="notePickerCamera" onclick="openCamera('note')">
                   <i class="ti ti-camera"></i> take photo
                 </button>
+                <!-- Sticky while the form is open: the mistake that cannot be
+                     undone is publishing the second of two private notes. -->
+                <label class="note-private-check" title="only visible in edit mode">
+                  <input type="checkbox" id="fNotePrivate"><i class="ti ti-lock"></i> private
+                </label>
                 <div class="note-shots" id="fNoteShots"></div>
               </div>
             </div>
@@ -2671,6 +2701,10 @@ function setAuthed(val) {
     : '<i class="ti ti-login"></i><span>edit mode</span>';
   document.getElementById('addBtn').style.display = val ? '' : 'none';
   document.getElementById('importLabel').style.display = val ? '' : 'none';
+  // Export goes with import now: it carries the private notes, so it is behind
+  // auth, and the button navigates rather than fetches — a visitor pressing it
+  // would land on a bare {"error":"Unauthorized"} page with the app gone.
+  document.getElementById('exportBtn').style.display = val ? '' : 'none';
   document.getElementById('mtabFab').style.display = val ? '' : 'none';
   // Re-render cards to show/hide play count editors
   render();
@@ -3438,7 +3472,8 @@ function dmHistoryEvents(r) {
     // hasContent, not n.text — a note that is only a photo still happened, and
     // testing the text alone hid it from the history completely.
     if (VinylNotes.hasContent(n)) {
-      add('note', n.date, { i, text: n.text || '', images: n.images || [] });
+      add('note', n.date, { i, text: n.text || '', images: n.images || [],
+                            private: !!n.private });
     }
   });
   // by day AND time, so two plays on one evening read in the order they happened
@@ -3523,12 +3558,17 @@ function dmHistoryEntryHTML(ev) {
          `<img class="note-shot" alt="" src="${esc(noteImageSrc(id))}" ` +
          `onclick="openShot('${id}')" onerror="this.remove()">`).join('')}</div>`
     : '';
+  // Only edit mode ever receives a private note — the server strips them from
+  // /api/records — so the lock here is not hiding anything, it is telling you
+  // which of your notes a visitor is not being shown.
+  const lock = ev.private
+    ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span> ' : '';
   const body = ev.type === 'note'
     ? `<div class="ht detail-notes-body">${ev.text ? (typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)) : ''}${shots}` +
-      `<span class="dm-hist-time"><i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
+      `<span class="dm-hist-time">${lock}<i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
   const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
-  return `<div class="dm-hist-entry ${ev.type}${lit}" data-ev="${esc(ev.key)}" data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
+  return `<div class="dm-hist-entry ${ev.type}${ev.private ? ' private' : ''}${lit}" data-ev="${esc(ev.key)}" data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
 }
 
 function dmHistoryGroupHTML(group) {
@@ -4107,10 +4147,14 @@ function renderNotesForm() {
       ? `<div class="note-shots">${n.images.map(id =>
            noteShotHTML(id, `removeNoteImage(${origIdx}, '${id}')`)).join('')}</div>`
       : '';
-    return `<div class="note-entry">
-      <div class="note-entry-date">${noteDateLabel(n.date)}</div>
+    return `<div class="note-entry${n.private ? ' private' : ''}">
+      <div class="note-entry-head">
+        <div class="note-entry-date">${noteDateLabel(n.date)}</div>
+        ${n.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''}
+      </div>
       <div class="note-entry-body">${typeof marked !== 'undefined' ? marked.parse(n.text || '') : esc(n.text || '')}</div>
       ${shots}
+      <button class="note-private-toggle" title="${n.private ? 'make this note public' : 'hide this note from visitors'}" onclick="toggleNotePrivate(${origIdx})"><i class="ti ti-${n.private ? 'lock' : 'lock-open'}"></i></button>
       <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
@@ -4275,13 +4319,28 @@ async function addNote() {
   }
   dateEl.style.borderColor='';
   textEl.style.borderColor='';
-  formNotes.push({ date, text, images: formNoteImages });
+  // The key is written only when it is true. Every note ever taken is public,
+  // and an absent flag is what keeps them that way — see _public_notes in app.py.
+  const note = { date, text, images: formNoteImages };
+  if (document.getElementById('fNotePrivate').checked) note.private = true;
+  formNotes.push(note);
   formNoteImages = [];
   renderNoteShots();
   textEl.value = '';
   // reset to now, so a second note written in the same sitting is stamped for it
   dateEl.value = today();
   timeEl.value = nowStamp().slice(11, 16);
+  renderNotesForm();
+}
+
+// Flip one note already in the list. Turning it public DELETES the key rather
+// than setting it false, so a note the user made public is indistinguishable
+// from one that never carried the flag.
+function toggleNotePrivate(idx) {
+  const note = formNotes[idx];
+  if (!note) return;
+  if (note.private) delete note.private;
+  else note.private = true;
   renderNotesForm();
 }
 
@@ -4448,6 +4507,8 @@ function openAdd(){
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteTime').value=nowStamp().slice(11,16);
   document.getElementById('fNoteText').value='';
+  // A fresh form starts public. The switch is sticky only within one sitting.
+  document.getElementById('fNotePrivate').checked=false;
   scanToken++;   // strand any note-photo upload still in the air
   formNoteImages=[];
   renderNoteShots();
@@ -4527,6 +4588,7 @@ function openEdit(id){
   document.getElementById('fNoteDate').value=today();
   document.getElementById('fNoteTime').value=nowStamp().slice(11,16);
   document.getElementById('fNoteText').value='';
+  document.getElementById('fNotePrivate').checked=false;
   renderNotesForm();
   const previewSrc = VinylCover.coverPreviewSrc(r, coverDataUri);
   if(previewSrc){ showCover(previewSrc); } else { clearCover(); }
@@ -5716,10 +5778,23 @@ function closeLogin(){document.getElementById('loginOverlay').classList.add('hid
 async function doLogin(){
   const pw=document.getElementById('pwInput').value;
   const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
-  if(r.ok){setAuthed(true);closeLogin();render();toast('edit mode unlocked');}
+  if(r.ok){
+    setAuthed(true);
+    closeLogin();
+    // Not render() — REload. What this page holds was stripped of every private
+    // note, and saving a record from that list would delete the notes it was
+    // never sent. Locking reloads for the mirror reason: they leave with you.
+    await loadRecords();
+    toast('edit mode unlocked');
+  }
   else{document.getElementById('loginErr').textContent='wrong password.';}
 }
-async function doLogout(){await fetch('/api/auth/logout',{method:'POST'});setAuthed(false);render();toast('locked');}
+async function doLogout(){
+  await fetch('/api/auth/logout',{method:'POST'});
+  setAuthed(false);
+  await loadRecords();
+  toast('locked');
+}
 
 // ── import / export ────────────────────────────────────────────────────────
 document.getElementById('importInput').addEventListener('change',async e=>{
@@ -7949,7 +8024,7 @@ function calEventRow(ev, fullNote) {
       ? `<div class="cal-ev-note detail-notes-body">${rendered}</div>`
       : `<div class="cal-ev-note preview">${esc(ev.text.replace(/\s+/g,' ').trim())}</div>`;
   }
-  return `<div class="cal-event ${ev.type}" onclick="openDetailFromCal(${r.id})">
+  return `<div class="cal-event ${ev.type}${ev.private ? ' private' : ''}" onclick="openDetailFromCal(${r.id})">
     ${cover}
     <div class="cal-ev-main">
       <div class="cal-ev-title">${esc(r.album_name) || 'untitled'}</div>
@@ -7957,6 +8032,7 @@ function calEventRow(ev, fullNote) {
       ${noteHtml}
     </div>
     ${ev.time ? `<span class="cal-ev-time">${esc(ev.time)}</span>` : ''}
+    ${ev.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''}
     <span class="cal-badge ${ev.type}">${CAL_TYPE_LABEL[ev.type]}</span>
   </div>`;
 }
