@@ -67,3 +67,56 @@ def test_places_lists_sorted_by_lowercased_name(client):
 def test_places_read_is_public(client):
     make_place("Tracks Rio", "https://tracksrio.com")
     assert client.get("/api/places").status_code == 200
+
+
+def test_create_a_place(authed):
+    r = authed.post("/api/places", json={"name": "  Tracks Rio  ", "url": "tracksrio.com"})
+
+    assert r.status_code == 201
+    body = r.get_json()
+    assert body["name"] == "Tracks Rio"
+    assert body["url"] == "https://tracksrio.com"
+
+
+def test_create_keeps_an_empty_link_empty(authed):
+    r = authed.post("/api/places", json={"name": "Feira da Glória"})
+    assert r.status_code == 201
+    assert r.get_json()["url"] == ""
+
+
+def test_create_refuses_a_duplicate_name_ignoring_case(authed):
+    authed.post("/api/places", json={"name": "Tracks Rio"})
+    r = authed.post("/api/places", json={"name": "tracks rio"})
+
+    assert r.status_code == 409
+    assert "error" in r.get_json()
+
+
+def test_create_refuses_an_empty_name(authed):
+    assert authed.post("/api/places", json={"name": "   "}).status_code == 400
+
+
+@pytest.mark.parametrize("bad", ["javascript:alert(1)", "ftp://x.com",
+                                 "data:text/html,hi", "https://",
+                                 "https:///", "https://:8080", "https://@"])
+def test_create_refuses_a_link_that_is_not_http(authed, bad):
+    r = authed.post("/api/places", json={"name": "Somewhere", "url": bad})
+    assert r.status_code == 400
+
+
+def test_create_requires_auth(client):
+    r = client.post("/api/places", json={"name": "Tracks Rio"})
+    assert r.status_code in (401, 403)
+
+
+def test_create_accepts_a_bare_host_port(authed):
+    r = authed.post("/api/places", json={"name": "Tracks Rio Loja",
+                                          "url": "tracksrio.com:8080/loja"})
+    assert r.status_code == 201
+    assert r.get_json()["url"] == "https://tracksrio.com:8080/loja"
+
+
+def test_create_accepts_localhost_port(authed):
+    r = authed.post("/api/places", json={"name": "Dev Store", "url": "localhost:3000"})
+    assert r.status_code == 201
+    assert r.get_json()["url"] == "https://localhost:3000"

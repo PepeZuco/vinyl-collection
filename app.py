@@ -1,4 +1,4 @@
-import os, io, base64, csv, json, uuid, hashlib
+import os, io, base64, csv, json, re, uuid, hashlib
 # 64MB per field, not 10: note_images packs every photo on one record into a
 # single field, where the old ceiling (sized for one cover) would reject a
 # photo-heavy row on import — an export that cannot be restored. The whole-upload
@@ -206,6 +206,45 @@ def _size(value):
     guessing 12" would put a fact in the database nobody checked."""
     v = str(value or "").strip()
     return v if v in _SIZES else ""
+
+
+_PLACE_HTTP_PREFIX  = re.compile(r"^https?://", re.I)           # already an http(s) url
+_PLACE_HOST_PORT    = re.compile(r"^[^\s:/?#]+:\d+(?:[/?#]|$)")  # host:port, not a scheme
+_PLACE_OTHER_SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")  # some other scheme — refuse
+_PLACE_HTTP         = re.compile(r"^https?://(?:[^\s/?#@]+@)?[^\s/?#@:]+(?::\d+)?(?:[/?#][^\s]*)?$", re.I)
+
+
+def _place_url(raw):
+    """A place's link: '' for none, the normalized url, or None to refuse it.
+
+    Mirrors normalizeUrl in static/places.js, and is the enforcing copy — the
+    browser's is a courtesy so the form can complain before the round trip.
+    The refusal matters: the drawer renders this value as an href, so a stored
+    'javascript:' url would be a click target.
+
+    host:port is distinguished from a scheme because both look like
+    "token:something" — a bare colon alone can't tell them apart. A scheme
+    token (RFC 3986) never starts with a digit right after the colon's
+    prefix, but the real tell used here is what follows the colon: a run of
+    digits (a port) versus letters (a scheme name like javascript, data,
+    ftp). Treating 'tracksrio.com:8080' as a scheme would refuse a
+    legitimate host:port link; treating every 'word:' as host:port would let
+    'javascript:alert(1)' through as if 'javascript' were a hostname. So
+    host:port is checked, and prepended with https://, before the general
+    scheme check runs.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    if _PLACE_HTTP_PREFIX.match(s):
+        pass  # already http(s) — leave as typed
+    elif _PLACE_HOST_PORT.match(s):
+        s = "https://" + s
+    elif _PLACE_OTHER_SCHEME.match(s):
+        return None
+    else:
+        s = "https://" + s.lstrip("/")
+    return s if _PLACE_HTTP.match(s) else None
 
 
 def _clean_tracks(raw, disc_count, strict=True):
@@ -517,6 +556,24 @@ def list_places():
     # for a visitor too, and a place name is already visible on every record.
     places = Place.query.order_by(func.lower(Place.name)).all()
     return jsonify([p.to_dict() for p in places])
+
+@app.route("/api/places", methods=["POST"])
+@require_auth
+def create_place():
+    d = request.get_json(silent=True) or {}
+    name = (d.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "a place needs a name"}), 400
+    url = _place_url(d.get("url"))
+    if url is None:
+        return jsonify({"error": "a link has to be http:// or https://"}), 400
+    clash = Place.query.filter(func.lower(Place.name) == name.lower()).first()
+    if clash:
+        return jsonify({"error": f"'{clash.name}' is already on the list"}), 409
+    p = Place(name=name, url=url)
+    db.session.add(p)
+    db.session.commit()
+    return jsonify(p.to_dict()), 201
 
 def get_record_or_404(rid):
     """A record by id, or a 404 — through Session.get rather than the legacy
