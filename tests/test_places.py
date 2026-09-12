@@ -2,19 +2,33 @@
 
 import pytest
 
+# `import app as app_module` rather than `from app import app, db, Place,
+# Record`: other test files in this suite (test_import.py) reload the app
+# module via importlib.reload() inside a module-scoped fixture, which rebinds
+# app.app / app.db / app.Place / app.Record to fresh objects in place. A name
+# captured once at collection time (`from app import db`) would then be a
+# stale object whose routes resolve `db` through the *current* module
+# globals — a different instance than the one the stale Flask app was
+# actually registered with, raising "the current Flask app is not registered
+# with this SQLAlchemy instance" the moment test_import.py runs first, which
+# it always does (it collects before this file alphabetically). Looking the
+# names up through `app_module` at fixture/call time, like
+# test_tracks_endpoint.py and test_search_endpoint.py do, always gets the
+# live, self-consistent set. Later tests appended to this file must keep
+# going through `app_module` rather than binding a bare `app`/`db`/`Place`/
+# `Record` name at module scope.
 import app as app_module
-from app import app, db, Place, Record
 
 
 @pytest.fixture
 def client():
     """A logged-OUT client on an empty places/records table."""
-    app.config["TESTING"] = True
-    with app.app_context():
-        Place.query.delete()
-        Record.query.delete()
-        db.session.commit()
-    with app.test_client() as c:
+    app_module.app.config["TESTING"] = True
+    with app_module.app.app_context():
+        app_module.Place.query.delete()
+        app_module.Record.query.delete()
+        app_module.db.session.commit()
+    with app_module.app.test_client() as c:
         yield c
 
 
@@ -32,10 +46,10 @@ def authed(client):
 
 
 def make_place(name, url=""):
-    with app.app_context():
-        p = Place(name=name, url=url)
-        db.session.add(p)
-        db.session.commit()
+    with app_module.app.app_context():
+        p = app_module.Place(name=name, url=url)
+        app_module.db.session.add(p)
+        app_module.db.session.commit()
         return p.id
 
 
