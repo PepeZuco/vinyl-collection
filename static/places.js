@@ -11,18 +11,36 @@
 
 const VinylPlaces = (function () {
 
-  const HAS_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.\-]*:/;
-  const HTTP_URL = /^https?:\/\/[^\s]+$/i;
+  const HTTP_PREFIX  = /^https?:\/\//i;                  // already an http(s) url
+  const HOST_PORT    = /^[^\s:\/?#]+:\d+(?:[\/?#]|$)/;   // host:port, not a scheme
+  const OTHER_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.\-]*:/;     // some other scheme — refuse
+  const HTTP_URL     = /^https?:\/\/(?:[^\s\/?#@]+@)?[^\s\/?#@:]+(?::\d+)?(?:[\/?#][^\s]*)?$/i;
 
   const str = v => String(v === undefined || v === null ? '' : v);
 
   /* '' for no link, the normalized url, or null when the value must be
    * refused. A bare host is assumed https; leading slashes are dropped first
-   * so '//host' does not become 'https:////host'. */
+   * so '//host' does not become 'https:////host'. The href rendered later is
+   * a security boundary: a stored javascript: or other non-http scheme becomes
+   * an href, enabling XSS. We distinguish host:port from schemes because colons
+   * appear in both, but host:port is not a scheme token. */
   function normalizeUrl(raw) {
     let s = str(raw).trim();
     if (!s) return '';
-    if (!HAS_SCHEME.test(s)) s = 'https://' + s.replace(/^\/+/, '');
+    if (HTTP_PREFIX.test(s)) {
+      // already http(s) — validate and return or refuse
+      return HTTP_URL.test(s) ? s : null;
+    }
+    if (HOST_PORT.test(s)) {
+      // bare host with explicit port — prepend https://
+      s = 'https://' + s;
+    } else if (OTHER_SCHEME.test(s)) {
+      // some other scheme (ftp, javascript, data, etc.) — refuse
+      return null;
+    } else {
+      // bare host or protocol-relative url — prepend https://, strip slashes
+      s = 'https://' + s.replace(/^\/+/, '');
+    }
     return HTTP_URL.test(s) ? s : null;
   }
 

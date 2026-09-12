@@ -45,6 +45,42 @@ test('a scheme with no host is rejected', () => {
   assert.strictEqual(normalizeUrl('https://'), null);
 });
 
+test('bare host with port gets https://', () => {
+  assert.strictEqual(normalizeUrl('tracksrio.com:8080/loja'), 'https://tracksrio.com:8080/loja');
+  assert.strictEqual(normalizeUrl('localhost:3000'), 'https://localhost:3000');
+});
+
+test('http(s) URLs with ports are kept as typed', () => {
+  assert.strictEqual(normalizeUrl('https://tracksrio.com:8080/loja'), 'https://tracksrio.com:8080/loja');
+});
+
+test('scheme with no host forms are rejected', () => {
+  assert.strictEqual(normalizeUrl('https:///'), null);
+  assert.strictEqual(normalizeUrl('https://:8080'), null);
+  assert.strictEqual(normalizeUrl('https://@'), null);
+});
+
+test('http(s) URLs with userinfo are kept as typed', () => {
+  assert.strictEqual(normalizeUrl('https://user:pw@tracksrio.com/x'), 'https://user:pw@tracksrio.com/x');
+});
+
+test('invariant: all results are empty, null, or http(s)', () => {
+  const inputs = [
+    'javascript:alert(1)',
+    'data:text/html,hi',
+    'ftp://x.com',
+    '//x.com',
+    'x.com',
+    'https://x.com',
+    'JavaScript:alert(1)',
+  ];
+  inputs.forEach(input => {
+    const result = normalizeUrl(input);
+    assert(result === '' || result === null || /^https?:\/\//.test(result),
+      `normalizeUrl('${input}') = ${result} — not empty, null, or http(s)`);
+  });
+});
+
 // ── validName ───────────────────────────────────────────────────────────────
 
 test('a name needs at least one non-space character', () => {
