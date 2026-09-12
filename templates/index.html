@@ -552,6 +552,21 @@ select option{background:var(--surface);color:var(--text)}
 .dm-tab.on{color:var(--accent);border-bottom-color:var(--accent)}
 .dm-tab:hover{color:var(--text)}
 
+/* On the desktop drawer the same three tabs are navigation rather than a
+   switch: all three blocks are stacked in the info column, so the row pins to
+   the top of it and a click scrolls a block's start up underneath. The record
+   header above the row is ordinary content and scrolls away — opaque
+   background because the blocks pass behind the row, not under the header. */
+.dd-tabs{position:sticky;top:0;z-index:2;background:var(--surface)}
+/* the seam between two blocks — the pinned row says which one you are in, so
+   this only has to make the break legible, not label it */
+.dd-sec + .dd-sec{margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}
+/* The last block has to be able to reach the row like the other two, and it
+   can only do that if there is a column's worth of room beneath it — without
+   this, clicking Timeline on a record with a short history scrolls to the
+   bottom and leaves the tracklist still sitting under the tabs. */
+.dd-sec:last-child{min-height:100%}
+
 .tl-disc{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
   color:var(--muted);margin:12px 0 4px}
 .tl-side{display:flex;align-items:center;gap:8px;margin:10px 0 4px}
@@ -3726,13 +3741,21 @@ function renderDetailContent(r) {
   dmList = dmRecs.length && dmRecs.some(x => x.id === r.id) ? dmRecs : [r];
   dmIdx = Math.max(0, dmList.findIndex(x => x.id === r.id));
 
+  // Logging a play or a cleaning rewrites the whole drawer (patchRecord), and
+  // on desktop that used to throw you back to the top of the column — the
+  // "Played today" button is in the Info block, so you could be anywhere below
+  // it. Restored only for the record that was already on screen: paging to a
+  // different one should start at its top.
+  const prevDd = document.getElementById('ddInfo');
+  const keepScroll = prevDd && prevDd.dataset.rid === String(r.id) ? prevDd.scrollTop : 0;
+
   document.getElementById('detailBody').innerHTML=`
     <div class="detail-layout">
       <div class="detail-cover-col">
         <div class="dd-carousel" id="ddCarousel">${dmList.map(dmSlideHTML).join('')}</div>
       </div>
-      <div class="detail-info-col" id="ddInfo">
-        ${dmInfoHTML(r)}
+      <div class="detail-info-col" id="ddInfo" data-rid="${r.id}">
+        ${ddInfoHTML(r)}
       </div>
     </div>
     <div class="detail-mobile-layout" id="dmLayout">
@@ -3750,6 +3773,9 @@ function renderDetailContent(r) {
   dmBind();
   ddBind();
   dmSetCurrent(dmIdx);
+  const dd = document.getElementById('ddInfo');
+  if (dd && keepScroll) dd.scrollTop = keepScroll;
+  ddBindSections();
   renderDetailFoot(r.id);
 }
 
@@ -3782,8 +3808,8 @@ function setDetailTab(tab) {
   if (!rec) return;
   const info = document.getElementById('dmInfo');
   if (info) info.innerHTML = dmInfoHTML(rec);
-  const ddInfo = document.getElementById('ddInfo');
-  if (ddInfo) ddInfo.innerHTML = dmInfoHTML(rec);
+  // no desktop half any more: over there the three blocks are all on screen
+  // and the tabs scroll between them (ddGoToSection) instead of swapping one in
 }
 
 function dmSlideHTML(rec) {
@@ -4016,6 +4042,86 @@ function dmInfoHTML(r) {
    :                      dmInfoTabHTML(r));
 }
 
+/* The desktop drawer shows all three blocks at once, in order, and the tab row
+ * becomes navigation over them: it pins to the top of the scrolling info
+ * column, clicking a tab scrolls that block's start up under the row, and the
+ * highlight follows whatever you have scrolled to. The phone still switches
+ * one tab at a time (dmInfoHTML above) — there, reaching Timeline would mean
+ * scrolling past a metadata grid and a full tracklist first. */
+function ddInfoHTML(r) {
+  const tabBtn = (id, label) =>
+    `<button class="dm-tab" data-ddsec="${id}" onclick="ddGoToSection('${id}')">${label}</button>`;
+  return dmHeaderHTML(r) + `
+    <div class="dm-tabs dd-tabs" id="ddTabs">
+      ${tabBtn('info', 'Info')}${tabBtn('tracks', 'Tracks')}${tabBtn('timeline', 'Timeline')}
+    </div>
+    <section class="dd-sec" id="ddSec-info">${dmInfoTabHTML(r)}</section>
+    <section class="dd-sec" id="ddSec-tracks">${dmTracksTabHTML(r)}</section>
+    <section class="dd-sec" id="ddSec-timeline">${dmTimelineTabHTML(r)}</section>`;
+}
+
+const DD_SECTIONS = ['info', 'tracks', 'timeline'];
+
+/* A click scrolls smoothly, passing through every block between here and the
+ * target. The spy would repaint the highlight for each one on the way, so it
+ * stands down until the scroll has had time to settle. */
+let ddSpyLockUntil = 0;
+
+function ddBarHeight() {
+  const bar = document.getElementById('ddTabs');
+  return bar ? bar.offsetHeight : 0;
+}
+
+function ddMarkSection(id) {
+  document.querySelectorAll('#ddInfo .dd-tabs .dm-tab').forEach(b =>
+    b.classList.toggle('on', b.dataset.ddsec === id));
+}
+
+function ddGoToSection(id) {
+  const col = document.getElementById('ddInfo');
+  const sec = document.getElementById('ddSec-' + id);
+  if (!col || !sec) return;
+  ddSpyLockUntil = Date.now() + 700;
+  ddMarkSection(id);
+  const top = col.scrollTop + sec.getBoundingClientRect().top
+            - col.getBoundingClientRect().top - ddBarHeight();
+  col.scrollTo({top: Math.max(0, top), behavior: 'smooth'});
+}
+
+/* Which block the column is actually showing: the last one whose start has
+ * passed the underside of the pinned row. Without this the highlight would sit
+ * wherever it was last clicked while you scrolled somewhere else entirely. */
+function ddSyncSpy() {
+  const col = document.getElementById('ddInfo');
+  if (!col || Date.now() < ddSpyLockUntil) return;
+  // renderDetailContent runs while the overlay is still .hidden, and a
+  // display:none column measures every block at zero — which reads as all
+  // three having passed the row, and highlights the last one. openDetail syncs
+  // again once the drawer is on screen and can actually be measured.
+  if (!col.clientHeight) return;
+  const line = col.getBoundingClientRect().top + ddBarHeight() + 4;
+  let active = DD_SECTIONS[0];
+  DD_SECTIONS.forEach(id => {
+    const sec = document.getElementById('ddSec-' + id);
+    if (sec && sec.getBoundingClientRect().top <= line) active = id;
+  });
+  // A short last block can never reach the row — the column runs out of scroll
+  // first — so a column scrolled to its end names its last block regardless,
+  // which is also what clicking that tab leaves you looking at. Only when
+  // there is something to scroll: a column with no overflow is at its end too,
+  // and that one is showing Info.
+  const over = col.scrollHeight - col.clientHeight;
+  if (over > 2 && col.scrollTop >= over - 2) active = DD_SECTIONS[DD_SECTIONS.length - 1];
+  ddMarkSection(active);
+}
+
+function ddBindSections() {
+  const col = document.getElementById('ddInfo');
+  if (!col) return;
+  col.addEventListener('scroll', ddSyncSpy, {passive: true});
+  ddSyncSpy();
+}
+
 function dmHeaderHTML(r) {
   const myR = Number(r.my_rating) || 0;
   const herR = Number(r.wife_rating) || 0;
@@ -4164,7 +4270,15 @@ function dmSetCurrent(idx) {
     ddCenterSlide(idx, true);
   }
   const ddInfo = document.getElementById('ddInfo');
-  if (ddInfo) ddInfo.innerHTML = dmInfoHTML(rec);
+  if (ddInfo) {
+    // the carousel can land on a different record than the column was showing,
+    // and that one starts at its own top with Info highlighted
+    const same = ddInfo.dataset.rid === String(rec.id);
+    ddInfo.innerHTML = ddInfoHTML(rec);
+    ddInfo.dataset.rid = String(rec.id);
+    if (!same) ddInfo.scrollTop = 0;
+    ddSyncSpy();
+  }
   renderDetailFoot(rec.id);
 }
 
@@ -4315,16 +4429,18 @@ function openDetail(id, focus) {
   confirmDeleteId = null;
   currentDetailId = id;
   focusDetail(focus);
-  // A focus points at an entry in the Timeline tab. If the sticky tab is
-  // something else, that entry never reaches the DOM and scrollFocusIntoView
-  // below finds nothing to scroll to — so a focused open always lands on
-  // Timeline, no matter what the drawer was showing last. Set before
-  // rendering: dmInfoHTML reads detailTab during renderDetailContent, so this
-  // has to land before that call, not after.
+  // A focus points at an entry in the Timeline block. On a phone, where one
+  // tab shows at a time, a tab other than Timeline means that entry never
+  // reaches the DOM and scrollFocusIntoView below finds nothing to scroll to —
+  // so a focused open always lands on Timeline, no matter what the drawer was
+  // showing last. Set before rendering: dmInfoHTML reads detailTab during
+  // renderDetailContent, so this has to land before that call, not after.
+  // Desktop needs none of it: all three blocks are always rendered there.
   if (focus) { detailTab = 'timeline'; detailTabPinned = false; }
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
+  ddSyncSpy();   // first measurable moment — see the guard in ddSyncSpy
   syncUrl(true);
   if (window.matchMedia('(max-width:760px)').matches) {
     dmCenterSlide(dmIdx, false);
@@ -4426,6 +4542,11 @@ function closeDetail(){
   confirmDeleteId=null;currentDetailId=null;focusDetail(null);
   detailTab = 'tracks';
   detailTabPinned = false;
+  // closing ends the desktop column's scroll position too — detailBody keeps
+  // its markup until the next open, and reopening the same record should start
+  // at the top the way any other record does
+  const dd = document.getElementById('ddInfo');
+  if (dd) dd.dataset.rid = '';
   syncUrl(true);
 }
 
