@@ -540,6 +540,9 @@ select option{background:var(--surface);color:var(--text)}
 .tl-heart:hover{opacity:1;color:var(--ev-liked)}
 .tl-heart.on,.tl-heart-static.on{opacity:1;color:var(--ev-liked)}
 .tl-heart-static{cursor:default}
+.when-btn{background:none;border:none;cursor:pointer;font-family:var(--font);padding:0}
+.when-btn:hover{color:var(--accent)}
+.when-btn i{font-size:10px;opacity:.6}
 /* one group per date — the timeline marker on the border-left line represents
    the date itself, not any one event type, so it stays neutral */
 .dm-hist-group{position:relative;padding:0 0 14px 16px;border-left:2px solid var(--border);margin-left:5px}
@@ -3870,7 +3873,10 @@ function dmTrackRowHTML(r, t) {
   return `<div class="tl-row${on ? ' liked' : ''}">
     <span class="num">${t.pos}</span>
     <span class="ttl">${esc(t.title)}</span>
-    ${on ? `<span class="when">${esc(dmFormatLikeDate(t.liked_at))}</span>` : ''}
+    ${on ? (authed
+      ? `<button class="when when-btn" onclick="editLikeDate(${r.id}, ${t.i})"
+           title="change the date">${esc(dmFormatLikeDate(t.liked_at))} <i class="ti ti-pencil"></i></button>`
+      : `<span class="when">${esc(dmFormatLikeDate(t.liked_at))}</span>`) : ''}
     ${heart}
   </div>`;
 }
@@ -6514,6 +6520,39 @@ function logCleaned(id) {
   const dates = [...parseCleanedDates(record.cleaned_dates), nowStamp()];
   patchRecord(id, { cleaned_dates: JSON.stringify(dates) });
   toast('Cleaned today');
+}
+
+/* A heart is one tap, with no edit mode and no save — the same call the rating
+ * bars in this drawer already make. Liking a song happens while the record is
+ * spinning, and routing it through open-edit-scroll-tick-save is the four-step
+ * problem those bars were introduced to kill.
+ *
+ * `i` is the index in the RAW track array, which is what every consumer
+ * addresses a track by. */
+function toggleLike(id, i) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  const list = parseTracks(record.tracks);
+  const t = list[i];
+  if (!t) return;
+  if (t.liked_at) delete t.liked_at; else t.liked_at = nowStamp();
+  patchRecord(id, { tracks: serializeTracks(list) });
+  toast(t.liked_at ? `Liked ${t.title}` : `Unliked ${t.title}`);
+}
+
+/* You already know which songs you love; the day you got round to marking one
+ * is not the day you fell for it. */
+function editLikeDate(id, i) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  const list = parseTracks(record.tracks);
+  const t = list[i];
+  if (!t || !t.liked_at) return;
+  const next = prompt(`When did you like ${t.title}?`, stampDay(t.liked_at));
+  if (next === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(next.trim())) { toast('use YYYY-MM-DD'); return; }
+  t.liked_at = next.trim();
+  patchRecord(id, { tracks: serializeTracks(list) });
 }
 
 /* The card's +/- buttons. Everything but the count element is patchRecord's
