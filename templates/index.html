@@ -279,7 +279,15 @@ select option{background:var(--surface);color:var(--text)}
 .modal.modal-wide{max-width:920px}
 
 /* idle screensaver — a quiet spotlight on one owned record at a time */
-.idle-overlay{background:rgba(0,0,0,.86);z-index:400;flex-direction:column;cursor:pointer}
+/* The spotlight keeps its black ground in both themes, so the text on it
+   can't follow the theme: in light mode --text is #1a1a18 and the artist and
+   the play counts vanish into the backdrop. Re-point the tokens the card
+   reads at their dark-mode values for everything inside the overlay, so the
+   rules below stay theme-agnostic. */
+.idle-overlay{
+  background:rgba(0,0,0,.86);z-index:400;flex-direction:column;cursor:pointer;
+  --text:#e8e8e0;--label:#9a9a92;
+}
 .idle-eyebrow,.idle-hint{
   position:absolute;left:0;right:0;text-align:center;font-family:var(--font-mono);
   font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(232,232,224,.45);
@@ -318,10 +326,11 @@ select option{background:var(--surface);color:var(--text)}
 .idle-stats{display:flex;gap:26px;align-items:flex-start}
 .idle-stat{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:72px}
 .idle-num{font-family:var(--font-mono);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text)}
-.idle-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+/* --label, not --muted: #555 on the black ground is barely legible */
+.idle-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--label)}
 .idle-rate{display:flex;flex-direction:column;gap:6px;align-items:center}
 .idle-rate-row{display:flex;align-items:center;gap:6px}
-.idle-who{font-size:10px;width:32px;text-align:right;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.idle-who{font-size:10px;width:32px;text-align:right;color:var(--label);text-transform:uppercase;letter-spacing:.05em}
 .idle-segs{display:flex;gap:2px}
 .idle-segs i{width:8px;height:11px;border-radius:1.5px;background:rgba(255,255,255,.14);display:block}
 .idle-rate-row.pepe .idle-segs i.on{background:var(--rate-pepe)}
@@ -4420,7 +4429,7 @@ let formDiscCount = 1;
 let formSize = '';
 
 const SIZE_OPTIONS = ['7', '10', '12'];
-const DISC_OPTIONS = [1, 2, 3];
+const DISC_OPTIONS = [1, 2, 3, 4];
 
 function renderTracksForm() {
   document.getElementById('fSizePick').innerHTML = SIZE_OPTIONS.map(v =>

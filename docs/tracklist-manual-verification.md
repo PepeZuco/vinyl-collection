@@ -10,7 +10,8 @@ without a browser and said so.
 
 ## The grid
 
-1. Set one record to `disc_count: 2` and another to `3`.
+1. Set one record to `disc_count: 2`, another to `3`, and another to `4` — the
+   highest the form's Discs picker offers.
 2. Both grow sleeves behind the cover and a segmented gold bar down the left
    edge — one segment per disc. **Check this in both themes, not just
    whichever one happens to be open.** Dark is the default theme and the one
