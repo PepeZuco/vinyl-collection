@@ -324,6 +324,25 @@ select option{background:var(--surface);color:var(--text)}
   cursor:pointer;transition:background .12s,border-color .12s,color .12s;
 }
 .detail-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+/* An end of the run is shown, not hidden: a missing arrow moves the other one
+   and reads as a layout glitch, a greyed one says there is nothing that way. */
+.detail-nav-btn:disabled{opacity:.3;cursor:default}
+.detail-nav-btn:disabled:hover{border-color:var(--border);color:var(--muted)}
+
+/* The photo lightbox's own pair. They sit ON the image rather than beside it:
+   flanking would cost width the phone does not have, and the photo is already
+   centred with room at its edges. */
+.shot-body{position:relative;text-align:center}
+.shot-nav{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:1;
+  width:38px;height:38px;font-size:20px;
+  background:rgba(0,0,0,.55);color:#fff;border-color:rgba(255,255,255,.35);
+  backdrop-filter:blur(2px);
+}
+.shot-nav.prev{left:4px}
+.shot-nav.next{right:4px}
+.shot-nav:hover{background:rgba(0,0,0,.75);color:#fff}
+.shot-nav:disabled:hover{background:rgba(0,0,0,.55);border-color:rgba(255,255,255,.35);color:#fff}
 
 /* ── record navigation animation: vertical slide, used on desktop and mobile ── */
 #detailBody{will-change:transform,opacity}
@@ -2347,8 +2366,14 @@ select option{background:var(--surface);color:var(--text)}
       <span class="modal-title">photo</span>
       <button class="btn btn-ghost btn-sm" onclick="closeShot()"><i class="ti ti-x"></i></button>
     </div>
-    <div class="modal-body" style="text-align:center">
+    <!-- The overlay closes on any click that reaches it, so the arrows have to
+         stop theirs — otherwise one press would change the photo and shut it. -->
+    <div class="modal-body shot-body">
+      <button class="detail-nav-btn shot-nav prev" id="shotPrevBtn" title="previous photo"
+              onclick="event.stopPropagation();stepShot(-1)"><i class="ti ti-chevron-left"></i></button>
       <img id="shotImage" alt="" style="max-width:100%;max-height:70vh;border-radius:var(--radius)">
+      <button class="detail-nav-btn shot-nav next" id="shotNextBtn" title="next photo"
+              onclick="event.stopPropagation();stepShot(1)"><i class="ti ti-chevron-right"></i></button>
     </div>
   </div>
 </div>
@@ -3555,8 +3580,11 @@ function dmHistoryEntryHTML(ev) {
   const shotIds = (ev.images || []).filter(VinylNotes.isImageId);
   const shots = shotIds.length
     ? `<div class="note-shots">${shotIds.map(id =>
-         `<img class="note-shot" alt="" src="${esc(noteImageSrc(id))}" ` +
-         `onclick="openShot('${id}')" onerror="this.remove()">`).join('')}</div>`
+         // data-shot so the lightbox can read the whole record's run off the
+         // rendered pane; the src is no use for that, an unsaved photo carries
+         // its bytes there rather than its id.
+         `<img class="note-shot" alt="" src="${esc(noteImageSrc(id))}" data-shot="${id}" ` +
+         `onclick="openShot('${id}', this)" onerror="this.remove()">`).join('')}</div>`
     : '';
   // Only edit mode ever receives a private note — the server strips them from
   // /api/records — so the lock here is not hiding anything, it is telling you
@@ -4855,16 +4883,58 @@ function closeCamera(){
   document.getElementById('cameraOverlay').classList.add('hidden');
 }
 
-function openShot(id){
+/* The photos the arrows walk, and where in them we are. Rebuilt on every open
+ * rather than held with the record: the drawer rewrites its history wholesale
+ * on navigation, and a list kept across that would name thumbnails that are
+ * no longer on the page. */
+let shotRun = [];
+let shotRunIdx = -1;
+
+/* Opening a photo hands over its own thumbnail, because the answer to "which
+ * other photos are there" is written in the DOM beside it.
+ *
+ * The drawer renders its history TWICE — #ddInfo for desktop, #dmInfo for the
+ * phone, both present at once — so the run has to be read from the pane the
+ * thumbnail is actually in, or every photo would appear in it twice. Reading
+ * the rendered pane rather than the record also means the run can only ever
+ * hold photos you can see: a private note the server withheld is not there to
+ * find, and one whose GET failed removed itself on error. */
+function openShot(id, thumb){
   if(!VinylNotes.isImageId(id)) return;
-  document.getElementById('shotImage').src = noteImageSrc(id);
+  const pane = thumb && thumb.closest && thumb.closest('#ddInfo, #dmInfo');
+  const thumbs = pane ? [...pane.querySelectorAll('.note-shot')] : [];
+  shotRun = thumbs.map(el => el.dataset.shot).filter(VinylNotes.isImageId);
+  shotRunIdx = thumb ? thumbs.indexOf(thumb) : -1;
+  // Called without a thumbnail, or from markup that has none: the photo still
+  // opens, it just stands alone.
+  if(shotRunIdx < 0 || shotRun.length !== thumbs.length){ shotRun = [id]; shotRunIdx = 0; }
+  paintShot();
   document.getElementById('shotOverlay').classList.remove('hidden');
+}
+
+// No wrap-around: the ends of a record's photos are ends, and the arrows say so.
+function stepShot(delta){
+  const next = shotRunIdx + delta;
+  if(next < 0 || next >= shotRun.length) return;
+  shotRunIdx = next;
+  paintShot();
+}
+
+function paintShot(){
+  document.getElementById('shotImage').src = noteImageSrc(shotRun[shotRunIdx]);
+  document.getElementById('shotPrevBtn').disabled = shotRunIdx <= 0;
+  document.getElementById('shotNextBtn').disabled = shotRunIdx >= shotRun.length - 1;
+}
+
+function shotIsOpen(){
+  return !document.getElementById('shotOverlay').classList.contains('hidden');
 }
 
 function closeShot(){
   document.getElementById('shotOverlay').classList.add('hidden');
   // An empty src attribute resolves to the page URL and fetches it again.
   document.getElementById('shotImage').removeAttribute('src');
+  shotRun = []; shotRunIdx = -1;
 }
 
 function captureFrame(){
@@ -5973,6 +6043,15 @@ function bindEvents(){
   document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
   document.addEventListener('keydown', e => {
     if (document.getElementById('detailOverlay').classList.contains('hidden')) return;
+    // An open photo takes the keys off the drawer behind it: the arrows walked
+    // the collection while you were looking at a photograph, and Escape threw
+    // the whole record away rather than the photo you meant to shut.
+    if (shotIsOpen()) {
+      if (e.key === 'ArrowLeft') stepShot(-1);
+      else if (e.key === 'ArrowRight') stepShot(1);
+      else if (e.key === 'Escape') closeShot();
+      return;
+    }
     if (e.key === 'ArrowLeft') navigateDetail(-1);
     else if (e.key === 'ArrowRight') navigateDetail(1);
     else if (e.key === 'Escape') closeDetail();

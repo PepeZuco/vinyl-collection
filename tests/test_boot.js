@@ -2069,3 +2069,127 @@ test('export is offered only in edit mode, like import', async () => {
   win.setAuthed(true);
   assert.notStrictEqual($(doc, '#exportBtn').style.display, 'none');
 });
+
+// ── walking a record's photos from the lightbox ─────────────────────────────
+
+/* Note photo ids are 32 lowercase hex characters and nothing else gets served,
+ * so the fakes have to look the part. One repeated character per photo keeps
+ * which-one-is-open readable in a failure message. */
+const shotId = ch => ch.repeat(32);
+
+/* A record carrying five photos across three notes. The drawer draws them
+ * oldest note first, photos in the order the note holds them — so the walk is
+ * a, b, c, d, e, and two of its four steps cross a note boundary.
+ * Built here rather than in the fixture so the sibling tests' counts stand. */
+function withPhotos(read, notes) {
+  const r = read('records').find(x => x.have_it);
+  r.notes = JSON.stringify(notes || [
+    { date: '2026-03-12', text: 'sleeve', images: [shotId('a'), shotId('b')] },
+    { date: '2026-04-03', text: 'label', images: [shotId('c')] },
+    { date: '2026-06-20', text: 'inner', images: [shotId('d'), shotId('e')] },
+  ]);
+  return r;
+}
+
+// The desktop pane, for the reason litKeys gives: #dmInfo holds the same
+// history and would double every photo.
+const shotThumbs = doc => [...doc.querySelectorAll('#ddInfo .note-shot')];
+const openShotId = doc =>
+  ($(doc, '#shotImage').getAttribute('src') || '').split('/').pop();
+const armed = (doc, sel) => !$(doc, sel).disabled;
+
+test('a photo opened mid-run can go both ways', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[2]);
+  assert.strictEqual(openShotId(doc), shotId('c'), 'the wrong photo opened');
+  assert.ok(armed(doc, '#shotPrevBtn'), 'no way back from the middle of the run');
+  assert.ok(armed(doc, '#shotNextBtn'), 'no way on from the middle of the run');
+});
+
+test('the first photo of a record cannot go back', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[0]);
+  assert.ok(!armed(doc, '#shotPrevBtn'), 'offered a photo before the first');
+  assert.ok(armed(doc, '#shotNextBtn'));
+});
+
+test('the last photo of a record cannot go forward', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[4]);
+  assert.ok(armed(doc, '#shotPrevBtn'));
+  assert.ok(!armed(doc, '#shotNextBtn'), 'offered a photo after the last');
+});
+
+/* The walk is the record's, not the note's: a note's last photo steps into the
+ * next note rather than stopping. */
+test('stepping on from a note s last photo reaches the next note s first', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[1]);            // 'b', last of the March note
+  press(win, $(doc, '#shotNextBtn'));
+  assert.strictEqual(openShotId(doc), shotId('c'), 'the walk stopped at the note edge');
+});
+
+test('stepping back from a note s first photo reaches the previous note s last', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[3]);            // 'd', first of the June note
+  press(win, $(doc, '#shotPrevBtn'));
+  assert.strictEqual(openShotId(doc), shotId('c'));
+});
+
+test('a record holding one photo offers neither direction', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read, [{ date: '2026-03-12', text: 'sleeve', images: [shotId('a')] }]);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[0]);
+  assert.ok(!armed(doc, '#shotPrevBtn'));
+  assert.ok(!armed(doc, '#shotNextBtn'));
+});
+
+/* The arrows are inside an overlay that closes on any click through it — so
+ * pressing one must not also shut the photo it just changed. */
+test('pressing an arrow does not close the photo', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[0]);
+  press(win, $(doc, '#shotNextBtn'));
+  assert.ok(!$(doc, '#shotOverlay').classList.contains('hidden'),
+    'the arrow navigated and closed in one press');
+});
+
+/* While a photo is open the keys are its own: the record drawer behind it
+ * used to take the arrows and walk the collection instead. */
+test('the arrow keys move between photos, not between records', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  const atRecord = read('dmIdx');
+  press(win, shotThumbs(doc)[0]);
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  assert.strictEqual(openShotId(doc), shotId('b'));
+  assert.strictEqual(read('dmIdx'), atRecord, 'the drawer changed record behind the photo');
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+  assert.strictEqual(openShotId(doc), shotId('a'));
+  assert.strictEqual(read('dmIdx'), atRecord);
+});
+
+test('escape closes the photo and leaves the record open', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  win.openDetail(r.id);
+  press(win, shotThumbs(doc)[0]);
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.ok($(doc, '#shotOverlay').classList.contains('hidden'), 'the photo stayed open');
+  assert.ok(!$(doc, '#detailOverlay').classList.contains('hidden'),
+    'escaping the photo threw the record away too');
+});
