@@ -120,3 +120,25 @@ def test_create_accepts_localhost_port(authed):
     r = authed.post("/api/places", json={"name": "Dev Store", "url": "localhost:3000"})
     assert r.status_code == 201
     assert r.get_json()["url"] == "https://localhost:3000"
+
+
+@pytest.mark.parametrize("bad", [12345, ["a"], {"a": 1}, True])
+def test_create_refuses_a_non_string_url(authed, bad):
+    r = authed.post("/api/places", json={"name": "Somewhere", "url": bad})
+    assert r.status_code == 400
+    with app_module.app.app_context():
+        assert app_module.Place.query.count() == 0
+
+
+@pytest.mark.parametrize("bad", [12345, ["a"], {"a": 1}, True])
+def test_create_refuses_a_non_string_name(authed, bad):
+    r = authed.post("/api/places", json={"name": bad})
+    assert r.status_code == 400
+    with app_module.app.app_context():
+        assert app_module.Place.query.count() == 0
+
+
+def test_create_accepts_a_null_url_as_no_link(authed):
+    r = authed.post("/api/places", json={"name": "Feira da Glória", "url": None})
+    assert r.status_code == 201
+    assert r.get_json()["url"] == ""

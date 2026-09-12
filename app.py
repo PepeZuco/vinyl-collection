@@ -232,8 +232,20 @@ def _place_url(raw):
     'javascript:alert(1)' through as if 'javascript' were a hostname. So
     host:port is checked, and prepended with https://, before the general
     scheme check runs.
+
+    A non-string, non-None `raw` (a number, list, dict, bool from a
+    hand-rolled POST body) is refused with None rather than coerced to a
+    string. normalizeUrl in the browser never faces this: it only ever reads
+    input.value, which is always a string. This path is reachable only by a
+    request that skipped the form, and for that caller a typed refusal is
+    more honest than silently turning 12345 into a hostname — the enforcing
+    copy is allowed to be the stricter of the two.
     """
-    s = (raw or "").strip()
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
     if not s:
         return ""
     if _PLACE_HTTP_PREFIX.match(s):
@@ -561,7 +573,8 @@ def list_places():
 @require_auth
 def create_place():
     d = request.get_json(silent=True) or {}
-    name = (d.get("name") or "").strip()
+    raw_name = d.get("name")
+    name = raw_name.strip() if isinstance(raw_name, str) else ""
     if not name:
         return jsonify({"error": "a place needs a name"}), 400
     url = _place_url(d.get("url"))
