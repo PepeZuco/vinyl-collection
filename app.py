@@ -588,6 +588,41 @@ def create_place():
     db.session.commit()
     return jsonify(p.to_dict()), 201
 
+@app.route("/api/places/<int:pid>", methods=["PUT"])
+@require_auth
+def update_place(pid):
+    place = db.session.get(Place, pid)
+    if place is None:
+        raise NotFound()
+    d = request.get_json(silent=True) or {}
+    raw_name = d.get("name")
+    name = raw_name.strip() if isinstance(raw_name, str) else ""
+    if not name:
+        return jsonify({"error": "a place needs a name"}), 400
+    url = _place_url(d.get("url"))
+    if url is None:
+        return jsonify({"error": "a link has to be http:// or https://"}), 400
+
+    # Every name this rename has to pull records off: the place's own old name,
+    # plus the name of any place it is being merged into. Both move to `name`,
+    # so a merge leaves one place and one spelling behind it.
+    old_names = [place.name] if place.name != name else []
+    absorbed = Place.query.filter(func.lower(Place.name) == name.lower(),
+                                  Place.id != place.id).first()
+    if absorbed:
+        old_names.append(absorbed.name)
+        db.session.delete(absorbed)
+
+    updated = 0
+    for old in old_names:
+        updated += (Record.query.filter(Record.bought_where == old)
+                    .update({Record.bought_where: name},
+                            synchronize_session=False))
+    place.name = name
+    place.url = url
+    db.session.commit()
+    return jsonify({"place": place.to_dict(), "records_updated": updated})
+
 def get_record_or_404(rid):
     """A record by id, or a 404 — through Session.get rather than the legacy
     Query.get that get_or_404 still calls under SQLAlchemy 2.0."""
@@ -612,7 +647,7 @@ def create_record():
         year        = d.get("year",""),
         genre       = d.get("genre",""),
         bought_date = d.get("bought_date",""),
-        bought_where= d.get("bought_where",""),
+        bought_where= (d.get("bought_where","") or "").strip(),
         bought_by   = d.get("bought_by",""),
         condition   = d.get("condition",""),
         my_rating   = float(d.get("my_rating") or 0),
@@ -641,9 +676,12 @@ def update_record(rid):
     # Read before the assignment below overwrites it: what the record used to
     # point at is the only way to know what it just stopped pointing at.
     images_before = _note_image_ids(r.notes) if "notes" in d else set()
-    for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by","condition"]:
+    for field in ["artist","album_name","year","genre","bought_date","bought_by","condition"]:
         if field in d:
             setattr(r, field, d[field])
+    # Trimmed, not passed through: the place table joins to this column by
+    # exact name, so a stray space would orphan the record from its link.
+    if "bought_where" in d: r.bought_where = (d["bought_where"] or "").strip()
     if "my_rating"   in d: r.my_rating   = float(d["my_rating"] or 0)
     if "wife_rating" in d: r.wife_rating  = float(d["wife_rating"] or 0)
     if "have_it"     in d: r.have_it      = bool(d["have_it"])

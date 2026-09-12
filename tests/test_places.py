@@ -142,3 +142,100 @@ def test_create_accepts_a_null_url_as_no_link(authed):
     r = authed.post("/api/places", json={"name": "Feira da Glória", "url": None})
     assert r.status_code == 201
     assert r.get_json()["url"] == ""
+
+
+def make_record(where):
+    with app_module.app.app_context():
+        r = app_module.Record(artist="a", album_name="b", bought_where=where)
+        app_module.db.session.add(r)
+        app_module.db.session.commit()
+        return r.id
+
+
+def wheres():
+    with app_module.app.app_context():
+        return sorted((r.bought_where or "") for r in app_module.Record.query.all())
+
+
+def test_edit_just_the_link(authed):
+    pid = make_place("Tracks Rio")
+    make_record("Tracks Rio")
+
+    r = authed.put(f"/api/places/{pid}",
+                   json={"name": "Tracks Rio", "url": "tracksrio.com"})
+
+    assert r.status_code == 200
+    assert r.get_json()["place"]["url"] == "https://tracksrio.com"
+    assert r.get_json()["records_updated"] == 0
+    assert wheres() == ["Tracks Rio"]
+
+
+def test_a_rename_rewrites_every_matching_record_and_leaves_others_alone(authed):
+    pid = make_place("Tracks")
+    make_record("Tracks")
+    make_record("Tracks")
+    make_record("Amoeba")
+
+    r = authed.put(f"/api/places/{pid}", json={"name": "Tracks Rio", "url": ""})
+
+    assert r.get_json()["records_updated"] == 2
+    assert wheres() == ["Amoeba", "Tracks Rio", "Tracks Rio"]
+
+
+def test_a_rename_onto_an_existing_name_merges_them(authed):
+    keep = make_place("Tracks", "https://tracksrio.com")
+    absorbed = make_place("tracks rio")
+    make_record("Tracks")
+    make_record("tracks rio")
+
+    r = authed.put(f"/api/places/{keep}", json={"name": "Tracks RIO", "url": ""})
+
+    assert r.status_code == 200
+    assert r.get_json()["records_updated"] == 2
+    # the casing typed into the rename wins, and the absorbed row is gone
+    assert wheres() == ["Tracks RIO", "Tracks RIO"]
+    with app_module.app.app_context():
+        assert app_module.db.session.get(app_module.Place, absorbed) is None
+        assert app_module.db.session.get(app_module.Place, keep).name == "Tracks RIO"
+
+
+def test_edit_refuses_a_bad_link_and_an_empty_name(authed):
+    pid = make_place("Tracks Rio")
+
+    assert authed.put(f"/api/places/{pid}",
+                      json={"name": "Tracks Rio", "url": "javascript:alert(1)"}
+                      ).status_code == 400
+    assert authed.put(f"/api/places/{pid}", json={"name": " "}).status_code == 400
+
+
+def test_edit_404s_on_an_unknown_place(authed):
+    assert authed.put("/api/places/99999", json={"name": "x"}).status_code == 404
+
+
+def test_edit_requires_auth(client):
+    pid = make_place("Tracks Rio")
+    assert client.put(f"/api/places/{pid}", json={"name": "x"}).status_code in (401, 403)
+
+
+def test_a_record_write_trims_bought_where(authed):
+    authed.post("/api/records", json={"artist": "a", "album_name": "b",
+                                      "bought_where": "  Tracks Rio  "})
+    assert wheres() == ["Tracks Rio"]
+
+    rid = make_record("Tracks Rio")
+    authed.put(f"/api/records/{rid}", json={"bought_where": "  Amoeba "})
+    assert wheres() == ["Amoeba", "Tracks Rio"]
+
+
+@pytest.mark.parametrize("bad", [12345, ["a"], {"a": 1}, True])
+def test_edit_refuses_a_non_string_name(authed, bad):
+    pid = make_place("Tracks Rio")
+    r = authed.put(f"/api/places/{pid}", json={"name": bad})
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("bad", [12345, ["a"], {"a": 1}, True])
+def test_edit_refuses_a_non_string_url(authed, bad):
+    pid = make_place("Tracks Rio")
+    r = authed.put(f"/api/places/{pid}", json={"name": "Tracks Rio", "url": bad})
+    assert r.status_code == 400
