@@ -1590,6 +1590,22 @@ select option{background:var(--surface);color:var(--text)}
   font-size:12px;font-family:var(--font);font-weight:600;cursor:pointer;transition:all .12s}
 .playdate-add:hover{border-color:var(--accent);color:var(--accent)}
 
+/* ── step 4: tracklist ───────────────────────────────────────────────────── */
+.seg-pick{display:flex;gap:4px}
+.seg-pick button{flex:1;padding:6px 0;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--card);color:var(--muted);font-size:12px;font-family:var(--font);cursor:pointer}
+.seg-pick button.on{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:700}
+.track-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.track-row .tnum{width:26px;flex:0 0 26px;text-align:center;font-size:11px;color:var(--muted)}
+.track-row input{flex:1;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12.5px;font-family:var(--font)}
+.track-row button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px}
+.track-row .tlike.on{color:var(--ev-liked)}
+.track-row button:hover{color:var(--accent)}
+.track-paste{width:100%;background:var(--bg);border:1px dashed var(--border);
+  border-radius:var(--radius-sm);padding:7px 9px;color:var(--text);font-size:12px;
+  font-family:var(--font);min-height:56px;resize:vertical}
+
 /* ── the add-queue strip ─────────────────────────────────────────────────── */
 .queue-strip{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--bg);
   border-bottom:1px solid var(--border);flex-wrap:wrap}
@@ -2388,6 +2404,21 @@ select option{background:var(--surface);color:var(--text)}
           </div>
         </div>
       </div>
+      </div>
+
+      <div class="form-step" data-step="4" hidden>
+        <div class="form-step-lead">What is on it? Sides come from the disc count.</div>
+        <div class="form-grid" style="margin-top:16px">
+          <div class="form-group">
+            <label><i class="ti ti-ruler-measure"></i> Size</label>
+            <div class="seg-pick" id="fSizePick"></div>
+          </div>
+          <div class="form-group">
+            <label><i class="ti ti-stack-2"></i> Discs</label>
+            <div class="seg-pick" id="fDiscPick"></div>
+          </div>
+        </div>
+        <div id="fTracksSides"></div>
       </div>
     </div>
 
@@ -4352,6 +4383,128 @@ let formPlayDates = []; // ditto for the play-date editor
 let formCleanedDates = []; // ditto for the cleaned-date editor
 let formArtists = []; // ditto for the multi-artist editor
 
+// ── tracklist (step 4) ─────────────────────────────────────────────────────
+// Track identity is the index into this raw array — every handler below
+// takes `i` and addresses formTracks[i] directly. Sides are derived, never
+// stored separately.
+let formTracks = [];
+let formDiscCount = 1;
+let formSize = '';
+
+const SIZE_OPTIONS = ['7', '10', '12'];
+const DISC_OPTIONS = [1, 2, 3];
+
+function renderTracksForm() {
+  document.getElementById('fSizePick').innerHTML = SIZE_OPTIONS.map(v =>
+    `<button type="button" class="${formSize === v ? 'on' : ''}"
+       onclick="setFormSize('${v}')">${v}"</button>`).join('');
+  document.getElementById('fDiscPick').innerHTML = DISC_OPTIONS.map(n =>
+    `<button type="button" class="${formDiscCount === n ? 'on' : ''}"
+       onclick="setFormDiscCount(${n})">${n}</button>`).join('');
+
+  const sides = tracksBySide(formTracks, formDiscCount);
+  let html = '';
+  let lastDisc = 0;
+  sides.forEach(side => {
+    if (formDiscCount > 1 && side.disc !== lastDisc) {
+      html += `<div class="tl-disc">Disc ${side.disc}</div>`;
+      lastDisc = side.disc;
+    }
+    html += `<div class="form-section"><header><i class="ti ti-disc"></i> Side ${side.letter}
+      <span class="count">${side.tracks.length || 'empty'}</span></header><div class="sec-body">`;
+    html += side.tracks.map(t => `
+      <div class="track-row">
+        <button type="button" onclick="moveTrack(${t.i}, -1)" title="move up"><i class="ti ti-chevron-up"></i></button>
+        <span class="tnum">${t.pos}</span>
+        <input value="${esc(t.title)}" placeholder="song title"
+               onchange="updateTrackTitle(${t.i}, this.value)">
+        <button type="button" class="tlike${t.liked_at ? ' on' : ''}" onclick="toggleFormLike(${t.i})"
+          title="${t.liked_at ? 'liked' : 'mark as liked'}"><i class="ti ti-heart${t.liked_at ? '-filled' : ''}"></i></button>
+        <button type="button" onclick="deleteTrack(${t.i})" title="remove"><i class="ti ti-x"></i></button>
+      </div>`).join('');
+    html += `<button type="button" class="playdate-add" onclick="addTrack('${side.letter}')">
+      <i class="ti ti-plus"></i> add song</button>`;
+    html += `<textarea class="track-paste" id="fPaste${side.letter}"
+      placeholder="or paste a tracklist here — one song per line"></textarea>
+      <button type="button" class="btn btn-sm" style="margin-top:5px"
+        onclick="applyPastedTracks('${side.letter}')">
+        <i class="ti ti-clipboard-text"></i> fill side ${side.letter}</button>`;
+    html += `</div></div>`;
+  });
+  document.getElementById('fTracksSides').innerHTML = html;
+  formChanged();
+}
+
+function setFormSize(v) {
+  formSize = (formSize === v) ? '' : v;   // clicking the current one clears it
+  renderTracksForm();
+}
+
+/* Lowering the disc count would orphan the songs on the sides that disappear.
+ * Refuse, and say which sides to empty first — data loss must be an explicit
+ * act, never a side effect of a picker. */
+function setFormDiscCount(n) {
+  const keeping = sideLettersFor(n);
+  const orphaned = sidesWithTracks(formTracks).filter(s => keeping.indexOf(s) === -1);
+  if (orphaned.length) {
+    toast(`side ${orphaned.join(', ')} still has songs — empty it first`);
+    return;
+  }
+  formDiscCount = n;
+  renderTracksForm();
+}
+
+function addTrack(letter) {
+  formTracks.push({ side: letter, title: '' });
+  renderTracksForm();
+}
+
+function updateTrackTitle(i, value) {
+  if (formTracks[i]) formTracks[i].title = value;
+  formChanged();
+}
+
+function deleteTrack(i) {
+  formTracks.splice(i, 1);
+  renderTracksForm();
+}
+
+/* Swap with the neighbouring song ON THE SAME SIDE. The raw array interleaves
+ * sides freely, so stepping one index can land on another side's song — which
+ * would silently move a track across the record. */
+function moveTrack(i, delta) {
+  const t = formTracks[i];
+  if (!t) return;
+  const sameSide = formTracks
+    .map((x, k) => ({ x, k }))
+    .filter(o => o.x.side === t.side)
+    .map(o => o.k);
+  const at = sameSide.indexOf(i);
+  const swapWith = sameSide[at + delta];
+  if (swapWith === undefined) return;
+  formTracks[i] = formTracks[swapWith];
+  formTracks[swapWith] = t;
+  renderTracksForm();
+}
+
+function toggleFormLike(i) {
+  const t = formTracks[i];
+  if (!t) return;
+  if (t.liked_at) delete t.liked_at; else t.liked_at = nowStamp();
+  renderTracksForm();
+}
+
+function applyPastedTracks(letter) {
+  const box = document.getElementById('fPaste' + letter);
+  if (!box) return;
+  const titles = parsePastedTracklist(box.value);
+  if (!titles.length) { toast('nothing to add'); return; }
+  titles.forEach(title => formTracks.push({ side: letter, title }));
+  box.value = '';
+  renderTracksForm();
+  toast(`${titles.length} song${titles.length > 1 ? 's' : ''} added to side ${letter}`);
+}
+
 // Both delegate to static/notes.js, which is where these are tested. The
 // wrappers stay because FILTER_DEPS and TIMELINE_DEPS inject parseNotes by
 // name, and because the today() fallback belongs to the page, not the module.
@@ -4724,6 +4877,10 @@ function applyDraft(d){
   renderPlayDatesForm();
   formCleanedDates = parseCleanedDates(d.cleaned_dates);
   renderCleanedDatesForm();
+  formTracks = parseTracks(d.tracks);
+  formDiscCount = Math.max(1, Number(d.disc_count) || 1);
+  formSize = d.size || '';
+  renderTracksForm();
   if (d.cover_data) applyCover(d.cover_data);
   formBaseline = formValues();
 }
@@ -4770,6 +4927,8 @@ function openAdd(){
   formNoteImages=[];
   renderNoteShots();
   renderNotesForm();
+  formTracks = []; formDiscCount = 1; formSize = '';
+  renderTracksForm();
   populateGenreSelect();
   populateCountryList();
   populateWhereList();
@@ -4847,6 +5006,10 @@ function openEdit(id){
   document.getElementById('fNoteText').value='';
   document.getElementById('fNotePrivate').checked=false;
   renderNotesForm();
+  formTracks = parseTracks(r.tracks);
+  formDiscCount = Math.max(1, Number(r.disc_count) || 1);
+  formSize = r.size || '';
+  renderTracksForm();
   const previewSrc = VinylCover.coverPreviewSrc(r, coverDataUri);
   if(previewSrc){ showCover(previewSrc); } else { clearCover(); }
   updateRatingUI();
@@ -4867,6 +5030,7 @@ const FORM_STEPS = [
   { n: 1, label: 'Identify', sub: 'what record is this' },
   { n: 2, label: 'Acquire',  sub: 'how you got it' },
   { n: 3, label: 'Log',      sub: 'what happens to it' },
+  { n: 4, label: 'Tracklist', sub: 'what is on it' },
 ];
 let formStep = 1;
 
@@ -5015,6 +5179,9 @@ function formValues(){
     play_dates:JSON.stringify(formPlayDates),
     cleaned_dates:JSON.stringify(formCleanedDates),
     country:countryCodeFromInput(document.getElementById('fCountry').value),
+    tracks:serializeTracks(formTracks),
+    disc_count:formDiscCount,
+    size:formSize,
   };
 }
 
