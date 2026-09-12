@@ -182,8 +182,9 @@ empty name → 400; rename rewrites every matching record and leaves others alon
 rename onto an existing name merges and deletes the absorbed row; writes require
 auth; `GET` works unauthed.
 
-**`tests/test_places.js`** + **`tests/test_places.py::test_places_js`** wrapper
-(the `test_notes.py` shape): every rule in §4.1, including `placeUrl` on an
+**`tests/test_places.js`** + **`tests/test_places_js.py`** wrapper (the
+`test_notes.py` shape — a separate wrapper file because `tests/test_places.py`
+is taken by the endpoint tests): every rule in §4.1, including `placeUrl` on an
 unknown name and `mergeTarget` ignoring the place being edited.
 
 **`tests/test_import.py`** additions: round-trip a collection with links; import a
