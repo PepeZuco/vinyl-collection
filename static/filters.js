@@ -39,6 +39,7 @@ const VinylFilters = (function (grouping) {
    * you more often than it helps. */
   const DEFAULT_FIELDS = {
     artist: true, album: true, genre: false, notes: false, bought_at: false,
+    song: false,
   };
 
   const DAY_MS = 86400000;
@@ -118,6 +119,10 @@ const VinylFilters = (function (grouping) {
     if (fields.notes) {
       const parse = (deps && deps.parseNotes) || (() => []);
       parts.push(parse(record.notes).map(n => (n && n.text) || '').join(' '));
+    }
+    if (fields.song) {
+      const parse = (deps && deps.parseTracks) || (() => []);
+      parts.push(parse(record.tracks).map(t => (t && t.title) || '').join(' '));
     }
     return parts.join(' ').toLowerCase();
   }

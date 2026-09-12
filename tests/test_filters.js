@@ -15,7 +15,7 @@ process.env.TZ = 'America/Sao_Paulo';
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { FACETS, facetById, defaultQuery, matches, filterRecords,
+const { DEFAULT_FIELDS, FACETS, facetById, defaultQuery, matches, filterRecords,
         facetValues, chipsFor } = require('../static/filters.js');
 
 let nextId = 1;
@@ -309,4 +309,41 @@ test('without a date to measure against, every record reads as never played', ()
 test('played joins the registry, after cleaning', () => {
   assert.deepStrictEqual(FACETS.map(f => f.id),
     ['genre', 'condition', 'decade', 'country', 'store', 'cleaning', 'played']);
+});
+
+// ── searching by song ───────────────────────────────────────────────────────
+
+const VinylTracks = require('../static/tracks.js');
+const SONG_DEPS = { parseTracks: VinylTracks.parseTracks };
+
+const withSongs = {
+  artist: 'Pink Floyd', album_name: 'The Wall', have_it: true,
+  tracks: JSON.stringify([{ side: 'A', title: 'Mother' }]),
+};
+
+test('song search is off by default', () => {
+  assert.strictEqual(DEFAULT_FIELDS.song, false);
+});
+
+test('with song off, a song title does not match', () => {
+  const qval = Object.assign(defaultQuery(), { text: 'mother' });
+  assert.strictEqual(matches(withSongs, qval, SONG_DEPS), false);
+});
+
+test('with song on, a song title matches its record', () => {
+  const qval = Object.assign(defaultQuery(), { text: 'mother' });
+  qval.fields.song = true;
+  assert.strictEqual(matches(withSongs, qval, SONG_DEPS), true);
+});
+
+test('song search is case-insensitive and matches a fragment', () => {
+  const qval = Object.assign(defaultQuery(), { text: 'OTHE' });
+  qval.fields.song = true;
+  assert.strictEqual(matches(withSongs, qval, SONG_DEPS), true);
+});
+
+test('a record with no tracks never throws when song search is on', () => {
+  const qval = Object.assign(defaultQuery(), { text: 'mother' });
+  qval.fields.song = true;
+  assert.strictEqual(matches({ artist: 'x', album_name: 'y' }, qval, SONG_DEPS), false);
 });

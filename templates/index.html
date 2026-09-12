@@ -1874,6 +1874,7 @@ select option{background:var(--surface);color:var(--text)}
             <label class="search-field-check"><input type="checkbox" id="searchField_genre" onchange="toggleSearchField('genre')"><span>Genre</span></label>
             <label class="search-field-check"><input type="checkbox" id="searchField_notes" onchange="toggleSearchField('notes')"><span>Notes</span></label>
             <label class="search-field-check"><input type="checkbox" id="searchField_bought_at" onchange="toggleSearchField('bought_at')"><span>Bought At</span></label>
+            <label class="search-field-check"><input type="checkbox" id="searchField_song" onchange="toggleSearchField('song')"><span>Song</span></label>
           </div>
         </div>
       </div>
@@ -2652,7 +2653,7 @@ select option{background:var(--surface);color:var(--text)}
 let records = [];
 let authed = false;
 let editingId = null;
-let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false };
+let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false, song: false };
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
 // True only once the user picks, captures or scans a cover in this session.
@@ -2925,6 +2926,7 @@ function currentQuery() {
 
 const FILTER_DEPS = {
   parseNotes: (raw) => parseNotes(raw),
+  parseTracks: (raw) => parseTracks(raw),
   // read fresh, so a tab left open across midnight still measures from today
   get today() { return today(); },
 };
