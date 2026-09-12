@@ -52,8 +52,9 @@ class Place(db.Model):
 autofill, the CSV mapping — keeps working with no edits.
 
 The join between the two is the name, compared exactly after a trim. To keep that
-join sound, `bought_where` is trimmed on every write (create, update, import,
-rename), so a stray trailing space can never orphan a record from its place.
+join sound, `bought_where` is trimmed on every write — `create_record`, `update_record`,
+`import_records_from_csv_rows` and the rename in `PUT /api/places/<id>` — so a
+stray trailing space can never orphan a record from its place.
 
 ### 2.2 Migration and backfill
 
@@ -78,9 +79,15 @@ are. The read is public, like `/api/records`.
 |---|---|---|
 | `GET /api/places` | — | `[{id, name, url}]`, sorted by name (case-insensitive) |
 | `POST /api/places` | `{name, url}` | creates. `409` if the name already exists case-insensitively; `400` on an empty name or a URL that is not http(s) |
-| `PUT /api/places/<id>` | `{name, url}` | updates. On a name change, also `UPDATE record SET bought_where=:new WHERE bought_where=:old`, in one transaction. Renaming onto an existing name **merges**: the other row is deleted and both sets of records land on the surviving name. Responds `{place, records_updated}` |
+| `PUT /api/places/<id>` | `{name, url}` | updates. On a name change, also `UPDATE record SET bought_where=:new WHERE bought_where=:old`, in one transaction. Renaming onto an existing name (matched case-insensitively) **merges**: the other row is deleted and both sets of records land on the name **as typed in this request**. Responds `{place, records_updated}` |
 
 There is no `DELETE`. A place that is no longer wanted is renamed into another.
+
+The merge is also how a casing collision is resolved: `POST` refuses a name that
+differs from an existing one only by case, but §2.2's backfill can produce such a
+pair from data already in the collection, and `PUT` renaming one onto the other
+collapses them — the casing typed into the rename wins, and every record on either
+side is rewritten to it.
 
 `/api/records` keeps its bare-array response shape — nothing is added to it.
 
