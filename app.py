@@ -188,6 +188,63 @@ def _sweep_note_images():
         db.session.commit()
     return len(stale)
 
+
+_SIDE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_SIZES = {"", "7", "10", "12"}
+
+
+def _disc_count(value, fallback=1):
+    """A disc count is a whole number of discs, and there is always at least one."""
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return max(1, int(fallback or 1))
+
+
+def _size(value):
+    """An unknown size is '' — the collection genuinely does not know, and
+    guessing 12" would put a fact in the database nobody checked."""
+    v = str(value or "").strip()
+    return v if v in _SIZES else ""
+
+
+def _clean_tracks(raw, disc_count):
+    """Validated tracks JSON, or ValueError naming what was wrong.
+
+    A side letter outside the record's discs is refused rather than dropped: it
+    is a song no surface would ever render, and swallowing it would hide the
+    bug in the data instead of at the request that wrote it. An empty title is
+    different — that is an unfilled row, and dropping it is what the form
+    expects.
+    """
+    if not raw:
+        return ""
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        raise ValueError("tracks is not valid JSON")
+    if not isinstance(parsed, list):
+        raise ValueError("tracks must be a list")
+
+    allowed = set(_SIDE_LETTERS[: _disc_count(disc_count) * 2])
+    out = []
+    for t in parsed:
+        if not isinstance(t, dict):
+            continue
+        title = str(t.get("title") or "").strip()
+        if not title:
+            continue
+        side = str(t.get("side") or "").strip().upper()[:1]
+        if side not in allowed:
+            raise ValueError(
+                f"side {side!r} is not on a record with {_disc_count(disc_count)} disc(s)")
+        row = {"side": side, "title": title}
+        liked = str(t.get("liked_at") or "").strip()
+        if liked:
+            row["liked_at"] = liked
+        out.append(row)
+    return json.dumps(out) if out else ""
+
 # Every dated field on a record — bought_date, play_dates, cleaned_dates and a
 # note's date — holds the same two shapes, and the app only ever reads them, never
 # computes on them, so they stay opaque strings here:
@@ -229,6 +286,14 @@ class Record(db.Model):
     cover_hash  = db.Column(db.String(64))
     notes       = db.Column(db.Text)      # JSON array of {date: stamp, text: markdown}
     country     = db.Column(db.String(2)) # ISO 3166-1 alpha-2 country code, e.g. "BR", "US"
+    # The songs, as JSON: [{side, title, liked_at?}]. The side LETTER carries
+    # which disc a song is on — disc 1 is A/B, disc 2 is C/D — so a double
+    # needs no nesting and no disc field per track. Small enough to ride in the
+    # record list (a 26-song double is about 1KB), unlike the covers that had
+    # to become a URL.
+    tracks      = db.Column(db.Text)
+    disc_count  = db.Column(db.Integer, default=1)
+    size        = db.Column(db.String(5))   # '' | '7' | '10' | '12', in inches
 
     def to_dict(self, private=True):
         """The record as the API sends it.
@@ -259,6 +324,9 @@ class Record(db.Model):
             "cover_url": f"/api/records/{self.id}/cover?v={self.cover_hash}" if self.cover_hash else "",
             "notes": (self.notes or "") if private else _public_notes(self.notes),
             "country": self.country or "",
+            "tracks": self.tracks or "",
+            "disc_count": self.disc_count or 1,
+            "size": self.size or "",
         }
 
 # One row per distinct note image, addressed by its own content hash.
@@ -300,6 +368,9 @@ with app.app_context():
         "cleaned_dates": "TEXT",
         "condition": "VARCHAR(10)",
         "cover_hash": "VARCHAR(64)",
+        "tracks": "TEXT",
+        "disc_count": "INTEGER",
+        "size": "VARCHAR(5)",
     }
     added_cleaned_dates = "cleaned_dates" not in existing_cols
     added_cover_hash = "cover_hash" not in existing_cols
@@ -411,6 +482,11 @@ def get_record_or_404(rid):
 @require_auth
 def create_record():
     d = request.get_json(silent=True) or {}
+    disc_count = _disc_count(d.get("disc_count"))
+    try:
+        tracks = _clean_tracks(d.get("tracks", ""), disc_count)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     r = Record(
         artist      = d.get("artist",""),
         album_name  = d.get("album_name",""),
@@ -430,6 +506,9 @@ def create_record():
         cover_hash  = _cover_hash(d.get("cover_data","")) if d.get("cover_data") else None,
         notes       = d.get("notes",""),
         country     = (d.get("country") or "").strip().upper()[:2],
+        tracks      = tracks,
+        disc_count  = disc_count,
+        size        = _size(d.get("size")),
     )
     db.session.add(r)
     db.session.commit()
@@ -457,6 +536,17 @@ def update_record(rid):
         r.cover_hash = _cover_hash(d["cover_data"]) if d["cover_data"] else None
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
+    # disc_count first: the tracks it is about to validate are checked against
+    # it. A PUT that sends tracks alone is checked against what the record
+    # already is, or every partial update to a double would reject its C side.
+    if "disc_count"  in d: r.disc_count   = _disc_count(d["disc_count"], r.disc_count)
+    if "size"        in d: r.size         = _size(d["size"])
+    if "tracks"      in d:
+        try:
+            r.tracks = _clean_tracks(d["tracks"], r.disc_count)
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 400
     db.session.commit()
     # After the commit, so the reap's "is anyone still using this" query sees
     # the notes that were just written rather than the ones being replaced.
@@ -867,7 +957,7 @@ def export_csv():
     # be a backup you could restore from.
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images"]
+            "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size"]
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -942,6 +1032,11 @@ def _record_mapping(row):
         "cover_hash":  _cover_hash(cover) if cover else None,
         "notes":       row.get("notes",""),
         "country":     (row.get("country","") or "").strip().upper()[:2],
+        # A CSV written before this feature simply has no such column, which is
+        # not an error — the same rule _row_note_images already follows.
+        "tracks":      row.get("tracks",""),
+        "disc_count":  _disc_count(row.get("disc_count")),
+        "size":        _size(row.get("size")),
     }
 
 
