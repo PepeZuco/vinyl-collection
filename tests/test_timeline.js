@@ -323,17 +323,17 @@ test('a like ranks between a play and a note', () => {
 });
 
 test('within a day the order reads played, then liked, then noted', () => {
-  // The note carries a clock (21:00, after the play and the like) rather than
-  // a bare date: a clockless stamp leads the day by design (see "events with
-  // no clock lead the day" below), which would file the note FIRST and defeat
-  // the very thing this test is checking. A clocked note is also the realistic
-  // case — notes written through the app are timestamped same as everything
-  // else; only rows written before times were kept are bare dates.
+  // All three share ONE stamp, deliberately: the comparator sorts by time
+  // first and only falls back to TYPE_ORDER on a tie, so distinct increasing
+  // clocks (or a bare, clockless date, which sorts as its own kind of tie —
+  // see "events with no clock lead the day" above) would let plain chronology
+  // decide the order and never touch TYPE_ORDER at all. Tying every clock is
+  // what forces TYPE_ORDER to be the thing deciding played < liked < note here.
   const r = {
     id: 1,
     play_dates: JSON.stringify(['2026-08-02T20:00:00']),
-    notes: JSON.stringify([{ date: '2026-08-02T21:00:00', text: 'what a side' }]),
-    tracks: JSON.stringify([{ side: 'A', title: 'Mother', liked_at: '2026-08-02T20:30:00' }]),
+    notes: JSON.stringify([{ date: '2026-08-02T20:00:00', text: 'what a side' }]),
+    tracks: JSON.stringify([{ side: 'A', title: 'Mother', liked_at: '2026-08-02T20:00:00' }]),
   };
   const deps = Object.assign({
     parsePlayDates: (raw) => JSON.parse(raw || '[]'),
