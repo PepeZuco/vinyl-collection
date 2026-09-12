@@ -138,6 +138,24 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-cover .no-cover i{font-size:32px}
 [data-theme="light"] .vcard-cover .no-cover{color:#b0a99b}
 
+/* A double (or triple...) record is more than one record. The stack reads
+ * from across the grid by insetting the front artwork from the bottom-right
+ * corner of the (still overflow:hidden) cover box, so the sleeve(s) behind it
+ * peek out along the bottom and right edges; the spine down the art's left
+ * edge carries one segment per disc. Both are drawn only for discMarks() >0 —
+ * a mark on all 250 cards is furniture the eye stops seeing.
+ *
+ * Everything here is drawn INSIDE .vcard-cover's own box: .vcard and
+ * .vcard-cover both clip with overflow:hidden, so anything positioned outside
+ * that box (as opposed to inset within it) is simply invisible. */
+.vcard-cover-art{position:absolute;top:0;left:0;right:0;bottom:0;
+  display:flex;align-items:center;justify-content:center}
+.vcard-sleeve{position:absolute;top:0;left:0;background:var(--card-hover);
+  pointer-events:none}
+.vcard-spine{position:absolute;top:0;left:0;width:5px;
+  display:flex;flex-direction:column;gap:3px;pointer-events:none}
+.vcard-spine i{flex:1;border-radius:3px;background:var(--accent);display:block}
+
 /* artist overlay on the cover */
 .vcard-artist-overlay{
   position:absolute;bottom:0;left:0;right:0;
@@ -2584,6 +2602,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/notes.js"></script>
+<script src="/static/tracks.js"></script>
 <script src="/static/spend.js"></script>
 <script src="/static/queue.js"></script>
 <script src="/static/idle-spotlight.js"></script>
@@ -2868,6 +2887,10 @@ const FILTER_DEPS = {
   // read fresh, so a tab left open across midnight still measures from today
   get today() { return today(); },
 };
+
+const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
+        tracksBySide, likedTracks, sidesWithTracks, discMarks,
+        parsePastedTracklist } = VinylTracks;
 
 /* Re-render whatever surface is on screen. Every control that changes the
  * query calls this, so the collection and the statistics page can never drift
@@ -3268,6 +3291,27 @@ function cardHTML(r) {
     ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`
     : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
 
+  // A double (or triple...) record is more than one record: sleeves peek out
+  // behind the artwork along its bottom and right edges, and a spine down its
+  // left edge carries one segment per disc. discMarks returns zeroes for a
+  // single disc, so coverArt stays the bare `cover` markup — pixel-identical
+  // to before — for most of the grid.
+  const marks = discMarks(r.disc_count);
+  const STACK_STEP = 5; // px each extra disc insets the art from bottom-right
+  const sleeves = Array.from({length: marks.sleeves}, (_, k) => {
+    const inset = k * STACK_STEP;
+    const depth = marks.sleeves - k; // 1 = nearest the art, sleeves = furthest back
+    return `<div class="vcard-sleeve" style="right:${inset}px;bottom:${inset}px;filter:brightness(${(1 - depth * 0.15).toFixed(2)})"></div>`;
+  }).join('');
+  const artInset = marks.sleeves * STACK_STEP;
+  const coverArt = marks.sleeves
+    ? `<div class="vcard-cover-art" style="right:${artInset}px;bottom:${artInset}px">${cover}</div>`
+    : cover;
+  const spine = marks.segments
+    ? `<div class="vcard-spine" style="bottom:${artInset}px" title="${marks.segments} discs">` +
+      Array.from({length: marks.segments}, () => '<i></i>').join('') + '</div>'
+    : '';
+
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
   const total = myR + herR;
@@ -3300,7 +3344,9 @@ function cardHTML(r) {
 
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
-      ${cover}
+      ${sleeves}
+      ${coverArt}
+      ${spine}
       <div class="vcard-hover-info">
         <div class="vcard-hover-row"><span class="vcard-hover-dot" style="background:${genreColor(r.genre)}"></span>${esc(r.genre)||'no genre'}</div>
         <div class="vcard-hover-row">${conditionBadgeHTML(r)}</div>
