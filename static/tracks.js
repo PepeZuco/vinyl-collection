@@ -82,11 +82,15 @@ const VinylTracks = (function () {
       return {
         disc: discOfSide(letter),
         letter: letter,
+        // liked_at is added only when present, matching the stored shape's
+        // own "absent, never falsy" rule — every consumer here already tests
+        // truthiness, so this view object does not need to invent a false.
         tracks: all
           .filter(function (x) { return x.t.side === letter; })
           .map(function (x, k) {
-            return { i: x.i, pos: k + 1, title: x.t.title,
-                     liked_at: x.t.liked_at || '' };
+            const out = { i: x.i, pos: k + 1, title: x.t.title };
+            if (x.t.liked_at) out.liked_at = x.t.liked_at;
+            return out;
           }),
       };
     });

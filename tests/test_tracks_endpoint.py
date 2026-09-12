@@ -6,6 +6,7 @@ ever render, and accepting it quietly would hide the bug in the data rather
 than at the request that caused it.
 """
 
+import csv
 import io
 import json
 
@@ -102,6 +103,43 @@ def test_put_validates_against_the_stored_disc_count(client):
     r = client.put(f"/api/records/{rid}",
                    json={"tracks": json.dumps([{"side": "D", "title": "The Trial"}])})
     assert r.status_code == 200
+    # T2: nothing else asserts _clean_tracks PRESERVES the side it was given —
+    # a regression that wrote "side": "A" unconditionally would pass every
+    # other test in this file.
+    assert json.loads(r.get_json()["tracks"])[0]["side"] == "D"
+
+
+def test_put_rejects_a_disc_count_drop_that_strands_a_stored_track(client):
+    """Lowering disc_count without also sending tracks used to skip
+    validation entirely: the STORED tracks stayed checked against the OLD
+    disc_count forever, so a record could end up with disc_count 1 and a
+    track still sitting on side C — hidden in the drawer, still counted by
+    the liked chip, still firing in the Calendar, and un-saveable from then
+    on. The PUT must 400 instead of silently accepting that."""
+    made = client.post("/api/records", json={
+        "album_name": "The Wall", "disc_count": 2,
+        "tracks": json.dumps([{"side": "C", "title": "Hey You"}])})
+    rid = made.get_json()["id"]
+    r = client.put(f"/api/records/{rid}", json={"disc_count": 1})
+    assert r.status_code == 400
+    assert "C" in r.get_json()["error"]
+    with app_module.app.app_context():
+        rec = app_module.db.session.get(app_module.Record, rid)
+        # Rejected, so neither half of the update stuck.
+        assert rec.disc_count == 2
+        assert json.loads(rec.tracks)[0]["side"] == "C"
+
+
+def test_put_allows_a_disc_count_drop_that_leaves_no_stranded_track(client):
+    """The re-validation added for the bug above must not block an ordinary
+    disc_count change that does not strand anything."""
+    made = client.post("/api/records", json={
+        "album_name": "The Wall", "disc_count": 2,
+        "tracks": json.dumps([{"side": "A", "title": "In the Flesh?"}])})
+    rid = made.get_json()["id"]
+    r = client.put(f"/api/records/{rid}", json={"disc_count": 1})
+    assert r.status_code == 200
+    assert r.get_json()["disc_count"] == 1
 
 
 def test_a_like_can_be_added_by_patching_tracks_alone(client):
@@ -140,6 +178,31 @@ def test_import_restores_the_new_columns(client):
         assert rec.disc_count == 2
         assert rec.size == "12"
         assert json.loads(rec.tracks)[0]["title"] == "Hey You"
+
+
+def test_import_drops_an_out_of_range_track_instead_of_aborting(client):
+    """_record_mapping used to pass tracks straight through with no
+    validation at all — unlike create_record and update_record — so an
+    imported row could end up with disc_count 1 and a track on side C, a
+    combination that then 400s every future save. A CSV row is a backup
+    being restored, not a live request, so the bad track is DROPPED rather
+    than failing the whole import (see _clean_tracks's strict=False path)."""
+    tracks = json.dumps([
+        {"side": "A", "title": "keeps this one"},
+        {"side": "C", "title": "not on a single disc"},
+    ])
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["album_name", "disc_count", "tracks"])
+    writer.writerow(["Stranded", "1", tracks])
+    r = client.post("/api/import", data={
+        "file": (io.BytesIO(buf.getvalue().encode()), "backup.csv")},
+        content_type="multipart/form-data")
+    assert r.status_code == 200
+    with app_module.app.app_context():
+        rec = app_module.Record.query.filter_by(album_name="Stranded").one()
+        titles = [t["title"] for t in json.loads(rec.tracks)]
+        assert titles == ["keeps this one"]
 
 
 def test_a_csv_without_the_columns_still_imports(client):

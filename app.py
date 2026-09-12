@@ -208,7 +208,7 @@ def _size(value):
     return v if v in _SIZES else ""
 
 
-def _clean_tracks(raw, disc_count):
+def _clean_tracks(raw, disc_count, strict=True):
     """Validated tracks JSON, or ValueError naming what was wrong.
 
     A side letter outside the record's discs is refused rather than dropped: it
@@ -216,15 +216,27 @@ def _clean_tracks(raw, disc_count):
     bug in the data instead of at the request that wrote it. An empty title is
     different — that is an unfilled row, and dropping it is what the form
     expects.
+
+    `strict=False` is for CSV import only (see `_record_mapping`): a row there
+    is a backup being restored, not a live request a user is waiting on, so an
+    out-of-range side is DROPPED instead of aborting the whole import — the
+    same DROP-not-abort trade `create_record`/`update_record` already make for
+    an empty title. `strict` (the default) keeps rejecting with a ValueError
+    for the live POST/PUT path, where a 400 that names the bad side is more
+    useful than a track that silently disappeared.
     """
     if not raw:
         return ""
     try:
         parsed = json.loads(raw)
     except (TypeError, ValueError):
-        raise ValueError("tracks is not valid JSON")
+        if strict:
+            raise ValueError("tracks is not valid JSON")
+        return ""  # a backup row's garbage is no tracklist, not an aborted import
     if not isinstance(parsed, list):
-        raise ValueError("tracks must be a list")
+        if strict:
+            raise ValueError("tracks must be a list")
+        return ""
 
     allowed = set(_SIDE_LETTERS[: _disc_count(disc_count) * 2])
     out = []
@@ -236,8 +248,10 @@ def _clean_tracks(raw, disc_count):
             continue
         side = str(t.get("side") or "").strip().upper()[:1]
         if side not in allowed:
-            raise ValueError(
-                f"side {side!r} is not on a record with {_disc_count(disc_count)} disc(s)")
+            if strict:
+                raise ValueError(
+                    f"side {side!r} is not on a record with {_disc_count(disc_count)} disc(s)")
+            continue
         row = {"side": side, "title": title}
         liked = str(t.get("liked_at") or "").strip()
         if liked:
@@ -539,11 +553,26 @@ def update_record(rid):
     # disc_count first: the tracks it is about to validate are checked against
     # it. A PUT that sends tracks alone is checked against what the record
     # already is, or every partial update to a double would reject its C side.
+    disc_count_changed = "disc_count" in d
     if "disc_count"  in d: r.disc_count   = _disc_count(d["disc_count"], r.disc_count)
     if "size"        in d: r.size         = _size(d["size"])
     if "tracks"      in d:
         try:
             r.tracks = _clean_tracks(d["tracks"], r.disc_count)
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 400
+    elif disc_count_changed and r.tracks:
+        # disc_count moved but this PUT did not also send tracks, so the
+        # branch above never re-checked them. Without this, the STORED
+        # tracks stay validated against the OLD disc_count forever: a PUT of
+        # {disc_count: 1} alone could leave a track parked on side C — hidden
+        # in the drawer, still counted by the liked chip, still firing in the
+        # Calendar, and (per invariant 2.3) this is exactly the silent data
+        # loss/orphaning the disc-count-lowering rule exists to prevent, so
+        # it 400s instead of saving.
+        try:
+            r.tracks = _clean_tracks(r.tracks, r.disc_count)
         except ValueError as e:
             db.session.rollback()
             return jsonify({"error": str(e)}), 400
@@ -1013,6 +1042,7 @@ def _record_mapping(row):
     cleaned_dates = row.get("cleaned_dates","")
     if not cleaned_dates and row.get("last_cleaned",""):
         cleaned_dates = json.dumps([row["last_cleaned"]])
+    disc_count = _disc_count(row.get("disc_count"))
     return {
         "artist":      row.get("artist",""),
         "album_name":  row.get("album_name",""),
@@ -1034,8 +1064,15 @@ def _record_mapping(row):
         "country":     (row.get("country","") or "").strip().upper()[:2],
         # A CSV written before this feature simply has no such column, which is
         # not an error — the same rule _row_note_images already follows.
-        "tracks":      row.get("tracks",""),
-        "disc_count":  _disc_count(row.get("disc_count")),
+        #
+        # Unlike create_record/update_record, an invalid row here does not
+        # 400 back to a human waiting on the request — it is a batch restore,
+        # and rejecting one bad row would abort the whole import per
+        # import_records_from_csv_rows' one-transaction contract. So this
+        # DROPS an out-of-range track (strict=False) rather than raising: a
+        # lossy restore of that one song beats a failed restore of everything.
+        "tracks":      _clean_tracks(row.get("tracks",""), disc_count, strict=False),
+        "disc_count":  disc_count,
         "size":        _size(row.get("size")),
     }
 

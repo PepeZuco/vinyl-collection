@@ -29,7 +29,17 @@ html,body{touch-action:pan-x pan-y}
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
   --ev-bought:#F5C518; --ev-cleaned:#4AA3C4; --ev-played:#5FBF7A; --ev-note:#9B7FD4; --ev-liked:#E05A5A;
-  --toggle-icon:'☀'
+  --toggle-icon:'☀';
+  /* The stacked sleeve reads against .vcard-cover's own hardcoded #111 ground
+     (that ground does not follow the theme — it is the "sleeve pocket", not
+     the page). --card-hover (#1f1f1f, 31) was reused here, but at
+     brightness(.85)/.70 it lands at 26/22 against 17: a 5-9 unit gap on a 5px
+     sliver, invisible. --sleeve is its own token, picked to actually contrast
+     against #111: #4d4d4d (77) still reads as a dim cardboard grey, well
+     under --text, but at .85/.70 it lands at 65/54 — a 48/37 unit gap, over
+     5x the old difference, while still keeping the farther sleeve darker than
+     the nearer one so the depth ordering still reads. */
+  --sleeve:#4d4d4d;
 }
 [data-theme="light"]{
   --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#CBB596;
@@ -37,7 +47,11 @@ html,body{touch-action:pan-x pan-y}
   --card-hover:#e9e5dc;--search-bg:#f0ede6;
   --sh-gray:rgba(0,0,0,0.18);
   --ev-bought:#b39609; --ev-cleaned:#2b7f99; --ev-played:#3d8a55; --ev-note:#6f4fae; --ev-liked:#b33b3b;
-  --toggle-icon:'☾'
+  --toggle-icon:'☾';
+  /* Already high-contrast against the cover's #111 ground (233 at full
+     brightness, 198/163 at .85/.70) — kept at the same value --card-hover
+     already had, just under its own token so dark mode can differ. */
+  --sleeve:#e9e5dc;
 }
 
 /* Pepe and Jenni's colours. Deliberately the same in both themes: the bars are
@@ -150,7 +164,7 @@ select option{background:var(--surface);color:var(--text)}
  * that box (as opposed to inset within it) is simply invisible. */
 .vcard-cover-art{position:absolute;top:0;left:0;right:0;bottom:0;
   display:flex;align-items:center;justify-content:center}
-.vcard-sleeve{position:absolute;top:0;left:0;background:var(--card-hover);
+.vcard-sleeve{position:absolute;top:0;left:0;background:var(--sleeve);
   pointer-events:none}
 .vcard-spine{position:absolute;top:0;left:0;width:5px;
   display:flex;flex-direction:column;gap:3px;pointer-events:none}
@@ -3371,6 +3385,12 @@ function cardHTML(r) {
   // single disc, so coverArt stays the bare `cover` markup — pixel-identical
   // to before — for most of the grid.
   const marks = discMarks(r.disc_count);
+  // The form caps discs at 3, but an imported CSV does not — an absurd
+  // disc_count (say 50) would inset the art past the cover's own width and
+  // render the card blank. Clamp the sleeve stack so a bad import degrades
+  // (a few extra px of inset) instead of destroying the card; the spine
+  // segment count is left alone since it is just short bars, not an inset.
+  marks.sleeves = Math.min(3, marks.sleeves);
   const STACK_STEP = 5; // px each extra disc insets the art from bottom-right
   const sleeves = Array.from({length: marks.sleeves}, (_, k) => {
     const inset = k * STACK_STEP;
@@ -3566,16 +3586,23 @@ let dmList = [], dmIdx = 0;
  *
  * Tracks is the default because it is what you open a record to see — but the
  * collection starts with no tracklists at all, so a record with none falls
- * back to Info rather than opening on an empty tab. */
+ * back to Info rather than opening on an empty tab. That fallback is only for
+ * the *automatic* default, though: once the user explicitly clicks a tab
+ * (setDetailTab), detailTabPinned goes true and the fallback stops applying —
+ * otherwise the empty Tracks tab (its "no tracklist yet" / "+ add the songs"
+ * state) could never be reached by clicking it. Pinning resets on close so the
+ * next record you open still gets the automatic default. */
 let detailTab = 'tracks';
+let detailTabPinned = false;
 
 function activeDetailTab(r) {
-  if (detailTab === 'tracks' && !parseTracks(r.tracks).length) return 'info';
+  if (!detailTabPinned && detailTab === 'tracks' && !parseTracks(r.tracks).length) return 'info';
   return detailTab;
 }
 
 function setDetailTab(tab) {
   detailTab = tab;
+  detailTabPinned = true;
   const rec = records.find(x => x.id === currentDetailId);
   if (!rec) return;
   const info = document.getElementById('dmInfo');
@@ -4116,7 +4143,7 @@ function openDetail(id, focus) {
   // Timeline, no matter what the drawer was showing last. Set before
   // rendering: dmInfoHTML reads detailTab during renderDetailContent, so this
   // has to land before that call, not after.
-  if (focus) detailTab = 'timeline';
+  if (focus) { detailTab = 'timeline'; detailTabPinned = false; }
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
@@ -4220,6 +4247,7 @@ function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
   confirmDeleteId=null;currentDetailId=null;focusDetail(null);
   detailTab = 'tracks';
+  detailTabPinned = false;
   syncUrl(true);
 }
 
@@ -6736,7 +6764,13 @@ function editLikeDate(id, i) {
   if (!t || !t.liked_at) return;
   const next = prompt(`When did you like ${t.title}?`, stampDay(t.liked_at));
   if (next === null) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(next.trim())) { toast('use YYYY-MM-DD'); return; }
+  // Shape-only regex used to accept impossible dates like 2026-02-30, which
+  // then desynced the drawer (still reads as liked) from the Calendar (the
+  // like silently vanishes — eventsByDay's add bails on !m.day). momentOf is
+  // the same parser the Calendar and drawer both read this stamp through, so
+  // validating with it is validating against the thing that actually matters.
+  const m = momentOf(next.trim());
+  if (!m.day) { toast('use YYYY-MM-DD'); return; }
   t.liked_at = next.trim();
   patchRecord(id, { tracks: serializeTracks(list) });
 }
@@ -8428,6 +8462,12 @@ function calUpdateDateRange() {
     parseCleanedDates(r.cleaned_dates).forEach(push);
     parsePlayDates(r.play_dates).forEach(push);
     parseNotes(r.notes, r.bought_date).forEach(n => push(n.date));
+    // Backdating a like exists precisely to record one from before the
+    // record's own history in this collection (spec §7.2) — without this,
+    // a like backdated earlier than everything else is unreachable in the
+    // Calendar forever, since calNavigate and the date picker both clamp to
+    // this range.
+    parseTracks(r.tracks).forEach(t => { if (t.liked_at) push(t.liked_at); });
   });
   if (dates.length) {
     calMinDate = new Date(Math.min(...dates.map(d => d.getTime())));
@@ -8533,12 +8573,18 @@ function calEventRow(ev, fullNote) {
       ? `<div class="cal-ev-note detail-notes-body">${rendered}</div>`
       : `<div class="cal-ev-note preview">${esc(ev.text.replace(/\s+/g,' ').trim())}</div>`;
   }
+  // A like carries the song's title (timeline.js's add() puts it on the
+  // event) — without naming it, three likes on one record on one day render
+  // as three identical rows. The drawer's dmHistoryEntryHTML already does
+  // this; this is the same fact in the Calendar.
+  const likedHtml = ev.type === 'liked' && ev.title
+    ? `<div class="cal-ev-note preview">${esc(ev.title)}</div>` : '';
   return `<div class="cal-event ${ev.type}${ev.private ? ' private' : ''}" onclick="openDetailFromCal(${r.id})">
     ${cover}
     <div class="cal-ev-main">
       <div class="cal-ev-title">${esc(r.album_name) || 'untitled'}</div>
       <div class="cal-ev-artist">${esc(artistDisplay(r))}</div>
-      ${noteHtml}
+      ${noteHtml}${likedHtml}
     </div>
     ${ev.time ? `<span class="cal-ev-time">${esc(ev.time)}</span>` : ''}
     ${ev.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''}
