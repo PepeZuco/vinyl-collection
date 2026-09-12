@@ -2216,3 +2216,63 @@ test('escape closes the photo and leaves the record open', async () => {
     'escaping the photo threw the record away too');
 });
 
+
+// ── the words that belong to the photo ──────────────────────────────────────
+
+/* The caption is the note's, and the walk crosses notes — so it has to be
+ * read per photo rather than once per open. marked is stubbed to the identity
+ * in boot(), so the rendered caption is the raw text. */
+const shotWords = doc => $(doc, '#shotNote').textContent.trim();
+const shotWordsShown = doc => !$(doc, '#shotNote').classList.contains('hidden');
+
+test('a photo opens with the words of the note holding it', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  openPhotoRun(win, r.id);
+  press(win, shotThumbs(doc)[0]);
+  assert.ok(shotWordsShown(doc), 'the note said something and none of it is shown');
+  assert.strictEqual(shotWords(doc), 'sleeve');
+});
+
+/* The one the walk makes easy to get wrong: step past the end of a note and
+ * the picture changes, so the words have to change with it. */
+test('stepping into the next note brings that note s words', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  openPhotoRun(win, r.id);
+  press(win, shotThumbs(doc)[1]);            // 'b', last of the March note
+  assert.strictEqual(shotWords(doc), 'sleeve');
+  press(win, $(doc, '#shotNextBtn'));        // 'c', the April note
+  assert.strictEqual(shotWords(doc), 'label', 'the words stayed on the old note');
+});
+
+test('stepping back brings the previous note s words', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  openPhotoRun(win, r.id);
+  press(win, shotThumbs(doc)[3]);            // 'd', first of the June note
+  assert.strictEqual(shotWords(doc), 'inner');
+  press(win, $(doc, '#shotPrevBtn'));        // 'c', the April note
+  assert.strictEqual(shotWords(doc), 'label');
+});
+
+/* A note can be a photo and nothing else. There is no caption to show, and an
+ * empty one would sit under the picture as an unexplained gap. */
+test('a photo on a wordless note shows no caption at all', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read, [{ date: '2026-03-12', text: '', images: [shotId('a')] }]);
+  openPhotoRun(win, r.id);
+  press(win, shotThumbs(doc)[0]);
+  assert.ok(!shotWordsShown(doc), 'a wordless note left an empty caption under the photo');
+});
+
+/* The lightbox is one element reused by every photo: words left behind would
+ * caption the next picture opened. */
+test('closing the photo takes its words with it', async () => {
+  const { win, doc, read } = await boot();
+  const r = withPhotos(read);
+  openPhotoRun(win, r.id);
+  press(win, shotThumbs(doc)[0]);
+  win.closeShot();
+  assert.strictEqual(shotWords(doc), '', 'the words outlived the photo');
+});

@@ -139,6 +139,11 @@ const VinylGrouping = (function () {
         if (!genre) return { id: 'nogenre', label: 'Unknown genre', rank: '', unknown: true };
         return { id: genre.toLowerCase(), label: genre, rank: genre.toLowerCase(), unknown: false };
       }
+      case 'bought_where': {
+        const place = (r.bought_where || '').trim();
+        if (!place) return { id: 'noplace', label: 'Unknown place', rank: '', unknown: true };
+        return { id: place.toLowerCase(), label: place, rank: place.toLowerCase(), unknown: false };
+      }
       case 'country': {
         const code = (r.country || '').trim().toUpperCase();
         if (!code) return { id: 'nocountry', label: 'Unknown country', rank: '', unknown: true };

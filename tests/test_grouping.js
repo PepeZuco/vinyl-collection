@@ -140,6 +140,40 @@ test('the unknown genre bucket is marked unknown so it can be pinned last', () =
   assert.strictEqual(bucketOf(rec({ genre: 'Jazz' }), 'genre').unknown, false);
 });
 
+// ── bucketOf: bought at ─────────────────────────────────────────────────────
+
+test('bought at buckets one crate per place', () => {
+  assert.strictEqual(bucketOf(rec({ bought_where: 'Feira Benedito Calixto' }), 'bought_where').label,
+                     'Feira Benedito Calixto');
+});
+
+test('bought at bucket ids ignore case and padding so one shop is one crate', () => {
+  assert.strictEqual(bucketOf(rec({ bought_where: 'Tracks' }), 'bought_where').id,
+                     bucketOf(rec({ bought_where: '  tracks ' }), 'bought_where').id);
+});
+
+test('a record with no place falls into the Unknown place bucket', () => {
+  assert.strictEqual(bucketOf(rec({ bought_where: '' }), 'bought_where').label, 'Unknown place');
+  assert.strictEqual(bucketOf(rec({ bought_where: '  ' }), 'bought_where').label, 'Unknown place');
+});
+
+test('the unknown place bucket is marked unknown so it can be pinned last', () => {
+  assert.strictEqual(bucketOf(rec({ bought_where: '' }), 'bought_where').unknown, true);
+  assert.strictEqual(bucketOf(rec({ bought_where: 'Tracks' }), 'bought_where').unknown, false);
+});
+
+test('bought at crates run A to Z ascending and flip with the arrow', () => {
+  const a = rec({ bought_where: 'Baratos Afins' }), b = rec({ bought_where: 'Tracks' });
+  assert.ok(compareByGroup(a, b, 'bought_where', 'asc') < 0);
+  assert.ok(compareByGroup(a, b, 'bought_where', 'desc') > 0);
+});
+
+test('the unknown place crate stays last in both directions', () => {
+  const known = rec({ bought_where: 'Tracks' }), unknown = rec({ bought_where: '' });
+  assert.ok(compareByGroup(known, unknown, 'bought_where', 'asc') < 0);
+  assert.ok(compareByGroup(known, unknown, 'bought_where', 'desc') < 0);
+});
+
 // ── bucketOf: condition ─────────────────────────────────────────────────────
 
 test('condition buckets into New and Used crates', () => {
