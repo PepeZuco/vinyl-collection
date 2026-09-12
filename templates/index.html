@@ -557,6 +557,7 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry.bought .dot{background:var(--ev-bought)}
 .dm-hist-entry.cleaned .dot{background:var(--ev-cleaned)}
 .dm-hist-entry.played .dot{background:var(--ev-played)}
+.dm-hist-entry.liked .dot{background:var(--ev-liked)}
 .dm-hist-entry.note .dot{background:var(--ev-note)}
 .dm-hist-entry .ht{font-size:13px;line-height:1.5;flex:1;min-width:0}
 .dm-hist-entry .ht p{margin:0 0 4px}
@@ -572,11 +573,13 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry.bought.hit{--hc:var(--ev-bought)}
 .dm-hist-entry.cleaned.hit{--hc:var(--ev-cleaned)}
 .dm-hist-entry.played.hit{--hc:var(--ev-played)}
+.dm-hist-entry.liked.hit{--hc:var(--ev-liked)}
 .dm-hist-entry.note.hit{--hc:var(--ev-note)}
 /* One kind of thing happened, so the date can wear its colour. A whole-day
    focus carries no hit-<type> and keeps the gold above. */
 .dm-hist-group .hd.hit-bought{--hc:var(--ev-bought)} .dm-hist-group .hd.hit-cleaned{--hc:var(--ev-cleaned)}
-.dm-hist-group .hd.hit-played{--hc:var(--ev-played)} .dm-hist-group .hd.hit-note{--hc:var(--ev-note)}
+.dm-hist-group .hd.hit-played{--hc:var(--ev-played)} .dm-hist-group .hd.hit-liked{--hc:var(--ev-liked)}
+.dm-hist-group .hd.hit-note{--hc:var(--ev-note)}
 .dm-hist-entry.hit.letting-go,.dm-hist-group .hd.hit.letting-go{
   background:transparent;box-shadow:inset 3px 0 0 transparent}
 @media(prefers-reduced-motion:reduce){
@@ -588,7 +591,9 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry.bought .dm-hist-icon{color:var(--ev-bought)}
 .dm-hist-entry.cleaned .dm-hist-icon{color:var(--ev-cleaned)}
 .dm-hist-entry.played .dm-hist-icon{color:var(--ev-played)}
+.dm-hist-entry.liked .dm-hist-icon{color:var(--ev-liked)}
 .dm-hist-entry.note .dm-hist-icon{color:var(--ev-note)}
+.dm-hist-song{font-size:12px;font-weight:600;color:var(--text);margin-left:6px}
 
 /* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
 .detail-mobile-layout{display:none}
@@ -1674,6 +1679,7 @@ select option{background:var(--surface);color:var(--text)}
 .cal-type-btn.active[data-type="bought"] i{color:var(--ev-bought)}
 .cal-type-btn.active[data-type="cleaned"] i{color:var(--ev-cleaned)}
 .cal-type-btn.active[data-type="played"] i{color:var(--ev-played)}
+.cal-type-btn.active[data-type="liked"] i{color:var(--ev-liked)}
 .cal-type-btn.active[data-type="note"] i{color:var(--ev-note)}
 .cal-scale{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0}
 .cal-scale-btn{height:32px;padding:0 13px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:var(--font);transition:all .12s}
@@ -1728,6 +1734,7 @@ select option{background:var(--surface);color:var(--text)}
 .cal-badge.bought{color:var(--ev-bought);border-color:color-mix(in srgb, var(--ev-bought) 45%, transparent);background:color-mix(in srgb, var(--ev-bought) 7%, transparent)}
 .cal-badge.cleaned{color:var(--ev-cleaned);border-color:color-mix(in srgb, var(--ev-cleaned) 45%, transparent);background:color-mix(in srgb, var(--ev-cleaned) 7%, transparent)}
 .cal-badge.played{color:var(--ev-played);border-color:color-mix(in srgb, var(--ev-played) 45%, transparent);background:color-mix(in srgb, var(--ev-played) 7%, transparent)}
+.cal-badge.liked{color:var(--ev-liked);border-color:color-mix(in srgb, var(--ev-liked) 45%, transparent);background:color-mix(in srgb, var(--ev-liked) 7%, transparent)}
 .cal-badge.note{color:var(--ev-note);border-color:color-mix(in srgb, var(--ev-note) 45%, transparent);background:color-mix(in srgb, var(--ev-note) 7%, transparent)}
 /* week grid (google-calendar-like columns of compact event chips) */
 .cal-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:start}
@@ -1941,6 +1948,7 @@ select option{background:var(--surface);color:var(--text)}
           <button class="cal-type-btn active" data-type="bought" onclick="toggleCalType('bought')" title="bought" aria-label="bought"><i class="ti ti-shopping-bag"></i></button>
           <button class="cal-type-btn active" data-type="cleaned" onclick="toggleCalType('cleaned')" title="cleaned" aria-label="cleaned"><i class="ti ti-droplet"></i></button>
           <button class="cal-type-btn active" data-type="played" onclick="toggleCalType('played')" title="played" aria-label="played"><i class="ti ti-headphones"></i></button>
+          <button class="cal-type-btn active" data-type="liked" onclick="toggleCalType('liked')" title="liked songs" aria-label="liked songs"><i class="ti ti-heart"></i></button>
           <button class="cal-type-btn active" data-type="note" onclick="toggleCalType('note')" title="notes" aria-label="notes"><i class="ti ti-note"></i></button>
         </div>
         <div class="cal-scale" id="calScaleBar">
@@ -3604,6 +3612,12 @@ function dmHistoryEvents(r) {
   if (r.bought_date) add('bought', r.bought_date);
   parseCleanedDates(r.cleaned_dates).forEach((dt, i) => { if (dt) add('cleaned', dt, { i }); });
   parsePlayDates(r.play_dates).forEach((dt, i) => { if (dt) add('played', dt, { i }); });
+  // The raw index again: an empty title still holds its slot, so filtering
+  // first would renumber every song after it and break keys the Timeline
+  // already handed out.
+  parseTracks(r.tracks).forEach((t, i) => {
+    if (t.liked_at) add('liked', t.liked_at, { i, title: t.title });
+  });
   // The raw index again: an empty note holds its slot, so filtering first would
   // renumber every note after it and break keys the Timeline already handed out.
   if (r.notes) parseNotes(r.notes, r.bought_date||today()).forEach((n, i) => {
@@ -3629,8 +3643,8 @@ function dmHistoryGroups(events) {
   return groups;
 }
 
-const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned', note:'Note' };
-const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet', note:'ti-note' };
+const DM_HIST_LABEL = { bought:'Added to the collection', played:'Played', cleaned:'Cleaned', liked:'Liked', note:'Note' };
+const DM_HIST_ICON = { bought:'ti-shopping-bag', played:'ti-headphones', cleaned:'ti-droplet', liked:'ti-heart-filled', note:'ti-note' };
 
 /* Which event the Timeline sent us to, if any.
  *
@@ -3668,7 +3682,7 @@ function focusForget() {
   detailFadeTimer = null;
   document.querySelectorAll('#detailBody .hit').forEach(el =>
     el.classList.remove('hit', 'letting-go',
-      'hit-bought', 'hit-cleaned', 'hit-played', 'hit-note'));
+      'hit-bought', 'hit-cleaned', 'hit-played', 'hit-liked', 'hit-note'));
 }
 
 /* Three widths of focus, narrowest first:
@@ -3707,6 +3721,9 @@ function dmHistoryEntryHTML(ev) {
   const body = ev.type === 'note'
     ? `<div class="ht detail-notes-body">${ev.text ? (typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)) : ''}${shots}` +
       `<span class="dm-hist-time">${lock}<i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
+    : ev.type === 'liked'
+    ? `<div class="ht"><i class="ti ${DM_HIST_ICON.liked} dm-hist-icon" title="${DM_HIST_LABEL.liked}"></i>` +
+      `<span class="dm-hist-song">${esc(ev.title || '')}</span>${clock}</div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
   const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
   return `<div class="dm-hist-entry ${ev.type}${ev.private ? ' private' : ''}${lit}" data-ev="${esc(ev.key)}" data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
@@ -8206,11 +8223,11 @@ function renderCountryRank(recordsByCode) {
 // month / week / day views over bought_date, cleaned_dates, play_dates and dated notes
 let calScale = 'week';                   // 'month' | 'week' | 'day' | 'replay'
 let calAnchor = new Date();              // any date inside the visible range
-let calTypes = { bought: true, cleaned: true, played: true, note: true };
+let calTypes = { bought: true, cleaned: true, played: true, liked: true, note: true };
 let calMinDate = null, calMaxDate = null; // date range constraints
 let calPickerAnchor = new Date();        // date picker navigation
 
-const CAL_TYPE_LABEL = { bought: 'bought', cleaned: 'cleaned', played: 'played', note: 'note' };
+const CAL_TYPE_LABEL = { bought: 'bought', cleaned: 'cleaned', played: 'played', liked: 'liked', note: 'note' };
 
 function calKey(d) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -8257,6 +8274,7 @@ const TIMELINE_DEPS = {
   parsePlayDates: (raw) => parsePlayDates(raw),
   parseCleanedDates: (raw) => parseCleanedDates(raw),
   parseNotes: (raw, fallback) => parseNotes(raw, fallback),
+  parseTracks: (raw) => parseTracks(raw),
 };
 
 /* The calendar used to read every record while the growth chart read only the
@@ -8359,10 +8377,10 @@ function calEventRow(ev, fullNote) {
   </div>`;
 }
 
-// The four glyphs are the ones the type bar already draws, so the icon on a
+// The glyphs are the ones the type bar already draws, so the icon on a
 // chip and the icon on the switch that hides it are the same shape.
 const CAL_TYPE_ICON = { bought:'ti-shopping-bag', cleaned:'ti-droplet',
-                        played:'ti-headphones', note:'ti-note' };
+                        played:'ti-headphones', liked:'ti-heart', note:'ti-note' };
 
 function calActsLabel(g) {
   return g.acts.map(a => CAL_TYPE_LABEL[a.type] + (a.evs.length > 1 ? ' ×' + a.evs.length : ''))

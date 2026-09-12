@@ -15,6 +15,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { ALL_TYPES, eventsByDay } = require('../static/timeline.js');
+const VinylTimeline = require('../static/timeline.js');
 
 let nextId = 1;
 function rec(fields) {
@@ -276,4 +277,68 @@ test('entries follow the record whose day started earliest', () => {
 
 test('an empty day collapses to nothing', () => {
   assert.deepStrictEqual(recordDays([]), []);
+});
+
+// ── likes ───────────────────────────────────────────────────────────────────
+
+const { parseTracks } = require('../static/tracks.js');
+const LIKE_DEPS = { parseTracks };
+
+test('a liked song is an event on the day it was liked', () => {
+  const r = { id: 1, tracks: JSON.stringify([
+    { side: 'A', title: 'Mother', liked_at: '2026-08-02T21:40:00' }]) };
+  const days = VinylTimeline.eventsByDay([r], null, LIKE_DEPS);
+  const evs = days.get('2026-08-02').filter(e => e.type === 'liked');
+  assert.strictEqual(evs.length, 1);
+  assert.strictEqual(evs[0].title, 'Mother');
+  assert.strictEqual(evs[0].i, 0);
+});
+
+test('an unliked song produces no event', () => {
+  const r = { id: 1, tracks: JSON.stringify([{ side: 'A', title: 'Mother' }]) };
+  const days = VinylTimeline.eventsByDay([r], null, LIKE_DEPS);
+  assert.strictEqual(days.size, 0);
+});
+
+test('a like key is the type, the stamp and the RAW track index', () => {
+  assert.strictEqual(VinylTimeline.keyOf('liked', '2026-08-02', 3), 'liked:2026-08-02:3');
+});
+
+test('likes can be switched off like any other type', () => {
+  const r = { id: 1, tracks: JSON.stringify([
+    { side: 'A', title: 'Mother', liked_at: '2026-08-02' }]) };
+  const days = VinylTimeline.eventsByDay([r], { bought: true }, LIKE_DEPS);
+  assert.strictEqual(days.size, 0);
+});
+
+test('a record with no tracks column never throws', () => {
+  const days = VinylTimeline.eventsByDay([{ id: 1 }], null, LIKE_DEPS);
+  assert.strictEqual(days.size, 0);
+});
+
+test('a like ranks between a play and a note', () => {
+  // You hear the song, you like it, then you write about it.
+  const o = VinylTimeline.TYPE_ORDER;
+  assert.ok(o.played < o.liked && o.liked < o.note);
+});
+
+test('within a day the order reads played, then liked, then noted', () => {
+  // The note carries a clock (21:00, after the play and the like) rather than
+  // a bare date: a clockless stamp leads the day by design (see "events with
+  // no clock lead the day" below), which would file the note FIRST and defeat
+  // the very thing this test is checking. A clocked note is also the realistic
+  // case — notes written through the app are timestamped same as everything
+  // else; only rows written before times were kept are bare dates.
+  const r = {
+    id: 1,
+    play_dates: JSON.stringify(['2026-08-02T20:00:00']),
+    notes: JSON.stringify([{ date: '2026-08-02T21:00:00', text: 'what a side' }]),
+    tracks: JSON.stringify([{ side: 'A', title: 'Mother', liked_at: '2026-08-02T20:30:00' }]),
+  };
+  const deps = Object.assign({
+    parsePlayDates: (raw) => JSON.parse(raw || '[]'),
+    parseNotes: (raw) => JSON.parse(raw || '[]'),
+  }, LIKE_DEPS);
+  const evs = VinylTimeline.eventsByDay([r], null, deps).get('2026-08-02');
+  assert.deepStrictEqual(evs.map(e => e.type), ['played', 'liked', 'note']);
 });

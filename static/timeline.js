@@ -16,12 +16,13 @@
 
 const VinylTimeline = (function (grouping) {
 
-  const ALL_TYPES = { bought: true, cleaned: true, played: true, note: true };
+  const ALL_TYPES = { bought: true, cleaned: true, played: true, liked: true, note: true };
 
   /* Ordering for events that share a day and carry no clock. A record is
    * bought before it is cleaned, cleaned before it is played, and any note
-   * about it comes after the thing it describes. */
-  const TYPE_ORDER = { bought: 0, cleaned: 1, played: 2, note: 3 };
+   * last. A like sits between the play and the note: you hear the song, you
+   * like it, then you write about it. */
+  const TYPE_ORDER = { bought: 0, cleaned: 1, played: 2, liked: 3, note: 4 };
 
   /* An event's name.
    *
@@ -50,6 +51,7 @@ const VinylTimeline = (function (grouping) {
     const parsePlays = (deps && deps.parsePlayDates) || (() => []);
     const parseCleans = (deps && deps.parseCleanedDates) || parsePlays;
     const parseNotes = (deps && deps.parseNotes) || (() => []);
+    const parseTracks = (deps && deps.parseTracks) || (() => []);
 
     const add = (date, event) => {
       const moment = grouping.momentOf(date);
@@ -65,6 +67,12 @@ const VinylTimeline = (function (grouping) {
       if (on.bought) add(r.bought_date, { type: 'bought', r });
       if (on.cleaned) parseCleans(r.cleaned_dates).forEach((d, i) => add(d, { type: 'cleaned', r, i }));
       if (on.played) parsePlays(r.play_dates).forEach((d, i) => add(d, { type: 'played', r, i }));
+      // The raw index again, exactly as for notes: a track with an empty title
+      // still holds its slot, so filtering before indexing would renumber
+      // every song after it and break keys already handed out.
+      if (on.liked) parseTracks(r.tracks).forEach((t, i) => {
+        if (t.liked_at) add(t.liked_at, { type: 'liked', r, i, title: t.title });
+      });
       if (on.note) parseNotes(r.notes, r.bought_date).forEach((n, i) => {
         // The index is the position in the RAW array: an empty note still holds
         // its slot, so filtering first would renumber everything after it.
@@ -111,8 +119,8 @@ const VinylTimeline = (function (grouping) {
       if (!a) { a = { type: ev.type, evs: [] }; g.acts.push(a); }
       a.evs.push(ev);
     });
-    // Within a record the rail reads bought, cleaned, played, note — the order
-    // the day happened in, not the order the clock reported it.
+    // Within a record the rail reads bought, cleaned, played, liked, note — the
+    // order the day happened in, not the order the clock reported it.
     out.forEach(g => g.acts.sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]));
     return out;
   }
