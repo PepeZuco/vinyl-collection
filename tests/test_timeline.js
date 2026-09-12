@@ -342,3 +342,72 @@ test('within a day the order reads played, then liked, then noted', () => {
   const evs = VinylTimeline.eventsByDay([r], null, deps).get('2026-08-02');
   assert.deepStrictEqual(evs.map(e => e.type), ['played', 'liked', 'note']);
 });
+
+// ── the month cell's split ──────────────────────────────────────────────────
+//
+// A month cell had three lines for the whole day and spent them on the first
+// three events in clock order, so a day of four plays and one purchase could
+// show the purchase and hide the listening. daySplit answers the question the
+// square actually asks: which KINDS happened, and how much of each.
+
+const { daySplit } = require('../static/timeline.js');
+
+// daySplit reads nothing but the type off an event, so a literal is the whole
+// fixture. The end-to-end case below goes through eventsByDay instead.
+const typed = (...types) => types.map(t => ({ type: t }));
+
+test('a day of one kind is one slice carrying its count', () => {
+  assert.deepStrictEqual(daySplit(typed('played', 'played', 'played')),
+    { slices: [{ type: 'played', n: 3 }], fold: null });
+});
+
+test('slices read in TYPE_ORDER, not in the order the day happened', () => {
+  // The square keeps a type in the same corner all month, so the eye can scan
+  // a column for it. Sorting by count instead would move them week to week.
+  const s = daySplit(typed('note', 'played', 'bought'));
+  assert.deepStrictEqual(s.slices.map(x => x.type), ['bought', 'played', 'note']);
+});
+
+test('four kinds fill the quadrants and nothing folds', () => {
+  const s = daySplit(typed('bought', 'cleaned', 'played', 'played', 'note'));
+  assert.deepStrictEqual(s.slices,
+    [{ type: 'bought', n: 1 }, { type: 'cleaned', n: 1 },
+     { type: 'played', n: 2 }, { type: 'note', n: 1 }]);
+  assert.strictEqual(s.fold, null);
+});
+
+test('a fifth kind folds out of the quadrants, rarest first', () => {
+  const s = daySplit(typed('bought', 'bought', 'cleaned', 'cleaned', 'cleaned',
+                           'played', 'played', 'played', 'played',
+                           'liked', 'note', 'note'));
+  assert.deepStrictEqual(s.fold, { type: 'liked', n: 1 });
+  assert.deepStrictEqual(s.slices.map(x => x.type),
+    ['bought', 'cleaned', 'played', 'note']);
+});
+
+test('a tie for rarest folds the later TYPE_ORDER', () => {
+  // bought and note both happened once. The note goes, because a purchase is
+  // the rarer thing to see in a month and the more expensive to miss.
+  const s = daySplit(typed('bought', 'cleaned', 'cleaned', 'played', 'played',
+                           'liked', 'liked', 'note'));
+  assert.deepStrictEqual(s.fold, { type: 'note', n: 1 });
+  assert.deepStrictEqual(s.slices.map(x => x.type),
+    ['bought', 'cleaned', 'played', 'liked']);
+});
+
+test('an empty day splits into nothing', () => {
+  assert.deepStrictEqual(daySplit([]), { slices: [], fold: null });
+  assert.deepStrictEqual(daySplit(undefined), { slices: [], fold: null });
+});
+
+test('the split counts the events eventsByDay actually built', () => {
+  const r = rec({
+    bought_date: '2026-06-12',
+    cleaned_dates: json('2026-06-12T13:55:00'),
+    play_dates: json('2026-06-12T14:12:00', '2026-06-12T18:30:00'),
+    notes: json({ date: '2026-06-12', text: 'ticks through the run-out' }),
+  });
+  assert.deepStrictEqual(daySplit(on([r], '2026-06-12')).slices,
+    [{ type: 'bought', n: 1 }, { type: 'cleaned', n: 1 },
+     { type: 'played', n: 2 }, { type: 'note', n: 1 }]);
+});

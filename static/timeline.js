@@ -125,7 +125,41 @@ const VinylTimeline = (function (grouping) {
     return out;
   }
 
-  return { ALL_TYPES, TYPE_ORDER, keyOf, eventsByDay, recordDays };
+  /* One day's events, reduced to what a month cell draws.
+   *
+   * The cell used to render one pill per event in clock order and stop at
+   * three. Clockless events lead a day, so a Friday of four plays opened with
+   * whatever was bought and cleaned and put the listening in "+9 more" — the
+   * cell counting events while the question is what KIND of day it was.
+   *
+   * So the square divides by kind, not by event, and each slice carries its
+   * own count. Slices sit in TYPE_ORDER rather than by count: a type keeps the
+   * same corner all month, and the eye can scan a column for it.
+   *
+   * Five kinds would mean five slices in ninety pixels. The rarest folds out
+   * instead, to a dot and a count in the last quadrant; a tie folds the later
+   * TYPE_ORDER, so a purchase outranks a note. Four is therefore the most
+   * slices this ever returns, and `fold` is null at every other count. */
+  function daySplit(dayEvents) {
+    const counts = new Map();
+    (dayEvents || []).forEach(ev =>
+      counts.set(ev.type, (counts.get(ev.type) || 0) + 1));
+
+    let slices = Array.from(counts, ([type, n]) => ({ type, n }))
+      .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
+
+    let fold = null;
+    if (slices.length === 5) {
+      fold = slices.reduce((rarest, s) =>
+        (s.n < rarest.n ||
+         (s.n === rarest.n && TYPE_ORDER[s.type] > TYPE_ORDER[rarest.type]))
+          ? s : rarest);
+      slices = slices.filter(s => s !== fold);
+    }
+    return { slices, fold };
+  }
+
+  return { ALL_TYPES, TYPE_ORDER, keyOf, eventsByDay, recordDays, daySplit };
 })(typeof module !== 'undefined' && module.exports
      ? require('./grouping.js') : VinylGrouping);
 

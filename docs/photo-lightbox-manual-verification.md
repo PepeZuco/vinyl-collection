@@ -48,6 +48,29 @@ top to bottom.
 
 ---
 
+## The words under the photo
+
+The note a photo belongs to is printed under it. jsdom proves the right words
+arrive and that they change as you walk; it has no layout, so it cannot tell
+you whether they fit.
+
+1. Open a photo on a note with a **long** note — a few paragraphs. The photo
+   stays whole and the modal scrolls to reach the rest of the words. Nothing is
+   cut off with no way to get at it.
+2. Open a photo on a note written with **markdown** — a list, a bold word, a
+   heading. It renders the same way it does in the History list behind it, not
+   as raw asterisks.
+3. Step across a note boundary with the arrows. The words change with the
+   picture, and the arrows stay centred on the **image** — they must not drift
+   down toward the caption.
+4. A note that is only a photo shows **no** caption and no empty gap where one
+   would be.
+5. Clicking the words closes the photo, the same as clicking the photo does.
+   That is the overlay behaving as it always has — worth knowing before it
+   surprises you mid-sentence.
+
+---
+
 ## The phone
 
 At ~400px, on a real device:
@@ -58,6 +81,8 @@ At ~400px, on a real device:
   overlay closes on any tap that reaches it, so this is the failure to watch
   for — it would look like the photo shutting the instant you navigate.
 - Tapping the photo itself still closes it, as it always has.
+- A note's words sit under the photo at full width and wrap; they never push
+  the picture sideways or off the screen.
 - A tall portrait photo and a wide landscape one both keep the arrows vertically
   centred on the image rather than on the empty space around it.
 

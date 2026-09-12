@@ -385,6 +385,12 @@ select option{background:var(--surface);color:var(--text)}
 .shot-nav:hover{background:rgba(0,0,0,.75);color:#fff}
 .shot-nav:disabled:hover{background:rgba(0,0,0,.55);border-color:rgba(255,255,255,.35);color:#fff}
 
+/* The note the photo was taken for. It sits BELOW .shot-body rather than in
+   it: .shot-nav centres on its offset parent, and a caption inside would pull
+   both arrows down off the picture they belong to. */
+.shot-note{padding:0 18px 16px;font-size:13px;color:var(--text);text-align:left}
+.shot-note.hidden{display:none}
+
 /* ── record navigation animation: vertical slide, used on desktop and mobile ── */
 #detailBody{will-change:transform,opacity}
 
@@ -2488,6 +2494,9 @@ select option{background:var(--surface);color:var(--text)}
       <button class="detail-nav-btn shot-nav next" id="shotNextBtn" title="next photo"
               onclick="event.stopPropagation();stepShot(1)"><i class="ti ti-chevron-right"></i></button>
     </div>
+    <!-- The words of the note this photo belongs to, when it has any. The walk
+         crosses notes, so this is repainted on every step, not just on open. -->
+    <div class="shot-note detail-notes-body hidden" id="shotNote"></div>
   </div>
 </div>
 
@@ -3775,7 +3784,10 @@ function dmHistoryEntryHTML(ev) {
   const clock = ev.time ? `<span class="dm-hist-time">${esc(ev.time)}</span>` : '';
   const shotIds = (ev.images || []).filter(VinylNotes.isImageId);
   const shots = shotIds.length
-    ? `<div class="note-shots">${shotIds.map(id =>
+    // data-note carries the note's own words to the lightbox, which shows them
+    // under the photo. Raw markdown, rendered there the way it is rendered
+    // here — the caption is the same note, not a second rendering of it.
+    ? `<div class="note-shots" data-note="${esc(ev.text || '')}">${shotIds.map(id =>
          // data-shot so the lightbox can read the whole record's run off the
          // rendered pane; the src is no use for that, an unsaved photo carries
          // its bytes there rather than its id.
@@ -5332,15 +5344,26 @@ let shotRunIdx = -1;
  * the rendered pane rather than the record also means the run can only ever
  * hold photos you can see: a private note the server withheld is not there to
  * find, and one whose GET failed removed itself on error. */
+// The words wrapping a thumbnail, '' for a note that is only a photo.
+function shotWordsOf(thumb){
+  const shots = thumb && thumb.closest && thumb.closest('.note-shots');
+  return (shots && shots.dataset.note) || '';
+}
+
 function openShot(id, thumb){
   if(!VinylNotes.isImageId(id)) return;
   const pane = thumb && thumb.closest && thumb.closest('#ddInfo, #dmInfo');
   const thumbs = pane ? [...pane.querySelectorAll('.note-shot')] : [];
-  shotRun = thumbs.map(el => el.dataset.shot).filter(VinylNotes.isImageId);
+  // {id, words} rather than two lists walked by one index: the caption changes
+  // as the walk crosses notes, and a second array could drift out of step.
+  shotRun = thumbs.map(el => ({ id: el.dataset.shot, words: shotWordsOf(el) }))
+                  .filter(shot => VinylNotes.isImageId(shot.id));
   shotRunIdx = thumb ? thumbs.indexOf(thumb) : -1;
   // Called without a thumbnail, or from markup that has none: the photo still
   // opens, it just stands alone.
-  if(shotRunIdx < 0 || shotRun.length !== thumbs.length){ shotRun = [id]; shotRunIdx = 0; }
+  if(shotRunIdx < 0 || shotRun.length !== thumbs.length){
+    shotRun = [{ id, words: shotWordsOf(thumb) }]; shotRunIdx = 0;
+  }
   paintShot();
   document.getElementById('shotOverlay').classList.remove('hidden');
 }
@@ -5354,9 +5377,22 @@ function stepShot(delta){
 }
 
 function paintShot(){
-  document.getElementById('shotImage').src = noteImageSrc(shotRun[shotRunIdx]);
+  const shot = shotRun[shotRunIdx];
+  document.getElementById('shotImage').src = noteImageSrc(shot.id);
   document.getElementById('shotPrevBtn').disabled = shotRunIdx <= 0;
   document.getElementById('shotNextBtn').disabled = shotRunIdx >= shotRun.length - 1;
+  paintShotWords(shot.words);
+}
+
+/* A note with no words gets no caption rather than an empty one, which would
+ * read as a gap under the photo that nobody could explain. */
+function paintShotWords(text){
+  const el = document.getElementById('shotNote');
+  const words = (text || '').trim();
+  el.innerHTML = words
+    ? (typeof marked !== 'undefined' ? marked.parse(words) : esc(words))
+    : '';
+  el.classList.toggle('hidden', !words);
 }
 
 function shotIsOpen(){
@@ -5367,6 +5403,7 @@ function closeShot(){
   document.getElementById('shotOverlay').classList.add('hidden');
   // An empty src attribute resolves to the page URL and fetches it again.
   document.getElementById('shotImage').removeAttribute('src');
+  paintShotWords('');
   shotRun = []; shotRunIdx = -1;
 }
 
