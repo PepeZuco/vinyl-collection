@@ -1578,7 +1578,6 @@ select option{background:var(--surface);color:var(--text)}
 .note-private-check:has(input:checked){color:var(--ev-note)}
 .dm-hist-entry.note.private .ht{border-left:2px dashed color-mix(in srgb, var(--ev-note) 55%, transparent);
   padding-left:8px}
-.cal-event.note.private{border-left-style:dashed}
 
 /* thumbnails on a note, in the form and in the detail history */
 .note-shots{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
@@ -1733,11 +1732,6 @@ select option{background:var(--surface);color:var(--text)}
 .cal-scale-btn:hover i{opacity:.8}
 .cal-scale-btn.active{background:var(--card);border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
 .cal-scale-btn.active i{opacity:1;color:var(--accent)}
-.cal-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
-.cal-dot.bought{background:var(--ev-bought)}
-.cal-dot.cleaned{background:var(--ev-cleaned)}
-.cal-dot.played{background:var(--ev-played)}
-.cal-dot.note{background:var(--ev-note)}
 /* month grid */
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .cal-dow{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:center;font-weight:600}
@@ -1749,36 +1743,76 @@ select option{background:var(--surface);color:var(--text)}
 .cal-cell.cal-today .cal-cell-num{color:var(--accent);font-weight:700}
 .cal-cell.cal-today{border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
 .cal-cell-num{font-size:11px;color:var(--muted);font-family:var(--font-mono);line-height:1}
-.cal-cell-evs{display:flex;flex-direction:column;gap:3px;min-width:0}
-.cal-pill{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);min-width:0}
-.cal-pill-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cal-more{font-size:10px;color:var(--muted)}
-.cal-cell-dots{display:none;flex-wrap:wrap;gap:3px;align-items:center}
+/* The day's activity, divided by KIND. daySplit() decides which slices there
+   are and in what order; this only draws them. The count rides on the
+   container as data-n so each shape is one rule instead of five classes. */
+.cal-split{flex:1;min-height:0;display:grid;gap:3px}
+.cal-split[data-n="1"]{grid-template-columns:1fr}
+.cal-split[data-n="2"]{grid-template-columns:1fr 1fr}
+.cal-split[data-n="3"],.cal-split[data-n="4"]{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+/* three kinds: the first type takes the tall left column rather than leaving a
+   quadrant visibly empty, which reads as a missing thing instead of a shape. */
+.cal-split[data-n="3"] .cal-slice:first-child{grid-row:1 / 3}
+.cal-slice{position:relative;display:flex;align-items:center;justify-content:center;gap:5px;
+  border-radius:var(--radius-sm);min-width:0;
+  background:color-mix(in srgb, currentColor 12%, transparent)}
+.cal-slice.bought{color:var(--ev-bought)} .cal-slice.cleaned{color:var(--ev-cleaned)}
+.cal-slice.played{color:var(--ev-played)} .cal-slice.liked{color:var(--ev-liked)}
+.cal-slice.note{color:var(--ev-note)}
+.cal-slice i{font-size:16px}
+.cal-slice b{font-family:var(--font-mono);font-size:13px;font-weight:700;line-height:1;letter-spacing:-.02em}
+/* A quadrant is the floor, so the roomier shapes spend the room they have
+   rather than settling for one glyph size everywhere. */
+.cal-split[data-n="1"] .cal-slice i{font-size:24px}
+.cal-split[data-n="1"] .cal-slice b{font-size:20px}
+.cal-split[data-n="2"] .cal-slice i,
+.cal-split[data-n="3"] .cal-slice:first-child i{font-size:20px}
+.cal-split[data-n="2"] .cal-slice b,
+.cal-split[data-n="3"] .cal-slice:first-child b{font-size:16px}
+.cal-split[data-n="3"] .cal-slice:not(:first-child) i{font-size:15px}
+.cal-split[data-n="3"] .cal-slice:not(:first-child) b{font-size:12px}
+/* the fifth kind, folded out of the quadrants into the last one's corner */
+.cal-fold{position:absolute;right:3px;bottom:2px;display:flex;align-items:center;gap:2px}
+.cal-fold-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.cal-fold b{font-size:9px}
+.cal-fold.bought{color:var(--ev-bought)} .cal-fold.cleaned{color:var(--ev-cleaned)}
+.cal-fold.played{color:var(--ev-played)} .cal-fold.liked{color:var(--ev-liked)}
+.cal-fold.note{color:var(--ev-note)}
 /* the day modal's empty line */
 .cal-day-empty{font-size:12px;color:var(--muted);margin-top:6px}
-.cal-event{display:flex;gap:12px;align-items:flex-start;padding:11px 0 11px 10px;border-bottom:1px solid var(--border);border-left:3px solid transparent;cursor:pointer}
-.cal-event:last-child{border-bottom:none;padding-bottom:2px}
-.cal-event:first-of-type{margin-top:8px;border-top:1px solid var(--border);padding-top:11px}
-.cal-event:hover .cal-ev-title{color:var(--accent)}
-.cal-event.bought{border-left-color:var(--ev-bought)}
-.cal-event.cleaned{border-left-color:var(--ev-cleaned)}
-.cal-event.played{border-left-color:var(--ev-played)}
-.cal-event.note{border-left-color:var(--ev-note)}
-.cal-ev-cover-wrap{width:48px;height:48px;border-radius:var(--radius-sm);overflow:hidden;flex-shrink:0;background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--muted)}
-.cal-ev-cover-wrap img{width:100%;height:100%;object-fit:cover;display:block}
-.cal-ev-main{flex:1;min-width:0}
-.cal-ev-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .12s}
-.cal-ev-artist{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
-.cal-ev-note{font-size:12.5px;color:var(--text);opacity:.85;margin-top:6px;line-height:1.6}
-.cal-ev-note.preview{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.cal-ev-time{font-size:11px;font-weight:700;color:var(--label);font-variant-numeric:tabular-nums;
-  flex-shrink:0;margin-top:3px;letter-spacing:.02em}
-.cal-badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid;flex-shrink:0;margin-top:2px}
-.cal-badge.bought{color:var(--ev-bought);border-color:color-mix(in srgb, var(--ev-bought) 45%, transparent);background:color-mix(in srgb, var(--ev-bought) 7%, transparent)}
-.cal-badge.cleaned{color:var(--ev-cleaned);border-color:color-mix(in srgb, var(--ev-cleaned) 45%, transparent);background:color-mix(in srgb, var(--ev-cleaned) 7%, transparent)}
-.cal-badge.played{color:var(--ev-played);border-color:color-mix(in srgb, var(--ev-played) 45%, transparent);background:color-mix(in srgb, var(--ev-played) 7%, transparent)}
-.cal-badge.liked{color:var(--ev-liked);border-color:color-mix(in srgb, var(--ev-liked) 45%, transparent);background:color-mix(in srgb, var(--ev-liked) 7%, transparent)}
-.cal-badge.note{color:var(--ev-note);border-color:color-mix(in srgb, var(--ev-note) 45%, transparent);background:color-mix(in srgb, var(--ev-note) 7%, transparent)}
+/* The day list: one card per record, not one row per event. The type colour
+   left the card and went onto the chips — a card holding four kinds of event
+   has no single colour to spend a border on. */
+.cal-day-sub{font-family:var(--font-mono);font-size:11px;color:var(--label);margin-top:4px}
+.cal-rec{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid var(--border)}
+.cal-rec:last-child{border-bottom:none;padding-bottom:4px}
+.cal-rec-cover{width:72px;height:72px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);
+  overflow:hidden;flex-shrink:0;background:var(--card);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px;
+  transition:border-color .12s,filter .12s}
+.cal-rec-cover:hover{filter:brightness(1.1);border-color:var(--accent)}
+.cal-rec-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.cal-rec-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.cal-rec-title{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-rec-artist{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.cal-rec-rail{display:flex;gap:6px;flex-wrap:wrap}
+.cal-rec-note{font-size:12.5px;color:var(--text);opacity:.85;line-height:1.6}
+.cal-rec-note.private{opacity:.7}
+.cal-rec-like{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ev-liked)}
+.cal-rec-like span{color:var(--text);opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the week rail's button, given the width to say when as well as what */
+.cal-day-act{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;
+  border-radius:999px;border:1px solid;cursor:pointer;font-family:var(--font-mono);
+  font-size:11px;font-weight:700;line-height:1;
+  border-color:color-mix(in srgb, currentColor 45%, transparent);
+  background:color-mix(in srgb, currentColor 7%, transparent);transition:background .12s}
+.cal-day-act:hover{background:color-mix(in srgb, currentColor 18%, transparent)}
+.cal-day-act i{font-size:15px}
+.cal-day-act .cal-act-when{font-size:10.5px;font-weight:400;opacity:.7;letter-spacing:.02em}
+.cal-day-act.bought{color:var(--ev-bought)} .cal-day-act.cleaned{color:var(--ev-cleaned)}
+.cal-day-act.played{color:var(--ev-played)} .cal-day-act.liked{color:var(--ev-liked)}
+.cal-day-act.note{color:var(--ev-note)}
 /* week grid (google-calendar-like columns of compact event chips) */
 .cal-week-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:start}
 .cal-week-col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 6px;display:flex;flex-direction:column;gap:6px;min-height:150px;min-width:0}
@@ -1826,9 +1860,18 @@ select option{background:var(--surface);color:var(--text)}
   .cal-nav{width:100%}
   .cal-controls{width:100%;justify-content:space-between}
   .cal-title{font-size:13px;margin-left:2px;padding:0 8px;height:32px}
-  .cal-cell{min-height:56px;padding:5px}
-  .cal-cell-evs{display:none}
-  .cal-cell-dots{display:flex}
+  .cal-cell{min-height:64px;padding:5px}
+  /* About 47px of cell means a quadrant is roughly 22x18: an icon and a
+     numeral do not both fit, and shrinking both until they do leaves neither
+     readable. The numeral goes and the icon takes the room — the square
+     answers WHICH, and the day list one tap away answers HOW MANY. */
+  .cal-slice b,.cal-fold b{display:none}
+  .cal-split{gap:2px}
+  .cal-slice i{font-size:13px}
+  .cal-split[data-n="1"] .cal-slice i{font-size:20px}
+  .cal-split[data-n="2"] .cal-slice i,
+  .cal-split[data-n="3"] .cal-slice:first-child i{font-size:16px}
+  .cal-split[data-n="3"] .cal-slice:not(:first-child) i{font-size:13px}
   .cal-grid,.cal-dow-row{gap:4px}
   .cal-week-grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
   .cal-week-col{padding:5px 3px;gap:4px;min-height:auto;border-radius:var(--radius-sm)}
@@ -2634,7 +2677,10 @@ select option{background:var(--surface);color:var(--text)}
 <div class="overlay hidden" id="calDayOverlay">
   <div class="modal" style="max-width:520px">
     <div class="modal-head">
-      <span class="modal-title" id="calDayTitle">day</span>
+      <div>
+        <span class="modal-title" id="calDayTitle">day</span>
+        <div class="cal-day-sub" id="calDaySub"></div>
+      </div>
       <button class="btn btn-ghost btn-sm" onclick="closeCalDay()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body" id="calDayBody"></div>
@@ -8602,37 +8648,60 @@ function renderCalendar() {
   else renderCalWeek(events);
 }
 
-// one event row — shared by the week view and the day modal
-function calEventRow(ev, fullNote) {
-  const r = ev.r;
+/* One activity, as a slice of a month cell.
+ *
+ * The count is printed only above one — the same rule calActBtn follows in the
+ * week rail, so a lone icon means once everywhere in the Timeline. `fold` is
+ * the fifth kind daySplit demoted, and rides on the LAST slice only. */
+function calSliceHTML(sl, fold) {
+  const n = (a) => a.n > 1 ? ' ×' + a.n : '';
+  return `<div class="cal-slice ${sl.type}" title="${CAL_TYPE_LABEL[sl.type]}${n(sl)}">
+    <i class="ti ${CAL_TYPE_ICON[sl.type]}"></i>${sl.n > 1 ? `<b>${sl.n}</b>` : ''}${
+      fold ? `<span class="cal-fold ${fold.type}" title="${CAL_TYPE_LABEL[fold.type]}${n(fold)}"><span class="cal-fold-dot"></span><b>${fold.n}</b></span>` : ''
+    }</div>`;
+}
+
+/* One record's day, as a card in the day list.
+ *
+ * The modal used to map events to rows, so a record played twice and cleaned
+ * once was three rows carrying the same cover and the same title. This is the
+ * collapse the week grid already does — recordDays() — with the room that
+ * buys: a 72px cover, and the note text and liked song titles sitting under
+ * the record they happened to instead of in orphan rows of their own.
+ *
+ * The cover takes no data-day. The mobile branch of the delegated listener
+ * sends a data-day cover to the day list, and this card IS the day list. */
+function calRecordDayCard(g) {
+  const r = g.r;
   const cover = r.cover_url
-    ? `<div class="cal-ev-cover-wrap"><img src="${r.cover_url}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'"></div>`
-    : `<div class="cal-ev-cover-wrap"><i class="ti ti-disc"></i></div>`;
-  let noteHtml = '';
-  if (ev.type === 'note' && ev.text) {
+    ? `<img src="${r.cover_url}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+    : `<i class="ti ti-disc"></i>`;
+  const evsOf = (type) => (g.acts.find(a => a.type === type) || { evs: [] }).evs;
+  const notes = evsOf('note').map(ev => {
     const rendered = typeof marked !== 'undefined'
       ? marked.parse(ev.text)
       : esc(ev.text).replace(/\n/g, '<br>');
-    noteHtml = fullNote
-      ? `<div class="cal-ev-note detail-notes-body">${rendered}</div>`
-      : `<div class="cal-ev-note preview">${esc(ev.text.replace(/\s+/g,' ').trim())}</div>`;
-  }
+    return `<div class="cal-rec-note detail-notes-body${ev.private ? ' private' : ''}">${
+      ev.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''
+    }${rendered}</div>`;
+  }).join('');
   // A like carries the song's title (timeline.js's add() puts it on the
-  // event) — without naming it, three likes on one record on one day render
-  // as three identical rows. The drawer's dmHistoryEntryHTML already does
-  // this; this is the same fact in the Calendar.
-  const likedHtml = ev.type === 'liked' && ev.title
-    ? `<div class="cal-ev-note preview">${esc(ev.title)}</div>` : '';
-  return `<div class="cal-event ${ev.type}${ev.private ? ' private' : ''}" onclick="openDetailFromCal(${r.id})">
-    ${cover}
-    <div class="cal-ev-main">
-      <div class="cal-ev-title">${esc(r.album_name) || 'untitled'}</div>
-      <div class="cal-ev-artist">${esc(artistDisplay(r))}</div>
-      ${noteHtml}${likedHtml}
+  // event) — without naming it, three likes on one record on one day are
+  // three identical lines. The drawer's dmHistoryEntryHTML already does this.
+  const likes = evsOf('liked').filter(ev => ev.title).map(ev =>
+    `<div class="cal-rec-like"><i class="ti ti-heart"></i><span>${esc(ev.title)}</span></div>`).join('');
+  return `<div class="cal-rec">
+    <button type="button" class="cal-rec-cover" data-rec="${r.id}" data-focus="${esc(g.day)}"
+      title="${esc(artistDisplay(r))} — ${esc(r.album_name) || 'untitled'} (${esc(calActsLabel(g))})">
+      ${cover}</button>
+    <div class="cal-rec-main">
+      <div>
+        <div class="cal-rec-title">${esc(r.album_name) || 'untitled'}</div>
+        <div class="cal-rec-artist">${esc(artistDisplay(r))}</div>
+      </div>
+      <div class="cal-rec-rail">${g.acts.map(a => calActBtn(g, a, 'cal-day-act', true)).join('')}</div>
+      ${notes}${likes}
     </div>
-    ${ev.time ? `<span class="cal-ev-time">${esc(ev.time)}</span>` : ''}
-    ${ev.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''}
-    <span class="cal-badge ${ev.type}">${CAL_TYPE_LABEL[ev.type]}</span>
   </div>`;
 }
 
@@ -8654,15 +8723,26 @@ function calActsLabel(g) {
  * cannot reach two.
  *
  * The focus is a data attribute rather than an inline onclick argument: keys
- * are built from stored date strings, and esc() does not escape single quotes. */
-function calActBtn(g, a, cls) {
+ * are built from stored date strings, and esc() does not escape single quotes.
+ *
+ * `withTimes` spells the clocks out beside the count. The week rail has 46px of
+ * column and leaves them to the tooltip; the day list has the width to print
+ * them, and printing them is what lets one chip stand for three plays. */
+function calActBtn(g, a, cls, withTimes) {
   const n = a.evs.length;
   const focus = n > 1 ? g.day + '~' + a.type : a.evs[0].key;
   const when = a.evs[0].time ? ' · ' + a.evs[0].time : '';
+  const clocks = a.evs.map(ev => ev.time).filter(Boolean);
+  // Three is what fits on one line at this width; the rest are a tally, and
+  // the drawer behind the chip has all of them anyway.
+  const run = withTimes && clocks.length
+    ? `<span class="cal-act-when">${esc(clocks.slice(0, 3).join(' · '))}${
+        clocks.length > 3 ? ' +' + (clocks.length - 3) : ''}</span>`
+    : '';
   return `<button type="button" class="${cls} ${a.type}" data-rec="${g.r.id}"
     data-type="${a.type}" data-focus="${esc(focus)}"
     title="${CAL_TYPE_LABEL[a.type]}${n > 1 ? ' ×' + n : ''}${esc(when)}">
-    <i class="ti ${CAL_TYPE_ICON[a.type]}"></i>${n > 1 ? `<b>${n}</b>` : ''}</button>`;
+    <i class="ti ${CAL_TYPE_ICON[a.type]}"></i>${n > 1 ? `<b>${n}</b>` : ''}${run}</button>`;
 }
 
 // one record's day — the cover, then what happened to it
@@ -8693,15 +8773,12 @@ function renderCalMonth(events) {
   for (let i = 0; i < weeks*7; i++) {
     const k = calKey(cur);
     const evs = events.get(k) || [];
-    const shown = evs.slice(0, 3);
-    const typesPresent = [...new Set(evs.map(e => e.type))];
+    const { slices, fold } = VinylTimeline.daySplit(evs);
     cells += `<div class="cal-cell${cur.getMonth() !== m ? ' cal-out' : ''}${k === todayK ? ' cal-today' : ''}${evs.length ? ' has-ev' : ''}"${evs.length ? ` onclick="openCalDay('${k}')"` : ''}>
       <div class="cal-cell-num">${cur.getDate()}</div>
-      <div class="cal-cell-evs">
-        ${shown.map(ev => `<div class="cal-pill"><span class="cal-dot ${ev.type}"></span><span class="cal-pill-txt">${esc(ev.r.album_name || artistDisplay(ev.r))}</span></div>`).join('')}
-        ${evs.length > 3 ? `<div class="cal-more">+${evs.length-3} more</div>` : ''}
-      </div>
-      <div class="cal-cell-dots">${typesPresent.map(t => `<span class="cal-dot ${t}"></span>`).join('')}</div>
+      ${slices.length ? `<div class="cal-split" data-n="${slices.length}">${
+        slices.map((sl, j) => calSliceHTML(sl, j === slices.length - 1 ? fold : null)).join('')
+      }</div>` : ''}
     </div>`;
     cur.setDate(cur.getDate() + 1);
   }
@@ -8744,9 +8821,15 @@ function renderCalWeek(events) {
 // day modal — opened from a month cell
 function openCalDay(k) {
   const evs = calEventsByDay().get(k) || [];
+  const groups = VinylTimeline.recordDays(evs);
+  const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
   document.getElementById('calDayTitle').textContent = calFmtLong(calParseKey(k));
-  document.getElementById('calDayBody').innerHTML = evs.length
-    ? evs.map(ev => calEventRow(ev, true)).join('')
+  // The two numbers are the whole point of aggregating: when they disagree,
+  // the list is shorter than the day was, and the line says by how much.
+  document.getElementById('calDaySub').textContent = evs.length
+    ? plural(groups.length, 'record') + ' · ' + plural(evs.length, 'event') : '';
+  document.getElementById('calDayBody').innerHTML = groups.length
+    ? groups.map(calRecordDayCard).join('')
     : '<div class="cal-day-empty">nothing on this day</div>';
   document.getElementById('calDayOverlay').classList.remove('hidden');
 }
