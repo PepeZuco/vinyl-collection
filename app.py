@@ -354,6 +354,19 @@ class NoteImage(db.Model):
     data    = db.Column(db.Text)      # base64 data URI, same shape as cover_data
     created = db.Column(db.String(50))  # a stamp — the sweep's grace window reads it
 
+# A place a record was bought at. The NAME is the key, and record.bought_where
+# holds it verbatim — so sort, group, filter, search, the scan autofill and the
+# CSV all keep reading the column they always read, and this table only adds the
+# link. The join is an exact match after trim, which is why every writer of
+# bought_where trims.
+class Place(db.Model):
+    id   = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    url  = db.Column(db.String(500))
+
+    def to_dict(self):
+        return {"id": self.id, "name": self.name or "", "url": self.url or ""}
+
 # One row per Claude API call a scan made. Anthropic publishes no balance or
 # remaining-credits endpoint, so what this app spends is only knowable if this
 # app writes it down — hence a ledger rather than a lookup.
@@ -426,6 +439,21 @@ with app.app_context():
             db.session.commit()
             last_id = rows[-1][0]
 
+    # One-time backfill: the place table is empty, so seed it from the names
+    # already in the collection. Links start empty — there is nowhere to get
+    # them from. Distinct is case-sensitive on purpose: if the data holds both
+    # 'Tracks' and 'tracks' this produces two places and the rename-merge in
+    # PUT /api/places/<id> is how they get collapsed. Picking a canonical
+    # casing here would silently rewrite records during a deploy.
+    if Place.query.first() is None:
+        names = {(n or "").strip() for (n,) in
+                 db.session.query(Record.bought_where).distinct().all()}
+        names.discard("")
+        if names:
+            db.session.execute(db.insert(Place),
+                               [{"name": n, "url": ""} for n in sorted(names)])
+            db.session.commit()
+
     # Photos uploaded into a form that was then abandoned have nothing pointing
     # at them and nothing that will ever call the save-time reap. This is the
     # only thing that collects them.
@@ -482,6 +510,13 @@ def list_records():
     # there is no GET for a single record, so this is the whole boundary.
     private = is_authed()
     return jsonify([r.to_dict(private=private) for r in recs])
+
+@app.route("/api/places")
+def list_places():
+    # Public, like /api/records: the drawer and the crate headers need the link
+    # for a visitor too, and a place name is already visible on every record.
+    places = Place.query.order_by(func.lower(Place.name)).all()
+    return jsonify([p.to_dict() for p in places])
 
 def get_record_or_404(rid):
     """A record by id, or a 404 — through Session.get rather than the legacy
