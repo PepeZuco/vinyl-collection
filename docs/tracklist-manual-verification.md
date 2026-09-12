@@ -98,5 +98,5 @@ without a browser and said so.
 
 ## The backup
 
-27. `/api/export` then `/api/import` of that file preserves tracks, likes,
+29. `/api/export` then `/api/import` of that file preserves tracks, likes,
     disc count and size.
