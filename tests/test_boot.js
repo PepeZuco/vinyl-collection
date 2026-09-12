@@ -260,15 +260,28 @@ test('every tab renders without throwing', async () => {
   assert.ok($(doc, '#collectionPage'), 'the shelf went missing');
 });
 
-test('the timeline switches between its four scales', async () => {
+test('the timeline switches between its three scales', async () => {
   const { win, doc, errors } = await boot();
   win.switchTab('timeline');
-  for (const scale of ['month', 'week', 'day', 'replay']) {
+  const offered = [...doc.querySelectorAll('#calScaleBar .cal-scale-btn')].map(b => b.dataset.scale);
+  assert.deepStrictEqual(offered, ['month', 'week', 'replay'], 'the scale switch changed shape');
+  for (const scale of offered) {
     win.setCalScale(scale);
     assert.deepStrictEqual(errors, [], `scale ${scale} threw:\n` + errors.join('\n'));
   }
   assert.strictEqual($(doc, '#replayBody').hidden, false, 'replay did not show');
   assert.strictEqual($(doc, '#calBody').hidden, true, 'the calendar did not step aside');
+});
+
+/* Each scale chip is an icon, so the only thing that says what it does is the
+ * tooltip. A chip that lost it is a button with no name at all. */
+test('every scale chip names itself', async () => {
+  const { doc } = await boot();
+  for (const b of doc.querySelectorAll('#calScaleBar .cal-scale-btn')) {
+    assert.ok(b.querySelector('i.ti'), `the ${b.dataset.scale} chip has no icon`);
+    assert.strictEqual(b.getAttribute('title'), b.dataset.scale);
+    assert.strictEqual(b.getAttribute('aria-label'), b.dataset.scale);
+  }
 });
 
 test('insights draws the health row from the same records', async () => {
@@ -2094,6 +2107,15 @@ function withPhotos(read, notes) {
 // The desktop pane, for the reason litKeys gives: #dmInfo holds the same
 // history and would double every photo.
 const shotThumbs = doc => [...doc.querySelectorAll('#ddInfo .note-shot')];
+
+/* The photos hang off the record's history, and the history is the Timeline
+ * tab — the drawer opens on Tracks/Info. Opening the record is not enough to
+ * put a thumbnail on the page, so every test here asks for the tab that holds
+ * them, the way a person reaching a photo has to. */
+function openPhotoRun(win, id) {
+  win.openDetail(id);
+  win.setDetailTab('timeline');
+}
 const openShotId = doc =>
   ($(doc, '#shotImage').getAttribute('src') || '').split('/').pop();
 const armed = (doc, sel) => !$(doc, sel).disabled;
@@ -2101,7 +2123,7 @@ const armed = (doc, sel) => !$(doc, sel).disabled;
 test('a photo opened mid-run can go both ways', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[2]);
   assert.strictEqual(openShotId(doc), shotId('c'), 'the wrong photo opened');
   assert.ok(armed(doc, '#shotPrevBtn'), 'no way back from the middle of the run');
@@ -2111,7 +2133,7 @@ test('a photo opened mid-run can go both ways', async () => {
 test('the first photo of a record cannot go back', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[0]);
   assert.ok(!armed(doc, '#shotPrevBtn'), 'offered a photo before the first');
   assert.ok(armed(doc, '#shotNextBtn'));
@@ -2120,7 +2142,7 @@ test('the first photo of a record cannot go back', async () => {
 test('the last photo of a record cannot go forward', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[4]);
   assert.ok(armed(doc, '#shotPrevBtn'));
   assert.ok(!armed(doc, '#shotNextBtn'), 'offered a photo after the last');
@@ -2131,7 +2153,7 @@ test('the last photo of a record cannot go forward', async () => {
 test('stepping on from a note s last photo reaches the next note s first', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[1]);            // 'b', last of the March note
   press(win, $(doc, '#shotNextBtn'));
   assert.strictEqual(openShotId(doc), shotId('c'), 'the walk stopped at the note edge');
@@ -2140,7 +2162,7 @@ test('stepping on from a note s last photo reaches the next note s first', async
 test('stepping back from a note s first photo reaches the previous note s last', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[3]);            // 'd', first of the June note
   press(win, $(doc, '#shotPrevBtn'));
   assert.strictEqual(openShotId(doc), shotId('c'));
@@ -2149,7 +2171,7 @@ test('stepping back from a note s first photo reaches the previous note s last',
 test('a record holding one photo offers neither direction', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read, [{ date: '2026-03-12', text: 'sleeve', images: [shotId('a')] }]);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[0]);
   assert.ok(!armed(doc, '#shotPrevBtn'));
   assert.ok(!armed(doc, '#shotNextBtn'));
@@ -2160,7 +2182,7 @@ test('a record holding one photo offers neither direction', async () => {
 test('pressing an arrow does not close the photo', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[0]);
   press(win, $(doc, '#shotNextBtn'));
   assert.ok(!$(doc, '#shotOverlay').classList.contains('hidden'),
@@ -2172,7 +2194,7 @@ test('pressing an arrow does not close the photo', async () => {
 test('the arrow keys move between photos, not between records', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   const atRecord = read('dmIdx');
   press(win, shotThumbs(doc)[0]);
   doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
@@ -2186,10 +2208,11 @@ test('the arrow keys move between photos, not between records', async () => {
 test('escape closes the photo and leaves the record open', async () => {
   const { win, doc, read } = await boot();
   const r = withPhotos(read);
-  win.openDetail(r.id);
+  openPhotoRun(win, r.id);
   press(win, shotThumbs(doc)[0]);
   doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.ok($(doc, '#shotOverlay').classList.contains('hidden'), 'the photo stayed open');
   assert.ok(!$(doc, '#detailOverlay').classList.contains('hidden'),
     'escaping the photo threw the record away too');
 });
+

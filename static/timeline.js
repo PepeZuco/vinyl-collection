@@ -7,7 +7,7 @@
  * tab you were standing in.
  *
  * This model does no filtering of its own. The caller hands it the records the
- * shared query selected, which is what lets Month, Week, Day and Replay all
+ * shared query selected, which is what lets Month, Week and Replay all
  * describe the same collection.
  *
  * Loaded as a plain script in the browser, where `const VinylTimeline` lands in
