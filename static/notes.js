@@ -55,6 +55,27 @@ const VinylNotes = (function () {
     return clean.length ? JSON.stringify(clean) : '';
   }
 
+  /* What the form holds -> what the column stores, or null when there is no
+   * note there at all. The add row and the edit row both come through here so
+   * the two cannot drift: a note needs a date and either words or a photo, and
+   * `private` is written ONLY when it is true -- _public_notes in app.py reads
+   * an absent key as public, so a note the user has published must look exactly
+   * like one that was never marked. The images array is a fresh copy: the
+   * caller's strip goes on living in the form after the note is filed. */
+  function normalizeNote(fields) {
+    const f = fields || {};
+    const text = (f.text || '').trim();
+    const images = [];
+    (f.images || []).forEach(function (id) {
+      if (isImageId(id) && images.indexOf(id) === -1) images.push(id);
+    });
+    if (!f.date) return null;
+    const note = { date: f.date, text, images };
+    if (!hasContent(note)) return null;
+    if (f.private) note.private = true;
+    return note;
+  }
+
   /* Every image id a note list refers to, deduped and ordered, for the callers
    * that need to know what a record points at without holding any bytes. */
   function noteImageIds(notes) {
@@ -67,7 +88,8 @@ const VinylNotes = (function () {
     return seen;
   }
 
-  return { parseNotes, serializeNotes, noteImageIds, hasContent, isImageId };
+  return { parseNotes, serializeNotes, noteImageIds, hasContent, isImageId,
+           normalizeNote };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylNotes;

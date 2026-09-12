@@ -9,7 +9,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { parseNotes, serializeNotes, noteImageIds, hasContent, isImageId } = require('../static/notes.js');
+const { parseNotes, serializeNotes, noteImageIds, hasContent, isImageId,
+        normalizeNote } = require('../static/notes.js');
 
 // ── serialize ───────────────────────────────────────────────────────────────
 
@@ -119,4 +120,58 @@ test('every id across every note comes back once', () => {
 
 test('a note list with no images has no ids', () => {
   assert.deepStrictEqual(noteImageIds([{ date: 'd', text: 't' }]), []);
+});
+
+// ── normalizeNote ───────────────────────────────────────────────────────────
+// The one place that turns what the form holds -- a date, a textarea, a strip
+// of ids, a checkbox -- into a stored note. Both writing a note and editing
+// one already saved come through here, so the rules cannot drift apart between
+// them: the privacy key in particular is written ONLY when it is true, because
+// _public_notes in app.py reads an absent key as public and a note the user
+// published must be indistinguishable from one never marked.
+
+test('a note keeps its date and its trimmed words', () => {
+  assert.deepStrictEqual(
+    normalizeNote({ date: '2026-01-01', text: '  hello  ' }),
+    { date: '2026-01-01', text: 'hello', images: [] });
+});
+
+test('a published note carries no privacy key at all', () => {
+  const note = normalizeNote({ date: 'd', text: 't', private: false });
+  assert.strictEqual('private' in note, false);
+});
+
+test('a private note is marked private', () => {
+  assert.strictEqual(normalizeNote({ date: 'd', text: 't', private: true }).private, true);
+});
+
+test('a photo with no words is still a note', () => {
+  assert.deepStrictEqual(normalizeNote({ date: 'd', text: '   ', images: [ID_A] }),
+                         { date: 'd', text: '', images: [ID_A] });
+});
+
+test('a note with neither words nor photos is not a note', () => {
+  assert.strictEqual(normalizeNote({ date: 'd', text: '  ', images: [] }), null);
+});
+
+test('a note with no date is not a note', () => {
+  assert.strictEqual(normalizeNote({ date: '', text: 'real words' }), null);
+});
+
+test('an unusable id never reaches the column', () => {
+  assert.deepStrictEqual(
+    normalizeNote({ date: 'd', text: 't', images: ["x'),window.pwned=1;//", ID_A] }).images,
+    [ID_A]);
+});
+
+test('the same photo attached twice is held once', () => {
+  assert.deepStrictEqual(
+    normalizeNote({ date: 'd', text: 't', images: [ID_A, ID_A, ID_B] }).images,
+    [ID_A, ID_B]);
+});
+
+test('normalizing does not write through to the caller\'s image list', () => {
+  const images = [ID_A];
+  normalizeNote({ date: 'd', text: 't', images }).images.push(ID_B);
+  assert.deepStrictEqual(images, [ID_A]);
 });

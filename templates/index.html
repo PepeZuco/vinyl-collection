@@ -29,6 +29,8 @@ html,body{touch-action:pan-x pan-y}
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
   --ev-bought:#F5C518; --ev-cleaned:#4AA3C4; --ev-played:#5FBF7A; --ev-note:#9B7FD4; --ev-liked:#E05A5A;
+  /* the month cell's glass over a record sleeve — see .cal-slice */
+  --cal-glass:8,8,8; --cal-ink:#e8e8e0; --cal-sleeve:brightness(.85) saturate(.9);
   --toggle-icon:'☀';
   /* The stacked sleeve reads against .vcard-cover's own hardcoded #111 ground
      (that ground does not follow the theme — it is the "sleeve pocket", not
@@ -47,6 +49,9 @@ html,body{touch-action:pan-x pan-y}
   --card-hover:#e9e5dc;--search-bg:#f0ede6;
   --sh-gray:rgba(0,0,0,0.18);
   --ev-bought:#b39609; --ev-cleaned:#2b7f99; --ev-played:#3d8a55; --ev-note:#6f4fae; --ev-liked:#b33b3b;
+  /* light mode deepens every --ev colour for a pale ground, so the glass has
+     to be pale too or the icons sit dark-on-dark over the artwork. */
+  --cal-glass:250,249,245; --cal-ink:#1a1a18; --cal-sleeve:brightness(1.02) saturate(.9);
   --toggle-icon:'☾';
   /* Already high-contrast against the cover's #111 ground (233 at full
      brightness, 198/163 at .85/.70) — kept at the same value --card-hover
@@ -1571,6 +1576,34 @@ select option{background:var(--surface);color:var(--text)}
   border-radius:3px;line-height:1}
 .note-private-toggle:hover{color:var(--ev-note)}
 .note-entry.private .note-private-toggle{color:var(--ev-note)}
+/* Left of the lock again, on the same corner rail. */
+.note-edit-btn{position:absolute;top:8px;right:52px;background:transparent;
+  border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;
+  border-radius:3px;line-height:1}
+.note-edit-btn:hover{color:var(--accent)}
+
+/* ── a note open for editing ────────────────────────────────────────────────
+   The entry keeps its place in the list and grows the controls in place, so
+   the note never moves out from under the words being changed. The accent
+   edge is the whole signal that this one is live; the corner buttons are gone
+   because save and cancel are the only two ways out. */
+.note-entry.editing{border-color:var(--accent);
+  background:color-mix(in srgb, var(--accent) 4%, var(--card))}
+.note-edit-when{display:grid;grid-template-columns:140px 104px;gap:8px;margin-bottom:8px}
+.note-edit-when input{background:var(--card);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:7px 9px 7px 30px;font-size:13px;outline:none;
+  font-family:var(--font);width:100%}
+.note-edit-when input:focus{border-color:var(--accent)}
+.note-entry.editing textarea{resize:vertical;min-height:88px;width:100%;font-size:12px;
+  line-height:1.6;background:var(--card);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:7px 9px;outline:none;font-family:var(--font)}
+.note-entry.editing textarea:focus{border-color:var(--accent)}
+.note-edit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px}
+.note-edit-actions .grow{flex:1}
+@media (max-width:640px){
+  .note-edit-when{grid-template-columns:1fr 1fr}
+  .note-edit-actions .grow{flex-basis:100%}
+}
 /* The add row's own switch. */
 .note-private-check{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
   color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
@@ -1736,31 +1769,71 @@ select option{background:var(--surface);color:var(--text)}
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .cal-dow{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:center;font-weight:600}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.cal-cell{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-height:96px;padding:6px;display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.cal-cell{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);min-height:96px;display:flex;flex-direction:column}
+/* The padding moved here so the sleeves can reach the cell's own edges. */
+.cal-cell-in{position:relative;flex:1;display:flex;flex-direction:column;gap:4px;padding:6px;min-width:0}
+/* The day's records, tiled as the cell's ground.
+ *
+ * The squares say what KIND of day it was; they cannot say whose. Four plays
+ * is one record four times or four records once each and the square reads the
+ * same either way. recordDays() collapses the day to one entry per record —
+ * the same collapse the day list uses, so a cell's sleeve count and its
+ * modal's card count are the same number by construction — and the first four
+ * tile the cell in the geometry the slices already speak.
+ *
+ * The two grids count different things and so line up only by coincidence: a
+ * four-kind, two-sleeve day puts quadrants over halves. That is the honest
+ * shape of two independent facts, not a bug to align away. */
+.cal-sleeves{position:absolute;inset:0;display:grid;filter:var(--cal-sleeve)}
+.cal-sleeve{overflow:hidden;background:var(--card);display:flex;align-items:center;
+  justify-content:center;color:var(--muted);font-size:15px}
+.cal-sleeve img{width:100%;height:100%;object-fit:cover;display:block}
+/* Without this the date sits on whatever the artwork happens to be there. */
+.cal-scrim{position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(var(--cal-glass),.82),rgba(var(--cal-glass),.18) 34%,transparent 55%)}
 .cal-cell.has-ev{cursor:pointer;transition:border-color .12s}
 .cal-cell.has-ev:hover{border-color:var(--accent)}
 .cal-cell.cal-out{opacity:.35}
 .cal-cell.cal-today .cal-cell-num{color:var(--accent);font-weight:700}
 .cal-cell.cal-today{border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
-.cal-cell-num{font-size:11px;color:var(--muted);font-family:var(--font-mono);line-height:1}
+.cal-cell-num{display:flex;align-items:center;justify-content:space-between;gap:4px;
+  font-size:11px;color:var(--muted);font-family:var(--font-mono);line-height:1}
+/* On a sleeve the numeral reads against the scrim, not against the theme. */
+.cal-cell.has-ev .cal-cell-num{text-shadow:0 1px 2px rgba(var(--cal-glass),.9)}
+/* Not :not()-free: .cal-today's accent rule above has the same specificity and
+   comes first, so colouring every has-ev numeral here would take the gold off
+   today whenever today had events. Today keeps the accent; the shadow is what
+   both need over artwork. */
+.cal-cell.has-ev:not(.cal-today) .cal-cell-num{color:var(--cal-ink)}
+/* the records past the fourth, which had nowhere to tile */
+.cal-cell-num b{font-size:9.5px;font-weight:700;opacity:.85}
 /* The day's activity, divided by KIND. daySplit() decides which slices there
    are and in what order; this only draws them. The count rides on the
    container as data-n so each shape is one rule instead of five classes. */
-.cal-split{flex:1;min-height:0;display:grid;gap:3px}
-.cal-split[data-n="1"]{grid-template-columns:1fr}
-.cal-split[data-n="2"]{grid-template-columns:1fr 1fr}
-.cal-split[data-n="3"],.cal-split[data-n="4"]{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+/* Nine, not three: the channel between slices is where the sleeve underneath
+   actually reads. Narrower and the artwork survives only as a tint. */
+.cal-split{flex:1;min-height:0;display:grid;gap:9px}
+.cal-split[data-n="1"],.cal-sleeves[data-n="1"]{grid-template-columns:1fr}
+.cal-split[data-n="2"],.cal-sleeves[data-n="2"]{grid-template-columns:1fr 1fr}
+.cal-split[data-n="3"],.cal-split[data-n="4"],
+.cal-sleeves[data-n="3"],.cal-sleeves[data-n="4"]{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.cal-sleeves[data-n="3"] .cal-sleeve:first-child{grid-row:1 / 3}
 /* three kinds: the first type takes the tall left column rather than leaving a
    quadrant visibly empty, which reads as a missing thing instead of a shape. */
 .cal-split[data-n="3"] .cal-slice:first-child{grid-row:1 / 3}
+/* Glass, not a wash: the type's colour over a translucent ground, so the
+   sleeve stays visible through it as well as around it. */
 .cal-slice{position:relative;display:flex;align-items:center;justify-content:center;gap:5px;
   border-radius:var(--radius-sm);min-width:0;
-  background:color-mix(in srgb, currentColor 12%, transparent)}
+  background:linear-gradient(0deg, color-mix(in srgb, currentColor 34%, transparent),
+    color-mix(in srgb, currentColor 34%, transparent)), rgba(var(--cal-glass),.52)}
 .cal-slice.bought{color:var(--ev-bought)} .cal-slice.cleaned{color:var(--ev-cleaned)}
 .cal-slice.played{color:var(--ev-played)} .cal-slice.liked{color:var(--ev-liked)}
 .cal-slice.note{color:var(--ev-note)}
-.cal-slice i{font-size:16px}
-.cal-slice b{font-family:var(--font-mono);font-size:13px;font-weight:700;line-height:1;letter-spacing:-.02em}
+.cal-slice i{font-size:16px;filter:drop-shadow(0 1px 2px rgba(var(--cal-glass),.95))}
+.cal-slice b{font-family:var(--font-mono);font-size:13px;font-weight:700;line-height:1;
+  letter-spacing:-.02em;text-shadow:0 1px 2px rgba(var(--cal-glass),.95)}
 /* A quadrant is the floor, so the roomier shapes spend the room they have
    rather than settling for one glyph size everywhere. */
 .cal-split[data-n="1"] .cal-slice i{font-size:24px}
@@ -1773,7 +1846,8 @@ select option{background:var(--surface);color:var(--text)}
 .cal-split[data-n="3"] .cal-slice:not(:first-child) b{font-size:12px}
 /* the fifth kind, folded out of the quadrants into the last one's corner */
 .cal-fold{position:absolute;right:3px;bottom:2px;display:flex;align-items:center;gap:2px}
-.cal-fold-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.cal-fold-dot{width:5px;height:5px;border-radius:50%;background:currentColor;
+  box-shadow:0 1px 2px rgba(var(--cal-glass),.95)}
 .cal-fold b{font-size:9px}
 .cal-fold.bought{color:var(--ev-bought)} .cal-fold.cleaned{color:var(--ev-cleaned)}
 .cal-fold.played{color:var(--ev-played)} .cal-fold.liked{color:var(--ev-liked)}
@@ -1865,8 +1939,11 @@ select option{background:var(--surface);color:var(--text)}
      numeral do not both fit, and shrinking both until they do leaves neither
      readable. The numeral goes and the icon takes the room — the square
      answers WHICH, and the day list one tap away answers HOW MANY. */
-  .cal-slice b,.cal-fold b{display:none}
-  .cal-split{gap:2px}
+  .cal-slice b,.cal-fold b,.cal-cell-num b{display:none}
+  /* Nine px of channel is a fifth of a 47px cell. Five still shows the sleeve
+     between the slices without eating the slices themselves. */
+  .cal-split{gap:5px}
+  .cal-cell-in{padding:5px}
   .cal-slice i{font-size:13px}
   .cal-split[data-n="1"] .cal-slice i{font-size:20px}
   .cal-split[data-n="2"] .cal-slice i,
@@ -2941,6 +3018,40 @@ function joinStamp(day, time) {
   return time ? `${day}T${time.slice(0, 5)}:00` : day;
 }
 
+// ── note markdown ───────────────────────────────────────────────────────────
+// Notes are markdown, and five places render them: the form's list, the drawer
+// history, the photo lightbox's caption, the calendar's day card and the day
+// list. They each used to carry their own `typeof marked` ternary, so the rule
+// below could only ever be applied to some of them.
+//
+// A link in a note goes to a shop, a Discogs page, a review — somewhere else.
+// Followed in this tab it navigates the whole app away and the collection has
+// to boot again, so every one of them opens in a new tab. `noopener` with it:
+// without it the opened page gets a handle on this window through opener and
+// can navigate it wherever it likes.
+//
+// Guarded twice over: marked comes off a CDN, so it can be missing altogether,
+// and a version that does not take a renderer this way must cost the page its
+// note links, not its boot.
+if (typeof marked !== 'undefined' && marked.use && marked.Renderer) {
+  marked.use({ renderer: { link(href, title, text) {
+    // Delegate to the stock renderer so escaping, titles and mailto: keep
+    // whatever marked does with them, and only add the attributes.
+    const html = marked.Renderer.prototype.link.call(this, href, title, text);
+    return html.replace(/^<a /, '<a target="_blank" rel="noopener noreferrer" ');
+  } } });
+}
+
+// The one way to turn a note's words into HTML. marked is a CDN script, so it
+// can be missing — a note is still shown, as its own plain text, rather than
+// the page dying on an undefined.
+function noteHTML(text) {
+  const words = text || '';
+  if (!words) return '';
+  return typeof marked !== 'undefined' ? marked.parse(words)
+                                       : esc(words).replace(/\n/g, '<br>');
+}
+
 // ── multi-artist records ────────────────────────────────────────────────────
 // artist field stores multiple names as "Name A; Name B" — semicolon was chosen
 // over comma because band names can legitimately contain commas (e.g. "Earth,
@@ -3846,7 +3957,7 @@ function dmHistoryEntryHTML(ev) {
   const lock = ev.private
     ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span> ' : '';
   const body = ev.type === 'note'
-    ? `<div class="ht detail-notes-body">${ev.text ? (typeof marked !== 'undefined' ? marked.parse(ev.text) : esc(ev.text)) : ''}${shots}` +
+    ? `<div class="ht detail-notes-body">${noteHTML(ev.text)}${shots}` +
       `<span class="dm-hist-time">${lock}<i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
     : ev.type === 'liked'
     ? `<div class="ht"><i class="ti ${DM_HIST_ICON.liked} dm-hist-icon" title="${DM_HIST_LABEL.liked}"></i>` +
@@ -4470,6 +4581,24 @@ function countryCodeFromInput(value) {
 // Migration: if raw value is plain string (not JSON array), convert it once
 // using the record's bought_date (or today) as the date.
 let formNotes = []; // in-memory list while the form is open
+
+/* Editing a note already in the list.
+ *
+ * `editingNote` holds the note OBJECT, not its index: deleteNote splices
+ * formNotes, so an index kept here would quietly start pointing at a different
+ * note the moment another one is removed while this is open.
+ *
+ * The changes go into a working copy and reach the note itself only on save,
+ * so cancel is free and a half-typed edit can never be what gets stored.
+ *
+ * `editSeq` stamps the row in the DOM. A render that happens while an edit is
+ * open reads the live inputs back into the draft first (a photo arriving is
+ * one such render, and the words typed since must survive it) — and that read
+ * is only safe when the row on screen still belongs to the draft in hand,
+ * which is exactly what the stamp says. */
+let editingNote = null;
+let editingDraft = null;
+let editSeq = 0;
 let formNoteImages = [];    // ids attached to the note being composed
 // Data URIs for photos uploaded in this session, so a just-added thumbnail
 // paints immediately instead of round-tripping through its own URL.
@@ -4637,6 +4766,9 @@ function noteDateLabel(date) {
 
 function renderNotesForm() {
   const list = document.getElementById('fNotesList');
+  // Anything typed into an open edit row is about to be thrown away by the
+  // innerHTML below, so it goes back into the draft first.
+  syncNoteEditFromDOM();
   if (!formNotes.length) { list.innerHTML = ''; return; }
   // oldest first by date AND time, matching the detail view
   // Walk the ORIGINAL indices in date order instead of matching a sorted copy
@@ -4648,6 +4780,7 @@ function renderNotesForm() {
     .sort((a,b) => momentAt(formNotes[a].date).localeCompare(momentAt(formNotes[b].date)));
   list.innerHTML = order.map(origIdx => {
     const n = formNotes[origIdx];
+    if (n === editingNote) return noteEditHTML();
     const shots = (n.images || []).length
       ? `<div class="note-shots">${n.images.map(id =>
            noteShotHTML(id, `removeNoteImage(${origIdx}, '${id}')`)).join('')}</div>`
@@ -4657,8 +4790,9 @@ function renderNotesForm() {
         <div class="note-entry-date">${noteDateLabel(n.date)}</div>
         ${n.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''}
       </div>
-      <div class="note-entry-body">${typeof marked !== 'undefined' ? marked.parse(n.text || '') : esc(n.text || '')}</div>
+      <div class="note-entry-body">${noteHTML(n.text)}</div>
       ${shots}
+      <button class="note-edit-btn" title="edit note" onclick="startNoteEdit(${origIdx})"><i class="ti ti-pencil"></i></button>
       <button class="note-private-toggle" title="${n.private ? 'make this note public' : 'hide this note from visitors'}" onclick="toggleNotePrivate(${origIdx})"><i class="ti ti-${n.private ? 'lock' : 'lock-open'}"></i></button>
       <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
     </div>`;
@@ -4816,18 +4950,19 @@ async function addNote() {
   const timeEl = document.getElementById('fNoteTime');
   const textEl = document.getElementById('fNoteText');
   const date = joinStamp(dateEl.value, timeEl.value);
-  const text = textEl.value.trim();
-  if (!date) { dateEl.focus(); dateEl.style.borderColor='var(--danger)'; return; }
-  // Text OR a photo. A note that is just a picture of the sleeve is a note.
-  if (!text && !formNoteImages.length) {
-    textEl.focus(); textEl.style.borderColor='var(--danger)'; return;
+  // A day, and text OR a photo — a note that is just a picture of the sleeve
+  // is a note. normalizeNote is the rule; editing one already written applies
+  // the same one, so the two cannot come apart.
+  const note = VinylNotes.normalizeNote({
+    date, text: textEl.value, images: formNoteImages,
+    private: document.getElementById('fNotePrivate').checked });
+  if (!note) {
+    const bad = date ? textEl : dateEl;
+    bad.focus(); bad.style.borderColor='var(--danger)';
+    return;
   }
   dateEl.style.borderColor='';
   textEl.style.borderColor='';
-  // The key is written only when it is true. Every note ever taken is public,
-  // and an absent flag is what keeps them that way — see _public_notes in app.py.
-  const note = { date, text, images: formNoteImages };
-  if (document.getElementById('fNotePrivate').checked) note.private = true;
   formNotes.push(note);
   formNoteImages = [];
   renderNoteShots();
@@ -4850,14 +4985,135 @@ function toggleNotePrivate(idx) {
 }
 
 function deleteNote(idx) {
+  // Deleting the one being edited takes the edit with it — the draft has
+  // nothing left to be written back onto.
+  if (formNotes[idx] === editingNote) { editingNote = editingDraft = null; }
   formNotes.splice(idx, 1);
+  renderNotesForm();
+}
+
+// ── editing a note already in the list ──────────────────────────────────────
+
+/* The entry, swapped for its controls. Everything the add row can set, a note
+ * already written can change: when it happened, what it says, which photos are
+ * on it and whether a visitor may read it. */
+function noteEditHTML() {
+  const d = editingDraft;
+  const shots = d.images.length
+    ? `<div class="note-shots">${d.images.map(id =>
+         noteShotHTML(id, `removeEditImage('${id}')`)).join('')}</div>`
+    : '';
+  return `<div class="note-entry editing${d.private ? ' private' : ''}" id="noteEditRow" data-seq="${editSeq}">
+    <div class="note-edit-when">
+      <div class="field"><i class="ti ti-calendar"></i><input type="date" class="ne-date" value="${esc(stampDay(d.date))}"></div>
+      <div class="field"><i class="ti ti-clock"></i><input type="time" class="ne-time" value="${esc(stampTime(d.date))}" title="time of the note — leave blank if it does not matter"></div>
+    </div>
+    <textarea class="ne-text" placeholder="Add a note…">${esc(d.text)}</textarea>
+    ${shots}
+    <div class="note-edit-actions">
+      <button type="button" class="btn btn-sm" onclick="pickNotePhoto()"><i class="ti ti-photo"></i> photo</button>
+      <button type="button" class="btn btn-sm" onclick="openCamera('note')"><i class="ti ti-camera"></i> camera</button>
+      <label class="note-private-check" title="only visible in edit mode">
+        <input type="checkbox" class="ne-private"${d.private ? ' checked' : ''} onchange="syncNoteEditFromDOM()"><i class="ti ti-lock"></i> private
+      </label>
+      <span class="grow"></span>
+      <button type="button" class="btn btn-sm" onclick="cancelNoteEdit()">cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="saveNoteEdit()"><i class="ti ti-check"></i> save</button>
+    </div>
+  </div>`;
+}
+
+/* The live inputs back into the draft. Called before anything that repaints
+ * the list and by the private checkbox, which changes how the row is drawn.
+ * The stamp check is the whole safety of this: without it, opening a second
+ * note for editing would read the FIRST note's inputs — still on screen at
+ * that moment — into the new draft. */
+function syncNoteEditFromDOM() {
+  if (!editingDraft) return;
+  const row = document.getElementById('noteEditRow');
+  if (!row || row.dataset.seq !== String(editSeq)) return;
+  editingDraft.date = joinStamp(row.querySelector('.ne-date').value,
+                                row.querySelector('.ne-time').value);
+  editingDraft.text = row.querySelector('.ne-text').value;
+  editingDraft.private = row.querySelector('.ne-private').checked;
+}
+
+// Would saving this edit change anything? Both sides go through normalizeNote
+// so that a legacy note with no images key does not read as changed merely for
+// having grown one.
+function noteEditIsDirty() {
+  if (!editingNote || !editingDraft) return false;
+  return JSON.stringify(VinylNotes.normalizeNote(editingDraft))
+      !== JSON.stringify(VinylNotes.normalizeNote(editingNote));
+}
+
+function startNoteEdit(idx) {
+  const note = formNotes[idx];
+  if (!note || note === editingNote) return;
+  if (editingNote) {
+    // Only one at a time, and the one being abandoned may hold real work.
+    syncNoteEditFromDOM();
+    if (noteEditIsDirty() && !confirm('Discard your changes to the other note?')) return;
+  }
+  editSeq++;
+  editingNote = note;
+  editingDraft = { date: note.date, text: note.text || '',
+                   images: (note.images || []).slice(), private: !!note.private };
+  renderNotesForm();
+  const textEl = document.querySelector('#noteEditRow .ne-text');
+  if (textEl) { textEl.focus(); textEl.setSelectionRange(textEl.value.length, textEl.value.length); }
+}
+
+/* Forget an open edit without repainting. For the three places that replace
+ * formNotes wholesale — a new record, one opened for editing, a restored
+ * draft — where the note being edited belongs to a list that no longer
+ * exists. They paint the list themselves. */
+function resetNoteEdit() { editingNote = editingDraft = photoNote = null; }
+
+function cancelNoteEdit() {
+  // Photos uploaded into an edit that is thrown away are left behind on
+  // purpose: no note refers to them, so the server's sweep collects them.
+  editingNote = editingDraft = null;
+  renderNotesForm();
+}
+
+async function saveNoteEdit() {
+  syncNoteEditFromDOM();
+  // A photo picked a moment ago has to land on the note before it is written
+  // back, or the note is saved without it and the photo is stranded.
+  if (notePhotoUploads.length) {
+    await Promise.all(notePhotoUploads.map(p => p.catch(() => {})));
+  }
+  const row = document.getElementById('noteEditRow');
+  if (!row || !editingDraft) return;   // cancelled while a photo was in flight
+  const note = VinylNotes.normalizeNote(editingDraft);
+  if (!note) {
+    // Same rule as adding one: a day, and words or a photo. A note emptied
+    // out is not a delete — that is what the trash button next to it is for.
+    const bad = row.querySelector(editingDraft.date ? '.ne-text' : '.ne-date');
+    bad.focus(); bad.style.borderColor = 'var(--danger)';
+    return;
+  }
+  const idx = formNotes.indexOf(editingNote);
+  if (idx !== -1) formNotes[idx] = note;
+  editingNote = editingDraft = null;
+  renderNotesForm();
+}
+
+// A photo off the note being edited. Unlike the add row's strip this cannot
+// empty the note out from under the user — an edit saved with nothing left in
+// it is refused above, so the entry stays until they say what it should be.
+function removeEditImage(id) {
+  if (!editingDraft) return;
+  syncNoteEditFromDOM();
+  editingDraft.images = editingDraft.images.filter(x => x !== id);
   renderNotesForm();
 }
 
 // A photo just picked or captured, on its way to a note. Uploaded now rather
 // than at save so the record's own payload stays small: several photos plus a
 // dirty cover would otherwise be megabytes of base64 on every save.
-async function addNoteImage(dataUri){
+async function addNoteImage(dataUri, dest){
   // Same guard handleCoverFile uses: the upload is a network round trip, and
   // the form can be closed and another record opened while it is in flight.
   const myToken = scanToken;
@@ -4876,6 +5132,16 @@ async function addNoteImage(dataUri){
   const {id} = await res.json();
   if(myToken !== scanToken) return;   // a different record is on screen now
   noteImagePreview[id] = dataUri;
+  if(dest){
+    // The edit this photo was picked for. If it was saved or cancelled while
+    // the upload was in the air the photo has nowhere to go: it is dropped
+    // rather than filed onto whatever is open now, and the image row it left
+    // behind is collected by the server's sweep.
+    if(dest !== editingDraft) return;
+    if(dest.images.indexOf(id) === -1) dest.images.push(id);
+    renderNotesForm();
+    return;
+  }
   if(formNoteImages.indexOf(id) === -1) formNoteImages.push(id);  // same photo twice
   renderNoteShots();
 }
@@ -4966,6 +5232,7 @@ function applyDraft(d){
   myRating = Number(d.my_rating) || 0;
   wifeRating = Number(d.wife_rating) || 0;
   updateRatingUI();
+  resetNoteEdit();
   formNotes = parseNotes(d.notes);
   renderNotesForm();
   formPlayDates = parsePlayDates(d.play_dates);
@@ -5008,6 +5275,7 @@ function openAdd(){
   renderOwnSwitch();
   document.getElementById('fCondition').value='';
   renderCondSwitch();
+  resetNoteEdit();
   formNotes=[];
   formPlayDates=[];
   renderPlayDatesForm();
@@ -5084,6 +5352,7 @@ function openEdit(id){
   renderOwnSwitch();
   document.getElementById('fCondition').value=r.condition||'';
   renderCondSwitch();
+  resetNoteEdit();
   formNotes=parseNotes(r.notes, r.bought_date||today());
   scanToken++;   // strand any note-photo upload still in the air
   formNoteImages=[];
@@ -5178,7 +5447,10 @@ function closeForm(force){
   // A pending queue is itself work to lose: startQueuedRecord sets the
   // baseline AFTER filling the record, so an untouched queued record is never
   // "dirty" even though closing here drops every release still waiting.
-  const dirty = formIsDirty() || formNoteImages.length;
+  // An edit open on a note is work too — it has not been written back onto
+  // formNotes yet, so formIsDirty cannot see it.
+  syncNoteEditFromDOM();
+  const dirty = formIsDirty() || formNoteImages.length || noteEditIsDirty();
   if (force !== true && (dirty || queued > 0)) {
     const scanned = coverDirty || scanWrote && Object.keys(scanWrote).length;
     let message;
@@ -5318,17 +5590,25 @@ function closeSpotifyOverlay(){ document.getElementById('spotifyOverlay').classL
 // captureFrame used to hardcode applyCover so the camera could only ever
 // produce a cover.
 let photoTarget = 'cover';
+// And, for a note photo, WHICH note: the draft of the entry being edited, or
+// null for the add row's own strip. Captured when the photo is picked, like
+// photoTarget, because the edit can be saved or abandoned while a phone photo
+// is still decoding.
+let photoNote = null;
 
 function pickCoverFile(){ photoTarget = 'cover'; document.getElementById('coverInput').click(); }
-function pickNotePhoto(){ photoTarget = 'note';  document.getElementById('coverInput').click(); }
+function pickNotePhoto(){ photoTarget = 'note';  photoNote = editingDraft;
+                          document.getElementById('coverInput').click(); }
 function fallbackCapture(){ document.getElementById('coverCaptureInput').click(); }
 
 // The one place that knows where a finished data URI goes. `target` is the
 // destination captured when the file was picked; without it the read happens
 // after the decode, and tapping the other picker mid-decode sent an album
 // cover to a note, or a note photo over the cover.
-function applyPhoto(dataUri, target){
-  if((target || photoTarget) === 'note') trackNoteUpload(addNoteImage(dataUri));
+function applyPhoto(dataUri, target, note){
+  if((target || photoTarget) === 'note') {
+    trackNoteUpload(addNoteImage(dataUri, note === undefined ? photoNote : note));
+  }
   else applyCover(dataUri);
 }
 
@@ -5350,6 +5630,7 @@ async function openCamera(target){
   // refused open still retargeted, so a capture from the live cover camera
   // was filed as a note photo.
   photoTarget = target || 'cover';   // the cover button calls openCamera()
+  photoNote = photoTarget === 'note' ? editingDraft : null;
   // navigator.mediaDevices is undefined (not an error) outside a secure context.
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ fallbackCapture(); return; }
   let stream;
@@ -5435,9 +5716,7 @@ function paintShot(){
 function paintShotWords(text){
   const el = document.getElementById('shotNote');
   const words = (text || '').trim();
-  el.innerHTML = words
-    ? (typeof marked !== 'undefined' ? marked.parse(words) : esc(words))
-    : '';
+  el.innerHTML = noteHTML(words);
   el.classList.toggle('hidden', !words);
 }
 
@@ -5669,7 +5948,7 @@ async function handleCoverFile(e){
   const myToken = scanToken;
   // Captured with the token and for the same reason: both are read after the
   // decode, which on a phone photo is about a second of the user's time.
-  const target = photoTarget;
+  const target = photoTarget, note = photoNote;
   let dataUri;
   try{
     dataUri = await resizeImage(file);
@@ -5684,7 +5963,7 @@ async function handleCoverFile(e){
   // different record opened; applying the cover now would stamp it onto that
   // record. No ++ here — runScan takes its own token when the scan starts.
   if(myToken !== scanToken) return;
-  applyPhoto(dataUri, target);
+  applyPhoto(dataUri, target, note);
 }
 document.getElementById('coverInput').addEventListener('change', handleCoverFile);
 document.getElementById('coverCaptureInput').addEventListener('change', handleCoverFile);
@@ -8648,6 +8927,24 @@ function renderCalendar() {
   else renderCalWeek(events);
 }
 
+/* The day's records, as the cell's ground.
+ *
+ * Four is the cap: past that a 159px cell cannot tell one sleeve from another,
+ * and it is the cap the slices already have. The rest become a +N beside the
+ * date, which is the one corner the fold marker cannot also want.
+ *
+ * A record with no artwork falls back to the disc on the card ground, the same
+ * fallback calRecordDayChip uses. */
+function calSleevesHTML(recs) {
+  const shown = recs.slice(0, 4);
+  if (!shown.length) return '';
+  return `<div class="cal-sleeves" data-n="${shown.length}">${shown.map(r =>
+    `<div class="cal-sleeve">${r.cover_url
+      ? `<img src="${r.cover_url}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+      : '<i class="ti ti-disc"></i>'}</div>`).join('')}</div>
+    <div class="cal-scrim"></div>`;
+}
+
 /* One activity, as a slice of a month cell.
  *
  * The count is printed only above one — the same rule calActBtn follows in the
@@ -8678,9 +8975,7 @@ function calRecordDayCard(g) {
     : `<i class="ti ti-disc"></i>`;
   const evsOf = (type) => (g.acts.find(a => a.type === type) || { evs: [] }).evs;
   const notes = evsOf('note').map(ev => {
-    const rendered = typeof marked !== 'undefined'
-      ? marked.parse(ev.text)
-      : esc(ev.text).replace(/\n/g, '<br>');
+    const rendered = noteHTML(ev.text);
     return `<div class="cal-rec-note detail-notes-body${ev.private ? ' private' : ''}">${
       ev.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''
     }${rendered}</div>`;
@@ -8774,11 +9069,18 @@ function renderCalMonth(events) {
     const k = calKey(cur);
     const evs = events.get(k) || [];
     const { slices, fold } = VinylTimeline.daySplit(evs);
+    // One entry per record, in the order the day reached them — the same
+    // collapse openCalDay does, so the cell and its modal agree on the count.
+    const sleeves = VinylTimeline.recordDays(evs).map(g => g.r);
     cells += `<div class="cal-cell${cur.getMonth() !== m ? ' cal-out' : ''}${k === todayK ? ' cal-today' : ''}${evs.length ? ' has-ev' : ''}"${evs.length ? ` onclick="openCalDay('${k}')"` : ''}>
-      <div class="cal-cell-num">${cur.getDate()}</div>
-      ${slices.length ? `<div class="cal-split" data-n="${slices.length}">${
-        slices.map((sl, j) => calSliceHTML(sl, j === slices.length - 1 ? fold : null)).join('')
-      }</div>` : ''}
+      ${calSleevesHTML(sleeves)}
+      <div class="cal-cell-in">
+        <div class="cal-cell-num">${cur.getDate()}${
+          sleeves.length > 4 ? `<b>+${sleeves.length - 4}</b>` : ''}</div>
+        ${slices.length ? `<div class="cal-split" data-n="${slices.length}">${
+          slices.map((sl, j) => calSliceHTML(sl, j === slices.length - 1 ? fold : null)).join('')
+        }</div>` : ''}
+      </div>
     </div>`;
     cur.setDate(cur.getDate() + 1);
   }

@@ -84,7 +84,22 @@ async function boot(hash) {
   });
   win.d3 = chain;
   win.topojson = { feature: () => ({ features: [] }) };
-  win.marked = { parse: s => String(s), setOptions() {} };
+  /* marked, in as much as the app asks of it: a Renderer whose link() the page
+   * overrides so a note's links open in a new tab, and a parse that puts a
+   * markdown link through whichever renderer is in force. Everything else is
+   * markdown's business and passes through as its own text. */
+  win.marked = (function () {
+    const Renderer = function () {};
+    Renderer.prototype.link = (href, title, text) => `<a href="${href}">${text}</a>`;
+    let link = Renderer.prototype.link;
+    return {
+      Renderer,
+      use(cfg) { if (cfg && cfg.renderer && cfg.renderer.link) link = cfg.renderer.link; },
+      parse: s => String(s).replace(/\[([^\]]*)\]\(([^)]*)\)/g,
+                                   (_, text, href) => link.call(Renderer.prototype, href, null, text)),
+      setOptions() {},
+    };
+  })();
   win.HTMLCanvasElement.prototype.getContext = () => ({});
   win.matchMedia = win.matchMedia || (q => ({ matches: false, addListener() {}, removeListener() {} }));
   win.confirm = () => true;
@@ -2048,6 +2063,7 @@ test('the drawer marks a private note in the history', async () => {
     { date: '2026-08-10', text: 'paid too much', private: true },
   ]);
   win.openDetail(r.id);
+  win.setDetailTab('timeline');   // where the history has lived since the tabs
   assert.strictEqual(count(doc, '#ddInfo .dm-hist-entry.note.private'), 1,
     'a private note looks exactly like a public one in the drawer');
 });
@@ -2069,6 +2085,176 @@ test('saving an edited record keeps the private flag on the note', async () => {
   assert.ok(sent, 'nothing was sent');
   assert.deepStrictEqual(JSON.parse(sent.notes),
     [{ date: '2026-08-10', text: 'paid too much', private: true }]);
+});
+
+// ── editing a note already written ──────────────────────────────────────────
+
+/* Until this existed a note could only be deleted and written again, which
+ * lost the day it was written on and any photo hanging off it. The rules the
+ * add row obeys hold here too — a note still needs a day and either words or
+ * a photo — and nothing reaches formNotes until save is pressed. */
+
+const NOTE_ID_A = 'a'.repeat(32);
+
+// A record carrying exactly the notes a test needs, opened in the form.
+function openNoted(win, read, notes) {
+  const r = read('records').find(x => x.have_it);
+  r.notes = JSON.stringify(notes);
+  win.openEdit(r.id);
+  return r;
+}
+
+const pencils = doc => [...doc.querySelectorAll('#fNotesList .note-edit-btn')];
+const editRow = doc => $(doc, '#noteEditRow');
+
+test('the words of a note already written can be changed', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'clicky side B' }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-text').value = 'clicky side B — cleaned, it is gone';
+  await win.saveNoteEdit();
+  assert.strictEqual(read('formNotes')[0].text, 'clicky side B — cleaned, it is gone');
+  assert.strictEqual(editRow(doc), null, 'the row stayed open after saving');
+});
+
+test('a note can be restamped with the day it really happened', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'seam split' }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-date').value = '2026-07-04';
+  $(doc, '#noteEditRow .ne-time').value = '21:30';
+  await win.saveNoteEdit();
+  assert.strictEqual(read('formNotes')[0].date, '2026-07-04T21:30:00');
+});
+
+/* The draft is a copy, and cancel is the whole reason it is one. */
+test('cancelling an edit leaves the note as it was', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'seam split' }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-text').value = 'nonsense typed by accident';
+  win.cancelNoteEdit();
+  assert.strictEqual(read('formNotes')[0].text, 'seam split');
+  assert.strictEqual(editRow(doc), null, 'the row stayed open after cancelling');
+});
+
+/* Emptying a note is not how a note is deleted — the trash button beside it
+ * is, and it asks nothing. A save that quietly dropped the note instead would
+ * make a mistyped edit indistinguishable from a deliberate delete. */
+test('a note cannot be emptied out by editing it', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'seam split' }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-text').value = '   ';
+  await win.saveNoteEdit();
+  assert.strictEqual(read('formNotes')[0].text, 'seam split', 'the note was emptied');
+  assert.ok(editRow(doc), 'the refused save closed the row anyway');
+});
+
+test('a note stripped of its day is refused too', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'seam split' }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-date').value = '';
+  await win.saveNoteEdit();
+  assert.strictEqual(read('formNotes')[0].date, '2026-08-10', 'the note lost its day');
+  assert.ok(editRow(doc), 'the refused save closed the row anyway');
+});
+
+/* No key at all, exactly as toggleNotePrivate leaves it — _public_notes reads
+ * an absent key as public, and a `private: false` left behind would be a note
+ * that looks published but was never written that way. */
+test('editing can publish a private note', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'paid too much', private: true }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-private').checked = false;
+  await win.saveNoteEdit();
+  assert.ok(!('private' in read('formNotes')[0]), 'the published note kept a flag');
+});
+
+test('editing can hide a note a visitor can currently read', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'paid too much' }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-private').checked = true;
+  await win.saveNoteEdit();
+  assert.strictEqual(read('formNotes')[0].private, true);
+});
+
+/* A photo picked while a note is open belongs to THAT note, not to the add row
+ * above it — which is where every note photo used to go. */
+test('a photo taken while editing lands on the note being edited', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'seam split' }]);
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => String(url).endsWith('/api/note-images')
+    ? { ok: true, status: 200, json: async () => ({ id: NOTE_ID_A }) }
+    : realFetch(url, opts);
+  press(win, pencils(doc)[0]);
+  await win.addNoteImage('data:image/png;base64,x', read('editingDraft'));
+  await win.saveNoteEdit();
+  assert.deepStrictEqual([...read('formNotes')[0].images], [NOTE_ID_A]);
+  assert.deepStrictEqual([...read('formNoteImages')], [], 'it went to the add row as well');
+});
+
+/* The photo arriving repaints the list, which rewrites the row being typed
+ * into. Whatever is in the box has to go back into the draft first. */
+test('words typed while a photo uploads are not lost when it arrives', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'seam split' }]);
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => String(url).endsWith('/api/note-images')
+    ? { ok: true, status: 200, json: async () => ({ id: NOTE_ID_A }) }
+    : realFetch(url, opts);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-text').value = 'typed while the photo was uploading';
+  await win.addNoteImage('data:image/png;base64,x', read('editingDraft'));
+  assert.strictEqual($(doc, '#noteEditRow .ne-text').value,
+                     'typed while the photo was uploading');
+});
+
+/* Opening the second note reads the FIRST one's inputs — still on screen at
+ * that moment — unless the sync can tell the row no longer belongs to the
+ * draft in hand. Without that check the second note silently becomes a copy
+ * of what was typed into the first. */
+test('opening a second note for editing does not take the first one s words', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'first note' },
+                         { date: '2026-08-11', text: 'second note' }]);
+  press(win, pencils(doc)[0]);
+  $(doc, '#noteEditRow .ne-text').value = 'changed my mind';
+  // By its words, not its place: the note open for editing shows no pencil, so
+  // positions shift the moment the first one is opened.
+  press(win, [...doc.querySelectorAll('#fNotesList .note-entry')]
+    .find(e => /second note/.test(e.textContent))
+    .querySelector('.note-edit-btn'));   // confirm() is stubbed to yes: drop the first
+  assert.strictEqual($(doc, '#noteEditRow .ne-text').value, 'second note');
+  await win.saveNoteEdit();
+  assert.deepStrictEqual([...read('formNotes')].map(n => n.text), ['first note', 'second note']);
+});
+
+test('deleting the note being edited closes the edit with it', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'seam split' }]);
+  press(win, pencils(doc)[0]);
+  win.deleteNote(0);
+  assert.strictEqual(editRow(doc), null, 'the row outlived the note');
+  assert.strictEqual(read('editingDraft'), null, 'the draft outlived the note');
+});
+
+/* A note links to a shop, a Discogs page, a review. Followed in this tab it
+ * navigates the whole collection away and the app boots again from scratch. */
+test('a link in a note opens in a new tab', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  r.notes = JSON.stringify([{ date: '2026-08-10', text: 'found it at [the shop](https://example.com)' }]);
+  win.openDetail(r.id);
+  win.setDetailTab('timeline');   // where the history has lived since the tabs
+  const link = $(doc, '#ddInfo .dm-hist-entry.note a');
+  assert.ok(link, 'the note rendered no link at all');
+  assert.strictEqual(link.getAttribute('target'), '_blank');
+  assert.match(link.getAttribute('rel') || '', /noopener/);
 });
 
 /* Export carries the private notes, so it is behind auth now. The button has
