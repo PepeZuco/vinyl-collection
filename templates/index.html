@@ -3304,8 +3304,19 @@ function cardHTML(r) {
     return `<div class="vcard-sleeve" style="right:${inset}px;bottom:${inset}px;filter:brightness(${(1 - depth * 0.15).toFixed(2)})"></div>`;
   }).join('');
   const artInset = marks.sleeves * STACK_STEP;
+  // The artist overlay is chrome that belongs to the ARTWORK, not to the
+  // sleeve band behind it: it is always-on (unlike the hover scrim and the
+  // quick-edit button) and paints after the marks, so left at the level of
+  // the full cover box its gradient would sit permanently over the bottom
+  // sleeve sliver and the lowest spine segment(s), muting the very marks this
+  // feature exists to show. So on a multi-disc card it is nested inside
+  // `.vcard-cover-art` instead of sitting alongside it — its bottom/left/right
+  // then resolve against the art's own (inset) box, not the cover's. On a
+  // single disc there is no wrapper to nest it in, so it stays exactly where
+  // it always has: a direct child of `.vcard-cover`, last in source order.
+  const artistOverlay = `<div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>`;
   const coverArt = marks.sleeves
-    ? `<div class="vcard-cover-art" style="right:${artInset}px;bottom:${artInset}px">${cover}</div>`
+    ? `<div class="vcard-cover-art" style="right:${artInset}px;bottom:${artInset}px">${cover}${artistOverlay}</div>`
     : cover;
   const spine = marks.segments
     ? `<div class="vcard-spine" style="bottom:${artInset}px" title="${marks.segments} discs">` +
@@ -3354,7 +3365,7 @@ function cardHTML(r) {
       </div>
       ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagImgHTML(r.country, 28)}</div>` : ''}
-      <div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>
+      ${marks.sleeves ? '' : artistOverlay}
     </div>
     <div class="vcard-body">
       <div class="vcard-title-row">
