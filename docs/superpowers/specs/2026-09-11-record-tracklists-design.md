@@ -394,8 +394,10 @@ The wizard becomes **Record · Purchase · Log · Tracklist**.
   copied text arrives in.
 - The hearts are editable here too. The form is the definitive writer; the
   drawer is the shortcut.
-- Draft persistence (`static/draft.js`) must cover the new step, or a
-  half-typed tracklist dies with the tab.
+- Draft persistence covers the new step for free: `rememberDraft()` saves
+  whatever `formValues()` returns, so adding `tracks`, `disc_count` and `size`
+  there is all a half-typed tracklist needs to survive a lost tab. `applyDraft()`
+  reads them back.
 
 ---
 
@@ -475,7 +477,7 @@ Named here so they are decisions, not omissions:
 | `static/tracks.js` | **new** — parse/serialize/grouping rules |
 | `static/filters.js` | `song` in `DEFAULT_FIELDS`, `haystack`, `FILTER_DEPS` |
 | `static/timeline.js` | `liked` in `ALL_TYPES`, `TYPE_ORDER`, `eventsByDay` |
-| `static/draft.js` | draft coverage for form step 4 |
+| `static/draft.js` | **no change** — `rememberDraft()` saves `formValues()` wholesale, so step 4 is covered by the three new keys there |
 | `templates/index.html` | card marks, drawer tabs + Tracks tab, Format cell, liked chip, heart handler, form step 4 + paste box, search checkbox, calendar type button, `--ev-liked`, `DM_HIST_*` |
 | `tests/` | five files per [§9](#9-testing) |
 | `docs/tracklist-manual-verification.md` | **new** |
