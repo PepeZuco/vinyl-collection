@@ -28,7 +28,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#f1c23f;--danger:#c0392b;
   --card-hover:#1f1f1f;--search-bg:transparent;
   --sh-gray:rgba(100,100,100,0.35);
-  --ev-bought:#F5C518; --ev-cleaned:#4AA3C4; --ev-played:#5FBF7A; --ev-note:#9B7FD4;
+  --ev-bought:#F5C518; --ev-cleaned:#4AA3C4; --ev-played:#5FBF7A; --ev-note:#9B7FD4; --ev-liked:#E05A5A;
   --toggle-icon:'☀'
 }
 [data-theme="light"]{
@@ -36,7 +36,7 @@ html,body{touch-action:pan-x pan-y}
   --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#7A5A00;--danger:#c0392b;
   --card-hover:#e9e5dc;--search-bg:#f0ede6;
   --sh-gray:rgba(0,0,0,0.18);
-  --ev-bought:#b39609; --ev-cleaned:#2b7f99; --ev-played:#3d8a55; --ev-note:#6f4fae;
+  --ev-bought:#b39609; --ev-cleaned:#2b7f99; --ev-played:#3d8a55; --ev-note:#6f4fae; --ev-liked:#b33b3b;
   --toggle-icon:'☾'
 }
 
@@ -497,6 +497,7 @@ select option{background:var(--surface);color:var(--text)}
 .dm-chip.plays .dm-dot{background:#5FBF7A}
 .dm-chip.genre .dm-dot{background:#4AA3C4}
 .dm-chip.wish .dm-dot{background:#9B7FD4}
+.dm-chip.liked .dm-dot{background:var(--ev-liked)}
 .dm-chip b{color:var(--text);font-variant-numeric:tabular-nums}
 .dm-mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
 .dm-mcell{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 11px}
@@ -510,6 +511,35 @@ select option{background:var(--surface);color:var(--text)}
 .dm-history{margin-top:14px}
 .dm-history h4{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--muted);margin-bottom:8px}
+.dm-tabs{display:flex;gap:2px;margin-top:12px;border-bottom:1px solid var(--border)}
+.dm-tab{padding:7px 12px;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--font)}
+.dm-tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.dm-tab:hover{color:var(--text)}
+
+.tl-disc{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin:12px 0 4px}
+.tl-side{display:flex;align-items:center;gap:8px;margin:10px 0 4px}
+.tl-letter{width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--bg);
+  font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 18px}
+.tl-side .lbl{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.tl-side .rule{flex:1;height:1px;background:var(--border)}
+.tl-row{display:flex;align-items:center;gap:9px;padding:4px 3px;border-radius:5px}
+.tl-row:hover{background:var(--card-hover)}
+.tl-row .num{width:14px;text-align:right;font-size:10.5px;color:var(--muted);
+  font-variant-numeric:tabular-nums;flex:0 0 14px}
+.tl-row .ttl{flex:1;font-size:12.5px;min-width:0}
+.tl-row.liked .ttl{color:var(--text);font-weight:600}
+.tl-row .when{font-size:9.5px;color:var(--muted);flex:0 0 auto}
+.tl-empty{font-size:11px;color:var(--muted);padding:4px 3px 4px 26px;font-style:italic}
+.tl-none{text-align:center;padding:26px 12px;color:var(--muted);font-size:12px}
+
+.tl-heart,.tl-heart-static{background:none;border:none;padding:2px;cursor:pointer;
+  font-size:14px;color:var(--muted);opacity:.35;flex:0 0 auto;line-height:1}
+.tl-heart:hover{opacity:1;color:var(--ev-liked)}
+.tl-heart.on,.tl-heart-static.on{opacity:1;color:var(--ev-liked)}
+.tl-heart-static{cursor:default}
 /* one group per date — the timeline marker on the border-left line represents
    the date itself, not any one event type, so it stays neutral */
 .dm-hist-group{position:relative;padding:0 0 14px 16px;border-left:2px solid var(--border);margin-left:5px}
@@ -3487,6 +3517,29 @@ function renderDetailContent(r) {
 // ── mobile crate carousel ───────────────────────────────────────────────────
 let dmList = [], dmIdx = 0;
 
+/* Which tab the drawer is showing. Sticky while the drawer is open, so paging
+ * through records with the arrows does not throw you back to Info every time.
+ *
+ * Tracks is the default because it is what you open a record to see — but the
+ * collection starts with no tracklists at all, so a record with none falls
+ * back to Info rather than opening on an empty tab. */
+let detailTab = 'tracks';
+
+function activeDetailTab(r) {
+  if (detailTab === 'tracks' && !parseTracks(r.tracks).length) return 'info';
+  return detailTab;
+}
+
+function setDetailTab(tab) {
+  detailTab = tab;
+  const rec = records.find(x => x.id === currentDetailId);
+  if (!rec) return;
+  const info = document.getElementById('dmInfo');
+  if (info) info.innerHTML = dmInfoHTML(rec);
+  const ddInfo = document.getElementById('ddInfo');
+  if (ddInfo) ddInfo.innerHTML = dmInfoHTML(rec);
+}
+
 function dmSlideHTML(rec) {
   const img = rec.cover_url
     ? `<img src="${rec.cover_url}" alt="${esc(rec.album_name)}" loading="lazy" onerror="this.style.display='none'">`
@@ -3693,6 +3746,19 @@ function lastCleanedLabel(r) {
 }
 
 function dmInfoHTML(r) {
+  const tab = activeDetailTab(r);
+  const tabBtn = (id, label) =>
+    `<button class="dm-tab${tab === id ? ' on' : ''}" onclick="setDetailTab('${id}')">${label}</button>`;
+  return dmHeaderHTML(r) + `
+    <div class="dm-tabs">
+      ${tabBtn('info', 'Info')}${tabBtn('tracks', 'Tracks')}${tabBtn('timeline', 'Timeline')}
+    </div>` +
+    (tab === 'tracks'   ? dmTracksTabHTML(r)
+   : tab === 'timeline' ? dmTimelineTabHTML(r)
+   :                      dmInfoTabHTML(r));
+}
+
+function dmHeaderHTML(r) {
   const myR = Number(r.my_rating) || 0;
   const herR = Number(r.wife_rating) || 0;
   const tot = myR + herR;
@@ -3704,16 +3770,6 @@ function dmInfoHTML(r) {
     Array.from({length:5}, (_,i) => authed
       ? `<button class="${i < Math.round(v) ? 'f' : ''}" data-rate="${who}" data-rid="${r.id}" data-val="${i+1}" aria-label="${who} ${i+1} of 5"></button>`
       : `<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('') + `</div>`;
-  const historyGroups = dmHistoryGroups(dmHistoryEvents(r));
-  const countryStr = r.country
-    ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
-  const conditionStr = conditionBadgeHTML(r);
-  // Played and cleaned are offered only for a record that is actually here. A
-  // wishlist entry is one nobody has yet, so logging either would be a claim
-  // about a copy that does not exist — the form already refuses both for one
-  // (applyOwnershipMode) and the insight tiles already leave it out of the play
-  // and cleaning counts. The drawer was the last place still asking.
-  const canLog = authed && r.have_it;
   return `
     <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
     <div class="dm-artist">${dmArtistHTML(r)}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
@@ -3721,16 +3777,29 @@ function dmInfoHTML(r) {
       <div class="dm-rate pepe"><div class="who">Pepe</div>${(myR>0||authed)?bars(myR,'my_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
       <div class="dm-rate jenni"><div class="who">Jenni</div>${(herR>0||authed)?bars(herR,'wife_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${herR>0?herR+'/5':''}</div></div>
       <div class="dm-total"><div class="who">Total</div><div class="tv">${totalStr}<small>/10</small></div></div>
-    </div>
+    </div>`;
+}
+
+function dmInfoTabHTML(r) {
+  const countryStr = r.country
+    ? `${flagImgHTML(r.country, 15)} ${countryLabelFromCode(r.country).replace(/\s*\([A-Z]{2}\)$/,'')}` : '—';
+  const liked = likedTracks(parseTracks(r.tracks)).length;
+  // Played and cleaned are offered only for a record that is actually here. A
+  // wishlist entry is one nobody has yet, so logging either would be a claim
+  // about a copy that does not exist.
+  const canLog = authed && r.have_it;
+  return `
     <div class="dm-chips">
       <span class="dm-chip plays"><span class="dm-dot"></span><b>${r.play_count||0}</b>&nbsp;plays</span>
       ${r.genre ? `<span class="dm-chip genre"><span class="dm-dot"></span>${esc(r.genre)}</span>` : ''}
+      ${liked ? `<span class="dm-chip liked"><span class="dm-dot"></span><b>${liked}</b>&nbsp;liked</span>` : ''}
       ${r.have_it ? '' : '<span class="dm-chip wish"><span class="dm-dot"></span>wishlist</span>'}
     </div>
     <div class="dm-mgrid">
       <div class="dm-mcell"><label><i class="ti ti-calendar"></i>Bought</label><span>${boughtLabel(r)}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-map-pin"></i>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
-      <div class="dm-mcell"><label><i class="ti ti-certificate"></i>Condition</label><span>${conditionStr}</span></div>
+      <div class="dm-mcell"><label><i class="ti ti-certificate"></i>Condition</label><span>${conditionBadgeHTML(r)}</span></div>
+      <div class="dm-mcell"><label><i class="ti ti-stack-2"></i>Format</label><span>${formatLabel(r)}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${lastCleanedLabel(r)}</span></div>
     </div>
@@ -3741,8 +3810,78 @@ function dmInfoHTML(r) {
       <button class="dm-qbtn clean" onclick="logCleaned(${r.id})">
         <i class="ti ti-droplet"></i>Cleaned today
       </button>
-    </div>` : ''}
-    ${historyGroups.length ? `<div class="dm-history"><h4>History</h4>${historyGroups.map(dmHistoryGroupHTML).join('')}</div>` : ''}`;
+    </div>` : ''}`;
+}
+
+/* Size and disc count in one cell rather than two: on a shelf they are one
+ * fact. An unknown size says so instead of guessing 12". */
+function formatLabel(r) {
+  const discs = Math.max(1, Number(r.disc_count) || 1);
+  const size = r.size ? `${r.size}"` : '';
+  if (discs > 1 && size) return `${discs} × ${size}`;
+  if (discs > 1)         return `${discs} discs`;
+  return size || '—';
+}
+
+function dmTimelineTabHTML(r) {
+  const groups = dmHistoryGroups(dmHistoryEvents(r));
+  if (!groups.length) return '<div class="tl-none">nothing logged yet</div>';
+  return `<div class="dm-history">${groups.map(dmHistoryGroupHTML).join('')}</div>`;
+}
+
+function dmTracksTabHTML(r) {
+  const list = parseTracks(r.tracks);
+  if (!list.length) {
+    return `<div class="tl-none">no tracklist yet
+      ${authed ? `<div style="margin-top:10px">
+        <button class="btn btn-sm" onclick="openEdit(${r.id});setFormStep(4)">
+          <i class="ti ti-plus"></i> add the songs</button></div>` : ''}
+    </div>`;
+  }
+  const discs = Math.max(1, Number(r.disc_count) || 1);
+  const sides = tracksBySide(list, discs);
+  let out = '';
+  let lastDisc = 0;
+  sides.forEach(side => {
+    // Disc headers appear only on a record that has more than one. A single LP
+    // shows sides A and B with no disc chrome at all.
+    if (discs > 1 && side.disc !== lastDisc) {
+      out += `<div class="tl-disc">Disc ${side.disc}</div>`;
+      lastDisc = side.disc;
+    }
+    out += `<div class="tl-side"><span class="tl-letter">${side.letter}</span>
+      <span class="lbl">Side ${side.letter}</span><span class="rule"></span></div>`;
+    out += side.tracks.length
+      ? side.tracks.map(t => dmTrackRowHTML(r, t)).join('')
+      : '<div class="tl-empty">nothing on this side</div>';
+  });
+  return out;
+}
+
+function dmTrackRowHTML(r, t) {
+  const on = !!t.liked_at;
+  // The heart is the control when you can edit — the same call the rating bars
+  // above it already make. Task 5 wires the handler; until then it renders.
+  const heart = authed
+    ? `<button class="tl-heart${on ? ' on' : ''}" onclick="toggleLike(${r.id}, ${t.i})"
+         title="${on ? 'remove this like' : 'liked this one'}"
+         aria-label="${on ? 'liked' : 'not liked'}"><i class="ti ti-heart${on ? '-filled' : ''}"></i></button>`
+    : `<i class="ti ti-heart${on ? '-filled' : ''} tl-heart-static${on ? ' on' : ''}"></i>`;
+  return `<div class="tl-row${on ? ' liked' : ''}">
+    <span class="num">${t.pos}</span>
+    <span class="ttl">${esc(t.title)}</span>
+    ${on ? `<span class="when">${esc(dmFormatLikeDate(t.liked_at))}</span>` : ''}
+    ${heart}
+  </div>`;
+}
+
+/* '9 Sep' — short, because it sits at the end of a song title and the year is
+ * almost always this one. The full stamp is in the Timeline tab. */
+function dmFormatLikeDate(stamp) {
+  const m = momentOf(stamp);
+  if (!m.day) return '';
+  const [y, mo, d] = m.day.split('-');
+  return `${Number(d)} ${DM_MONTHS_PT[Number(mo)-1].slice(0,3)}`;
 }
 
 function dmSetCurrent(idx) {
@@ -3915,6 +4054,13 @@ function openDetail(id, focus) {
   confirmDeleteId = null;
   currentDetailId = id;
   focusDetail(focus);
+  // A focus points at an entry in the Timeline tab. If the sticky tab is
+  // something else, that entry never reaches the DOM and scrollFocusIntoView
+  // below finds nothing to scroll to — so a focused open always lands on
+  // Timeline, no matter what the drawer was showing last. Set before
+  // rendering: dmInfoHTML reads detailTab during renderDetailContent, so this
+  // has to land before that call, not after.
+  if (focus) detailTab = 'timeline';
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
@@ -4017,6 +4163,7 @@ function renderDetailFoot(id) {
 function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
   confirmDeleteId=null;currentDetailId=null;focusDetail(null);
+  detailTab = 'tracks';
   syncUrl(true);
 }
 
