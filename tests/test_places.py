@@ -199,6 +199,43 @@ def test_a_rename_onto_an_existing_name_merges_them(authed):
         assert app_module.db.session.get(app_module.Place, keep).name == "Tracks RIO"
 
 
+def test_a_rename_typed_as_the_absorbed_places_exact_spelling_does_not_double_count(authed):
+    # The natural way to merge: rename the edited place onto the OTHER place's
+    # name, typed exactly as that other place already has it. Nothing here is
+    # a new spelling — "Tracks Rio"'s 2 records already read the right thing —
+    # so only the 3 "Tracks" records actually change.
+    edited = make_place("Tracks")
+    absorbed = make_place("Tracks Rio")
+    make_record("Tracks")
+    make_record("Tracks")
+    make_record("Tracks")
+    make_record("Tracks Rio")
+    make_record("Tracks Rio")
+
+    r = authed.put(f"/api/places/{edited}", json={"name": "Tracks Rio", "url": ""})
+
+    assert r.status_code == 200
+    assert r.get_json()["records_updated"] == 3
+    assert wheres() == ["Tracks Rio"] * 5
+    with app_module.app.app_context():
+        assert app_module.db.session.get(app_module.Place, absorbed) is None
+        assert app_module.Place.query.count() == 1
+
+
+def test_a_verbatim_merge_still_applies_the_requests_name_and_url(authed):
+    edited = make_place("Tracks")
+    make_place("Tracks Rio")
+    make_record("Tracks")
+    make_record("Tracks Rio")
+
+    r = authed.put(f"/api/places/{edited}",
+                   json={"name": "Tracks Rio", "url": "https://tracksrio.com"})
+
+    body = r.get_json()["place"]
+    assert body["name"] == "Tracks Rio"
+    assert body["url"] == "https://tracksrio.com"
+
+
 def test_edit_refuses_a_bad_link_and_an_empty_name(authed):
     pid = make_place("Tracks Rio")
 

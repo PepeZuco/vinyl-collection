@@ -604,20 +604,25 @@ def update_place(pid):
         return jsonify({"error": "a link has to be http:// or https://"}), 400
 
     # Every name this rename has to pull records off: the place's own old name,
-    # plus the name of any place it is being merged into. Both move to `name`,
-    # so a merge leaves one place and one spelling behind it.
-    old_names = [place.name] if place.name != name else []
+    # plus the name of any place it is being merged into — but only the ones
+    # that actually differ from the typed name. Typing a place's own existing
+    # spelling verbatim (the natural way to merge onto it) must not count
+    # those rows twice, so a name identical to `name` is excluded rather than
+    # rewritten. One bulk UPDATE over the survivors' rowcount is the count:
+    # with a single statement there's no second WHERE to double-match rows
+    # the first one just renamed.
     absorbed = Place.query.filter(func.lower(Place.name) == name.lower(),
                                   Place.id != place.id).first()
     if absorbed:
-        old_names.append(absorbed.name)
         db.session.delete(absorbed)
 
+    candidates = (place.name, absorbed.name) if absorbed else (place.name,)
+    names_to_move = [n for n in candidates if n != name]
     updated = 0
-    for old in old_names:
-        updated += (Record.query.filter(Record.bought_where == old)
-                    .update({Record.bought_where: name},
-                            synchronize_session=False))
+    if names_to_move:
+        updated = (Record.query.filter(Record.bought_where.in_(names_to_move))
+                   .update({Record.bought_where: name},
+                           synchronize_session=False))
     place.name = name
     place.url = url
     db.session.commit()
