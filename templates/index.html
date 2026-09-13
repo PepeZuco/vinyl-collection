@@ -7737,6 +7737,7 @@ function scanCardHtml(c, opts){
     ? '<span class="scan-badge-dup"><i class="ti ti-alert-triangle"></i> already in your collection</span>'
     : '';
   const best = opts.best ? '<span class="scan-badge-best">best match</span>' : '';
+  const vinyl = vinylBadgeHtml(c.vinyl);
   const box = opts.selectable
     ? `<span class="scan-pick${opts.selected ? ' on' : ''}"><i class="ti ti-check"></i></span>`
     : '';
