@@ -163,6 +163,7 @@ select option{background:var(--surface);color:var(--text)}
   color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px}
 .cover-censor-eye:hover{background:rgba(0,0,0,.75)}
 .cover-censored.revealed .cover-censor-eye{display:none}
+.list-cover-wrap .cover-censor-eye{width:18px;height:18px;font-size:9px;border-width:1px}
 
 /* A double (or triple...) record is more than one record, and a 7" is not the
  * same object as an LP. The card used to say both in marks — yellow segments
@@ -620,8 +621,17 @@ select option{background:var(--surface);color:var(--text)}
   box-shadow:0 10px 30px rgba(0,0,0,.45);cursor:default;z-index:1}
 /* info-card styling shared by desktop drawer and mobile info sheet — built
    from the same dmInfoHTML() markup so both views stay in sync */
-.dm-album{font-size:22px;font-weight:800;line-height:1.15}
+/* A row rather than a line of text, because the phone hangs its furniture
+   toggle off the right end of it. align-items:start keeps that button level
+   with the FIRST line of a title that wraps to three, instead of drifting down
+   beside the middle of it. */
+.dm-album{font-size:22px;font-weight:800;line-height:1.15;
+  display:flex;align-items:flex-start;gap:10px}
+.dm-album .dm-album-t{flex:1;min-width:0}
 .dm-album .dm-year{font-size:14px;color:var(--muted);font-weight:500;margin-left:8px}
+/* Nudged up by the difference between the button and the title's cap height, so
+   it sits on the title's line rather than below it. */
+.dm-album .dm-shelf{flex:0 0 auto;margin-top:-1px}
 .dm-artist{margin-top:4px;font-size:14px;color:var(--muted)}
 .dm-artist .multi-artist-badge{margin-right:0;margin-left:4px}
 .dm-artist-more{display:none}
@@ -2619,7 +2629,7 @@ select option{background:var(--surface);color:var(--text)}
       <span class="modal-title">record detail</span>
       <div class="detail-drawer-nav">
         <span class="detail-shelf-pos" id="detailShelfPos"></span>
-        <button class="detail-nav-btn shelf" id="detailShelfBtn" title="show shelf order" onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>
+        <button class="detail-nav-btn shelf-btn" id="detailShelfBtn" title="show shelf order" onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>
         <button class="detail-nav-btn random" id="detailRandomBtn" title="random record" onclick="randomDetail()"><i class="ti ti-dice-5"></i></button>
         <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><i class="ti ti-x"></i></button>
       </div>
@@ -3981,7 +3991,15 @@ function trackOverlayHTML(r, needle) {
 function scrollTracksToMatch(root) {
   (root || document).querySelectorAll('.vct-scroll').forEach(sc => {
     const hit = sc.querySelector('.vct-row.hit');
-    if (hit) sc.scrollTop = Math.max(0, hit.offsetTop - 44);
+    if (!hit) return;
+    const put = () => { sc.scrollTop = Math.max(0, hit.offsetTop - 44); };
+    put();
+    /* Hovering collapses the list to the matches alone, which is shorter than
+     * the box — so the browser clamps the scroll to 0, and letting go would
+     * leave the tracklist sitting at side A with the song you came for out of
+     * sight. Putting it back on the way out is what makes the peek free. */
+    const card = sc.closest('.vcard');
+    if (card) card.addEventListener('mouseleave', put);
   });
 }
 
@@ -4201,6 +4219,20 @@ function toggleDetailShelfOrder() {
 
 function shelfPositionOf(id) {
   return id == null ? null : VinylGrouping.shelfPositionOf(shelfRecords(), id);
+}
+
+/* What the furniture button should look like for a given record. Both copies of
+ * it -- the desktop header's and the phone's, in the album row -- are drawn and
+ * re-synced from this, so they can never disagree about a state they share. */
+function shelfBtnState(id) {
+  const pos = shelfPositionOf(id);
+  return {
+    pos,
+    on: detailShelfOrder && !!pos,
+    title: !pos ? 'not on the shelf yet'
+         : detailShelfOrder ? 'back to the collection order'
+         : 'show shelf order',
+  };
 }
 
 function renderDetailContent(r) {
@@ -4546,7 +4578,7 @@ function detailSectionsHTML(r, pane) {
   const tabBtn = (id, icon, label) =>
     `<button class="dm-tab" data-ddsec="${id}" onclick="detailGoToSection('${pane}','${id}')"
        ><i class="ti ti-${icon}"></i>${label}</button>`;
-  return dmHeaderHTML(r) + `
+  return dmHeaderHTML(r, pane) + `
     <div class="dm-tabs dd-tabs" id="${pane}Tabs">
       ${tabBtn('info', 'info-circle', 'Info')}${tabBtn('tracks', 'playlist', 'Tracks')}${tabBtn('timeline', 'timeline', 'Timeline')}
     </div>
@@ -4655,7 +4687,7 @@ function dmMeasureChrome() {
   lay.style.setProperty('--dm-sec-min', Math.max(0, room) + 'px');
 }
 
-function dmHeaderHTML(r) {
+function dmHeaderHTML(r, pane) {
   const myR = Number(r.my_rating) || 0;
   const herR = Number(r.wife_rating) || 0;
   const tot = myR + herR;
@@ -4667,8 +4699,19 @@ function dmHeaderHTML(r) {
     Array.from({length:5}, (_,i) => authed
       ? `<button class="${i < Math.round(v) ? 'f' : ''}" data-rate="${who}" data-rid="${r.id}" data-val="${i+1}" aria-label="${who} ${i+1} of 5"></button>`
       : `<i class="${i < Math.round(v) ? 'f' : ''}"></i>`).join('') + `</div>`;
+  // The desktop drawer has this button in its own header; the phone has no
+  // header to put it in (.modal-head is display:none there), so its copy rides
+  // the album row. Drawn with its state already on it rather than waiting to be
+  // synced: dmSetCurrent redraws this whole sheet on every swipe of the
+  // carousel, and a button that started life un-lit would read as a toggle that
+  // flipped itself back.
+  const st = shelfBtnState(r.id);
+  const shelfBtn = pane !== 'dm' ? '' :
+    `<button type="button" class="detail-nav-btn shelf-btn dm-shelf${st.on ? ' on' : ''}"
+       ${st.pos ? '' : 'disabled'} title="${esc(st.title)}"
+       onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>`;
   return `
-    <div class="dm-album">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></div>
+    <div class="dm-album"><span class="dm-album-t">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></span>${shelfBtn}</div>
     <div class="dm-artist">${dmArtistHTML(r)}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
     <div class="dm-rates">
       <div class="dm-rate pepe"><div class="who">Pepe</div>${(myR>0||authed)?bars(myR,'my_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
@@ -4838,8 +4881,7 @@ function dmSetCurrent(idx) {
   if (car) [...car.children].forEach((s,k)=>s.classList.toggle('cur', k===idx));
   dmHighlightCrate(idx);
   dmCenterCrateThumb(idx, true);
-  const count = document.getElementById('dmCount');
-  if (count) count.innerHTML = `<b>${idx+1}</b> / ${dmList.length}`;
+  dmSyncCount();
   const info = document.getElementById('dmInfo');
   if (info) info.innerHTML = dmInfoHTML(rec);
   const ddCar = document.getElementById('ddCarousel');
@@ -5049,17 +5091,34 @@ function updateDetailNavVisibility() {
   const recs = detailNavRecords();
   document.getElementById('detailRandomBtn').style.display = recs.length > 1 ? '' : 'none';
 
-  const pos = shelfPositionOf(currentDetailId);
-  const btn = document.getElementById('detailShelfBtn');
-  btn.disabled = !pos;
-  btn.classList.toggle('on', detailShelfOrder && !!pos);
-  btn.title = !pos ? 'not on the shelf yet'
-            : detailShelfOrder ? 'back to the collection order'
-            : 'show shelf order';
+  const st = shelfBtnState(currentDetailId);
+  // Both copies: the desktop header's, and the phone's in the album row. The
+  // phone one is inside #dmInfo and so is redrawn by dmSetCurrent on every
+  // swipe -- it renders itself correct (see dmHeaderHTML), and this keeps it
+  // in step on the paths that do not redraw it.
+  document.querySelectorAll('.shelf-btn').forEach(btn => {
+    btn.disabled = !st.pos;
+    btn.classList.toggle('on', st.on);
+    btn.title = st.title;
+  });
   // The readout is the flipped state's whole point, so it comes and goes with
   // it rather than sitting there naming a spot the scroll is not showing.
   document.getElementById('detailShelfPos').innerHTML =
-    (detailShelfOrder && pos) ? `${esc(pos.block)} · <b>${pos.index}</b> / ${pos.total}` : '';
+    st.on ? `${esc(st.pos.block)} · <b>${st.pos.index}</b> / ${st.pos.total}` : '';
+  dmSyncCount();
+}
+
+/* The phone's sticky counter. In shelf order it names the spot in the furniture
+ * -- the same block-scoped pair the desktop header prints -- because that is
+ * what the strip below it is now ordered by; otherwise it stays the plain
+ * "where am I in this list" count it has always been. */
+function dmSyncCount() {
+  const count = document.getElementById('dmCount');
+  if (!count) return;
+  const st = shelfBtnState(currentDetailId);
+  count.innerHTML = st.on
+    ? `${esc(st.pos.block)} · <b>${st.pos.index}</b> / ${st.pos.total}`
+    : `<b>${dmIdx + 1}</b> / ${dmList.length}`;
 }
 
 let detailAnimating = false;
