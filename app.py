@@ -717,6 +717,7 @@ def create_record():
         tracks      = tracks,
         disc_count  = disc_count,
         size        = _size(d.get("size")),
+        censored    = bool(d.get("censored", False)),
     )
     db.session.add(r)
     _ensure_place(r.bought_where)
