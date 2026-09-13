@@ -1134,7 +1134,11 @@ def export_csv():
     # be a backup you could restore from.
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size"]
+            "bought_where_url","bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size"]
+    # One dict for the whole export rather than a lookup per row: there are a
+    # few dozen places against hundreds of records, and unlike the note images
+    # below these are short strings, so holding them all costs nothing.
+    place_urls = dict(db.session.query(Place.name, Place.url).all())
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -1142,6 +1146,10 @@ def export_csv():
             d = r.to_dict()
             # to_dict() reports a URL now, but a backup has to carry the bytes.
             d["cover_image_base64"] = r.cover_data or ""
+            # The link belongs to the place, but the backup is one flat table,
+            # so every row carries its place's link and the importer rebuilds
+            # the place table from the pairs it sees.
+            d["bought_where_url"] = place_urls.get((r.bought_where or "").strip(), "") or ""
             # Looked up per row rather than preloaded: this generator streams to
             # keep a whole-collection export off the heap, and a dict of every
             # image would put it straight back.
@@ -1197,7 +1205,7 @@ def _record_mapping(row):
         "year":        row.get("year",""),
         "genre":       row.get("genre",""),
         "bought_date": row.get("bought_date",""),
-        "bought_where":row.get("bought_where",""),
+        "bought_where":(row.get("bought_where","") or "").strip(),
         "bought_by":   row.get("bought_by",""),
         "condition":   row.get("condition",""),
         "my_rating":   float(row.get("my_rating") or 0),
@@ -1245,6 +1253,11 @@ def import_records_from_csv_rows(rows):
     # Only ids, so this stays small however many rows name the same photo.
     seen_images = set()
     stamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    # name -> url, first non-empty url per name wins. Places are NOT wiped like
+    # the records are: a link the CSV does not know about (a place added after
+    # the export) is still true, and losing it would make a restore lossy in a
+    # way the export cannot see.
+    places_seen = {}
 
     def flush():
         if batch:
@@ -1260,10 +1273,26 @@ def import_records_from_csv_rows(rows):
             if image_id not in seen_images:
                 seen_images.add(image_id)
                 image_batch.append({"id": image_id, "data": data, "created": stamp})
+        place_name = (row.get("bought_where","") or "").strip()
+        if place_name:
+            place_url = _place_url(row.get("bought_where_url")) or ""
+            if place_url or place_name not in places_seen:
+                places_seen.setdefault(place_name, "")
+                if place_url:
+                    places_seen[place_name] = place_url
         count += 1
         if len(batch) >= _IMPORT_BATCH_ROWS:
             flush()
     flush()
+    if places_seen:
+        existing = {p.name: p for p in
+                    Place.query.filter(Place.name.in_(list(places_seen))).all()}
+        for name, url in places_seen.items():
+            p = existing.get(name)
+            if p is None:
+                db.session.add(Place(name=name, url=url))
+            elif url:
+                p.url = url
     db.session.commit()
     return count
 
