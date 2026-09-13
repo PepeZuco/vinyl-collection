@@ -31,6 +31,22 @@ def _clean_records():
     yield
 
 
+
+@pytest.fixture(autouse=True)
+def _vinyl_offline():
+    """Both halves of the vinyl question are mocked for the whole module.
+
+    The real ones reach MusicBrainz and Claude, which conftest's socket guard
+    turns into an AssertionError inside the route. Tests that care about the
+    badge patch over these with their own answers.
+    """
+    with patch.object(scan, "vinyl_rgids_for_artist", return_value=set()), \
+         patch.object(scan, "vinyl_rgids", return_value=set()), \
+         patch.object(scan, "confirm_vinyl", side_effect=lambda rows, **kw:
+                      ["unsure"] * len(rows)):
+        yield
+
+
 def _seed(artist, album):
     with app_module.app.app_context():
         app_module.db.session.add(
@@ -183,3 +199,85 @@ def test_spend_is_banked_even_when_musicbrainz_dies_afterwards(client):
 def test_the_usage_endpoint_quotes_a_search_estimate(client):
     body = client.get("/api/scan/usage").get_json()
     assert "search" in body["estimate"]
+
+
+# ── does it exist as a record? ──────────────────────────────────────────────
+
+def _search(client, discography, **overrides):
+    patches = [
+        patch.object(scan, "parse_search_query",
+                     return_value={"artist": "Jorge Ben", "album": None}),
+        patch.object(scan, "lookup_artist",
+                     return_value={"mbid": "19499124", "name": "Jorge Ben Jor",
+                                   "country": "BR"}),
+        patch.object(scan, "lookup_discography",
+                     return_value=[dict(r) for r in discography]),
+        patch.object(scan, "search_covers"),
+    ]
+    patches += [patch.object(scan, name, **kw) for name, kw in overrides.items()]
+    for p in patches:
+        p.start()
+    try:
+        return client.post("/api/search", json={"query": "jorge ben"}).get_json()
+    finally:
+        for p in reversed(patches):
+            p.stop()
+
+
+def test_every_result_says_whether_it_exists_as_a_record(client):
+    body = _search(client, DISCOGRAPHY,
+                   vinyl_rgids_for_artist={"return_value": {"m2"}},
+                   confirm_vinyl={"return_value": ["no", "no"]})
+
+    assert [(r["album_name"], r["vinyl"]) for r in body["results"]] == [
+        ("África Brasil", "confirmed"),   # MusicBrainz has a pressing
+        ("Força bruta", "none"),          # neither source knows of one
+    ]
+
+
+def test_pressings_sort_ahead_of_records_that_were_never_made(client):
+    """Vinyl first is the whole point of the grid — but the bands stay
+    chronological inside themselves, the way lookup_discography left them."""
+    rows = [dict(DISCOGRAPHY[0], mbid=f"m{i}", album_name=str(1970 + i),
+                 year=str(1970 + i)) for i in range(4)]
+
+    body = _search(client, rows,
+                   vinyl_rgids_for_artist={"return_value": {"m3"}},
+                   confirm_vinyl={"return_value": ["no", "yes", "no", "no"]})
+
+    assert [(r["album_name"], r["vinyl"]) for r in body["results"]] == [
+        ("1973", "confirmed"),
+        ("1971", "likely"),
+        ("1970", "none"),
+        ("1972", "none"),
+    ]
+
+
+def test_the_sweep_is_given_the_artist_musicbrainz_resolved(client):
+    with patch.object(scan, "parse_search_query",
+                      return_value={"artist": "Jorge Ben", "album": None}), \
+         patch.object(scan, "lookup_artist",
+                      return_value={"mbid": "19499124", "name": "Jorge Ben Jor",
+                                    "country": "BR"}), \
+         patch.object(scan, "lookup_discography",
+                      return_value=[dict(r) for r in DISCOGRAPHY]), \
+         patch.object(scan, "search_covers"), \
+         patch.object(scan, "vinyl_rgids_for_artist",
+                      return_value=set()) as sweep, \
+         patch.object(scan, "confirm_vinyl", return_value=["unsure", "unsure"]):
+        client.post("/api/search", json={"query": "jorge ben"})
+
+    assert sweep.call_args.args[0] == "19499124"
+
+
+def test_the_vinyl_confirmation_is_banked_as_search_spend(client):
+    def spend(rows, usage_out=None):
+        usage_out.append({"model": "claude-haiku-4-5",
+                          "input_tokens": 200, "output_tokens": 10})
+        return ["unsure"] * len(rows)
+
+    _search(client, DISCOGRAPHY, confirm_vinyl={"side_effect": spend})
+
+    with app_module.app.app_context():
+        rows = app_module.ScanSpend.query.filter_by(source="search").all()
+    assert sum(r.input_tokens for r in rows) == 200

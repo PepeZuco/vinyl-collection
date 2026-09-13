@@ -977,6 +977,13 @@ select option{background:var(--surface);color:var(--text)}
 .field > i{position:absolute;left:10px;font-size:15px;color:var(--label);pointer-events:none;z-index:1}
 .form-group .field input,.form-group .field select{padding-left:32px}
 
+/* a field that also opens what it holds — the icon on the right stays put,
+   only the link toggles between a real href and a disabled look */
+.field-link-btn{position:absolute;right:10px;font-size:15px;color:var(--accent);z-index:1;
+  display:flex;align-items:center}
+.field-link-btn.disabled{color:var(--label);opacity:.4;pointer-events:none}
+.field:has(.field-link-btn) input{padding-right:32px}
+
 /* grouped section card */
 /* the step spine — a real sequence, so it is numbered */
 .form-spine{display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;
@@ -1163,6 +1170,33 @@ select option{background:var(--surface);color:var(--text)}
 .scan-badge-dup{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;
   background:rgba(192,57,43,.92);color:#fff;padding:6px 10px;font-size:10.5px;font-weight:700;
   text-transform:uppercase;letter-spacing:.04em}
+/* Was it ever pressed? A release group carries no format, so this is the one
+   thing a card cannot say by looking at the album. Bottom-left of the sleeve,
+   lifted clear when the duplicate bar is also down there. */
+.scan-badge-vinyl{position:absolute;left:9px;bottom:9px;display:flex;align-items:center;gap:4px;
+  border-radius:4px;padding:3px 7px;font-size:9.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.04em;backdrop-filter:blur(2px)}
+.scan-badge-vinyl i{font-size:12px}
+.scan-card-cover:has(.scan-badge-dup) .scan-badge-vinyl{bottom:38px}
+/* Pressed, and MusicBrainz has the pressing on file. */
+.scan-badge-vinyl.confirmed{background:rgba(39,122,72,.92);color:#fff}
+/* Nobody catalogued one, but it reads like a record that existed. */
+.scan-badge-vinyl.likely{background:rgba(0,0,0,.6);color:#e8e8e0;
+  border:1px solid rgba(232,232,224,.35)}
+.scan-badge-vinyl.none{background:rgba(0,0,0,.72);color:#d9d4c9;
+  border:1px solid rgba(217,212,201,.28)}
+/* Still pickable — you may know something the databases do not — just not
+   competing with the records you can actually buy. Picking one restores it. */
+.scan-card.no-vinyl{opacity:.55}
+.scan-card.no-vinyl .scan-card-cover img{filter:grayscale(1)}
+.scan-card.no-vinyl:hover,.scan-card.no-vinyl.picked{opacity:1}
+.scan-card.no-vinyl.picked .scan-card-cover img{filter:none}
+/* The count line and its filter share a row. */
+.scan-count-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.scan-count-row .scan-count{margin-bottom:0}
+.scan-vinyl-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
+  color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap;margin-left:auto}
+.scan-vinyl-toggle input{accent-color:var(--accent);cursor:pointer}
 .scan-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   padding:48px 28px;text-align:center}
 .scan-empty i{font-size:52px;color:var(--border)}
@@ -1938,6 +1972,27 @@ select option{background:var(--surface);color:var(--text)}
   .note-md-split{grid-template-columns:1fr}
   .note-md-split textarea,.note-md-preview{min-height:32vh;max-height:32vh}
 }
+.note-md-head-actions{display:flex;align-items:center;gap:6px}
+
+/* Search box + result list for dropping a record's deep link into the note
+   being edited, so linking to something in the collection no longer means
+   leaving the modal to go open that record and copy its address bar link. */
+.note-link-picker{margin-bottom:14px}
+.note-link-picker .field{margin-bottom:8px}
+.note-link-picker .field input{width:100%;padding:8px 10px 8px 32px;background:var(--card);
+  color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-family:var(--font);font-size:13px;outline:none}
+.note-link-picker .field input:focus{border-color:var(--accent)}
+.note-link-results{display:flex;flex-direction:column;gap:2px;max-height:180px;overflow-y:auto}
+.note-link-hint{padding:8px 4px;font-size:12px;color:var(--muted)}
+.note-link-row{display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;
+  background:transparent;border:none;border-radius:var(--radius-sm);padding:7px 9px;
+  cursor:pointer;font-family:var(--font);color:var(--text)}
+.note-link-row:hover{background:var(--card-hover)}
+.note-link-row .nlr-artist{font-weight:600;font-size:12.5px;flex-shrink:0}
+.note-link-row .nlr-album{font-size:12.5px;color:var(--muted);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+
 /* The add row's own switch. */
 .note-private-check{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
   color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
@@ -2794,6 +2849,16 @@ select option{background:var(--surface);color:var(--text)}
                   <label><i class="ti ti-player-play"></i> Play count</label>
                   <div class="field"><i class="ti ti-player-play"></i><input id="fPlays" type="number" min="0" value="0"></div>
                 </div>
+                <div class="form-group" style="grid-column:1/-1">
+                  <label><i class="ti ti-brand-spotify"></i> Spotify link</label>
+                  <div class="field">
+                    <i class="ti ti-brand-spotify"></i>
+                    <input id="fSpotifyUrl" placeholder="https://open.spotify.com/album/…"
+                           autocomplete="off" oninput="updateSpotifyLinkBtn()">
+                    <a id="fSpotifyLinkBtn" class="field-link-btn disabled" target="_blank"
+                       rel="noopener noreferrer" title="open in Spotify" tabindex="-1"><i class="ti ti-external-link"></i></a>
+                  </div>
+                </div>
                 <div class="form-group" style="grid-column:1/-1;margin-bottom:0">
                   <div class="check-row">
                     <input type="checkbox" id="fMultiArtist" onchange="toggleMultiArtist()">
@@ -2967,9 +3032,16 @@ select option{background:var(--surface);color:var(--text)}
   <div class="modal modal-wide">
     <div class="modal-head">
       <span class="modal-title">note markdown</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeNoteMdModal()"><i class="ti ti-x"></i></button>
+      <div class="note-md-head-actions">
+        <button type="button" class="btn btn-ghost btn-sm" title="link a record" onclick="toggleNoteLinkPicker()"><i class="ti ti-vinyl"></i></button>
+        <button class="btn btn-ghost btn-sm" onclick="closeNoteMdModal()"><i class="ti ti-x"></i></button>
+      </div>
     </div>
     <div class="modal-body">
+      <div class="note-link-picker hidden" id="noteLinkPicker">
+        <div class="field"><i class="ti ti-search"></i><input id="noteLinkQuery" type="text" placeholder="search artist or album…" autocomplete="off"></div>
+        <div class="note-link-results" id="noteLinkResults"></div>
+      </div>
       <div class="note-md-split">
         <textarea id="noteMdText" placeholder="Add a note…"></textarea>
         <div class="detail-notes-body note-md-preview" id="noteMdPreview"></div>
@@ -3486,6 +3558,7 @@ function openNoteMdModal(textareaEl) {
   noteMdSource = textareaEl;
   document.getElementById('noteMdText').value = textareaEl.value;
   renderNoteMdPreview();
+  closeNoteLinkPicker();
   document.getElementById('noteMdOverlay').classList.remove('hidden');
   const modalText = document.getElementById('noteMdText');
   modalText.focus();
@@ -3505,7 +3578,65 @@ function syncNoteMdToSource() {
 
 function closeNoteMdModal() {
   document.getElementById('noteMdOverlay').classList.add('hidden');
+  closeNoteLinkPicker();
   noteMdSource = null;
+}
+
+// ── link-a-record picker ────────────────────────────────────────────────────
+// Lives inside the markdown modal: search the collection by artist or album
+// and drop a `[title](deep link)` for the match at the cursor, so putting a
+// record in a note no longer means opening it elsewhere just to copy its URL.
+// The link is the app's own address-bar scheme (VinylUrlState) with only
+// `recordId` set, so it opens exactly like the one you'd copy by hand.
+function toggleNoteLinkPicker() {
+  const box = document.getElementById('noteLinkPicker');
+  if (box.classList.contains('hidden')) {
+    box.classList.remove('hidden');
+    const q = document.getElementById('noteLinkQuery');
+    q.value = '';
+    renderNoteLinkResults('');
+    q.focus();
+  } else {
+    closeNoteLinkPicker();
+  }
+}
+
+function closeNoteLinkPicker() {
+  document.getElementById('noteLinkPicker').classList.add('hidden');
+}
+
+function renderNoteLinkResults(query) {
+  const box = document.getElementById('noteLinkResults');
+  const q = (query || '').trim().toLowerCase();
+  if (!q) { box.innerHTML = '<div class="note-link-hint">type to search your collection…</div>'; return; }
+  const matches = records.filter(r =>
+    (r.artist || '').toLowerCase().includes(q) || (r.album_name || '').toLowerCase().includes(q)
+  ).slice(0, 8);
+  if (!matches.length) { box.innerHTML = '<div class="note-link-hint">no records found</div>'; return; }
+  box.innerHTML = matches.map(r => `
+    <button type="button" class="note-link-row" data-id="${r.id}">
+      <span class="nlr-artist">${esc(r.artist || 'unknown')}</span>
+      <span class="nlr-album">${esc(r.album_name || 'untitled')}</span>
+    </button>`).join('');
+}
+
+// Inserted at the cursor (replacing any selection), matching how a real
+// editor's "insert link" action behaves rather than always appending.
+function insertNoteLink(id) {
+  const r = records.find(rec => rec.id === id);
+  if (!r) return;
+  const label = [r.artist, r.album_name].filter(Boolean).join(' – ') || 'record';
+  const url = location.origin + location.pathname + '#' + VinylUrlState.encode({ recordId: id });
+  const snippet = `[${label}](${url})`;
+  const ta = document.getElementById('noteMdText');
+  const start = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+  const end = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + snippet + ta.value.slice(end);
+  closeNoteLinkPicker();
+  ta.focus();
+  const caret = start + snippet.length;
+  ta.setSelectionRange(caret, caret);
+  syncNoteMdToSource();
 }
 
 // ── multi-artist records ────────────────────────────────────────────────────
@@ -6252,7 +6383,8 @@ function openAdd(){
   document.getElementById('scanDupWarning').style.display = 'none';
   document.getElementById('spotifyUrlInput').value = '';
   showSpotifyError('');
-  ['fArtist','fAlbum','fYear','fWhere','fCountry'].forEach(id=>document.getElementById(id).value='');
+  ['fArtist','fAlbum','fYear','fWhere','fCountry','fSpotifyUrl'].forEach(id=>document.getElementById(id).value='');
+  updateSpotifyLinkBtn();
   formArtists=[];
   document.getElementById('fMultiArtist').checked=false;
   document.getElementById('fArtistGroup').style.display='';
@@ -6340,6 +6472,8 @@ function openEdit(id){
   document.getElementById('fWhere').value=r.bought_where||'';
   document.getElementById('fPlays').value=r.play_count||0;
   document.getElementById('fCensored').checked=!!r.censored;
+  document.getElementById('fSpotifyUrl').value=r.spotify_url||'';
+  updateSpotifyLinkBtn();
   document.getElementById('fHaveIt').checked=!!r.have_it;
   renderOwnSwitch();
   document.getElementById('fCondition').value=r.condition||'';
@@ -6548,6 +6682,7 @@ function formValues(){
     disc_count:formDiscCount,
     size:formSize,
     censored:document.getElementById('fCensored').checked,
+    spotify_url:document.getElementById('fSpotifyUrl').value.trim(),
   };
 }
 
@@ -6583,6 +6718,22 @@ function openSpotifyOverlay(){
   document.getElementById('spotifyUrlInput').focus();
 }
 function closeSpotifyOverlay(){ document.getElementById('spotifyOverlay').classList.add('hidden'); }
+
+// The Identify field's own link, separate from the popup above: this one is
+// what gets saved on the record, editable by hand or filled by a Spotify scan.
+// The trailing icon only turns into a real link once the field looks like one
+// — no format validation on save, so a half-typed paste must not open blank.
+function updateSpotifyLinkBtn(){
+  const value = document.getElementById('fSpotifyUrl').value.trim();
+  const btn = document.getElementById('fSpotifyLinkBtn');
+  if(/^https?:\/\//i.test(value)){
+    btn.href = value;
+    btn.classList.remove('disabled');
+  } else {
+    btn.removeAttribute('href');
+    btn.classList.add('disabled');
+  }
+}
 
 // Which half of the form the next photo belongs to. The picker, the camera
 // overlay and the resize path are shared; only the destination differs, and
@@ -7446,6 +7597,14 @@ function applyScanResult(data){
   setScanField('fAlbum', data.album_name);
   setScanField('fGenre', data.genre);
 
+  // The link that identified this record is worth keeping on it — a scan
+  // sourced from Spotify already has it in hand, so save it rather than
+  // making the user paste it a second time.
+  if(data.source === 'spotify' && pendingSpotifyUrl){
+    document.getElementById('fSpotifyUrl').value = pendingSpotifyUrl;
+    updateSpotifyLinkBtn();
+  }
+
   scanCandidates = data.candidates || [];
   scanLookupFailed = !!data.lookup_failed;
   // No candidate is applied until the user picks one on the results screen.
@@ -8036,9 +8195,15 @@ function bindEvents(){
   document.getElementById('calDatePickerOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDatePicker();});
   document.getElementById('noteMdOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeNoteMdModal();});
   document.getElementById('noteMdText').addEventListener('input', syncNoteMdToSource);
+  document.getElementById('noteLinkQuery').addEventListener('input', e => renderNoteLinkResults(e.target.value));
+  document.getElementById('noteLinkResults').addEventListener('click', e => {
+    const row = e.target.closest('.note-link-row');
+    if (row) insertNoteLink(Number(row.dataset.id));
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (!document.getElementById('noteMdOverlay').classList.contains('hidden')) closeNoteMdModal();
+      if (!document.getElementById('noteLinkPicker').classList.contains('hidden')) closeNoteLinkPicker();
+      else if (!document.getElementById('noteMdOverlay').classList.contains('hidden')) closeNoteMdModal();
       else if (!document.getElementById('calDayOverlay').classList.contains('hidden')) closeCalDay();
       else if (!document.getElementById('calDatePickerOverlay').classList.contains('hidden')) closeCalDatePicker();
     }

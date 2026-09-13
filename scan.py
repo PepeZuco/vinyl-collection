@@ -859,6 +859,230 @@ def parse_search_query(query: str, usage_out: list | None = None) -> dict:
     return {"artist": artist, "album": album}
 
 
+# ── was it ever pressed? ──────────────────────────────────────────────────────
+# A release group is the abstract album and carries no format: MusicBrainz
+# files a streaming-only remix and a 1977 LP in the same shape, which is why a
+# search by artist name used to hand back records that do not exist as records.
+# The pressings live one level down, on releases, which is where `format` is.
+# So this is a second lookup, not a filter on the first — and its answer is
+# only ever half of the badge, because MusicBrainz not having a pressing is
+# not the same as there never having been one. See _vinyl_status.
+
+# MusicBrainz indexes a format as its whole name rather than as words.
+# Measured against the live API for Pink Floyd's "Animals": format:vinyl
+# returns 1 release and format:vinyl* returns 1, while these four names ORed
+# together return 31. A bare or prefixed term looks like it works and silently
+# confirms almost nothing.
+VINYL_FORMATS = ('12" Vinyl', '7" Vinyl', '10" Vinyl', 'Vinyl')
+
+# 100 is the release search's page ceiling, and three pages is the whole
+# budget: each costs a throttled second, and a prolific artist — Pink Floyd
+# has 605 vinyl album releases — would otherwise add seven of them to a single
+# search. Groups the sweep never reaches fall through to confirm_vinyl, not
+# to "no".
+MB_VINYL_LIMIT = 100
+MB_VINYL_PAGES = 3
+
+
+def _vinyl_format_clause() -> str:
+    """Every vinyl format as a quoted phrase, ORed into one parenthesised term.
+
+    Parenthesised so the ORs cannot bind looser than the AND beside them, and
+    the inch mark escaped or the phrase would end at `12`.
+    """
+    names = " OR ".join('format:"%s"' % f.replace('"', '\\"')
+                        for f in VINYL_FORMATS)
+    return f"({names})"
+
+
+def _rgids_in(payload: dict) -> tuple[set, int]:
+    """The release groups a release-search page covers, and how long it was."""
+    releases = (payload or {}).get("releases") or []
+    found = {(r.get("release-group") or {}).get("id") for r in releases}
+    return found - {None}, len(releases)
+
+
+def vinyl_rgids(rgids: list) -> set:
+    """Which of these release groups have at least one vinyl pressing.
+
+    One query for the whole list — three candidates must not cost three
+    seconds of MusicBrainz throttle. Never raises: an unreachable MusicBrainz
+    confirms nothing, which leaves the verdict to confirm_vinyl rather than
+    standing in as evidence that nothing was pressed.
+    """
+    wanted = [r for r in rgids if r]
+    if not wanted:
+        return set()
+
+    query = ("(" + " OR ".join(f"rgid:{r}" for r in wanted) + ")"
+             f" AND {_vinyl_format_clause()}")
+    try:
+        payload = _mb_get("/release/", params={"query": query,
+                                               "limit": MB_VINYL_LIMIT})
+    except MusicBrainzUnavailable:
+        logger.warning("MusicBrainz unavailable for the vinyl lookup")
+        return set()
+
+    found, _ = _rgids_in(payload)
+    return found & set(wanted)
+
+
+def vinyl_rgids_for_artist(arid: str, wanted: set) -> set:
+    """Sweep one artist's vinyl releases page by page, stopping early.
+
+    Restricted to the same albums-only universe lookup_discography draws from:
+    sweeping wider would spend the page budget on pressings of rows nobody can
+    see. Returns whatever it confirmed — a sweep cut short by an unreachable
+    MusicBrainz keeps what it already had.
+    """
+    if not arid:
+        return set()
+
+    query = (f"arid:{arid} AND primarytype:Album"
+             " AND -secondarytype:Compilation AND -secondarytype:Live"
+             f" AND {_vinyl_format_clause()}")
+    found: set = set()
+    for page in range(MB_VINYL_PAGES):
+        try:
+            payload = _mb_get("/release/", params={
+                "query": query,
+                "limit": MB_VINYL_LIMIT,
+                "offset": page * MB_VINYL_LIMIT,
+            })
+        except MusicBrainzUnavailable:
+            logger.warning("Vinyl sweep for %s cut short", arid)
+            break
+        page_rgids, seen = _rgids_in(payload)
+        found |= page_rgids
+        # Nothing left to page, or every row on screen is already accounted
+        # for — the rest of this artist's pressings are nobody's question.
+        if seen < MB_VINYL_LIMIT or (wanted and wanted <= found):
+            break
+    return found
+
+
+VINYL_MODEL = "claude-haiku-4-5"
+
+_VINYL_SYSTEM = (
+    "You judge whether a record was ever manufactured on vinyl.\n"
+    "Rules:\n"
+    "1. Judge the album, not one pressing: any vinyl issue of it, in any "
+    "country or era, counts — an original LP, a later reissue, a limited "
+    "repress.\n"
+    "2. Answer \"no\" only where you are confident there has never been one. "
+    "A CD-only or streaming-only release, most often from 1985 to 2005.\n"
+    "3. Answer \"unsure\" when you do not know the album. Never reason from "
+    "the artist alone: a band with fifteen LPs can still have a digital-only "
+    "record, and one with none can still have had a single repressed.\n"
+    "4. One verdict per numbered release, in the order given."
+)
+
+_VINYL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdicts": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["yes", "no", "unsure"]},
+        },
+    },
+    "required": ["verdicts"],
+    "additionalProperties": False,
+}
+
+_VINYL_VERDICTS = frozenset({"yes", "no", "unsure"})
+
+
+def confirm_vinyl(releases: list, usage_out: list | None = None) -> list:
+    """One verdict per release, in order: "yes" | "no" | "unsure".
+
+    Batched into a single call: forty releases are one act and are priced as
+    one, the same way the genre pass over a search is.
+
+    Never raises, and degrades to "unsure" rather than "no" — a search that
+    found the releases is still worth showing, and badging a whole grid "no
+    vinyl" because the API was down would be a confident lie. Same reason
+    classify_genre swallows its failures.
+    """
+    if not releases:
+        return []
+
+    lines = []
+    for i, release in enumerate(releases, 1):
+        row = release or {}
+        parts = [row.get("artist") or "?", row.get("album_name") or "?"]
+        if row.get("year"):
+            parts.append(str(row["year"]))
+        lines.append(f"{i}. " + " — ".join(parts))
+
+    verdicts: list = []
+    try:
+        client = _anthropic_client()
+        # Enough for one short word per release plus the JSON scaffolding.
+        response = client.messages.create(
+            model=VINYL_MODEL,
+            max_tokens=16 * len(releases) + 64,
+            system=_VINYL_SYSTEM,
+            output_config={
+                "format": {"type": "json_schema", "schema": _VINYL_SCHEMA},
+            },
+            messages=[{"role": "user", "content": "\n".join(lines)}],
+        )
+        _record_usage(usage_out, VINYL_MODEL, response)
+        text = next(b.text for b in response.content if b.type == "text")
+        parsed = json.loads(text)
+        verdicts = parsed.get("verdicts") if isinstance(parsed, dict) else []
+        if not isinstance(verdicts, list):
+            verdicts = []
+    except Exception:
+        logger.warning("Vinyl confirmation failed", exc_info=True)
+        verdicts = []
+
+    # Padded and truncated to the release list before anything is zipped with
+    # it: a short answer taken as-is would shift every badge onto the wrong
+    # record, which is worse than having no badge at all.
+    verdicts = (list(verdicts) + ["unsure"] * len(releases))[:len(releases)]
+    return [v if v in _VINYL_VERDICTS else "unsure" for v in verdicts]
+
+
+def _vinyl_status(mb_has_vinyl: bool, verdict: str) -> str:
+    """Combine the two answers into one badge.
+
+    MusicBrainz wins the tie. It catalogues pressings somebody actually held;
+    Claude recalls them, and a recollection that a pressing never existed does
+    not outrank a catalogue entry saying it did.
+
+    Where MusicBrainz is silent the reverse applies. Its format data is thin —
+    badly so for the Brazilian pressings that are most of this collection, and
+    for anything the sweep's page budget did not reach — so silence only
+    hardens into "no" when Claude says so too. Otherwise the record is still
+    offered, just without the claim that it was pressed.
+    """
+    if mb_has_vinyl:
+        return "confirmed"
+    return "none" if verdict == "no" else "likely"
+
+
+def flag_vinyl(rows: list, arid: str | None = None,
+               usage_out: list | None = None) -> None:
+    """Stamp each row with `vinyl`: "confirmed" | "likely" | "none".
+
+    In place, and never raises: both halves degrade on their own.
+
+    With an arid — a whole discography — the MusicBrainz side sweeps by artist
+    instead of ORing forty rgids into one query, where a single prolific
+    album's pressings could fill the page and hide the other thirty-nine.
+    """
+    if not rows:
+        return
+
+    rgids = {r.get("mbid") for r in rows if r.get("mbid")}
+    has_vinyl = (vinyl_rgids_for_artist(arid, rgids) if arid
+                 else vinyl_rgids(sorted(rgids)))
+    verdicts = confirm_vinyl(rows, usage_out=usage_out)
+    for row, verdict in zip(rows, verdicts):
+        row["vinyl"] = _vinyl_status(row.get("mbid") in has_vinyl, verdict)
+
+
 SPOTIFY_API = "https://api.spotify.com/v1"
 SPOTIFY_TIMEOUT = 5.0
 

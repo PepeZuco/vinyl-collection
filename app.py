@@ -369,6 +369,7 @@ class Record(db.Model):
     disc_count  = db.Column(db.Integer, default=1)
     size        = db.Column(db.String(5))   # '' | '7' | '10' | '12', in inches
     censored    = db.Column(db.Boolean, default=False)  # cover has explicit art; blurred client-side until revealed
+    spotify_url = db.Column(db.String(500))  # free text: whatever link the scan or the user handed in
 
     def to_dict(self, private=True):
         """The record as the API sends it.
@@ -403,6 +404,7 @@ class Record(db.Model):
             "disc_count": self.disc_count or 1,
             "size": self.size or "",
             "censored": bool(self.censored),
+            "spotify_url": self.spotify_url or "",
         }
 
 # One row per distinct note image, addressed by its own content hash.
@@ -461,6 +463,7 @@ with app.app_context():
         "disc_count": "INTEGER",
         "size": "VARCHAR(5)",
         "censored": "BOOLEAN",
+        "spotify_url": "VARCHAR(500)",
     }
     added_cleaned_dates = "cleaned_dates" not in existing_cols
     added_cover_hash = "cover_hash" not in existing_cols
@@ -718,6 +721,7 @@ def create_record():
         disc_count  = disc_count,
         size        = _size(d.get("size")),
         censored    = bool(d.get("censored", False)),
+        spotify_url = d.get("spotify_url",""),
     )
     db.session.add(r)
     _ensure_place(r.bought_where)
@@ -752,6 +756,7 @@ def update_record(rid):
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
     if "censored"    in d: r.censored     = bool(d["censored"])
+    if "spotify_url" in d: r.spotify_url  = d["spotify_url"]
     # disc_count first: the tracks it is about to validate are checked against
     # it. A PUT that sends tracks alone is checked against what the record
     # already is, or every partial update to a double would reject its C side.
@@ -954,6 +959,18 @@ def scan_record():
         for candidate in candidates:
             candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
 
+        # Not sorted vinyl-first the way the search grid is: candidates[0] is
+        # the best match, it fills the form and supplies the year, and a badge
+        # must not get to decide which pressing the user is holding.
+        #
+        # Spotify has everything, including albums that were never records, and
+        # MusicBrainz having no release group for one leaves nothing to badge —
+        # so the album itself gets a verdict too, and the form can say so even
+        # when the candidate grid is empty.
+        album_row = [{"mbid": None, "artist": artist, "album_name": album}]
+        scan.flag_vinyl(candidates or album_row, usage_out=spent)
+        vinyl = (candidates or album_row)[0]["vinyl"]
+
         existing = [{"id": r.id, "artist": r.artist or "",
                      "album_name": r.album_name or ""} for r in rows]
         duplicate = scan.find_duplicate(artist, album, existing)
@@ -975,6 +992,9 @@ def scan_record():
         "artist": artist,
         "album_name": album,
         "genre": fields.get("genre") or "",
+        # The album's own verdict, which survives an empty candidate list —
+        # see flag_vinyl above.
+        "vinyl": vinyl,
         "candidates": candidates,
         # An empty candidate list has two very different meanings and the form
         # has to word them differently: MusicBrainz has no such release, or
@@ -1071,6 +1091,15 @@ def scan_usage():
 
 # ── search by name ────────────────────────────────────────────────────────────
 
+# Records you can actually buy come first, and the rest stay listed underneath
+# rather than being hidden: MusicBrainz's format data is thin enough that a
+# hard filter would drop real pressings. Sorted server-side, not in the
+# browser — searchPicked holds indices into this list and reads them back by
+# index when the picks are added, so a client-side re-sort would quietly add
+# the wrong records.
+_VINYL_ORDER = {"confirmed": 0, "likely": 1, "none": 2}
+
+
 @app.route("/api/search", methods=["POST"])
 @require_auth
 def search_records():
@@ -1095,6 +1124,8 @@ def search_records():
         else:
             results = scan.lookup_discography(artist["mbid"], parsed["album"])
             scan.search_covers(results)
+            scan.flag_vinyl(results, arid=artist["mbid"], usage_out=spent)
+            results.sort(key=lambda r: _VINYL_ORDER.get(r.get("vinyl"), 1))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except scan.MusicBrainzUnavailable:

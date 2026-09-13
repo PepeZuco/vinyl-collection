@@ -14,6 +14,18 @@ def client(monkeypatch, tmp_path):
         yield test_client
 
 
+
+@pytest.fixture(autouse=True)
+def _vinyl_offline():
+    """The vinyl question's two halves reach MusicBrainz and Claude for real;
+    conftest's socket guard turns that into an AssertionError inside the
+    route. Tests that care about the badge patch over these."""
+    with patch.object(app_module.scan, "vinyl_rgids", return_value=set()), \
+         patch.object(app_module.scan, "confirm_vinyl",
+                      side_effect=lambda rows, **kw: ["unsure"] * len(rows)):
+        yield
+
+
 def test_requires_auth():
     app_module.app.config["TESTING"] = True
     with app_module.app.test_client() as anon:
@@ -171,3 +183,65 @@ def test_outage_still_records_what_the_scan_spent(client):
     assert source == "photo"
     assert spent == [{"model": "claude-sonnet-5",
                       "input_tokens": 1200, "output_tokens": 40}]
+
+
+# ── does it exist as a record? ──────────────────────────────────────────────
+
+def test_a_spotify_link_says_whether_the_album_was_ever_pressed(client):
+    """Spotify has everything, including records that were never records.
+    The link still resolves — it just comes back labelled."""
+    resolved = {"artist": "Some Band", "album_name": "Streaming Only",
+                "image_url": None}
+    candidate = {"mbid": "abc", "year": "2019", "country": "US", "label": None,
+                 "artist": "Some Band", "album_name": "Streaming Only"}
+
+    with patch.object(app_module.scan, "extract_from_spotify", return_value=resolved), \
+         patch.object(app_module.scan, "classify_genre", return_value="Rock"), \
+         patch.object(app_module.scan, "lookup_musicbrainz", return_value=[candidate]), \
+         patch.object(app_module.scan, "fetch_cover", return_value=None), \
+         patch.object(app_module.scan, "vinyl_rgids", return_value=set()), \
+         patch.object(app_module.scan, "confirm_vinyl", return_value=["no"]):
+        body = client.post("/api/scan",
+                           json={"spotify_url": "spotify:album:4LH4d3cOWNNsVw41Gqt2kv"}).get_json()
+
+    assert body["candidates"][0]["vinyl"] == "none"
+
+
+def test_a_catalogued_pressing_is_confirmed(client):
+    extracted = {"artist": "Bill Withers", "album_name": "Live at Carnegie Hall",
+                 "genre": "Soul & Funk", "label": "Sussex", "catalog_number": None}
+    candidate = {"mbid": "abc", "year": "1973", "country": "US", "label": None,
+                 "artist": "Bill Withers", "album_name": "Live at Carnegie Hall"}
+
+    with patch.object(app_module.scan, "extract_from_image", return_value=extracted), \
+         patch.object(app_module.scan, "lookup_musicbrainz", return_value=[candidate]), \
+         patch.object(app_module.scan, "fetch_cover", return_value=None), \
+         patch.object(app_module.scan, "vinyl_rgids", return_value={"abc"}), \
+         patch.object(app_module.scan, "confirm_vinyl", return_value=["no"]):
+        body = client.post("/api/scan",
+                           json={"image": "data:image/jpeg;base64,x"}).get_json()
+
+    assert body["candidates"][0]["vinyl"] == "confirmed"
+
+
+def test_the_scan_never_reorders_its_candidates(client):
+    """candidates[0] is the best match and it is what fills the form and
+    supplies the year. Sorting vinyl-first here — as the search grid does —
+    would let a badge decide which pressing the user is holding."""
+    extracted = {"artist": "A", "album_name": "B", "genre": None,
+                 "label": None, "catalog_number": None}
+    candidates = [{"mbid": "best", "year": "1970", "country": "BR", "label": None,
+                   "artist": "A", "album_name": "B"},
+                  {"mbid": "other", "year": "1999", "country": "BR", "label": None,
+                   "artist": "A", "album_name": "B"}]
+
+    with patch.object(app_module.scan, "extract_from_image", return_value=extracted), \
+         patch.object(app_module.scan, "lookup_musicbrainz", return_value=candidates), \
+         patch.object(app_module.scan, "fetch_cover", return_value=None), \
+         patch.object(app_module.scan, "vinyl_rgids", return_value={"other"}), \
+         patch.object(app_module.scan, "confirm_vinyl", return_value=["no", "no"]):
+        body = client.post("/api/scan",
+                           json={"image": "data:image/jpeg;base64,x"}).get_json()
+
+    assert [c["mbid"] for c in body["candidates"]] == ["best", "other"]
+    assert body["candidates"][0]["vinyl"] == "none"
