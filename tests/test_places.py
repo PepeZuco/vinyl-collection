@@ -276,3 +276,54 @@ def test_edit_refuses_a_non_string_url(authed, bad):
     pid = make_place("Tracks Rio")
     r = authed.put(f"/api/places/{pid}", json={"name": "Tracks Rio", "url": bad})
     assert r.status_code == 400
+
+
+# ── a record write puts its place on the list ────────────────────────────────
+# The backfill in app.py only runs once, on the boot that creates the table, and
+# the record form still takes bought_where as free text. Without this, a store
+# first typed into a record after that boot would never appear in the places
+# popup, and so could never be given a link. The CSV importer already upserts
+# places this way; these pin the record routes doing the same.
+
+def test_creating_a_record_creates_its_place(authed):
+    authed.post("/api/records", json={"artist": "a", "album_name": "b",
+                                      "bought_where": "  Disco Rio  "})
+
+    body = authed.get("/api/places").get_json()
+    assert [(p["name"], p["url"]) for p in body] == [("Disco Rio", "")]
+
+
+def test_editing_a_record_onto_a_new_place_creates_it(authed):
+    rid = authed.post("/api/records", json={"artist": "a", "album_name": "b",
+                                            "bought_where": "Tracks Rio"}).get_json()["id"]
+    authed.put(f"/api/records/{rid}", json={"bought_where": "Amoeba"})
+
+    # Both: the place the record left is not deleted with it. Other records may
+    # still point at it, and its link is worth keeping either way — a place goes
+    # away only by being merged into another.
+    assert [p["name"] for p in authed.get("/api/places").get_json()] == ["Amoeba", "Tracks Rio"]
+
+
+def test_a_record_write_never_duplicates_a_place(authed):
+    make_place("Tracks Rio", "https://tracksrio.com")
+    authed.post("/api/records", json={"artist": "a", "album_name": "b",
+                                      "bought_where": "Tracks Rio"})
+
+    body = authed.get("/api/places").get_json()
+    assert [(p["name"], p["url"]) for p in body] == [("Tracks Rio", "https://tracksrio.com")]
+
+
+def test_a_record_write_matching_only_by_case_does_not_add_a_second_place(authed):
+    # POST /api/places refuses a case-clash, so a record write must not create
+    # through the back door what the API would have refused at the front.
+    make_place("Tracks Rio")
+    authed.post("/api/records", json={"artist": "a", "album_name": "b",
+                                      "bought_where": "tracks rio"})
+
+    assert [p["name"] for p in authed.get("/api/places").get_json()] == ["Tracks Rio"]
+
+
+def test_a_record_with_no_place_creates_nothing(authed):
+    authed.post("/api/records", json={"artist": "a", "album_name": "b",
+                                      "bought_where": "   "})
+    assert authed.get("/api/places").get_json() == []

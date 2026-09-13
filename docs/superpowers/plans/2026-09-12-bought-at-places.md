@@ -929,7 +929,30 @@ git commit -m "feat: place links ride the CSV backup out and back"
 
 ---
 
-### Task 6: The picker in the form
+### Task 6: The picker in the form — SUPERSEDED
+
+> **Not built, and not going to be.** The picker was to replace the record
+> form's free-text `bought_where` with a dropdown of known places, each row
+> carrying a `✎` that edited the place's name and link. In its place the link
+> editing moved to its own screen: ⋯ → **places**, an authed-only popup listing
+> every place with its record count, an inline name+link form per row, and the
+> rename-merge. The record form's field is untouched.
+>
+> **Why:** the link is the thing that was missing, and it does not need the
+> record form to be rewritten to be reachable. Editing a place from inside the
+> record form also only let you reach places while adding or editing a record.
+>
+> **What that costs:** free text can still invent a place by typo. Saving a
+> record now creates a place row for whatever was typed (`_ensure_place` in
+> `app.py`), so a new shop is immediately linkable — and a typo is immediately
+> its own place. The rename-merge in the popup is the cleanup. If phantom
+> places become a real nuisance, the picker below is still the answer and the
+> data model already supports it.
+
+<details>
+<summary>The original Task 6, kept for that eventuality</summary>
+
+### Task 6 (original): The picker in the form
 
 **Files:**
 - Modify: `templates/index.html` — the `<script src>` list (~line 2850), the `#fWhere` markup (~line 2496), new CSS beside the other form styles, the JS around `populateWhereList` (~line 4662), `applyDraft` (~line 5346), the `openAdd` reset (~line 5386), `editRecord` (~line 5470)
@@ -1215,7 +1238,11 @@ git commit -m "feat: pick a bought-at location from the ones you already have"
 
 ---
 
-### Task 7: The link on the read surfaces
+</details>
+
+---
+
+### Task 7: The link on the read surfaces — DONE
 
 **Files:**
 - Modify: `templates/index.html` — `dmInfoTabHTML`'s "Bought at" cell (~line 4164), the crate header (~line 3489)
@@ -1328,7 +1355,7 @@ git commit -m "feat: a place's link opens from the drawer and its crate"
 
 ---
 
-### Task 8: The manual verification doc
+### Task 8: The manual verification doc — DONE (`docs/bought-at-places-manual-verification.md`)
 
 **Files:**
 - Create: `docs/places-manual-verification.md`
