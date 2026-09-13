@@ -10,7 +10,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
-        tracksBySide, likedTracks, sidesWithTracks, discMarks,
+        tracksBySide, likedTracks, sidesWithTracks, formatTag,
+        discGroups, formatSummary, capitalizeName,
         parsePastedTracklist, artistsInUse } = require('../static/tracks.js');
 
 // ── parse ───────────────────────────────────────────────────────────────────
@@ -138,19 +139,137 @@ test('sidesWithTracks names the sides that would lose songs', () => {
   assert.deepStrictEqual(sidesWithTracks(list), ['A', 'C']);
 });
 
-// ── the grid marks ──────────────────────────────────────────────────────────
+// ── the grid card's format tag ──────────────────────────────────────────────
+//
+// The tag replaced the spine segments and the sleeve stack, which counted the
+// discs in marks you had to decode and never said the size at all. It earns
+// its place on the artwork only when there is something to say: a plain single
+// 12" is what most of the shelf is, and a label on all 250 cards is furniture
+// the eye stops seeing — the same trade discMarks used to make.
 
-test('a single disc gets no marks at all', () => {
-  assert.deepStrictEqual(discMarks(1), { sleeves: 0, segments: 0 });
-  assert.deepStrictEqual(discMarks(undefined), { sleeves: 0, segments: 0 });
+test('a plain single 12" gets no tag — it is what most of the shelf is', () => {
+  assert.strictEqual(formatTag(1, '12'), '');
 });
 
-test('a double gets one sleeve behind and two spine segments', () => {
-  assert.deepStrictEqual(discMarks(2), { sleeves: 1, segments: 2 });
+test('an unknown size on a single disc says nothing rather than guessing 12"', () => {
+  assert.strictEqual(formatTag(1, ''), '');
+  assert.strictEqual(formatTag(1, null), '');
+  assert.strictEqual(formatTag(undefined, undefined), '');
 });
 
-test('a triple gets two sleeves and three segments', () => {
-  assert.deepStrictEqual(discMarks(3), { sleeves: 2, segments: 3 });
+test('a size that is not 12" is worth saying on its own', () => {
+  assert.strictEqual(formatTag(1, '7'), '7"');
+  assert.strictEqual(formatTag(1, '10'), '10"');
+});
+
+test('more than one disc is worth saying, with the size when it is known', () => {
+  assert.strictEqual(formatTag(2, '12'), '2 × 12"');
+  assert.strictEqual(formatTag(3, '7'), '3 × 7"');
+});
+
+test('a multi-disc record of unknown size counts the discs alone', () => {
+  assert.strictEqual(formatTag(2, ''), '2 discs');
+});
+
+// ── the tracklist's disc groups ─────────────────────────────────────────────
+//
+// The tracklist draws a rail down the whole height of a disc, so it needs the
+// sides GROUPED by disc rather than the flat run tracksBySide returns: a rail
+// has to know where the disc ends, not just where it starts.
+
+test('a single disc is one group holding both its sides', () => {
+  const groups = discGroups([{ side: 'A', title: 'x' }], 1);
+  assert.strictEqual(groups.length, 1);
+  assert.deepStrictEqual(groups[0].letters, ['A', 'B']);
+});
+
+test('a double splits A/B from C/D', () => {
+  const groups = discGroups([], 2);
+  assert.deepStrictEqual(groups.map(g => g.disc), [1, 2]);
+  assert.deepStrictEqual(groups.map(g => g.letters), [['A', 'B'], ['C', 'D']]);
+});
+
+test('a group counts the songs on both of its sides', () => {
+  const list = [
+    { side: 'A', title: 'one' }, { side: 'A', title: 'two' },
+    { side: 'B', title: 'three' },
+    { side: 'C', title: 'four' },
+  ];
+  assert.deepStrictEqual(discGroups(list, 2).map(g => g.songs), [3, 1]);
+});
+
+test('a group carries the same side objects tracksBySide builds', () => {
+  const list = [{ side: 'A', title: 'Umbabarauma' }];
+  const [first] = discGroups(list, 1);
+  assert.deepStrictEqual(first.sides[0], tracksBySide(list, 1)[0]);
+});
+
+// ── the tracklist's format summary ──────────────────────────────────────────
+
+test('the summary reports the discs, the size, the sides and the songs', () => {
+  const list = [{ side: 'A', title: 'one' }, { side: 'C', title: 'two' }];
+  assert.deepStrictEqual(formatSummary(list, 2, '12'),
+    { discs: 2, size: 12, sides: 4, songs: 2 });
+});
+
+test('an unknown size comes back null, so the drawing can skip it', () => {
+  assert.strictEqual(formatSummary([], 1, '').size, null);
+  assert.strictEqual(formatSummary([], 1, undefined).size, null);
+});
+
+test('a nonsense size is rejected rather than drawn at some absurd width', () => {
+  assert.strictEqual(formatSummary([], 1, '33').size, null);
+  assert.strictEqual(formatSummary([], 1, 'twelve').size, null);
+});
+
+test('sides are the ones the record physically has, not the ones with songs', () => {
+  assert.strictEqual(formatSummary([], 2, '12').sides, 4);
+});
+
+test('a missing disc count is one disc, the way it is everywhere else', () => {
+  assert.strictEqual(formatSummary([], undefined, '12').discs, 1);
+  assert.strictEqual(formatSummary([], 0, '12').discs, 1);
+});
+
+// ── a name as it is written on a sleeve ──────────────────────────
+// Only the FIRST letter of each word is touched. Lowercasing the rest would
+// rewrite the names that are meant to be read the way they are typed — an
+// acronym, an initialled band, a stylised stage name — and a tracklist full of
+// "Dna" is worse than one full of "dna".
+
+test('each word of a name starts capital', () => {
+  assert.strictEqual(capitalizeName('the boy in the bubble'), 'The Boy In The Bubble');
+});
+
+test('a name already capitalised is left as it is', () => {
+  assert.strictEqual(capitalizeName('Hey You'), 'Hey You');
+});
+
+test('letters after the first are never touched', () => {
+  assert.strictEqual(capitalizeName('DNA'), 'DNA');
+  assert.strictEqual(capitalizeName('R.E.M.'), 'R.E.M.');
+  assert.strictEqual(capitalizeName('MOTHER'), 'MOTHER');
+  assert.strictEqual(capitalizeName('will.i.am'), 'Will.i.am');
+});
+
+test('a word that opens with a non-letter keeps its shape', () => {
+  assert.strictEqual(capitalizeName('10 years gone'), '10 Years Gone');
+  assert.strictEqual(capitalizeName('(reprise)'), '(reprise)');
+  assert.strictEqual(capitalizeName('\u00e9lan vital'), '\u00c9lan Vital');
+});
+
+test('the spacing between words survives exactly', () => {
+  assert.strictEqual(capitalizeName('hey  you'), 'Hey  You');
+  assert.strictEqual(capitalizeName('side a\nside b'), 'Side A\nSide B');
+  assert.strictEqual(capitalizeName('  leading space'), '  Leading Space');
+  assert.strictEqual(capitalizeName('trailing space  '), 'Trailing Space  ');
+});
+
+test('an empty or missing name is the empty string, never a throw', () => {
+  assert.strictEqual(capitalizeName(''), '');
+  assert.strictEqual(capitalizeName(null), '');
+  assert.strictEqual(capitalizeName(undefined), '');
+  assert.strictEqual(capitalizeName('   '), '   ');
 });
 
 // ── the paste box ───────────────────────────────────────────────────────────

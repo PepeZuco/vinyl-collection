@@ -32,16 +32,7 @@ html,body{touch-action:pan-x pan-y}
   /* the month cell's glass over a record sleeve — see .cal-slice */
   --cal-glass:8,8,8; --cal-ink:#e8e8e0; --cal-sleeve:brightness(.85) saturate(.9);
   --toggle-icon:'☀';
-  /* The stacked sleeve reads against .vcard-cover's own hardcoded #111 ground
-     (that ground does not follow the theme — it is the "sleeve pocket", not
-     the page). --card-hover (#1f1f1f, 31) was reused here, but at
-     brightness(.85)/.70 it lands at 26/22 against 17: a 5-9 unit gap on a 5px
-     sliver, invisible. --sleeve is its own token, picked to actually contrast
-     against #111: #4d4d4d (77) still reads as a dim cardboard grey, well
-     under --text, but at .85/.70 it lands at 65/54 — a 48/37 unit gap, over
-     5x the old difference, while still keeping the farther sleeve darker than
-     the nearer one so the depth ordering still reads. */
-  --sleeve:#4d4d4d;
+  --vinyl-a:#141414;--vinyl-b:#0a0a0a;--vinyl-edge:#2e2e2e;
 }
 [data-theme="light"]{
   --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#CBB596;
@@ -53,10 +44,7 @@ html,body{touch-action:pan-x pan-y}
      to be pale too or the icons sit dark-on-dark over the artwork. */
   --cal-glass:250,249,245; --cal-ink:#1a1a18; --cal-sleeve:brightness(1.02) saturate(.9);
   --toggle-icon:'☾';
-  /* Already high-contrast against the cover's #111 ground (233 at full
-     brightness, 198/163 at .85/.70) — kept at the same value --card-hover
-     already had, just under its own token so dark mode can differ. */
-  --sleeve:#e9e5dc;
+  --vinyl-a:#2a2622;--vinyl-b:#161310;--vinyl-edge:#4a443c;
 }
 
 /* Pepe and Jenni's colours. Deliberately the same in both themes: the bars are
@@ -157,23 +145,30 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-cover .no-cover i{font-size:32px}
 [data-theme="light"] .vcard-cover .no-cover{color:#b0a99b}
 
-/* A double (or triple...) record is more than one record. The stack reads
- * from across the grid by insetting the front artwork from the bottom-right
- * corner of the (still overflow:hidden) cover box, so the sleeve(s) behind it
- * peek out along the bottom and right edges; the spine down the art's left
- * edge carries one segment per disc. Both are drawn only for discMarks() >0 —
- * a mark on all 250 cards is furniture the eye stops seeing.
+/* A double (or triple...) record is more than one record, and a 7" is not the
+ * same object as an LP. The card used to say both in marks — yellow segments
+ * down the left edge counting the discs, grey sleeves peeking out bottom-right
+ * counting the extras — and neither was legible: the segments were a count you
+ * had to decode, the sleeves were a 5px sliver that read as a rendering
+ * artefact, and between them they never said the SIZE at all.
  *
- * Everything here is drawn INSIDE .vcard-cover's own box: .vcard and
- * .vcard-cover both clip with overflow:hidden, so anything positioned outside
- * that box (as opposed to inset within it) is simply invisible. */
-.vcard-cover-art{position:absolute;top:0;left:0;right:0;bottom:0;
-  display:flex;align-items:center;justify-content:center}
-.vcard-sleeve{position:absolute;top:0;left:0;background:var(--sleeve);
-  pointer-events:none}
-.vcard-spine{position:absolute;top:0;left:0;width:5px;
-  display:flex;flex-direction:column;gap:3px;pointer-events:none}
-.vcard-spine i{flex:1;border-radius:3px;background:var(--accent);display:block}
+ * So the card just says it. formatTag() returns '' for a plain single 12" —
+ * what most of the shelf is — so this stays off all but the handful of cards
+ * that have something to report; a label on all 250 is furniture the eye stops
+ * seeing, which is the same trade the old marks were making.
+ *
+ * Top-left is the only free corner: the flag is top-right, the artist overlay
+ * runs along the bottom, and the quick-edit button sits bottom-right. Drawn
+ * INSIDE .vcard-cover's box, which clips with overflow:hidden. */
+.vcard-fmt{position:absolute;top:7px;left:7px;z-index:3;
+  display:flex;align-items:center;gap:5px;pointer-events:none;
+  background:rgba(0,0,0,.72);border-radius:3px;padding:3px 7px 3px 5px;
+  font-size:10px;font-weight:800;letter-spacing:.05em;color:#fff;
+  font-variant-numeric:tabular-nums}
+/* the tag's own little record, so the number is attached to the thing it
+   counts rather than floating as a bare figure */
+.vcard-fmt .disc{--d:11px;--lab:var(--accent)}
+.vcard-fmt .disc::after{background:#000}
 
 /* artist overlay on the cover */
 .vcard-artist-overlay{
@@ -567,6 +562,66 @@ select option{background:var(--surface);color:var(--text)}
    bottom and leaves the tracklist still sitting under the tabs. */
 .dd-sec:last-child{min-height:100%}
 
+/* ── the record, drawn ──────────────────────────────────────────────────────
+   One rule draws every disc in the app, sized by --d, so a 7" and a 12" can
+   be put side by side and be honestly different widths. Black wax in
+   repeating groove bands, the house gold for the label, the spindle hole
+   punched through in the page ground. --vinyl-* rather than literals because
+   near-black grooves disappear into a light-mode ground. */
+.disc{position:relative;display:block;width:var(--d);height:var(--d);flex:0 0 var(--d);
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%, var(--lab,var(--accent)) 0 32%, transparent 32.4%),
+    repeating-radial-gradient(circle at 50% 50%,
+      var(--vinyl-a) 0 1.6px, var(--vinyl-b) 1.6px 3.2px),
+    var(--vinyl-b);
+  box-shadow:inset 0 0 0 1px var(--vinyl-edge), 0 1px 3px rgba(0,0,0,.5)}
+/* the spindle hole */
+.disc::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:9%;height:9%;min-width:2px;min-height:2px;border-radius:50%;background:var(--bg)}
+/* the light sweeping across the wax, so it reads as an object and not a dot */
+.disc::before{content:'';position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:linear-gradient(115deg,rgba(255,255,255,.16) 0 14%,
+    transparent 30% 70%,rgba(255,255,255,.08) 86% 100%)}
+
+/* ── what this record physically is, above its tracklist ────────────────────
+   The discs at true relative scale — a 7" single is drawn narrower than a 12"
+   LP because it IS narrower, which is the whole point: the count and the
+   format are read off the shapes before any text is read. They overlap the
+   way they sit in a gatefold. Drawn only when the size is known; formatSummary
+   returns null rather than guessing 12", and a made-up measurement would
+   print a single at the width of an LP. */
+.tl-fmt{display:flex;align-items:center;gap:14px;padding-bottom:14px;margin-bottom:2px;
+  border-bottom:1px solid var(--border)}
+.tl-fmt .platters{display:flex;align-items:center;flex:0 0 auto}
+.tl-fmt .platters .disc + .disc{margin-left:calc(var(--d) * -0.34)}
+.tl-fmt .big{font-size:17px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.tl-fmt .big em{font-style:normal;color:var(--accent)}
+.tl-fmt .sub{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-top:4px}
+
+/* ── one disc's worth of tracklist ──────────────────────────────────────────
+   The disc owns a gutter, and the rail runs the FULL height of the group. The
+   old treatment was a 9px muted word above side C, which said where a disc
+   started but never where it ended — on a triple you lost track of which disc
+   you were reading. The rail fades downward so it reads as the start of a
+   block rather than a border between two.
+
+   Only drawn on a record with more than one disc: a single LP is sides A and
+   B and needs no disc chrome at all, exactly as before. */
+.tl-group{position:relative;padding-left:26px;margin-top:18px}
+.tl-group:first-child{margin-top:4px}
+.tl-group::before{content:'';position:absolute;left:8px;top:6px;bottom:4px;width:2px;
+  border-radius:2px;
+  background:linear-gradient(var(--accent),color-mix(in srgb,var(--accent) 15%,transparent))}
+/* the header hangs back out over the gutter so the disc sits on the rail */
+.tl-group > .hd{display:flex;align-items:center;gap:8px;margin:0 0 6px -26px}
+.tl-group > .hd .pip{width:26px;flex:0 0 26px;display:flex;align-items:center;justify-content:center}
+.tl-group > .hd .t{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.tl-group > .hd .m{font-size:9.5px;color:var(--muted);letter-spacing:.04em}
+/* The edit form still labels its disc breaks this way. The form is a stack of
+   boxed sides being typed into, not a tracklist being read, so it does not
+   want the rail — it already has a box per side. */
 .tl-disc{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
   color:var(--muted);margin:12px 0 4px}
 .tl-side{display:flex;align-items:center;gap:8px;margin:10px 0 4px}
@@ -1676,9 +1731,18 @@ select option{background:var(--surface);color:var(--text)}
 .track-row .tnum{width:26px;flex:0 0 26px;text-align:center;font-size:11px;color:var(--muted)}
 .track-row input{flex:1;background:var(--bg);border:1px solid var(--border);
   border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12.5px;font-family:var(--font)}
-.track-row .tartist{flex:0 1 118px;min-width:0;background:var(--bg);
+.track-row{flex-wrap:wrap}
+.track-row .tartist{flex:0 1 118px;min-width:96px;background:var(--bg);
   border:1px solid var(--border);color:var(--text);border-radius:5px;
   padding:5px 4px;font-size:11px;font-family:inherit}
+/* Narrow: the picker drops to its own line under the title rather than
+   shrinking. Squeezed inline it collapsed to a bare 19px chevron — the name it
+   exists to show was the first thing to go, which makes it useless exactly
+   where the sleeve is hardest to read from. The title keeps the first line; the
+   26px indent lines the picker up under it, clear of the move-up arrow. */
+@media (max-width:640px){
+  .track-row .tartist{flex:1 0 calc(100% - 32px);order:1;margin-left:32px;font-size:12px}
+}
 .track-row button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px}
 .track-row .tlike.on{color:var(--ev-liked)}
 .track-row button:hover{color:var(--accent)}
@@ -1933,7 +1997,8 @@ select option{background:var(--surface);color:var(--text)}
 .cal-act:hover{background:color-mix(in srgb, currentColor 16%, transparent)}
 .cal-act i{font-size:15px}
 .cal-act.bought{color:var(--ev-bought)} .cal-act.cleaned{color:var(--ev-cleaned)}
-.cal-act.played{color:var(--ev-played)} .cal-act.note{color:var(--ev-note)}
+.cal-act.played{color:var(--ev-played)} .cal-act.liked{color:var(--ev-liked)}
+.cal-act.note{color:var(--ev-note)}
 .cal-week-empty{font-size:10.5px;color:var(--muted);text-align:center;opacity:.5;padding:6px 0}
 
 /* date picker modal */
@@ -3171,7 +3236,8 @@ const FILTER_DEPS = {
 };
 
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
-        tracksBySide, likedTracks, sidesWithTracks, discMarks,
+        tracksBySide, likedTracks, sidesWithTracks, formatTag,
+        discGroups, formatSummary, capitalizeName,
         parsePastedTracklist, artistsInUse } = VinylTracks;
 
 /* Re-render whatever surface is on screen. Every control that changes the
@@ -3573,42 +3639,17 @@ function cardHTML(r) {
     ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`
     : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
 
-  // A double (or triple...) record is more than one record: sleeves peek out
-  // behind the artwork along its bottom and right edges, and a spine down its
-  // left edge carries one segment per disc. discMarks returns zeroes for a
-  // single disc, so coverArt stays the bare `cover` markup — pixel-identical
-  // to before — for most of the grid.
-  const marks = discMarks(r.disc_count);
-  // The form caps discs at 3, but an imported CSV does not — an absurd
-  // disc_count (say 50) would inset the art past the cover's own width and
-  // render the card blank. Clamp the sleeve stack so a bad import degrades
-  // (a few extra px of inset) instead of destroying the card; the spine
-  // segment count is left alone since it is just short bars, not an inset.
-  marks.sleeves = Math.min(3, marks.sleeves);
-  const STACK_STEP = 5; // px each extra disc insets the art from bottom-right
-  const sleeves = Array.from({length: marks.sleeves}, (_, k) => {
-    const inset = k * STACK_STEP;
-    const depth = marks.sleeves - k; // 1 = nearest the art, sleeves = furthest back
-    return `<div class="vcard-sleeve" style="right:${inset}px;bottom:${inset}px;filter:brightness(${(1 - depth * 0.15).toFixed(2)})"></div>`;
-  }).join('');
-  const artInset = marks.sleeves * STACK_STEP;
-  // The artist overlay is chrome that belongs to the ARTWORK, not to the
-  // sleeve band behind it: it is always-on (unlike the hover scrim and the
-  // quick-edit button) and paints after the marks, so left at the level of
-  // the full cover box its gradient would sit permanently over the bottom
-  // sleeve sliver and the lowest spine segment(s), muting the very marks this
-  // feature exists to show. So on a multi-disc card it is nested inside
-  // `.vcard-cover-art` instead of sitting alongside it — its bottom/left/right
-  // then resolve against the art's own (inset) box, not the cover's. On a
-  // single disc there is no wrapper to nest it in, so it stays exactly where
-  // it always has: a direct child of `.vcard-cover`, last in source order.
   const artistOverlay = `<div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>`;
-  const coverArt = marks.sleeves
-    ? `<div class="vcard-cover-art" style="right:${artInset}px;bottom:${artInset}px">${cover}${artistOverlay}</div>`
-    : cover;
-  const spine = marks.segments
-    ? `<div class="vcard-spine" style="bottom:${artInset}px" title="${marks.segments} discs">` +
-      Array.from({length: marks.segments}, () => '<i></i>').join('') + '</div>'
+  // What the object is, in words, replacing the spine segments and the sleeve
+  // stack that used to count the discs in marks nobody could read. Empty for a
+  // plain single 12" — see formatTag — so most of the grid is untouched. The
+  // title attribute carries the same text for a screen reader, since the tag
+  // itself is pointer-events:none chrome over the artwork. esc() is not
+  // optional here: the tag ENDS in an inch mark, which closes the title
+  // attribute early if it goes in raw.
+  const tag = formatTag(r.disc_count, r.size);
+  const fmtTag = tag
+    ? `<div class="vcard-fmt" title="${esc(tag)}"><span class="disc"></span>${esc(tag)}</div>`
     : '';
 
   const myR  = Number(r.my_rating)  || 0;
@@ -3643,9 +3684,8 @@ function cardHTML(r) {
 
   return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
-      ${sleeves}
-      ${coverArt}
-      ${spine}
+      ${cover}
+      ${fmtTag}
       <div class="vcard-hover-info">
         <div class="vcard-hover-row"><span class="vcard-hover-dot" style="background:${genreColor(r.genre)}"></span>${esc(r.genre)||'no genre'}</div>
         <div class="vcard-hover-row">${conditionBadgeHTML(r)}</div>
@@ -3653,7 +3693,7 @@ function cardHTML(r) {
       </div>
       ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagImgHTML(r.country, 28)}</div>` : ''}
-      ${marks.sleeves ? '' : artistOverlay}
+      ${artistOverlay}
     </div>
     <div class="vcard-body">
       <div class="vcard-title-row">
@@ -4197,33 +4237,71 @@ function dmTimelineTabHTML(r) {
   return `<div class="dm-history">${groups.map(dmHistoryGroupHTML).join('')}</div>`;
 }
 
+/* The width a 12" is drawn at in the Tracks tab; every other size is drawn at
+ * its true ratio to this, so the circles are a measurement and not a motif. */
+const DM_DISC_12IN = 54;
+/* Four is the form's own ceiling, and four 12" platters already fill the
+ * column. An imported CSV can carry any disc_count, so the DRAWING is capped
+ * here while the number printed beside it stays truthful. */
+const DM_PLATTERS_MAX = 4;
+
+/* What this record physically is, above its tracklist: the discs themselves,
+ * at true relative scale, overlapping the way they sit in a gatefold.
+ *
+ * Nothing is drawn for a single record of unknown size — there is no
+ * measurement to scale a circle by and no second disc to count, so the header
+ * would be an empty box making a claim we cannot support. */
+function dmFormatHeaderHTML(r) {
+  const f = formatSummary(parseTracks(r.tracks), r.disc_count, r.size);
+  if (!f.size && f.discs < 2) return '';
+  const px = Math.round(DM_DISC_12IN * (f.size || 12) / 12);
+  const platters = Array.from({ length: Math.min(DM_PLATTERS_MAX, f.discs) },
+    () => `<span class="disc" style="--d:${px}px"></span>`).join('');
+  const big = f.size
+    ? `${f.discs > 1 ? `${f.discs} <em>×</em> ` : ''}${f.size}<em>"</em>`
+    : `${f.discs} <em>discs</em>`;
+  const songs = f.songs ? ` · ${f.songs} song${f.songs === 1 ? '' : 's'}` : '';
+  return `<div class="tl-fmt">
+    <span class="platters">${platters}</span>
+    <span><div class="big">${big}</div>
+      <div class="sub">${f.sides} sides${songs}</div></span>
+  </div>`;
+}
+
+function dmSideHTML(r, side) {
+  return `<div class="tl-side"><span class="tl-letter">${side.letter}</span>
+      <span class="lbl">Side ${side.letter}</span><span class="rule"></span></div>`
+    + (side.tracks.length
+        ? side.tracks.map(t => dmTrackRowHTML(r, t)).join('')
+        : '<div class="tl-empty">nothing on this side</div>');
+}
+
 function dmTracksTabHTML(r) {
   const list = parseTracks(r.tracks);
+  const header = dmFormatHeaderHTML(r);
   if (!list.length) {
-    return `<div class="tl-none">no tracklist yet
+    return header + `<div class="tl-none">no tracklist yet
       ${authed ? `<div style="margin-top:10px">
         <button class="btn btn-sm" onclick="openEdit(${r.id});setFormStep(4)">
           <i class="ti ti-plus"></i> add the songs</button></div>` : ''}
     </div>`;
   }
   const discs = Math.max(1, Number(r.disc_count) || 1);
-  const sides = tracksBySide(list, discs);
-  let out = '';
-  let lastDisc = 0;
-  sides.forEach(side => {
-    // Disc headers appear only on a record that has more than one. A single LP
-    // shows sides A and B with no disc chrome at all.
-    if (discs > 1 && side.disc !== lastDisc) {
-      out += `<div class="tl-disc">Disc ${side.disc}</div>`;
-      lastDisc = side.disc;
-    }
-    out += `<div class="tl-side"><span class="tl-letter">${side.letter}</span>
-      <span class="lbl">Side ${side.letter}</span><span class="rule"></span></div>`;
-    out += side.tracks.length
-      ? side.tracks.map(t => dmTrackRowHTML(r, t)).join('')
-      : '<div class="tl-empty">nothing on this side</div>';
-  });
-  return out;
+  // A single LP is sides A and B: no disc chrome at all, exactly as before.
+  if (discs < 2) {
+    return header + tracksBySide(list, discs).map(side => dmSideHTML(r, side)).join('');
+  }
+  // Past one disc, each disc is a group with a rail down its full height, so
+  // you can see where a disc ENDS — the old header said only where one began.
+  return header + discGroups(list, discs).map(g => `
+    <div class="tl-group">
+      <div class="hd">
+        <span class="pip"><span class="disc" style="--d:16px"></span></span>
+        <span class="t">Disc ${g.disc}</span>
+        <span class="m">· ${g.letters.join('/')} · ${g.songs} song${g.songs === 1 ? '' : 's'}</span>
+      </div>
+      ${g.sides.map(side => dmSideHTML(r, side)).join('')}
+    </div>`).join('');
 }
 
 function dmTrackRowHTML(r, t) {
@@ -4774,7 +4852,7 @@ function renderTracksForm() {
         <button type="button" onclick="moveTrack(${t.i}, -1)" title="move up"><i class="ti ti-chevron-up"></i></button>
         <span class="tnum">${t.pos}</span>
         <input value="${esc(t.title)}" placeholder="song title"
-               onchange="updateTrackTitle(${t.i}, this.value)">
+               onchange="updateTrackTitle(${t.i}, this)">
         ${trackArtistPickerHTML(t, artists)}
         <button type="button" class="tlike${t.liked_at ? ' on' : ''}" onclick="toggleFormLike(${t.i})"
           title="${t.liked_at ? 'liked' : 'mark as liked'}"><i class="ti ti-heart${t.liked_at ? '-filled' : ''}"></i></button>
@@ -4858,8 +4936,16 @@ function addTrack(letter) {
   renderTracksForm();
 }
 
-function updateTrackTitle(i, value) {
-  if (formTracks[i]) formTracks[i].title = value;
+/* Takes the ELEMENT, not its value: the title is capitalised on the way in,
+ * and the field has to show what was actually stored or the input and the
+ * record disagree about the song's name. Written straight back rather than
+ * through renderTracksForm() — a re-render rebuilds every side, and would wipe
+ * a tracklist half-pasted into another side's box. Fires on change, so the
+ * capitals appear when you leave the field and never mid-word. */
+function updateTrackTitle(i, el) {
+  const title = capitalizeName(el.value);
+  el.value = title;
+  if (formTracks[i]) formTracks[i].title = title;
   formChanged();
 }
 
@@ -4898,7 +4984,7 @@ function applyPastedTracks(letter) {
   if (!box) return;
   const titles = parsePastedTracklist(box.value);
   if (!titles.length) { toast('nothing to add'); return; }
-  titles.forEach(title => formTracks.push({ side: letter, title }));
+  titles.forEach(title => formTracks.push({ side: letter, title: capitalizeName(title) }));
   box.value = '';
   renderTracksForm();
   toast(`${titles.length} song${titles.length > 1 ? 's' : ''} added to side ${letter}`);

@@ -142,12 +142,90 @@ const VinylTracks = (function () {
     return seen.sort();
   }
 
-  /* What the card draws: sleeves peeking out behind the cover, and segments in
-   * the spine down its left edge. Both are zero for a single disc — a mark on
-   * every card in the grid is furniture the eye stops seeing. */
-  function discMarks(discCount) {
+  /* The only sizes a sleeve is cut to, in inches. A value from outside this
+   * list is not a size we can draw — see sizeInches(). */
+  const SIZES = [7, 10, 12];
+
+  function sizeInches(size) {
+    const n = Number(size);
+    return SIZES.indexOf(n) === -1 ? null : n;
+  }
+
+  /* What the card says about the object itself: how many discs, how many
+   * inches. Empty when there is nothing worth saying — a single 12" is what
+   * most of the shelf is, and a label on all 250 cards is furniture the eye
+   * stops seeing. An unknown size says nothing rather than guessing 12", the
+   * same trade the Info tab's Format cell already makes. */
+  function formatTag(discCount, size) {
     const n = Math.max(1, Number(discCount) || 1);
-    return n > 1 ? { sleeves: n - 1, segments: n } : { sleeves: 0, segments: 0 };
+    const inches = sizeInches(size);
+    if (n > 1 && inches) return n + ' \u00d7 ' + inches + '"';
+    if (n > 1)           return n + ' discs';
+    if (inches && inches !== 12) return inches + '"';
+    return '';
+  }
+
+  /* The sides grouped by the disc they are on.
+   *
+   * tracksBySide returns a flat run of sides because that is how a tracklist
+   * is read; this is the same sides nested, because the tracklist DRAWS a rail
+   * down the full height of a disc and a rail has to know where the disc ends,
+   * not just where it starts. The side objects are passed through untouched —
+   * there is one place that decides what a side looks like, and it is up
+   * there. */
+  function discGroups(list, discCount) {
+    const groups = [];
+    tracksBySide(list, discCount).forEach(function (side) {
+      let g = groups[groups.length - 1];
+      if (!g || g.disc !== side.disc) {
+        g = { disc: side.disc, letters: [], sides: [], songs: 0 };
+        groups.push(g);
+      }
+      g.letters.push(side.letter);
+      g.sides.push(side);
+      g.songs += side.tracks.length;
+    });
+    return groups;
+  }
+
+  /* The numbers behind the discs drawn at the top of the Tracks tab.
+   *
+   * `sides` is what the record physically HAS (two per disc), not the sides
+   * that happen to hold songs: a half-entered tracklist is still a double LP,
+   * and counting only the filled sides would redraw the record as you typed.
+   * `size` is null rather than 12 when unknown — the drawing needs a real
+   * measurement to scale a circle by, and an invented one would print a 7"
+   * single at the width of an LP. */
+  function formatSummary(list, discCount, size) {
+    const discs = Math.max(1, Number(discCount) || 1);
+    return {
+      discs: discs,
+      size: sizeInches(size),
+      sides: discs * 2,
+      songs: (list || []).length,
+    };
+  }
+
+  /* A name the way it is written on a sleeve: every word starts capital.
+   *
+   * Only the FIRST letter of each word is touched. Lowercasing the rest would
+   * rewrite the names that are meant to be read exactly as they are typed — an
+   * acronym (DNA), an initialled band (R.E.M.), a stylised stage name
+   * (will.i.am) — and a tracklist full of "Dna" is worse than one full of
+   * "dna". A word opening on a digit or a bracket is left alone by the same
+   * rule: there is no first letter to raise.
+   *
+   * The gap is captured and put back rather than joined over, so the spacing a
+   * title was typed with survives — a double space, a newline — and this
+   * cannot quietly re-flow text on its way through. Trimming belongs to
+   * serializeTracks, which already does it.
+   *
+   * Applied where a human ENTERS a title (the song-title field, the paste
+   * box), never in serializeTracks: a title that came from a Spotify scan or
+   * an imported CSV must not be rewritten by an unrelated save. */
+  function capitalizeName(name) {
+    return String(name == null ? '' : name)
+      .replace(/(^|\s)(\S)/g, function (m, gap, first) { return gap + first.toUpperCase(); });
   }
 
   /* Turn pasted text into titles — the shapes a tracklist arrives in when it
@@ -170,7 +248,8 @@ const VinylTracks = (function () {
   }
 
   return { parseTracks, serializeTracks, sideLettersFor, discOfSide,
-           tracksBySide, likedTracks, sidesWithTracks, discMarks,
+           tracksBySide, likedTracks, sidesWithTracks, formatTag,
+           discGroups, formatSummary, capitalizeName,
            parsePastedTracklist, artistsInUse };
 })();
 

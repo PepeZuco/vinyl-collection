@@ -107,17 +107,23 @@ without a browser and said so.
 ## Who plays each song (multi-artist records)
 
 The picker and the credit under the title are the only two things this feature
-draws. Neither has been seen in a browser.
+draws. Unlike the rest of this file, both HAVE now been driven in real headless
+Chromium against the dev server (2026-09-13): rules 31, 32, 39 and 40 were
+checked there and 32 caught a real bug — inline at phone width the select
+collapsed to a bare 19px chevron, showing no name at all, so it now drops to its
+own full-width line under 640px. What follows is still worth re-walking by hand
+on a real device, since a screenshot is not a finger.
 
 30. On a record with **one** artist, step 4 shows no picker at all — the song
     row is exactly what rule 25 already describes.
 31. On a record whose artist field holds `Edu Lobo; Gal Costa`, every song row
     grows a small select offering *— who plays it —*, `Edu Lobo` and
     `Gal Costa`, and nothing else.
-32. **At phone width the select must not squeeze the title input to nothing.**
-    It is `flex:0 1 118px`, so it is allowed to shrink; check that the title is
-    still the widest thing on the row and that the row does not wrap oddly or
-    push the heart and × buttons off the edge.
+32. **At phone width (≤640px) the select drops to its own line** under the
+    title, indented to line up with it, and reads at full width — measured 302px
+    of a 334px row, with the heart and × still on the title's line. Above that
+    breakpoint it sits inline at 118px. Check no row scrolls sideways and that
+    the added height does not make a long side unusable to scroll.
 33. Type the two artists into the **single** artist field as `A; B` on step 1,
     without ticking *multiple artists*, then walk to step 4: the pickers offer
     both. (The tick box is a way of editing the same semicolon-separated field,
