@@ -152,10 +152,12 @@ select option{background:var(--surface);color:var(--text)}
  * had to decode, the sleeves were a 5px sliver that read as a rendering
  * artefact, and between them they never said the SIZE at all.
  *
- * So the card just says it. formatTag() returns '' for a plain single 12" —
- * what most of the shelf is — so this stays off all but the handful of cards
- * that have something to report; a label on all 250 is furniture the eye stops
- * seeing, which is the same trade the old marks were making.
+ * So the card just says it. Every record whose size is known wears the tag,
+ * the plain single 12" included — a blank corner was being asked to mean
+ * "12″, one disc", which is only legible to someone who already knows the
+ * shelf, and it read identically to a record whose size was never filled in.
+ * formatTag() still returns '' when the size is unknown, so the empty corner
+ * now means exactly one thing.
  *
  * Top-left is the only free corner: the flag is top-right, the artist overlay
  * runs along the bottom, and the quick-edit button sits bottom-right. Drawn
@@ -541,9 +543,13 @@ select option{background:var(--surface);color:var(--text)}
 .dm-history h4{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
   color:var(--muted);margin-bottom:8px}
 .dm-tabs{display:flex;gap:2px;margin-top:12px;border-bottom:1px solid var(--border)}
-.dm-tab{padding:7px 12px;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+.dm-tab{display:inline-flex;align-items:center;gap:5px;
+  padding:7px 11px;font-size:10.5px;font-weight:700;letter-spacing:.06em;
   text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;
   border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--font)}
+/* Bigger than the word beside it: at 10.5px uppercase the label is a texture,
+   and the icon is what the eye actually lands on. */
+.dm-tab i{font-size:14px;line-height:1}
 .dm-tab.on{color:var(--accent);border-bottom-color:var(--accent)}
 .dm-tab:hover{color:var(--text)}
 
@@ -3684,12 +3690,11 @@ function cardHTML(r) {
 
   const artistOverlay = `<div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>`;
   // What the object is, in words, replacing the spine segments and the sleeve
-  // stack that used to count the discs in marks nobody could read. Empty for a
-  // plain single 12" — see formatTag — so most of the grid is untouched. The
-  // title attribute carries the same text for a screen reader, since the tag
-  // itself is pointer-events:none chrome over the artwork. esc() is not
-  // optional here: the tag ENDS in an inch mark, which closes the title
-  // attribute early if it goes in raw.
+  // stack that used to count the discs in marks nobody could read. Empty only
+  // when the size is unknown — see formatTag. The title attribute carries the
+  // same text for a screen reader, since the tag itself is pointer-events:none
+  // chrome over the artwork. esc() is not optional here: the tag ENDS in an
+  // inch mark, which closes the title attribute early if it goes in raw.
   const tag = formatTag(r.disc_count, r.size);
   const fmtTag = tag
     ? `<div class="vcard-fmt" title="${esc(tag)}"><span class="disc"></span>${esc(tag)}</div>`
@@ -4161,11 +4166,12 @@ function lastCleanedLabel(r) {
  * tracklist OR its history and never said the other existed, and the cover
  * carousel above scrolls away anyway. */
 function detailSectionsHTML(r, pane) {
-  const tabBtn = (id, label) =>
-    `<button class="dm-tab" data-ddsec="${id}" onclick="detailGoToSection('${pane}','${id}')">${label}</button>`;
+  const tabBtn = (id, icon, label) =>
+    `<button class="dm-tab" data-ddsec="${id}" onclick="detailGoToSection('${pane}','${id}')"
+       ><i class="ti ti-${icon}"></i>${label}</button>`;
   return dmHeaderHTML(r) + `
     <div class="dm-tabs dd-tabs" id="${pane}Tabs">
-      ${tabBtn('info', 'Info')}${tabBtn('tracks', 'Tracks')}${tabBtn('timeline', 'Timeline')}
+      ${tabBtn('info', 'info-circle', 'Info')}${tabBtn('tracks', 'playlist', 'Tracks')}${tabBtn('timeline', 'timeline', 'Timeline')}
     </div>
     <section class="dd-sec" id="${pane}Sec-info">${dmInfoTabHTML(r)}</section>
     <section class="dd-sec" id="${pane}Sec-tracks">${dmTracksTabHTML(r)}</section>

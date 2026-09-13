@@ -2919,3 +2919,39 @@ test('a focused history entry reaches the phone sheet without hiding the rest', 
   assert.ok(count(doc, '#dmSec-tracks .tl-row'),
     'the focused open cost the phone sheet its tracklist');
 });
+
+/* The row is three words in the same weight and colour, and on a phone it is
+ * the only thing saying the sheet has more below it. An icon per block gives
+ * each tab a shape to be recognised by before the word is read. */
+
+const DETAIL_TABS = ['info', 'tracks', 'timeline'];
+
+const tabIcons = (doc, pane) => DETAIL_TABS.map(id => {
+  const icons = [...doc.querySelectorAll('#' + pane + 'Tabs .dm-tab[data-ddsec="' + id + '"] i')];
+  assert.strictEqual(icons.length, 1, `the ${id} tab has ${icons.length} icons, not one`);
+  return [...icons[0].classList].find(c => c.startsWith('ti-'));
+});
+
+['dm', 'dd'].forEach(pane => {
+  const where = pane === 'dm' ? 'the phone sheet' : 'the desktop column';
+
+  test(`each block's tab carries its own icon on ${where}`, async () => {
+    const { win, doc, read } = await boot();
+    win.openDetail(fullRecord(read).id);
+    const icons = tabIcons(doc, pane);
+    icons.forEach((c, i) => assert.ok(c, `the ${DETAIL_TABS[i]} tab has no icon`));
+    assert.strictEqual(new Set(icons).size, 3,
+      `two tabs wear the same icon: ${icons.join(', ')}`);
+  });
+
+  test(`the tabs still name their blocks in words on ${where}`, async () => {
+    // An icon-only row would be three glyphs and a guess. The word stays.
+    const { win, doc, read } = await boot();
+    win.openDetail(fullRecord(read).id);
+    DETAIL_TABS.forEach(id => {
+      const tab = $(doc, '#' + pane + 'Tabs .dm-tab[data-ddsec="' + id + '"]');
+      assert.strictEqual(tab.textContent.trim().toLowerCase(), id,
+        `the ${id} tab lost its word`);
+    });
+  });
+});

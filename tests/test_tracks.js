@@ -179,13 +179,13 @@ test('sidesWithTracks names the sides that would lose songs', () => {
 // ── the grid card's format tag ──────────────────────────────────────────────
 //
 // The tag replaced the spine segments and the sleeve stack, which counted the
-// discs in marks you had to decode and never said the size at all. It earns
-// its place on the artwork only when there is something to say: a plain single
-// 12" is what most of the shelf is, and a label on all 250 cards is furniture
-// the eye stops seeing — the same trade discMarks used to make.
+// discs in marks you had to decode and never said the size at all. Every
+// record whose size is known says it, the plain single 12" included: reading
+// the tag as "this one is unusual" only works if the ordinary case is also
+// labelled, otherwise a blank corner is doing the talking.
 
-test('a plain single 12" gets no tag — it is what most of the shelf is', () => {
-  assert.strictEqual(formatTag(1, '12'), '');
+test('a plain single 12" says so too — a blank corner is not an answer', () => {
+  assert.strictEqual(formatTag(1, '12'), '12"');
 });
 
 test('an unknown size on a single disc says nothing rather than guessing 12"', () => {
@@ -194,7 +194,7 @@ test('an unknown size on a single disc says nothing rather than guessing 12"', (
   assert.strictEqual(formatTag(undefined, undefined), '');
 });
 
-test('a size that is not 12" is worth saying on its own', () => {
+test('a smaller size is worth saying on its own', () => {
   assert.strictEqual(formatTag(1, '7'), '7"');
   assert.strictEqual(formatTag(1, '10'), '10"');
 });
