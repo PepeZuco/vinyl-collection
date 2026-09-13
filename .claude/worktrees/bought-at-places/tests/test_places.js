@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl } =
+const { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl, placeLinkHTML } =
   require('../static/places.js');
 
 // ── normalizeUrl ────────────────────────────────────────────────────────────
@@ -135,4 +135,57 @@ test('a place with no link, an unknown name and no name all resolve to empty', (
   assert.strictEqual(placeUrl('Nowhere', places), '');
   assert.strictEqual(placeUrl('', places), '');
   assert.strictEqual(placeUrl(null, places), '');
+});
+
+// ── placeLinkHTML ───────────────────────────────────────────────────────────
+// The escaping here is the point: this function is the only place a stored
+// place name or url becomes markup, and normalizeUrl deliberately lets a quote
+// through in a path (it only refuses whitespace and non-http schemes), so an
+// unescaped href would break out of its own attribute.
+
+test('a place with no link renders as plain escaped text', () => {
+  const places = [{ id: 1, name: 'Tracks Rio', url: '' }];
+  assert.strictEqual(placeLinkHTML('Tracks Rio', places), 'Tracks Rio');
+});
+
+test('a place with a link renders an anchor that cannot hand the tab over', () => {
+  const places = [{ id: 1, name: 'Tracks Rio', url: 'https://tracksrio.com' }];
+  const html = placeLinkHTML('Tracks Rio', places);
+  assert.match(html, /^<a href="https:\/\/tracksrio\.com"/);
+  assert.match(html, /target="_blank"/);
+  assert.match(html, /rel="noopener noreferrer"/);
+  assert.match(html, /Tracks Rio/);
+  assert.match(html, /ti-external-link/);
+});
+
+test('the name is looked up trimmed but rendered as given', () => {
+  const places = [{ id: 1, name: 'Tracks Rio', url: 'https://tracksrio.com' }];
+  assert.match(placeLinkHTML('  Tracks Rio  ', places), /^<a href="https:\/\/tracksrio\.com"/);
+});
+
+test('no name falls back, and the fallback is the caller\'s to choose', () => {
+  const places = [{ id: 1, name: 'Tracks Rio', url: '' }];
+  assert.strictEqual(placeLinkHTML('', places), '—');
+  assert.strictEqual(placeLinkHTML('   ', places), '—');
+  assert.strictEqual(placeLinkHTML(null, places), '—');
+  assert.strictEqual(placeLinkHTML('', places, ''), '');
+});
+
+test('a name carrying markup is escaped in both branches', () => {
+  const linked = [{ id: 1, name: '<img src=x onerror=alert(1)>', url: 'https://x.com' }];
+  const bare = [{ id: 1, name: '<img src=x onerror=alert(1)>', url: '' }];
+  for (const places of [linked, bare]) {
+    const html = placeLinkHTML('<img src=x onerror=alert(1)>', places);
+    assert.ok(!html.includes('<img'), html);
+    assert.match(html, /&lt;img/);
+  }
+});
+
+test('a quote inside a url cannot break out of the href', () => {
+  const url = 'https://x.com/a"onmouseover="alert(1)';
+  // it survives normalizeUrl — nothing about it is whitespace or another scheme
+  assert.strictEqual(normalizeUrl(url), url);
+  const html = placeLinkHTML('Shop', [{ id: 1, name: 'Shop', url }]);
+  assert.ok(!html.includes('onmouseover="'), html);
+  assert.match(html, /&quot;onmouseover=&quot;/);
 });

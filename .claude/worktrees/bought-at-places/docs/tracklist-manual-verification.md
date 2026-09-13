@@ -101,3 +101,51 @@ without a browser and said so.
 
 29. `/api/export` then `/api/import` of that file preserves tracks, likes,
     disc count and size.
+
+---
+
+## Who plays each song (multi-artist records)
+
+The picker and the credit under the title are the only two things this feature
+draws. Unlike the rest of this file, both HAVE now been driven in real headless
+Chromium against the dev server (2026-09-13): rules 31, 32, 39 and 40 were
+checked there and 32 caught a real bug — inline at phone width the select
+collapsed to a bare 19px chevron, showing no name at all, so it now drops to its
+own full-width line under 640px. What follows is still worth re-walking by hand
+on a real device, since a screenshot is not a finger.
+
+30. On a record with **one** artist, step 4 shows no picker at all — the song
+    row is exactly what rule 25 already describes.
+31. On a record whose artist field holds `Edu Lobo; Gal Costa`, every song row
+    grows a small select offering *— who plays it —*, `Edu Lobo` and
+    `Gal Costa`, and nothing else.
+32. **At phone width (≤640px) the select drops to its own line** under the
+    title, indented to line up with it, and reads at full width — measured 302px
+    of a 334px row, with the heart and × still on the title's line. Above that
+    breakpoint it sits inline at 118px. Check no row scrolls sideways and that
+    the added height does not make a long side unusable to scroll.
+33. Type the two artists into the **single** artist field as `A; B` on step 1,
+    without ticking *multiple artists*, then walk to step 4: the pickers offer
+    both. (The tick box is a way of editing the same semicolon-separated field,
+    not a separate mode.)
+34. Tick *multiple artists*, add a third artist row, then go to step 4 — the
+    pickers offer all three. Coming back to step 1 and renaming one updates the
+    pickers without losing what was already chosen.
+35. Credit a song, then rename that artist's row: the song follows the new
+    name. Check the select actually shows the new name, not a blank.
+36. Credit a song, then press the trash on that artist's row: it is **refused**
+    with a toast naming how many songs still credit them. The row stays.
+37. Same again, but clear the artist's name to empty instead of pressing the
+    trash: also refused, and the name comes back in the input.
+38. An artist nobody is credited to is removed with no fuss.
+39. In the drawer's **Tracks** tab, a credited song shows the name in small
+    muted type under the title; an uncredited one shows nothing at all and does
+    not borrow the record's artists. **Check both themes** — the credit uses
+    `--muted` on the row's hover ground.
+40. A long artist name under a long title must wrap rather than push the like
+    date and heart out of the row.
+41. Search with only the default fields ticked (**Song** still unticked) finds
+    the compilation by a name that appears *only* on a song — a guest who is
+    not in the artist field. Ticking **Song** off and on changes nothing about
+    that; unticking **Artist** hides it.
+42. `/api/export` then `/api/import` preserves the credits along with the rest.

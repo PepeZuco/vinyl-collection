@@ -72,7 +72,29 @@ const VinylPlaces = (function () {
     return (hit && hit.url) || '';
   }
 
-  return { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl };
+  /* Mirrors esc() in templates/index.html — places.js has to escape on its own
+   * because it is required by node in the tests, where the page's helper does
+   * not exist. */
+  const esc = s => String(s === undefined || s === null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  /* A place name as a link when its place carries one, and as plain text when
+   * it does not — so a place with no link reads exactly as it did before this
+   * feature existed. The url is escaped as well as the name: normalizeUrl only
+   * refuses whitespace and non-http schemes, so a quote can legitimately sit in
+   * a path and would otherwise close the href early. rel=noopener because
+   * target=_blank without it hands the opened page a handle on this one. */
+  function placeLinkHTML(name, places, fallback) {
+    const shown = str(name).trim();
+    if (!shown) return fallback === undefined ? '\u2014' : fallback;
+    const url = placeUrl(shown, places);
+    if (!url) return esc(shown);
+    return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">'
+      + esc(shown) + ' <i class="ti ti-external-link"></i></a>';
+  }
+
+  return { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl, placeLinkHTML };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylPlaces;

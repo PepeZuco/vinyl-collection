@@ -529,3 +529,18 @@ test('compilations at the end do not change the count-based split', () => {
   assert.deepStrictEqual(block1.records.map(r => r.id), [3, 1]);
   assert.deepStrictEqual(block2.records.map(r => r.id), [2]);
 });
+
+// ── bucketOf: bought at ─────────────────────────────────────────────────────
+// Guards the crate rules against the place-link work on the header: the link
+// is a sibling of the header button and must never reach into the bucket.
+
+test('a place crate is keyed by the place, trimmed, whatever link it carries', () => {
+  const bucket = bucketOf(rec({ bought_where: '  Tracks Rio ' }), 'bought_where');
+  assert.strictEqual(bucket.label, 'Tracks Rio');
+  assert.strictEqual(bucket.unknown, false);
+});
+
+test('a record with no place lands in the unknown crate', () => {
+  const bucket = bucketOf(rec({ bought_where: '   ' }), 'bought_where');
+  assert.strictEqual(bucket.unknown, true);
+});

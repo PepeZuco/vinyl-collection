@@ -217,3 +217,68 @@ def test_a_csv_without_the_columns_still_imports(client):
         rec = app_module.Record.query.filter_by(album_name="Africa Brasil").one()
         assert rec.disc_count == 1
         assert rec.tracks in ("", None)
+
+
+def test_a_song_carries_the_artist_it_was_assigned(client):
+    """A compilation credits each song to one of the record's own artists."""
+    tracks = json.dumps([
+        {"side": "A", "title": "Ponteio", "artist": "Edu Lobo"},
+        {"side": "A", "title": "Aquarela do Brasil", "artist": "Gal Costa"},
+    ])
+    r = client.post("/api/records", json={"album_name": "Elis & Tom",
+                                          "artist": "Edu Lobo; Gal Costa",
+                                          "tracks": tracks})
+    assert r.status_code == 201
+    got = json.loads(r.get_json()["tracks"])
+    assert [t["artist"] for t in got] == ["Edu Lobo", "Gal Costa"]
+
+
+def test_an_unassigned_song_stores_no_artist_key(client):
+    r = client.post("/api/records", json={
+        "album_name": "Transa",
+        "tracks": json.dumps([{"side": "A", "title": "You Don't Know Me"}])})
+    assert "artist" not in json.loads(r.get_json()["tracks"])[0]
+
+
+def test_a_blank_artist_is_dropped_rather_than_stored_empty(client):
+    r = client.post("/api/records", json={
+        "album_name": "Transa",
+        "tracks": json.dumps([{"side": "A", "title": "Triste Bahia", "artist": "   "}])})
+    assert "artist" not in json.loads(r.get_json()["tracks"])[0]
+
+
+def test_the_artist_is_trimmed_on_the_way_in(client):
+    r = client.post("/api/records", json={
+        "album_name": "Elis & Tom",
+        "tracks": json.dumps([{"side": "A", "title": "Ponteio", "artist": "  Edu Lobo  "}])})
+    assert json.loads(r.get_json()["tracks"])[0]["artist"] == "Edu Lobo"
+
+
+def test_a_song_artist_absent_from_the_record_is_kept_not_refused(client):
+    """The picker in the form is what ties the two lists together. A PUT that
+    sends tracks alone must not be rejected because the artist column moved in
+    some other request — that would make a stale browser tab unable to save."""
+    r = client.post("/api/records", json={"album_name": "Elis & Tom",
+                                          "artist": "Edu Lobo"})
+    rid = r.get_json()["id"]
+    r = client.put(f"/api/records/{rid}", json={
+        "tracks": json.dumps([{"side": "A", "title": "Ponteio", "artist": "Gal Costa"}])})
+    assert r.status_code == 200
+    assert json.loads(r.get_json()["tracks"])[0]["artist"] == "Gal Costa"
+
+
+def test_a_song_artist_survives_export_and_import(client):
+    tracks = json.dumps([{"side": "A", "title": "Ponteio", "artist": "Edu Lobo"}])
+    client.post("/api/records", json={"album_name": "Elis & Tom",
+                                      "artist": "Edu Lobo; Gal Costa",
+                                      "tracks": tracks})
+    dump = client.get("/api/export").get_data(as_text=True)
+
+    with app_module.app.app_context():
+        app_module.db.drop_all()
+        app_module.db.create_all()
+
+    client.post("/api/import", data={"file": (io.BytesIO(dump.encode()), "backup.csv")},
+                content_type="multipart/form-data")
+    rows = client.get("/api/records").get_json()
+    assert json.loads(rows[0]["tracks"])[0]["artist"] == "Edu Lobo"

@@ -164,14 +164,17 @@ select option{background:var(--surface);color:var(--text)}
  * formatTag() still returns '' when the size is unknown, so the empty corner
  * now means exactly one thing.
  *
- * Top-left is the only free corner: the flag is top-right, the artist overlay
- * runs along the bottom, and the quick-edit button sits bottom-right. Drawn
- * INSIDE .vcard-cover's box, which clips with overflow:hidden. */
+ * Top-left: the flag is top-right and the artist overlay runs along the bottom,
+ * so this corner is the tag's at rest. It shares the corner with the quick-edit
+ * pencil, which only exists in edit mode and only fades in on hover — the tag
+ * slides aside for it rather than being sat on. Drawn INSIDE .vcard-cover's box,
+ * which clips with overflow:hidden. */
 .vcard-fmt{position:absolute;top:7px;left:7px;z-index:3;
   display:flex;align-items:center;gap:5px;pointer-events:none;
   background:rgba(0,0,0,.72);border-radius:3px;padding:3px 7px 3px 5px;
   font-size:10px;font-weight:800;letter-spacing:.05em;color:#fff;
-  font-variant-numeric:tabular-nums}
+  font-variant-numeric:tabular-nums;
+  transform:translateX(0);transition:transform .16s ease}
 /* the tag's own little record, so the number is attached to the thing it
    counts rather than floating as a bare figure */
 .vcard-fmt .disc{--d:11px;--lab:var(--accent)}
@@ -232,6 +235,17 @@ select option{background:var(--surface);color:var(--text)}
 .vcard:hover .vcard-quick-edit{opacity:1;transform:translateY(0)}
 .vcard-quick-edit:hover{background:rgba(0,0,0,.8);border-color:var(--accent);color:var(--accent)}
 @media(hover:none){.vcard-quick-edit{display:none}}
+/* The pencil and the format tag want the same corner, so on hover the tag steps
+   aside by the button's footprint (26px wide + 6px gap) and the pencil lands in
+   the cleared space instead of on top of it. The tag's .16s slide starts before
+   the pencil's .12s fade finishes, so it reads as one movement rather than two.
+   Gated on body.is-authed because a visitor gets no pencil — without the gate
+   the tag would slide 32px to uncover nothing. Real-pointer devices only: touch
+   hides the button outright above, and sticky :hover would otherwise strand the
+   tag mid-shift after a tap. */
+@media(hover:hover){
+  body.is-authed .vcard:hover .vcard-fmt{transform:translateX(32px)}
+}
 
 .vcard-body{padding:8px 10px 10px}
 /* row 1: album name + year inline */
@@ -3107,6 +3121,10 @@ async function checkAuth() {
 
 function setAuthed(val) {
   authed = val;
+  // CSS hook for chrome that only makes sense in edit mode. The card's format
+  // tag reads it to decide whether to slide aside on hover for the quick-edit
+  // pencil, which is rendered only when authed.
+  document.body.classList.toggle('is-authed', val);
   const badge = document.getElementById('authBadge');
   badge.className = 'auth-badge' + (val ? ' authed' : '');
   badge.style.display = val ? '' : 'none';

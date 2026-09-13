@@ -100,19 +100,55 @@ const VinylFilters = (function (grouping) {
     return FACETS.find(f => f.id === id) || null;
   }
 
+  /* The search box, minus the keys that are hard to reach.
+   *
+   * A shelf of Brazilian and Spanish records could not be searched from a
+   * keyboard: Milanés, Chitãozinho, Perfídia. And "Bill Withers’ Greatest
+   * Hits" carries the curly apostrophe, so even typing the punctuation
+   * correctly — the straight one, next to Enter — missed the record.
+   *
+   * NFD splits an accented letter into its base plus a combining mark, so
+   * dropping the marks leaves the bare letter; every apostrophe the world
+   * writes goes with them. Applied to BOTH sides, which is what makes it a
+   * relaxation rather than a rewrite: 'milanes' reaches Milanés and 'Milanés'
+   * still reaches itself.
+   *
+   * Nothing else is touched. Hyphens, dots and ampersands stay, because
+   * folding those makes a query mean something the person did not type. */
+  const MARKS = /[\u0300-\u036f]/g;
+  const APOSTROPHES = /['\u2018\u2019\u02bc\u0060\u00b4]/g;
+
+  function relax(text) {
+    return text.normalize('NFD').replace(MARKS, '').replace(APOSTROPHES, '');
+  }
+
   function defaultQuery() {
     return {
       text: '',
       fields: Object.assign({}, DEFAULT_FIELDS),
       ownership: 'owned',  // 'owned' | 'wishlist'
       facets: {},          // id -> array of allowed values; absent = no constraint
+      loose: true,         // fold accents and apostrophes away before comparing
     };
   }
 
   /* The text a record offers to the search box, given which fields are on. */
   function haystack(record, fields, deps) {
     const parts = [];
-    if (fields.artist)    parts.push(record.artist || '');
+    // Two fields read the tracks column; parse it once, since this runs for
+    // every record on every keystroke.
+    const tracks = (fields.artist || fields.song)
+      ? ((deps && deps.parseTracks) || (() => []))(record.tracks)
+      : [];
+    if (fields.artist) {
+      parts.push(record.artist || '');
+      // A compilation credits each song to one of its artists, and a guest who
+      // plays on a single track is often missing from the artist column
+      // entirely — the song is then the only place their name appears. This
+      // sits under the artist field rather than the song field because "who is
+      // on this record" is one question to the person typing.
+      parts.push(tracks.map(t => (t && t.artist) || '').join(' '));
+    }
     if (fields.album)     parts.push(record.album_name || '');
     if (fields.genre)     parts.push(record.genre || '');
     if (fields.bought_at) parts.push(record.bought_where || '');
@@ -121,8 +157,7 @@ const VinylFilters = (function (grouping) {
       parts.push(parse(record.notes).map(n => (n && n.text) || '').join(' '));
     }
     if (fields.song) {
-      const parse = (deps && deps.parseTracks) || (() => []);
-      parts.push(parse(record.tracks).map(t => (t && t.title) || '').join(' '));
+      parts.push(tracks.map(t => (t && t.title) || '').join(' '));
     }
     return parts.join(' ').toLowerCase();
   }
@@ -144,10 +179,17 @@ const VinylFilters = (function (grouping) {
       if (allowed.indexOf(facet.valueOf(record, deps)) === -1) return false;
     }
 
-    const text = (q.text || '').trim().toLowerCase();
+    const loose = q.loose !== false;   // absent reads as on, like the default
+    let text = (q.text || '').trim().toLowerCase();
+    if (loose) text = relax(text);
+    // A query of nothing but apostrophes relaxes away to '', and an empty
+    // needle sits inside every haystack — so without this it would silently
+    // "match" the whole collection while looking like a typo that found
+    // something. An empty query is no constraint, however it got empty.
     if (text) {
       const fields = q.fields || DEFAULT_FIELDS;
-      if (haystack(record, fields, deps).indexOf(text) === -1) return false;
+      const hay = haystack(record, fields, deps);
+      if ((loose ? relax(hay) : hay).indexOf(text) === -1) return false;
     }
     return true;
   }
@@ -194,7 +236,7 @@ const VinylFilters = (function (grouping) {
       .map(f => ({ id: f.id, label: f.label, values: facets[f.id] }));
   }
 
-  return { DEFAULT_FIELDS, FACETS, facetById, defaultQuery,
+  return { DEFAULT_FIELDS, FACETS, facetById, defaultQuery, relax,
            matches, filterRecords, facetValues, chipsFor };
 })(typeof module !== 'undefined' && module.exports
      ? require('./grouping.js') : VinylGrouping);

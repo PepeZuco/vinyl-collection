@@ -10,8 +10,9 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
-        tracksBySide, likedTracks, sidesWithTracks, discMarks,
-        parsePastedTracklist } = require('../static/tracks.js');
+        tracksBySide, likedTracks, sidesWithTracks, formatTag,
+        discGroups, formatSummary, capitalizeName,
+        parsePastedTracklist, artistsInUse, sideLabel } = require('../static/tracks.js');
 
 // ── parse ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,43 @@ test('an unliked track carries no liked_at key at all', () => {
 test('side is upper-cased and cut to one letter', () => {
   const parsed = parseTracks(JSON.stringify([{ side: 'bb', title: 'x' }]));
   assert.strictEqual(parsed[0].side, 'B');
+});
+
+// A title is capitalised on the way OUT of the column, not only where one is
+// typed: the tracklists already stored were written before that rule existed,
+// and the ones a scan or a CSV wrote never passed a field at all. Doing it
+// here is what makes every consumer — the tracklist tab, the timeline, the
+// drawer, search — read a sleeve the same way, and what makes the edit form
+// show the capitals so the next save keeps them.
+
+test('a stored title reads with each word capital', () => {
+  const raw = JSON.stringify([{ side: 'A', title: 'down bad' }]);
+  assert.strictEqual(parseTracks(raw)[0].title, 'Down Bad');
+});
+
+test('a sentence-cased tracklist is raised word by word', () => {
+  const raw = JSON.stringify([{ side: 'B', title: 'So long, London' },
+                              { side: 'B', title: 'But daddy i love him' }]);
+  assert.deepStrictEqual(parseTracks(raw).map(t => t.title),
+                         ['So Long, London', 'But Daddy I Love Him']);
+});
+
+test('the stored casing of every letter but the first survives the read', () => {
+  const raw = JSON.stringify([{ side: 'C', title: 'guilty as sin?' },
+                              { side: 'C', title: '10ml' },
+                              { side: 'C', title: 'DNA' }]);
+  assert.deepStrictEqual(parseTracks(raw).map(t => t.title),
+                         ['Guilty As Sin?', '10ml', 'DNA']);
+});
+
+test('a missing title is still the empty string', () => {
+  assert.strictEqual(parseTracks(JSON.stringify([{ side: 'A' }]))[0].title, '');
+  assert.strictEqual(parseTracks(JSON.stringify([{ side: 'A', title: 7 }]))[0].title, '');
+});
+
+test('the artist credit on a song is capitalised the same way', () => {
+  const raw = JSON.stringify([{ side: 'A', title: 'aquarela', artist: 'toquinho' }]);
+  assert.strictEqual(parseTracks(raw)[0].artist, 'Toquinho');
 });
 
 // ── serialize ───────────────────────────────────────────────────────────────
@@ -138,19 +176,137 @@ test('sidesWithTracks names the sides that would lose songs', () => {
   assert.deepStrictEqual(sidesWithTracks(list), ['A', 'C']);
 });
 
-// ── the grid marks ──────────────────────────────────────────────────────────
+// ── the grid card's format tag ──────────────────────────────────────────────
+//
+// The tag replaced the spine segments and the sleeve stack, which counted the
+// discs in marks you had to decode and never said the size at all. Every
+// record whose size is known says it, the plain single 12" included: reading
+// the tag as "this one is unusual" only works if the ordinary case is also
+// labelled, otherwise a blank corner is doing the talking.
 
-test('a single disc gets no marks at all', () => {
-  assert.deepStrictEqual(discMarks(1), { sleeves: 0, segments: 0 });
-  assert.deepStrictEqual(discMarks(undefined), { sleeves: 0, segments: 0 });
+test('a plain single 12" says so too — a blank corner is not an answer', () => {
+  assert.strictEqual(formatTag(1, '12'), '12"');
 });
 
-test('a double gets one sleeve behind and two spine segments', () => {
-  assert.deepStrictEqual(discMarks(2), { sleeves: 1, segments: 2 });
+test('an unknown size on a single disc says nothing rather than guessing 12"', () => {
+  assert.strictEqual(formatTag(1, ''), '');
+  assert.strictEqual(formatTag(1, null), '');
+  assert.strictEqual(formatTag(undefined, undefined), '');
 });
 
-test('a triple gets two sleeves and three segments', () => {
-  assert.deepStrictEqual(discMarks(3), { sleeves: 2, segments: 3 });
+test('a smaller size is worth saying on its own', () => {
+  assert.strictEqual(formatTag(1, '7'), '7"');
+  assert.strictEqual(formatTag(1, '10'), '10"');
+});
+
+test('more than one disc is worth saying, with the size when it is known', () => {
+  assert.strictEqual(formatTag(2, '12'), '2 × 12"');
+  assert.strictEqual(formatTag(3, '7'), '3 × 7"');
+});
+
+test('a multi-disc record of unknown size counts the discs alone', () => {
+  assert.strictEqual(formatTag(2, ''), '2 discs');
+});
+
+// ── the tracklist's disc groups ─────────────────────────────────────────────
+//
+// The tracklist draws a rail down the whole height of a disc, so it needs the
+// sides GROUPED by disc rather than the flat run tracksBySide returns: a rail
+// has to know where the disc ends, not just where it starts.
+
+test('a single disc is one group holding both its sides', () => {
+  const groups = discGroups([{ side: 'A', title: 'x' }], 1);
+  assert.strictEqual(groups.length, 1);
+  assert.deepStrictEqual(groups[0].letters, ['A', 'B']);
+});
+
+test('a double splits A/B from C/D', () => {
+  const groups = discGroups([], 2);
+  assert.deepStrictEqual(groups.map(g => g.disc), [1, 2]);
+  assert.deepStrictEqual(groups.map(g => g.letters), [['A', 'B'], ['C', 'D']]);
+});
+
+test('a group counts the songs on both of its sides', () => {
+  const list = [
+    { side: 'A', title: 'one' }, { side: 'A', title: 'two' },
+    { side: 'B', title: 'three' },
+    { side: 'C', title: 'four' },
+  ];
+  assert.deepStrictEqual(discGroups(list, 2).map(g => g.songs), [3, 1]);
+});
+
+test('a group carries the same side objects tracksBySide builds', () => {
+  const list = [{ side: 'A', title: 'Umbabarauma' }];
+  const [first] = discGroups(list, 1);
+  assert.deepStrictEqual(first.sides[0], tracksBySide(list, 1)[0]);
+});
+
+// ── the tracklist's format summary ──────────────────────────────────────────
+
+test('the summary reports the discs, the size, the sides and the songs', () => {
+  const list = [{ side: 'A', title: 'one' }, { side: 'C', title: 'two' }];
+  assert.deepStrictEqual(formatSummary(list, 2, '12'),
+    { discs: 2, size: 12, sides: 4, songs: 2 });
+});
+
+test('an unknown size comes back null, so the drawing can skip it', () => {
+  assert.strictEqual(formatSummary([], 1, '').size, null);
+  assert.strictEqual(formatSummary([], 1, undefined).size, null);
+});
+
+test('a nonsense size is rejected rather than drawn at some absurd width', () => {
+  assert.strictEqual(formatSummary([], 1, '33').size, null);
+  assert.strictEqual(formatSummary([], 1, 'twelve').size, null);
+});
+
+test('sides are the ones the record physically has, not the ones with songs', () => {
+  assert.strictEqual(formatSummary([], 2, '12').sides, 4);
+});
+
+test('a missing disc count is one disc, the way it is everywhere else', () => {
+  assert.strictEqual(formatSummary([], undefined, '12').discs, 1);
+  assert.strictEqual(formatSummary([], 0, '12').discs, 1);
+});
+
+// ── a name as it is written on a sleeve ──────────────────────────
+// Only the FIRST letter of each word is touched. Lowercasing the rest would
+// rewrite the names that are meant to be read the way they are typed — an
+// acronym, an initialled band, a stylised stage name — and a tracklist full of
+// "Dna" is worse than one full of "dna".
+
+test('each word of a name starts capital', () => {
+  assert.strictEqual(capitalizeName('the boy in the bubble'), 'The Boy In The Bubble');
+});
+
+test('a name already capitalised is left as it is', () => {
+  assert.strictEqual(capitalizeName('Hey You'), 'Hey You');
+});
+
+test('letters after the first are never touched', () => {
+  assert.strictEqual(capitalizeName('DNA'), 'DNA');
+  assert.strictEqual(capitalizeName('R.E.M.'), 'R.E.M.');
+  assert.strictEqual(capitalizeName('MOTHER'), 'MOTHER');
+  assert.strictEqual(capitalizeName('will.i.am'), 'Will.i.am');
+});
+
+test('a word that opens with a non-letter keeps its shape', () => {
+  assert.strictEqual(capitalizeName('10 years gone'), '10 Years Gone');
+  assert.strictEqual(capitalizeName('(reprise)'), '(reprise)');
+  assert.strictEqual(capitalizeName('\u00e9lan vital'), '\u00c9lan Vital');
+});
+
+test('the spacing between words survives exactly', () => {
+  assert.strictEqual(capitalizeName('hey  you'), 'Hey  You');
+  assert.strictEqual(capitalizeName('side a\nside b'), 'Side A\nSide B');
+  assert.strictEqual(capitalizeName('  leading space'), '  Leading Space');
+  assert.strictEqual(capitalizeName('trailing space  '), 'Trailing Space  ');
+});
+
+test('an empty or missing name is the empty string, never a throw', () => {
+  assert.strictEqual(capitalizeName(''), '');
+  assert.strictEqual(capitalizeName(null), '');
+  assert.strictEqual(capitalizeName(undefined), '');
+  assert.strictEqual(capitalizeName('   '), '   ');
 });
 
 // ── the paste box ───────────────────────────────────────────────────────────
@@ -181,4 +337,80 @@ test('trailing durations are stripped', () => {
 
 test('a title that merely starts with a number survives intact', () => {
   assert.deepStrictEqual(parsePastedTracklist('10 Years Gone'), ['10 Years Gone']);
+});
+
+// ── the per-song artist ─────────────────────────────────────────────────────
+// Only a compilation carries these: the name says WHICH of the record's
+// semicolon-separated artists played this song. Absent means unassigned, the
+// same "absent, never falsy" shape liked_at already uses.
+
+test('a track keeps the artist it was assigned', () => {
+  const raw = JSON.stringify([{ side: 'A', title: 'Aquarela do Brasil', artist: 'Gal Costa' }]);
+  assert.deepStrictEqual(parseTracks(raw),
+    [{ side: 'A', title: 'Aquarela Do Brasil', artist: 'Gal Costa' }]);
+});
+
+test('an unassigned track carries no artist key at all', () => {
+  const parsed = parseTracks(JSON.stringify([{ side: 'A', title: 'Taj Mahal' }]));
+  assert.strictEqual('artist' in parsed[0], false);
+});
+
+test('a blank artist parses as unassigned rather than an empty name', () => {
+  const parsed = parseTracks(JSON.stringify([{ side: 'A', title: 'x', artist: '   ' }]));
+  assert.strictEqual('artist' in parsed[0], false);
+});
+
+test('an artist survives serialize, trimmed', () => {
+  assert.strictEqual(serializeTracks([{ side: 'A', title: 'Ponteio', artist: '  Edu Lobo  ' }]),
+                     JSON.stringify([{ side: 'A', title: 'Ponteio', artist: 'Edu Lobo' }]));
+});
+
+test('clearing the picker drops the artist key instead of storing an empty one', () => {
+  assert.strictEqual(serializeTracks([{ side: 'A', title: 'Ponteio', artist: '' }]),
+                     JSON.stringify([{ side: 'A', title: 'Ponteio' }]));
+});
+
+test('the side view carries the artist through to the renderers', () => {
+  const sides = tracksBySide([{ side: 'A', title: 'Ponteio', artist: 'Edu Lobo' },
+                              { side: 'A', title: 'Upa Neguinho' }], 1);
+  assert.strictEqual(sides[0].tracks[0].artist, 'Edu Lobo');
+  assert.strictEqual('artist' in sides[0].tracks[1], false);
+});
+
+test('artistsInUse counts the songs assigned to a name', () => {
+  const list = [{ side: 'A', title: 'one', artist: 'Gal Costa' },
+                { side: 'A', title: 'two' },
+                { side: 'B', title: 'three', artist: 'Gal Costa' },
+                { side: 'B', title: 'four', artist: 'Edu Lobo' }];
+  assert.strictEqual(artistsInUse(list, 'Gal Costa'), 2);
+  assert.strictEqual(artistsInUse(list, 'Edu Lobo'), 1);
+  assert.strictEqual(artistsInUse(list, 'Nobody'), 0);
+});
+
+test('artistsInUse matches the name exactly, ignoring only surrounding space', () => {
+  const list = [{ side: 'A', title: 'one', artist: 'Gal Costa' }];
+  assert.strictEqual(artistsInUse(list, '  Gal Costa  '), 1);
+  assert.strictEqual(artistsInUse(list, 'gal costa'), 0);
+});
+
+// ── sideLabel ───────────────────────────────────────────────────────────────
+
+test('a single LP names the side alone, with no disc to disambiguate', () => {
+  assert.strictEqual(sideLabel('A', 1), 'Side A');
+  assert.strictEqual(sideLabel('B', 1), 'Side B');
+});
+
+test('past one disc the label says which disc the side belongs to', () => {
+  assert.strictEqual(sideLabel('A', 2), 'Disc 1 \u00b7 Side A');
+  assert.strictEqual(sideLabel('C', 2), 'Disc 2 \u00b7 Side C');
+  assert.strictEqual(sideLabel('E', 3), 'Disc 3 \u00b7 Side E');
+});
+
+test('a lowercase side letter reads the same as the stored uppercase one', () => {
+  assert.strictEqual(sideLabel('c', 2), 'Disc 2 \u00b7 Side C');
+});
+
+test('a track with no side has no label to give', () => {
+  assert.strictEqual(sideLabel('', 1), '');
+  assert.strictEqual(sideLabel(undefined, 2), '');
 });

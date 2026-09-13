@@ -2063,7 +2063,6 @@ test('the drawer marks a private note in the history', async () => {
     { date: '2026-08-10', text: 'paid too much', private: true },
   ]);
   win.openDetail(r.id);
-  win.setDetailTab('timeline');   // where the history has lived since the tabs
   assert.strictEqual(count(doc, '#ddInfo .dm-hist-entry.note.private'), 1,
     'a private note looks exactly like a public one in the drawer');
 });
@@ -2250,7 +2249,6 @@ test('a link in a note opens in a new tab', async () => {
   const r = read('records').find(x => x.have_it);
   r.notes = JSON.stringify([{ date: '2026-08-10', text: 'found it at [the shop](https://example.com)' }]);
   win.openDetail(r.id);
-  win.setDetailTab('timeline');   // where the history has lived since the tabs
   const link = $(doc, '#ddInfo .dm-hist-entry.note a');
   assert.ok(link, 'the note rendered no link at all');
   assert.strictEqual(link.getAttribute('target'), '_blank');
@@ -2294,13 +2292,11 @@ function withPhotos(read, notes) {
 // history and would double every photo.
 const shotThumbs = doc => [...doc.querySelectorAll('#ddInfo .note-shot')];
 
-/* The photos hang off the record's history, and the history is the Timeline
- * tab — the drawer opens on Tracks/Info. Opening the record is not enough to
- * put a thumbnail on the page, so every test here asks for the tab that holds
- * them, the way a person reaching a photo has to. */
+/* The photos hang off the record's history, which the drawer stacks under the
+ * tracklist. Opening the record renders all three blocks, so the thumbnails
+ * are on the page without a tab being asked for — only scrolled past. */
 function openPhotoRun(win, id) {
   win.openDetail(id);
-  win.setDetailTab('timeline');
 }
 const openShotId = doc =>
   ($(doc, '#shotImage').getAttribute('src') || '').split('/').pop();
@@ -2461,4 +2457,501 @@ test('closing the photo takes its words with it', async () => {
   press(win, shotThumbs(doc)[0]);
   win.closeShot();
   assert.strictEqual(shotWords(doc), '', 'the words outlived the photo');
+});
+
+// ── crediting each song on a compilation ────────────────────────────────────
+// A compilation's artist column already lists every performer. What was
+// missing was saying WHICH of them plays WHICH song, so the picker is offered
+// only where there is a choice to make — a single-artist record answers the
+// question by existing.
+
+const COMP_ARTISTS = 'Edu Lobo; Gal Costa';
+const COMP_TRACKS = JSON.stringify([
+  { side: 'A', title: 'Ponteio', artist: 'Edu Lobo' },
+  { side: 'A', title: 'Aquarela do Brasil' },
+]);
+
+/* A compilation open on the tracklist step of the form. */
+function openComp(win, read, over) {
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { artist: COMP_ARTISTS, tracks: COMP_TRACKS, disc_count: 1 }, over || {});
+  win.openEdit(r.id);
+  win.setFormStep(4);
+  return r;
+}
+
+const pickers = doc => [...doc.querySelectorAll('#fTracksSides .track-row .tartist')];
+const optionsOf = sel => [...sel.options].map(o => o.value);
+
+test('a compilation offers an artist picker on every song', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read);
+  assert.strictEqual(pickers(doc).length, 2, 'not one picker per song');
+  assert.deepStrictEqual(optionsOf(pickers(doc)[0]), ['', 'Edu Lobo', 'Gal Costa'],
+    'the picker must offer exactly the record\'s own artists, plus unassigned');
+});
+
+test('a record with one artist gets no picker, there is nothing to choose', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read, { artist: 'Edu Lobo' });
+  assert.deepStrictEqual(pickers(doc), []);
+});
+
+test('the picker opens on the artist the song is already credited to', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read);
+  assert.strictEqual(pickers(doc)[0].value, 'Edu Lobo');
+  assert.strictEqual(pickers(doc)[1].value, '', 'an uncredited song must start blank');
+});
+
+test('picking an artist credits the song, and blank uncredits it', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateTrackArtist(1, 'Gal Costa');
+  assert.strictEqual(read('formTracks')[1].artist, 'Gal Costa');
+  win.updateTrackArtist(1, '');
+  assert.strictEqual('artist' in read('formTracks')[1], false,
+    'clearing must drop the key, not store an empty name');
+});
+
+test('renaming an artist follows every song credited to them', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateArtistRow(0, 'Edu Lobo & Marilia Medalha');
+  assert.strictEqual(read('formTracks')[0].artist, 'Edu Lobo & Marilia Medalha');
+  assert.strictEqual(read('formArtists')[0], 'Edu Lobo & Marilia Medalha');
+});
+
+test('removing an artist with songs is refused, and says how many', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateTrackArtist(1, 'Edu Lobo');       // now both songs are his
+  win.deleteArtistRow(0);
+  assert.deepStrictEqual([...read('formArtists')], ['Edu Lobo', 'Gal Costa'],
+    'the artist was removed even though songs still credit them');
+  assert.strictEqual(read('formTracks')[0].artist, 'Edu Lobo');
+});
+
+test('clearing an artist name is refused the same way removing them is', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateArtistRow(0, '   ');
+  assert.strictEqual(read('formArtists')[0], 'Edu Lobo', 'the name was blanked out');
+  assert.strictEqual(read('formTracks')[0].artist, 'Edu Lobo');
+});
+
+test('an artist nobody is credited to is removed without a fuss', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.deleteArtistRow(1);                      // Gal Costa has no songs
+  assert.deepStrictEqual([...read('formArtists')], ['Edu Lobo']);
+});
+
+test('a credit whose artist is no longer listed stays pickable, not silently lost', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read, {
+    artist: 'Edu Lobo; Gal Costa',
+    tracks: JSON.stringify([{ side: 'A', title: 'Ponteio', artist: 'Marilia Medalha' }]),
+  });
+  assert.strictEqual(pickers(doc)[0].value, 'Marilia Medalha');
+  assert.ok(optionsOf(pickers(doc)[0]).includes('Marilia Medalha'),
+    'a stored credit must survive a render even when it left the artist list');
+});
+
+test('saving sends the credits', async () => {
+  const { win, read } = await boot();
+  const r = openComp(win, read);
+  win.updateTrackArtist(1, 'Gal Costa');
+  let sent = null;
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => {
+    if (opts && opts.method === 'PUT') sent = JSON.parse(opts.body);
+    return realFetch(url, opts);
+  };
+  await win.submitForm();
+  assert.ok(sent, 'nothing was sent');
+  assert.deepStrictEqual(JSON.parse(sent.tracks).map(t => t.artist),
+    ['Edu Lobo', 'Gal Costa']);
+  assert.ok(r);
+});
+
+test('the tracks tab names who played each song', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { artist: COMP_ARTISTS, tracks: COMP_TRACKS });
+  win.openDetail(r.id);
+  // The drawer renders the tracklist in more than one place — once per pane,
+  // desktop and phone — so this asks what each ROW says, not how many there are.
+  const rows = [...doc.querySelectorAll('#detailBody .tl-row')];
+  const rowsFor = re => rows.filter(el => re.test(el.textContent));
+  assert.ok(rowsFor(/Ponteio/).length, 'no tracklist rendered');
+  rowsFor(/Ponteio/).forEach(el => assert.match(el.textContent, /Edu Lobo/));
+  rowsFor(/Aquarela/).forEach(el =>
+    assert.ok(!/Edu Lobo|Gal Costa/.test(el.textContent),
+      'an uncredited song must not borrow the record\'s artists'));
+});
+
+// ── a sleeve reads with capitals wherever it came from ─────────────────────
+// The tracklists already in the column were written before the song field
+// capitalised anything, and a scan or an import never passed that field at
+// all. parseTracks raises them on the way out, so what the tab shows and what
+// the form offers to edit are the same words.
+
+const SENTENCE_TRACKS = JSON.stringify([
+  { side: 'A', title: 'down bad' },
+  { side: 'A', title: 'the tortured poets department' },
+  { side: 'B', title: 'so long, London' },
+  { side: 'B', title: 'guilty as sin?' },
+]);
+
+test('a tracklist stored in sentence case is shown with capitals', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { tracks: SENTENCE_TRACKS, disc_count: 1 });
+  win.openDetail(r.id);
+  const text = doc.querySelector('#detailBody').textContent;
+  ['Down Bad', 'The Tortured Poets Department', 'So Long, London', 'Guilty As Sin?']
+    .forEach(title => assert.ok(text.includes(title), `the tracklist still reads "${title}" flat`));
+  assert.ok(!text.includes('down bad'), 'a stored lower-case title reached the drawer');
+});
+
+test('the edit form shows the capitals, so the next save keeps them', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { tracks: SENTENCE_TRACKS, disc_count: 1 });
+  win.openEdit(r.id);
+  win.setFormStep(4);
+  const titles = [...doc.querySelectorAll('#fTracksSides .track-row input')].map(el => el.value);
+  assert.deepStrictEqual(titles, ['Down Bad', 'The Tortured Poets Department',
+                                  'So Long, London', 'Guilty As Sin?']);
+});
+
+test('artists typed on step one light the pickers on the tracklist step', async () => {
+  // Every route to the tracklist step has to arrive with a current artist
+  // list: the pickers ARE that list, and one built before the artists were
+  // typed offers nothing to choose.
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.addTrack('A');            // the tracklist is built while there are no artists
+  $(doc, '#fArtist').value = 'Edu Lobo; Gal Costa';
+  win.setFormStep(4);           // ...and only now do they exist
+  assert.deepStrictEqual(optionsOf(pickers(doc)[0]), ['', 'Edu Lobo', 'Gal Costa']);
+});
+
+test('the tracklist step stays clean when nothing on it was touched', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  assert.strictEqual(win.formIsDirty(), false,
+    'walking to the tracklist step counts as an edit');
+});
+
+// ── a like in the timeline says which side it is on ─────────────────────────
+// The Tracks tab groups by side already; the timeline used to list a bare song
+// title, so four likes in one sitting read as four unplaced facts.
+
+/* A record whose likes land on one Sunday: two on side A, one on side C. */
+function likedRecord(read, over) {
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, {
+    disc_count: 2,
+    tracks: JSON.stringify([
+      { side: 'A', title: 'Hey Jude',  liked_at: '2026-08-09T19:42:11' },
+      { side: 'A', title: 'Let It Be', liked_at: '2026-08-09T19:44:02' },
+      { side: 'A', title: 'Yesterday' },
+      { side: 'C', title: 'Something', liked_at: '2026-08-09T19:58:40' },
+    ]),
+  }, over || {});
+  return r;
+}
+
+const likeEntries = doc => [...doc.querySelectorAll('#ddInfo .dm-hist-entry.liked')];
+
+test('songs liked on one day and side are one entry, not one each', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.strictEqual(likes.length, 2, 'side A did not collapse into one entry');
+  assert.match(likes[0].textContent, /Hey Jude/);
+  assert.match(likes[0].textContent, /Let It Be/);
+  assert.ok(!/Yesterday/.test(likes[0].textContent),
+    'a song nobody liked reached the timeline');
+  assert.match(likes[1].textContent, /Something/,
+    'the other side must stay its own entry');
+});
+
+test('a like on a double names the disc as well as the side', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /Disc 1 · Side A/);
+  assert.match(likes[1].textContent, /Disc 2 · Side C/,
+    'side C is on the second disc, and the letter alone says so to nobody');
+});
+
+test('a single LP names the side and says no more', async () => {
+  // Disc chrome earns its place only past one disc — the same trade the
+  // Tracks tab makes.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    disc_count: 1,
+    tracks: JSON.stringify([
+      { side: 'A', title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' },
+    ]),
+  });
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /Side A/);
+  assert.ok(!/Disc/.test(likes[0].textContent), 'a single LP is wearing disc chrome');
+});
+
+test('a sitting that ran over several minutes shows the span', async () => {
+  // One clock on a group of four would claim they were all hearted in the same
+  // minute. The span is what actually happened.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /19:42–19:44/);
+  assert.match(likes[1].textContent, /19:58/, 'a lone like still reads as one time');
+  assert.ok(!/19:58–/.test(likes[1].textContent), 'a lone like is not a span');
+});
+
+test('likes carrying only a day show no clock at all', async () => {
+  // editLikeDate writes a bare 'YYYY-MM-DD'. The rest of the drawer refuses to
+  // invent midnight for those, and so does this.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    tracks: JSON.stringify([{ side: 'A', title: 'Hey Jude', liked_at: '2026-08-09' }]),
+  });
+  win.openDetail(r.id);
+  assert.ok(!/\d\d:\d\d/.test(likeEntries(doc)[0].textContent),
+    'a clockless like was given a time anyway');
+});
+
+test('a like entry names the disc and side its songs sit on', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /Disc 1 · Side A/);
+  assert.match(likes[1].textContent, /Disc 2 · Side C/);
+});
+
+test('a single LP names the side with no disc in front of it', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    disc_count: 1,
+    tracks: JSON.stringify([{ side: 'A', title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' }]),
+  });
+  win.openDetail(r.id);
+  const text = likeEntries(doc)[0].textContent;
+  assert.match(text, /Side A/);
+  assert.ok(!/Disc/.test(text), 'a one-disc record has no disc to name');
+});
+
+test('each liked song keeps the clock it was hearted at', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const text = likeEntries(doc)[0].textContent;
+  assert.match(text, /19:42/);
+  assert.match(text, /19:44/, 'the second song lost its own time to the group');
+});
+
+test('a like on a song with no side is still listed, with no header naming one', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    disc_count: 1,
+    tracks: JSON.stringify([{ title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' }]),
+  });
+  win.openDetail(r.id);
+  const text = likeEntries(doc)[0].textContent;
+  assert.match(text, /Hey Jude/);
+  assert.ok(!/Side/.test(text), 'a track with no side letter got a header naming one');
+});
+
+test('a like clicked in the timeline lights the group its song belongs to', async () => {
+  // The group is keyed by its EARLIEST like; clicking the second song of the
+  // sitting must still light the one entry that now holds it.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id, 'liked:2026-08-09T19:44:02:1');
+  assert.deepStrictEqual(litKeys(doc), ['liked:2026-08-09T19:42:11:0']);
+});
+
+// todo: the drawer groups likes by side; the calendar's day card still draws
+// one line per song. Drop the todo flag when calRecordDayCard groups them.
+test('the calendar day card names the side of each like', { todo: true }, async () => {
+  const { win, doc, read } = await boot();
+  likedRecord(read);
+  win.openCalDay('2026-08-09');
+  const lines = [...doc.querySelectorAll('#calDayBody .cal-rec-like')];
+  assert.strictEqual(lines.length, 2, 'one line per side, not one per song');
+  assert.match(lines[0].textContent, /Disc 1 · Side A/);
+  assert.match(lines[0].textContent, /Hey Jude/);
+  assert.match(lines[0].textContent, /Let It Be/);
+  assert.match(lines[1].textContent, /Disc 2 · Side C/);
+  assert.match(lines[1].textContent, /Something/);
+});
+
+test('the timeline can still send you to one song inside a group', async () => {
+  // The calendar files one dot per liked song and hands out that song's key.
+  // The drawer now shows the whole side as one entry — which has to answer to
+  // every key it swallowed, not just the first.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id, 'liked:2026-08-09T19:44:02:1');   // the SECOND like on side A
+  const lit = [...doc.querySelectorAll('#ddInfo .dm-hist-entry.hit')];
+  assert.strictEqual(lit.length, 1, 'the group holding that song did not light');
+  assert.match(lit[0].textContent, /Let It Be/);
+  assert.ok(!/Something/.test(lit[0].textContent), 'the other side lit with it');
+});
+
+test('a day of likes lights both sides and nothing else', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  r.bought_date = '2026-08-09';                  // same day, a different kind of fact
+  win.openDetail(r.id, '2026-08-09~liked');
+  const lit = [...doc.querySelectorAll('#ddInfo .dm-hist-entry.hit')];
+  assert.strictEqual(lit.length, 2);
+  lit.forEach(el => assert.ok(el.classList.contains('liked'),
+    'the purchase lit with the likes'));
+});
+
+test('a song with no side letter is still shown, without a made-up disc', async () => {
+  // The form always writes a side; a hand-edited PUT or a row from somewhere
+  // else may not. The like still happened and still belongs on the timeline.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    tracks: JSON.stringify([{ title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' }]),
+  });
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.strictEqual(likes.length, 1, 'the like was dropped');
+  assert.match(likes[0].textContent, /Hey Jude/);
+  assert.ok(!/Disc|Side/.test(likes[0].textContent),
+    'a sideless song was given a place on the record');
+});
+
+// ── the phone shows the whole record, like the desktop drawer ───────────────
+//
+// The phone used to swap one block into the sheet at a time, so opening a
+// record showed Tracks OR Info OR Timeline and the other two were not in the
+// DOM at all. It now stacks all three under a pinned tab row, the way the
+// desktop column has always done, and a tab is navigation over them.
+//
+// jsdom lays nothing out, so where a scroll lands is not assertable here. What
+// is: that all three blocks are rendered at once, that a tab press leaves them
+// alone, and that the press asks the sheet to scroll.
+
+const PHONE_SECS = ['info', 'tracks', 'timeline'];
+
+/* A record with something in every one of the three blocks, so an empty one
+ * cannot pass for a missing one. */
+function fullRecord(read) {
+  const r = busySunday(read);
+  r.tracks = JSON.stringify([
+    { side: 'A', title: 'Ponteio' },
+    { side: 'B', title: 'Aquarela' },
+  ]);
+  return r;
+}
+
+/* Record what the sheet is asked to scroll to. The element's own scrollTo
+ * shadows the prototype stub the harness installs. */
+function watchSheetScroll(doc) {
+  const calls = [];
+  $(doc, '#dmLayout').scrollTo = opts => calls.push(opts);
+  return calls;
+}
+
+test('the phone sheet holds all three blocks at once', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  PHONE_SECS.forEach(id => assert.ok($(doc, '#dmInfo #dmSec-' + id),
+    `the phone sheet has no ${id} block`));
+});
+
+test('the phone sheet has the tracklist and the history without asking for a tab', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  assert.ok(count(doc, '#dmSec-tracks .tl-row'), 'no tracklist on the phone sheet');
+  assert.ok(count(doc, '#dmSec-timeline .dm-hist-entry'), 'no history on the phone sheet');
+  assert.ok(count(doc, '#dmSec-info .dm-chip'), 'no info block on the phone sheet');
+});
+
+test('pressing a phone tab leaves the other two blocks in place', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  const tab = $(doc, '#dmTabs .dm-tab[data-ddsec="timeline"]');
+  assert.ok(tab, 'the phone tab row does not name its blocks');
+  press(win, tab);
+  PHONE_SECS.forEach(id => assert.ok($(doc, '#dmInfo #dmSec-' + id),
+    `pressing Timeline took the ${id} block away`));
+});
+
+test('pressing a phone tab scrolls the sheet', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  const calls = watchSheetScroll(doc);
+  press(win, $(doc, '#dmTabs .dm-tab[data-ddsec="tracks"]'));
+  assert.strictEqual(calls.length, 1, 'the tab did not scroll the sheet');
+  assert.strictEqual(calls[0].behavior, 'smooth');
+});
+
+test('the phone tab row marks the block it scrolled to', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  press(win, $(doc, '#dmTabs .dm-tab[data-ddsec="timeline"]'));
+  const on = [...doc.querySelectorAll('#dmTabs .dm-tab.on')].map(b => b.dataset.ddsec);
+  assert.deepStrictEqual(on, ['timeline']);
+});
+
+test('a focused history entry reaches the phone sheet without hiding the rest', async () => {
+  // Opening on a timeline event used to force the phone onto the Timeline tab,
+  // because that was the only way the entry reached the DOM at all.
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id, 'note:2026-08-09:0');
+  assert.strictEqual(count(doc, '#dmSec-timeline .dm-hist-entry.hit'), 1,
+    'the focused entry is not lit on the phone sheet');
+  assert.ok(count(doc, '#dmSec-tracks .tl-row'),
+    'the focused open cost the phone sheet its tracklist');
+});
+
+/* The row is three words in the same weight and colour, and on a phone it is
+ * the only thing saying the sheet has more below it. An icon per block gives
+ * each tab a shape to be recognised by before the word is read. */
+
+const DETAIL_TABS = ['info', 'tracks', 'timeline'];
+
+const tabIcons = (doc, pane) => DETAIL_TABS.map(id => {
+  const icons = [...doc.querySelectorAll('#' + pane + 'Tabs .dm-tab[data-ddsec="' + id + '"] i')];
+  assert.strictEqual(icons.length, 1, `the ${id} tab has ${icons.length} icons, not one`);
+  return [...icons[0].classList].find(c => c.startsWith('ti-'));
+});
+
+['dm', 'dd'].forEach(pane => {
+  const where = pane === 'dm' ? 'the phone sheet' : 'the desktop column';
+
+  test(`each block's tab carries its own icon on ${where}`, async () => {
+    const { win, doc, read } = await boot();
+    win.openDetail(fullRecord(read).id);
+    const icons = tabIcons(doc, pane);
+    icons.forEach((c, i) => assert.ok(c, `the ${DETAIL_TABS[i]} tab has no icon`));
+    assert.strictEqual(new Set(icons).size, 3,
+      `two tabs wear the same icon: ${icons.join(', ')}`);
+  });
+
+  test(`the tabs still name their blocks in words on ${where}`, async () => {
+    // An icon-only row would be three glyphs and a guess. The word stays.
+    const { win, doc, read } = await boot();
+    win.openDetail(fullRecord(read).id);
+    DETAIL_TABS.forEach(id => {
+      const tab = $(doc, '#' + pane + 'Tabs .dm-tab[data-ddsec="' + id + '"]');
+      assert.strictEqual(tab.textContent.trim().toLowerCase(), id,
+        `the ${id} tab lost its word`);
+    });
+  });
 });

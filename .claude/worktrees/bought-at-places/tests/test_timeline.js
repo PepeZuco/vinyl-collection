@@ -294,6 +294,15 @@ test('a liked song is an event on the day it was liked', () => {
   assert.strictEqual(evs[0].i, 0);
 });
 
+test('a liked song carries the side it sits on, so the day card can name it', () => {
+  const r = { id: 1, disc_count: 2, tracks: JSON.stringify([
+    { side: 'A', title: 'Mother', liked_at: '2026-08-02T21:40:00' },
+    { side: 'C', title: 'Hey You', liked_at: '2026-08-02T21:50:00' }]) };
+  const days = VinylTimeline.eventsByDay([r], null, LIKE_DEPS);
+  const evs = days.get('2026-08-02').filter(e => e.type === 'liked');
+  assert.deepStrictEqual(evs.map(e => e.side), ['A', 'C']);
+});
+
 test('an unliked song produces no event', () => {
   const r = { id: 1, tracks: JSON.stringify([{ side: 'A', title: 'Mother' }]) };
   const days = VinylTimeline.eventsByDay([r], null, LIKE_DEPS);
