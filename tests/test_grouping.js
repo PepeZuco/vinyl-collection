@@ -587,6 +587,8 @@ test('shelfPositionOf returns null for an empty collection', () => {
 test('shelfPositionOf matches ids by value, not by string', () => {
   const list = [rec({ id: 7, artist: 'ABBA' }), rec({ id: 8, artist: 'Wilco' })];
   assert.deepStrictEqual(shelfPositionOf(list, 7), { block: 'Block 1', index: 1, total: 1 });
+});
+
 // ── bucketOf: bought at ─────────────────────────────────────────────────────
 // Guards the crate rules against the place-link work on the header: the link
 // is a sibling of the header button and must never reach into the bucket.

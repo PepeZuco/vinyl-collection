@@ -9,19 +9,13 @@
  * tests/test_spend.js. */
 const VinylSpend = (function () {
 
-  /* A scan costs a fraction of a cent, so dollars would render every real
-   * number as $0.00. Cents carry the whole useful range, and the precision
-   * drops as the number grows: 0.04¢, 3.4¢, 42¢, then $1.94. */
+  /* Always dollars, always two decimals: $0.05, $1.94. A scan costs a
+   * fraction of a cent, so the small end of the range collapses — a spotify
+   * estimate reads $0.00 — but one shape of money on screen beats a readout
+   * that changes units as the total grows. */
   function formatMoney(usd) {
     const value = Number(usd) || 0;
-    const cents = value * 100;
-    const rounded = cents >= 10 ? Math.round(cents)
-                  : cents >= 1  ? Math.round(cents * 10) / 10
-                  :               Math.round(cents * 100) / 100;
-    // Checked after rounding, not before: 99.9¢ rounds to 100¢, which is a
-    // dollar however it was written.
-    if (rounded >= 100) return '$' + value.toFixed(2);
-    return String(rounded) + '¢';
+    return '$' + value.toFixed(2);
   }
 
   /* The line under the analyse button. It already carried the reason the
