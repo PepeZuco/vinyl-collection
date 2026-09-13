@@ -150,6 +150,20 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-cover .no-cover i{font-size:32px}
 [data-theme="light"] .vcard-cover .no-cover{color:#b0a99b}
 
+/* Instagram-style sensitive-media guard on a cover flagged censored: the image
+   blurs and a tap-to-reveal eye sits centered over it. Works wherever a cover
+   img is wrapped in this (grid, list, drawer) since the sizing rules on the
+   img itself (e.g. .vcard-cover img) are descendant selectors and still match
+   one level deeper. */
+.cover-censored{position:relative;width:100%;height:100%}
+.cover-censored img{filter:blur(18px) saturate(1.15);transform:scale(1.15)}
+.cover-censored.revealed img{filter:none;transform:none}
+.cover-censor-eye{position:absolute;inset:0;margin:auto;width:32px;height:32px;padding:0;
+  border-radius:50%;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);
+  color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px}
+.cover-censor-eye:hover{background:rgba(0,0,0,.75)}
+.cover-censored.revealed .cover-censor-eye{display:none}
+
 /* A double (or triple...) record is more than one record, and a 7" is not the
  * same object as an LP. The card used to say both in marks — yellow segments
  * down the left edge counting the discs, grey sleeves peeking out bottom-right
@@ -214,6 +228,103 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-hover-row{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vcard-hover-row i{font-size:12px;flex-shrink:0}
 .vcard-hover-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* the tracklist over the cover, while the search box is looking at songs
+ *
+ * The cover is not replaced by the tracklist, it is read THROUGH it: a shelf
+ * you are scanning for a song is still a shelf you recognise by its artwork,
+ * and a grid of black rectangles full of small type is not. So the artwork
+ * stays, dimmed by the same kind of scrim .vcard-hover-info already uses —
+ * which is also why this needs no light-mode variant: the ground here is a
+ * photograph, not the page.
+ *
+ * Below the flag and the format tag (z-3) and above the artwork, so the chrome
+ * that says what the OBJECT is keeps its corners. */
+.vcard-tracks{
+  position:absolute;inset:0;z-index:2;
+  background:linear-gradient(rgba(0,0,0,.80),rgba(0,0,0,.88));
+  display:flex;flex-direction:column;
+  transition:background .16s ease;
+}
+/* The corner chrome owns the top of the cover, so the scrollport starts BELOW
+   it rather than under it. Padding would not do: a sticky side header sticks
+   to the scrollport's edge and ignores its padding, so the first header would
+   slide up under the badges as you scrolled. */
+.vct-head{height:24px;flex-shrink:0}
+.vct-scroll{
+  flex:1;overflow-y:auto;overscroll-behavior:contain;
+  padding:0 9px 26px;
+  scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent;
+}
+.vct-scroll::-webkit-scrollbar{width:4px}
+.vct-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:2px}
+.vct-side{
+  position:sticky;top:0;z-index:1;
+  margin:7px -9px 3px;padding:4px 9px 3px;
+  background:rgba(0,0,0,.92);
+  font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+  color:rgba(255,255,255,.5);
+}
+.vct-side:first-child{margin-top:0}
+.vct-row{
+  display:flex;gap:6px;align-items:baseline;
+  padding:2px 4px;border-radius:2px;
+  font-size:11px;line-height:1.3;color:rgba(255,255,255,.62);
+}
+.vct-n{
+  flex-shrink:0;width:12px;text-align:right;
+  font-variant-numeric:tabular-nums;
+  font-size:9px;color:rgba(255,255,255,.32);
+}
+.vct-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the match: the row lifts out of the list, and the letters typed are marked
+   inside the title so a long song name still says WHICH part matched */
+.vct-row.hit{
+  background:rgba(241,194,63,.16);
+  box-shadow:inset 2px 0 0 var(--accent);
+  color:#fff;font-weight:700;
+}
+.vct-row.hit .vct-n{color:rgba(255,255,255,.6)}
+.vct-row.hit mark{background:rgba(241,194,63,.38);color:#fff;border-radius:2px;padding:0 1px}
+/* how many songs matched — a long tracklist scrolls, so the count has to be
+   said rather than counted off the rows on screen. It takes the flag's corner:
+   while you are hunting a song, which country pressed the record is not the
+   thing you are reading. */
+.vct-count{
+  position:absolute;top:7px;right:7px;z-index:3;
+  background:var(--accent);color:#000;
+  border-radius:3px;padding:2px 5px;
+  font-size:9px;font-weight:800;letter-spacing:.04em;
+  pointer-events:none;
+}
+.vcard.song-hit .vcard-flag{display:none}
+/* the artist goes ABOVE the scrim rather than being dimmed with the artwork:
+   it is what says whose tracklist you are reading */
+.vcard.song-hit .vcard-artist-overlay{z-index:3;background:linear-gradient(transparent,rgba(0,0,0,.92))}
+
+/* Hover uncovers the artwork WITHOUT throwing away the answer: the tracklist
+   drops to the matches alone — their side, their number, their title — and the
+   scrim lifts to a haze behind them. Fading the whole layer out was the first
+   try, and it made you choose between seeing the record and seeing why it was
+   on screen.
+   The rows are hidden rather than faded so the layout collapses: the matches
+   gather at the top instead of sitting wherever the scroll had left them, and
+   a list that needed scrolling stops needing it. */
+@media(hover:hover){
+  .vcard.song-hit:hover .vcard-tracks{background:linear-gradient(rgba(0,0,0,.26),rgba(0,0,0,.34))}
+  .vcard.song-hit:hover .vct-row:not(.hit){display:none}
+  .vcard.song-hit:hover .vct-side:not(.has-hit){display:none}
+  /* over full-brightness artwork a translucent tint is not enough to read
+     white text off, so what stays gets its own ground */
+  .vcard.song-hit:hover .vct-side{background:rgba(0,0,0,.86)}
+  .vcard.song-hit:hover .vct-row.hit{background:rgba(0,0,0,.86);
+    box-shadow:inset 2px 0 0 var(--accent),0 1px 6px rgba(0,0,0,.5)}
+  .vcard.song-hit:hover .vct-scroll{overflow:hidden}
+  /* the genre/condition/plays scrim would cover the artwork just uncovered */
+  .vcard.song-hit .vcard-hover-info{display:none}
+}
+/* No hover on a touch screen, so the tracklist is all there is — and the tap
+   already opens the drawer, where the same tracklist has a whole tab. */
 
 /* flag image — used wherever a country renders (card badge, list row, detail
    panel); a real picture on every platform instead of relying on the OS's
@@ -2569,6 +2680,11 @@ select option{background:var(--surface);color:var(--text)}
             </button>
           </div>
 
+          <div class="check-row" style="margin-top:10px">
+            <input type="checkbox" id="fCensored">
+            <label for="fCensored"><i class="ti ti-eye-off"></i> Mark cover as sensitive (blurred until tapped)</label>
+          </div>
+
           <!-- Reopens the last scan's results without paying for a new one, so
                a wrong pick costs a tap rather than another vision call. -->
           <button type="button" class="scan-cover-btn" id="scanRepickBtn" onclick="reopenScanOverlay()">
@@ -3405,7 +3521,7 @@ const FILTER_DEPS = {
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide, sideLabel,
         tracksBySide, likedTracks, sidesWithTracks, formatTag,
         discGroups, formatSummary, capitalizeName,
-        parsePastedTracklist, artistsInUse } = VinylTracks;
+        parsePastedTracklist, artistsInUse, matchingTracks } = VinylTracks;
 
 /* Re-render whatever surface is on screen. Every control that changes the
  * query calls this, so the collection and the statistics page can never drift
@@ -3578,6 +3694,7 @@ function render() {
     el.addEventListener('click', () => toggleCrate(el.dataset.crate))
   );
   observeCardsForGlow();
+  scrollTracksToMatch(c);
 }
 
 // ── setup mode ─────────────────────────────────────────────────────────────
@@ -3811,10 +3928,95 @@ function dotsHTML(n, max=5) {
   return `<div class="score-dots">${d}</div>`;
 }
 
+/* The needle the song overlay marks with, or '' when it should not draw.
+ *
+ * Read off the same controls the filter model reads, and folded the same way,
+ * so the overlay cannot disagree with the shelf about what matched: a record
+ * that got through on 'milanes' has its Milanés marked, and one that got
+ * through on its ALBUM has nothing marked and keeps its cover. */
+function songNeedle() {
+  if (!searchFields.song) return '';
+  const text = document.getElementById('searchInput').value.trim().toLowerCase();
+  return searchLoose ? VinylFilters.relax(text) : text;
+}
+
+/* A title with the matched letters wrapped, escaped on the way out.
+ *
+ * The range is measured against the STORED title by matchingTracks, so the
+ * three pieces are sliced off the real string and escaped separately — which
+ * is what keeps a title containing '&' or '<' safe while still being marked. */
+function trackTitleHTML(t) {
+  if (!t.hit) return esc(t.title);
+  return esc(t.title.slice(0, t.hit[0])) +
+         '<mark>' + esc(t.title.slice(t.hit[0], t.hit[1])) + '</mark>' +
+         esc(t.title.slice(t.hit[1]));
+}
+
+/* The tracklist a card draws over its cover, or '' for a record with nothing
+ * matching — which is how a record that got onto the shelf by its artist or
+ * its album keeps its artwork while the ones that matched a song show why. */
+function trackOverlayHTML(r, needle) {
+  if (!needle) return '';
+  const found = matchingTracks(parseTracks(r.tracks), needle, r.disc_count,
+                               searchLoose ? VinylFilters.relax : null);
+  if (!found.hits) return '';
+  const body = found.sides.map(side =>
+    `<div class="vct-side${side.hits ? ' has-hit' : ''}">${esc(side.label)}</div>` +
+    side.tracks.map(t =>
+      `<div class="vct-row${t.hit ? ' hit' : ''}">` +
+        `<span class="vct-n">${t.pos}</span>` +
+        `<span class="vct-t">${trackTitleHTML(t)}</span></div>`).join('')
+  ).join('');
+  return `<div class="vcard-tracks"><div class="vct-head"></div>` +
+         `<div class="vct-scroll">${body}</div></div>` +
+         `<div class="vct-count">${found.hits} song${found.hits === 1 ? '' : 's'}</div>`;
+}
+
+/* Put each overlay's first match in view, once the cards are in the document.
+ *
+ * Not at render time: the scroll position of a box that is not laid out yet is
+ * meaningless, and scrollTop silently stays 0. The header above the match is
+ * kept on screen deliberately — landing the hit at the very top would hide
+ * which side it is on, which is half of what the grouping is for. */
+function scrollTracksToMatch(root) {
+  (root || document).querySelectorAll('.vct-scroll').forEach(sc => {
+    const hit = sc.querySelector('.vct-row.hit');
+    if (hit) sc.scrollTop = Math.max(0, hit.offsetTop - 44);
+  });
+}
+
+// Sensitive-cover guard: a record flagged censored renders blurred with a
+// tap-to-reveal eye until its id lands here. Session-only by design — this is
+// about not showing explicit art by default on a shared screen, not real
+// access control, so it resets on reload rather than persisting anywhere.
+const revealedCovers = new Set();
+
+// Wraps an already-built <img> in the blur+eye chrome when the record is
+// censored and not yet revealed; returns imgHTML unchanged otherwise. Callers
+// keep their own "no cover" fallback markup untouched — this only ever wraps
+// a real image. `eye:false` blurs without a reveal control, for thumbnails
+// too small to click (the drawer's crate strip).
+function censorWrap(r, imgHTML, {eye = true} = {}) {
+  if (!r.censored || revealedCovers.has(r.id)) return imgHTML;
+  const eyeBtn = eye
+    ? `<button type="button" class="cover-censor-eye" title="show cover" onclick="event.stopPropagation();revealCover(${r.id},this)"><i class="ti ti-eye"></i></button>`
+    : '';
+  return `<div class="cover-censored">${imgHTML}${eyeBtn}</div>`;
+}
+
+// Reveals in place (no full re-render, so it doesn't disturb carousel
+// position/scroll) and remembers the id so every future render — grid, list,
+// drawer — starts unblurred for it too.
+function revealCover(id, btn) {
+  revealedCovers.add(id);
+  const wrap = btn.closest('.cover-censored');
+  if (wrap) wrap.classList.add('revealed');
+}
+
 function cardHTML(r) {
   const styles = cardStyles(r);
   const cover = r.cover_url
-    ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`
+    ? censorWrap(r, `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`)
     : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
 
   const artistOverlay = `<div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>`;
@@ -3859,9 +4061,12 @@ function cardHTML(r) {
     </div>`;
   })() : '';
 
-  return `<div class="vcard" data-id="${r.id}" style="box-shadow:${styles.shadow}">
+  const tracklist = trackOverlayHTML(r, songNeedle());
+
+  return `<div class="vcard${tracklist ? ' song-hit' : ''}" data-id="${r.id}" style="box-shadow:${styles.shadow}">
     <div class="vcard-cover">
       ${cover}
+      ${tracklist}
       ${fmtTag}
       <div class="vcard-hover-info">
         <div class="vcard-hover-row"><span class="vcard-hover-dot" style="background:${genreColor(r.genre)}"></span>${esc(r.genre)||'no genre'}</div>
@@ -3919,7 +4124,7 @@ function listHeadHTML() {
 
 function listRowHTML(r) {
   const cover = r.cover_url
-    ? `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`
+    ? censorWrap(r, `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`)
     : `<i class="ti ti-disc"></i>`;
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
@@ -4049,14 +4254,14 @@ let dmList = [], dmIdx = 0;
 
 function dmSlideHTML(rec) {
   const img = rec.cover_url
-    ? `<img src="${rec.cover_url}" alt="${esc(rec.album_name)}" loading="lazy" onerror="this.style.display='none'">`
+    ? censorWrap(rec, `<img src="${rec.cover_url}" alt="${esc(rec.album_name)}" loading="lazy" onerror="this.style.display='none'">`)
     : `<div class="dm-slide-ph"><i class="ti ti-disc" style="font-size:56px"></i></div>`;
   return `<div class="dm-slide" data-id="${rec.id}">${img}</div>`;
 }
 
 function dmThumbHTML(rec) {
   const img = rec.cover_url
-    ? `<img src="${rec.cover_url}" alt="" loading="lazy">`
+    ? censorWrap(rec, `<img src="${rec.cover_url}" alt="" loading="lazy">`, {eye: false})
     : `<i class="ti ti-disc"></i>`;
   return `<button type="button" class="dm-thumb" data-id="${rec.id}" title="${esc(rec.album_name)}">${img}</button>`;
 }
@@ -5887,6 +6092,7 @@ function openAdd(){
   renderNotesForm();
   formTracks = []; formDiscCount = 1; formSize = '';
   renderTracksForm();
+  document.getElementById('fCensored').checked = false;
   populateGenreSelect();
   populateCountryList();
   populateWhereList();
@@ -5943,6 +6149,7 @@ function openEdit(id){
   document.getElementById('fCountry').value=countryLabelFromCode(r.country||'');
   document.getElementById('fWhere').value=r.bought_where||'';
   document.getElementById('fPlays').value=r.play_count||0;
+  document.getElementById('fCensored').checked=!!r.censored;
   document.getElementById('fHaveIt').checked=!!r.have_it;
   renderOwnSwitch();
   document.getElementById('fCondition').value=r.condition||'';
@@ -6150,6 +6357,7 @@ function formValues(){
     tracks:serializeTracks(formTracks),
     disc_count:formDiscCount,
     size:formSize,
+    censored:document.getElementById('fCensored').checked,
   };
 }
 
