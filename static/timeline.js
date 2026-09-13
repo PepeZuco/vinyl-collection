@@ -71,7 +71,10 @@ const VinylTimeline = (function (grouping) {
       // still holds its slot, so filtering before indexing would renumber
       // every song after it and break keys already handed out.
       if (on.liked) parseTracks(r.tracks).forEach((t, i) => {
-        if (t.liked_at) add(t.liked_at, { type: 'liked', r, i, title: t.title });
+        // The side rides along so a consumer can name where the song sits —
+        // which disc it is on is the letter's to say, read off r.disc_count.
+        if (t.liked_at) add(t.liked_at, { type: 'liked', r, i, title: t.title,
+                                          side: t.side });
       });
       if (on.note) parseNotes(r.notes, r.bought_date).forEach((n, i) => {
         // The index is the position in the RAW array: an empty note still holds

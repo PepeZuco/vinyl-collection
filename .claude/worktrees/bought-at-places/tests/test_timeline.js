@@ -1,0 +1,413 @@
+// Tests for the event model behind the Timeline tab.
+// Run by tests/test_timeline.py so `pytest` stays the single command.
+//
+// Calendar and History were two tabs over the same events at different zooms —
+// and they disagreed about which records counted: the calendar read every
+// record, the growth chart read owned-and-dated ones. This model is the one
+// answer to "what happened, and when", and the caller decides the scope.
+
+// Pinned before anything constructs a Date: an evening event must stay on its
+// own evening, which says nothing without an offset. Sao Paulo is UTC-3 and the
+// collection's own timezone.
+process.env.TZ = 'America/Sao_Paulo';
+
+const test = require('node:test');
+const assert = require('node:assert');
+
+const { ALL_TYPES, eventsByDay } = require('../static/timeline.js');
+const VinylTimeline = require('../static/timeline.js');
+
+let nextId = 1;
+function rec(fields) {
+  return Object.assign(
+    { id: nextId++, artist: 'Tim Maia', album_name: 'Uma Onda',
+      bought_date: '', play_dates: '', cleaned_dates: '', notes: '' },
+    fields);
+}
+const json = (...v) => JSON.stringify(v);
+
+// The template owns these parsers; the model takes them rather than duplicating
+// their legacy-migration rules.
+const deps = {
+  parsePlayDates: (raw) => { try { const p = JSON.parse(raw || '[]'); return Array.isArray(p) ? p : []; } catch (e) { return []; } },
+  parseNotes: (raw) => { try { const p = JSON.parse(raw || '[]'); return Array.isArray(p) ? p : []; } catch (e) { return []; } },
+};
+deps.parseCleanedDates = deps.parsePlayDates;
+
+const days = (records, types) => eventsByDay(records, types || ALL_TYPES, deps);
+const on = (records, day, types) => (days(records, types).get(day) || []);
+
+// ── each kind of event ──────────────────────────────────────────────────────
+
+test('a bought date puts a bought event on its day', () => {
+  const got = on([rec({ bought_date: '2026-08-23' })], '2026-08-23');
+  assert.deepStrictEqual(got.map(e => e.type), ['bought']);
+});
+
+test('every play date puts a played event on its own day', () => {
+  const r = rec({ play_dates: json('2026-08-23T21:12:00', '2026-08-25T15:41:00') });
+  const map = days([r]);
+  assert.deepStrictEqual(map.get('2026-08-23').map(e => e.type), ['played']);
+  assert.deepStrictEqual(map.get('2026-08-25').map(e => e.type), ['played']);
+});
+
+test('every cleaning date puts a cleaned event on its day', () => {
+  const got = on([rec({ cleaned_dates: json('2026-08-02T16:40:00') })], '2026-08-02');
+  assert.deepStrictEqual(got.map(e => e.type), ['cleaned']);
+});
+
+test('a note with text puts a note event on its day, carrying the text', () => {
+  const r = rec({ notes: json({ date: '2026-08-23T21:20:00', text: 'clicky side B' }) });
+  const got = on([r], '2026-08-23');
+  assert.deepStrictEqual(got.map(e => e.type), ['note']);
+  assert.strictEqual(got[0].text, 'clicky side B');
+});
+
+/* The calendar marks a private note so the owner can see which of their notes
+ * a visitor is not being shown. It can only do that if the flag survives the
+ * trip from the column into the event. */
+test('a note event says whether the note was private', () => {
+  const r = rec({ notes: json({ date: '2026-08-23', text: 'paid too much', private: true }) });
+  assert.strictEqual(on([r], '2026-08-23')[0].private, true);
+});
+
+test('a note event without the flag is not private', () => {
+  const r = rec({ notes: json({ date: '2026-08-23', text: 'first pressing' }) });
+  assert.strictEqual(on([r], '2026-08-23')[0].private, false);
+});
+
+test('a note with no text is not an event', () => {
+  const r = rec({ notes: json({ date: '2026-08-23', text: '   ' }) });
+  assert.strictEqual(days([r]).size, 0);
+});
+
+test('every event carries the record it belongs to', () => {
+  const r = rec({ bought_date: '2026-08-23' });
+  assert.strictEqual(on([r], '2026-08-23')[0].r, r);
+});
+
+// ── the type switches ───────────────────────────────────────────────────────
+
+test('a type that is switched off contributes nothing', () => {
+  const r = rec({ bought_date: '2026-08-23', play_dates: json('2026-08-23T21:00:00') });
+  const types = Object.assign({}, ALL_TYPES, { bought: false });
+  assert.deepStrictEqual(on([r], '2026-08-23', types).map(e => e.type), ['played']);
+});
+
+test('switching every type off empties the timeline', () => {
+  const r = rec({ bought_date: '2026-08-23', play_dates: json('2026-08-23') });
+  const none = { bought: false, cleaned: false, played: false, note: false };
+  assert.strictEqual(days([r], none).size, 0);
+});
+
+// ── dates that do not hold ──────────────────────────────────────────────────
+
+test('a record with no dates contributes nothing', () => {
+  assert.strictEqual(days([rec({})]).size, 0);
+});
+
+test('an unparseable date is dropped rather than thrown on', () => {
+  const map = days([rec({ bought_date: '2026-02-30' }), rec({ bought_date: '2026-02-11' })]);
+  assert.deepStrictEqual([...map.keys()], ['2026-02-11']);
+});
+
+test('play dates that are not valid JSON are ignored', () => {
+  assert.strictEqual(days([rec({ play_dates: 'not json' })]).size, 0);
+});
+
+// ── the day an event belongs to ─────────────────────────────────────────────
+
+test('a late-evening event stays on its own day', () => {
+  // Stored as a local wall clock with no zone. Reading it as UTC would file
+  // this on the 24th, which is the bug the stamp format exists to avoid.
+  const r = rec({ play_dates: json('2026-08-23T23:30:00') });
+  assert.deepStrictEqual([...days([r]).keys()], ['2026-08-23']);
+});
+
+// ── how a day reads ─────────────────────────────────────────────────────────
+
+test('a day is ordered by clock time', () => {
+  const r = rec({ play_dates: json('2026-08-23T21:12:00', '2026-08-23T09:05:00') });
+  assert.deepStrictEqual(on([r], '2026-08-23').map(e => e.time), ['09:05', '21:12']);
+});
+
+test('events with no clock lead the day, in bought-cleaned-played-note order', () => {
+  const r = rec({
+    bought_date: '2026-08-23',
+    cleaned_dates: json('2026-08-23'),
+    play_dates: json('2026-08-23'),
+    notes: json({ date: '2026-08-23', text: 'a note' }),
+  });
+  assert.deepStrictEqual(on([r], '2026-08-23').map(e => e.type),
+    ['bought', 'cleaned', 'played', 'note']);
+});
+
+test('two records at the same moment fall back to album order', () => {
+  const records = [
+    rec({ album_name: 'Zeta', bought_date: '2026-08-23' }),
+    rec({ album_name: 'Alpha', bought_date: '2026-08-23' }),
+  ];
+  assert.deepStrictEqual(on(records, '2026-08-23').map(e => e.r.album_name), ['Alpha', 'Zeta']);
+});
+
+test('records merge onto the same day', () => {
+  const records = [
+    rec({ bought_date: '2026-08-23T10:00:00' }),
+    rec({ bought_date: '2026-08-23T11:00:00' }),
+  ];
+  assert.strictEqual(on(records, '2026-08-23').length, 2);
+});
+
+// ── scope is the caller's business ──────────────────────────────────────────
+
+test('the model filters nothing itself, so one shared query governs the tab', () => {
+  // The calendar used to read every record while the growth chart read only
+  // owned ones, so the same tab disagreed with itself about the collection.
+  const wishlist = rec({ have_it: false, notes: json({ date: '2026-08-23', text: 'want' }) });
+  assert.strictEqual(on([wishlist], '2026-08-23').length, 1);
+  assert.strictEqual(days([]).size, 0);
+});
+
+
+test('type order beats album order for clockless events on the same day', () => {
+  // Alphabetically Alpha precedes Beta, and Alpha's note is added first — so
+  // this only comes out right if the type comparator actually runs.
+  const records = [
+    rec({ album_name: 'Alpha', notes: json({ date: '2026-08-23', text: 'a note' }) }),
+    rec({ album_name: 'Beta', bought_date: '2026-08-23' }),
+  ];
+  assert.deepStrictEqual(on(records, '2026-08-23').map(e => e.type), ['bought', 'note']);
+});
+
+// ── an event's name ─────────────────────────────────────────────────────────
+
+const { keyOf } = require('../static/timeline.js');
+
+test('bought keys carry no index, because bought_date is one column', () => {
+  assert.strictEqual(keyOf('bought', '2026-08-23'), 'bought:2026-08-23');
+});
+
+test('a list-backed event is named by its type, stamp and position', () => {
+  assert.strictEqual(keyOf('played', '2026-08-23T21:12:00', 0),
+    'played:2026-08-23T21:12:00:0');
+});
+
+test('two clockless cleanings on one day get different keys', () => {
+  // Rows written before times were kept carry a bare date, so the stamp alone
+  // would collide. This is why every list-backed type is indexed.
+  const r = rec({ cleaned_dates: json('2026-08-23', '2026-08-23') });
+  const got = on([r], '2026-08-23').map(e => e.key);
+  assert.strictEqual(new Set(got).size, 2, 'keys collided: ' + got.join(' '));
+});
+
+test('every event carries its key, its raw stamp and its day', () => {
+  const r = rec({ play_dates: json('2026-08-23T21:12:00') });
+  const ev = on([r], '2026-08-23')[0];
+  assert.strictEqual(ev.key, 'played:2026-08-23T21:12:00:0');
+  assert.strictEqual(ev.at, '2026-08-23T21:12:00');
+  assert.strictEqual(ev.day, '2026-08-23');
+});
+
+test('a note is indexed by its position in the raw notes array', () => {
+  // The empty note still occupies index 0, so the note that follows it is 1.
+  // Filtering first would renumber it and break the key the drawer expects.
+  const r = rec({ notes: json({ date: '2026-08-23', text: '' },
+                              { date: '2026-08-23', text: 'clicky side B' }) });
+  assert.strictEqual(on([r], '2026-08-23')[0].key, 'note:2026-08-23:1');
+});
+
+// ── one entry per record, per day ───────────────────────────────────────────
+
+const { recordDays } = require('../static/timeline.js');
+
+const collapse = (records, day) => recordDays(on(records, day));
+
+test('four kinds on one day collapse to one entry with four acts', () => {
+  const r = rec({
+    bought_date: '2026-08-23',
+    cleaned_dates: json('2026-08-23T18:20:00'),
+    play_dates: json('2026-08-23T19:04:00'),
+    notes: json({ date: '2026-08-23', text: 'seam split' }),
+  });
+  const got = collapse([r], '2026-08-23');
+  assert.strictEqual(got.length, 1);
+  assert.deepStrictEqual(got[0].acts.map(a => a.type),
+    ['bought', 'cleaned', 'played', 'note']);
+  assert.strictEqual(got[0].r, r);
+  assert.strictEqual(got[0].day, '2026-08-23');
+});
+
+test('acts come back in type order however the day arrived', () => {
+  // Clocks put the note first; TYPE_ORDER must still win in the rail.
+  const r = rec({
+    notes: json({ date: '2026-08-23T08:00:00', text: 'early thought' }),
+    bought_date: '2026-08-23T20:00:00',
+  });
+  assert.deepStrictEqual(collapse([r], '2026-08-23')[0].acts.map(a => a.type),
+    ['bought', 'note']);
+});
+
+test('two plays on one day are one act holding two events', () => {
+  const r = rec({ play_dates: json('2026-08-23T19:04:00', '2026-08-23T21:47:00') });
+  const acts = collapse([r], '2026-08-23')[0].acts;
+  assert.strictEqual(acts.length, 1);
+  assert.strictEqual(acts[0].evs.length, 2);
+  assert.deepStrictEqual(acts[0].evs.map(e => e.time), ['19:04', '21:47']);
+});
+
+test('an entry keeps the day flat and chronological too', () => {
+  const r = rec({ bought_date: '2026-08-23',
+                  play_dates: json('2026-08-23T19:04:00') });
+  assert.strictEqual(collapse([r], '2026-08-23')[0].evs.length, 2);
+});
+
+test('two records on one day are two entries', () => {
+  const records = [rec({ bought_date: '2026-08-23' }), rec({ bought_date: '2026-08-23' })];
+  assert.strictEqual(collapse(records, '2026-08-23').length, 2);
+});
+
+test('entries follow the record whose day started earliest', () => {
+  const records = [
+    rec({ album_name: 'Later', play_dates: json('2026-08-23T21:00:00') }),
+    rec({ album_name: 'Earlier', play_dates: json('2026-08-23T09:00:00') }),
+  ];
+  assert.deepStrictEqual(collapse(records, '2026-08-23').map(g => g.r.album_name),
+    ['Earlier', 'Later']);
+});
+
+test('an empty day collapses to nothing', () => {
+  assert.deepStrictEqual(recordDays([]), []);
+});
+
+// ── likes ───────────────────────────────────────────────────────────────────
+
+const { parseTracks } = require('../static/tracks.js');
+const LIKE_DEPS = { parseTracks };
+
+test('a liked song is an event on the day it was liked', () => {
+  const r = { id: 1, tracks: JSON.stringify([
+    { side: 'A', title: 'Mother', liked_at: '2026-08-02T21:40:00' }]) };
+  const days = VinylTimeline.eventsByDay([r], null, LIKE_DEPS);
+  const evs = days.get('2026-08-02').filter(e => e.type === 'liked');
+  assert.strictEqual(evs.length, 1);
+  assert.strictEqual(evs[0].title, 'Mother');
+  assert.strictEqual(evs[0].i, 0);
+});
+
+test('an unliked song produces no event', () => {
+  const r = { id: 1, tracks: JSON.stringify([{ side: 'A', title: 'Mother' }]) };
+  const days = VinylTimeline.eventsByDay([r], null, LIKE_DEPS);
+  assert.strictEqual(days.size, 0);
+});
+
+test('a like key is the type, the stamp and the RAW track index', () => {
+  assert.strictEqual(VinylTimeline.keyOf('liked', '2026-08-02', 3), 'liked:2026-08-02:3');
+});
+
+test('likes can be switched off like any other type', () => {
+  const r = { id: 1, tracks: JSON.stringify([
+    { side: 'A', title: 'Mother', liked_at: '2026-08-02' }]) };
+  const days = VinylTimeline.eventsByDay([r], { bought: true }, LIKE_DEPS);
+  assert.strictEqual(days.size, 0);
+});
+
+test('a record with no tracks column never throws', () => {
+  const days = VinylTimeline.eventsByDay([{ id: 1 }], null, LIKE_DEPS);
+  assert.strictEqual(days.size, 0);
+});
+
+test('a like ranks between a play and a note', () => {
+  // You hear the song, you like it, then you write about it.
+  const o = VinylTimeline.TYPE_ORDER;
+  assert.ok(o.played < o.liked && o.liked < o.note);
+});
+
+test('within a day the order reads played, then liked, then noted', () => {
+  // All three share ONE stamp, deliberately: the comparator sorts by time
+  // first and only falls back to TYPE_ORDER on a tie, so distinct increasing
+  // clocks (or a bare, clockless date, which sorts as its own kind of tie —
+  // see "events with no clock lead the day" above) would let plain chronology
+  // decide the order and never touch TYPE_ORDER at all. Tying every clock is
+  // what forces TYPE_ORDER to be the thing deciding played < liked < note here.
+  const r = {
+    id: 1,
+    play_dates: JSON.stringify(['2026-08-02T20:00:00']),
+    notes: JSON.stringify([{ date: '2026-08-02T20:00:00', text: 'what a side' }]),
+    tracks: JSON.stringify([{ side: 'A', title: 'Mother', liked_at: '2026-08-02T20:00:00' }]),
+  };
+  const deps = Object.assign({
+    parsePlayDates: (raw) => JSON.parse(raw || '[]'),
+    parseNotes: (raw) => JSON.parse(raw || '[]'),
+  }, LIKE_DEPS);
+  const evs = VinylTimeline.eventsByDay([r], null, deps).get('2026-08-02');
+  assert.deepStrictEqual(evs.map(e => e.type), ['played', 'liked', 'note']);
+});
+
+// ── the month cell's split ──────────────────────────────────────────────────
+//
+// A month cell had three lines for the whole day and spent them on the first
+// three events in clock order, so a day of four plays and one purchase could
+// show the purchase and hide the listening. daySplit answers the question the
+// square actually asks: which KINDS happened, and how much of each.
+
+const { daySplit } = require('../static/timeline.js');
+
+// daySplit reads nothing but the type off an event, so a literal is the whole
+// fixture. The end-to-end case below goes through eventsByDay instead.
+const typed = (...types) => types.map(t => ({ type: t }));
+
+test('a day of one kind is one slice carrying its count', () => {
+  assert.deepStrictEqual(daySplit(typed('played', 'played', 'played')),
+    { slices: [{ type: 'played', n: 3 }], fold: null });
+});
+
+test('slices read in TYPE_ORDER, not in the order the day happened', () => {
+  // The square keeps a type in the same corner all month, so the eye can scan
+  // a column for it. Sorting by count instead would move them week to week.
+  const s = daySplit(typed('note', 'played', 'bought'));
+  assert.deepStrictEqual(s.slices.map(x => x.type), ['bought', 'played', 'note']);
+});
+
+test('four kinds fill the quadrants and nothing folds', () => {
+  const s = daySplit(typed('bought', 'cleaned', 'played', 'played', 'note'));
+  assert.deepStrictEqual(s.slices,
+    [{ type: 'bought', n: 1 }, { type: 'cleaned', n: 1 },
+     { type: 'played', n: 2 }, { type: 'note', n: 1 }]);
+  assert.strictEqual(s.fold, null);
+});
+
+test('a fifth kind folds out of the quadrants, rarest first', () => {
+  const s = daySplit(typed('bought', 'bought', 'cleaned', 'cleaned', 'cleaned',
+                           'played', 'played', 'played', 'played',
+                           'liked', 'note', 'note'));
+  assert.deepStrictEqual(s.fold, { type: 'liked', n: 1 });
+  assert.deepStrictEqual(s.slices.map(x => x.type),
+    ['bought', 'cleaned', 'played', 'note']);
+});
+
+test('a tie for rarest folds the later TYPE_ORDER', () => {
+  // bought and note both happened once. The note goes, because a purchase is
+  // the rarer thing to see in a month and the more expensive to miss.
+  const s = daySplit(typed('bought', 'cleaned', 'cleaned', 'played', 'played',
+                           'liked', 'liked', 'note'));
+  assert.deepStrictEqual(s.fold, { type: 'note', n: 1 });
+  assert.deepStrictEqual(s.slices.map(x => x.type),
+    ['bought', 'cleaned', 'played', 'liked']);
+});
+
+test('an empty day splits into nothing', () => {
+  assert.deepStrictEqual(daySplit([]), { slices: [], fold: null });
+  assert.deepStrictEqual(daySplit(undefined), { slices: [], fold: null });
+});
+
+test('the split counts the events eventsByDay actually built', () => {
+  const r = rec({
+    bought_date: '2026-06-12',
+    cleaned_dates: json('2026-06-12T13:55:00'),
+    play_dates: json('2026-06-12T14:12:00', '2026-06-12T18:30:00'),
+    notes: json({ date: '2026-06-12', text: 'ticks through the run-out' }),
+  });
+  assert.deepStrictEqual(daySplit(on([r], '2026-06-12')).slices,
+    [{ type: 'bought', n: 1 }, { type: 'cleaned', n: 1 },
+     { type: 'played', n: 2 }, { type: 'note', n: 1 }]);
+});
