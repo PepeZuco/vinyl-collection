@@ -1703,6 +1703,7 @@ select option{background:var(--surface);color:var(--text)}
   font-variant-numeric:tabular-nums;white-space:nowrap}
 .place-edit{flex:0 0 auto;background:none;border:none;color:var(--muted);cursor:pointer;padding:4px 2px}
 .place-edit:hover{color:var(--accent)}
+.place-delete:hover{color:var(--danger)}
 .place-empty{font-size:12px;color:var(--muted);padding:10px 2px 14px;line-height:1.5}
 .place-new{display:flex;align-items:center;gap:7px;width:100%;margin-top:12px;padding:10px 2px;
   background:none;border:none;color:var(--accent);font-family:var(--font);font-size:12px;
@@ -7242,10 +7243,12 @@ function showSpotifyError(message){
  * records bought at the same store share one url, so the link is edited once,
  * here, rather than being retyped on every record.
  *
- * There is no delete. A place that is no longer wanted is renamed onto another
- * one, which merges them and rewrites every record on both sides — that is also
- * the only way to fix a name a typo invented in the record form's free-text
- * field, so it stays reachable rather than being a hidden API-only route. */
+ * Two ways for a place to stop existing: renamed onto another one, which
+ * merges them and rewrites every record on both sides — also the only way to
+ * fix a name a typo invented in the record form's free-text field, so it
+ * stays reachable rather than being a hidden API-only route — or deleted
+ * outright, which blanks bought_where on any record still pointing at it
+ * rather than leaving them referencing a place that is gone. */
 
 let placeEditingId = null;   // the place the inline form is editing
 let placeFormOpen = false;   // ...or, when this is on with no id, a new one
@@ -7280,6 +7283,7 @@ function renderPlaces() {
            title="${esc(p.url)}"><i class="ti ti-link"></i></a>` : ''}
       <span class="place-count">${n} ${n === 1 ? 'record' : 'records'}</span>
       <button class="place-edit" title="edit ${esc(p.name)}" onclick="editPlace(${p.id})"><i class="ti ti-pencil"></i></button>
+      <button class="place-edit place-delete" title="delete ${esc(p.name)}" onclick="deletePlace(${p.id})"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
 
@@ -7358,6 +7362,33 @@ async function savePlace() {
   renderPlaces();
   const moved = d.records_updated || 0;
   toast(moved ? `saved — ${moved} ${moved === 1 ? 'record' : 'records'} updated` : 'place saved');
+}
+
+async function deletePlace(id) {
+  const p = placeList.find(p => p.id === id);
+  if (!p) return;
+  const n = placeRecordCount(p.name);
+  const warn = n
+    ? `\n\n${n} ${n === 1 ? 'record currently lists' : 'records currently list'} it — `
+      + `${n === 1 ? 'its' : 'their'} "bought at" will be cleared.`
+    : '';
+  if (!confirm(`Delete "${p.name}"? This cannot be undone.${warn}`)) return;
+
+  const r = await fetch(`/api/places/${id}`, { method: 'DELETE' });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    return toast(d.error || 'could not delete that place.');
+  }
+  const d = await r.json().catch(() => ({}));
+
+  if (placeEditingId === id) { placeFormOpen = false; placeEditingId = null; }
+  // The records too: a delete blanked bought_where on every one of them, and
+  // the grid behind this popup is still showing the old name.
+  await loadRecords();
+  await loadPlaces();
+  renderPlaces();
+  const cleared = d.records_updated || 0;
+  toast(cleared ? `deleted — ${cleared} ${cleared === 1 ? 'record' : 'records'} cleared` : 'place deleted');
 }
 
 // ── login ──────────────────────────────────────────────────────────────────

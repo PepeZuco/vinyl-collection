@@ -327,3 +327,50 @@ def test_a_record_with_no_place_creates_nothing(authed):
     authed.post("/api/records", json={"artist": "a", "album_name": "b",
                                       "bought_where": "   "})
     assert authed.get("/api/places").get_json() == []
+
+
+# ── delete ─────────────────────────────────────────────────────────────────
+
+def test_delete_a_place_with_no_records(authed):
+    pid = make_place("Tracks Rio")
+
+    r = authed.delete(f"/api/places/{pid}")
+
+    assert r.status_code == 200
+    assert r.get_json()["records_updated"] == 0
+    with app_module.app.app_context():
+        assert app_module.db.session.get(app_module.Place, pid) is None
+    assert [p["name"] for p in authed.get("/api/places").get_json()] == []
+
+
+def test_delete_blanks_bought_where_on_every_matching_record_and_leaves_others_alone(authed):
+    pid = make_place("Tracks")
+    make_record("Tracks")
+    make_record("Tracks")
+    make_record("Amoeba")
+
+    r = authed.delete(f"/api/places/{pid}")
+
+    assert r.status_code == 200
+    assert r.get_json()["records_updated"] == 2
+    assert wheres() == ["", "", "Amoeba"]
+
+
+def test_delete_leaves_the_other_place_alone(authed):
+    pid = make_place("Tracks")
+    make_place("Amoeba")
+
+    authed.delete(f"/api/places/{pid}")
+
+    assert [p["name"] for p in authed.get("/api/places").get_json()] == ["Amoeba"]
+
+
+def test_delete_404s_on_an_unknown_place(authed):
+    assert authed.delete("/api/places/99999").status_code == 404
+
+
+def test_delete_requires_auth(client):
+    pid = make_place("Tracks Rio")
+    assert client.delete(f"/api/places/{pid}").status_code in (401, 403)
+    with app_module.app.app_context():
+        assert app_module.db.session.get(app_module.Place, pid) is not None

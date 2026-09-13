@@ -368,6 +368,7 @@ class Record(db.Model):
     tracks      = db.Column(db.Text)
     disc_count  = db.Column(db.Integer, default=1)
     size        = db.Column(db.String(5))   # '' | '7' | '10' | '12', in inches
+    censored    = db.Column(db.Boolean, default=False)  # cover has explicit art; blurred client-side until revealed
 
     def to_dict(self, private=True):
         """The record as the API sends it.
@@ -401,6 +402,7 @@ class Record(db.Model):
             "tracks": self.tracks or "",
             "disc_count": self.disc_count or 1,
             "size": self.size or "",
+            "censored": bool(self.censored),
         }
 
 # One row per distinct note image, addressed by its own content hash.
@@ -458,6 +460,7 @@ with app.app_context():
         "tracks": "TEXT",
         "disc_count": "INTEGER",
         "size": "VARCHAR(5)",
+        "censored": "BOOLEAN",
     }
     added_cleaned_dates = "cleaned_dates" not in existing_cols
     added_cover_hash = "cover_hash" not in existing_cols
@@ -657,6 +660,22 @@ def update_place(pid):
     place.url = url
     db.session.commit()
     return jsonify({"place": place.to_dict(), "records_updated": updated})
+
+@app.route("/api/places/<int:pid>", methods=["DELETE"])
+@require_auth
+def delete_place(pid):
+    """Remove a place. Any record still pointing at it by name has its
+    bought_where blanked out rather than left dangling on a place that no
+    longer exists — the same bulk UPDATE-by-name the rename-merge above uses,
+    just onto "" instead of onto another place's name."""
+    place = db.session.get(Place, pid)
+    if place is None:
+        raise NotFound()
+    updated = (Record.query.filter(Record.bought_where == place.name)
+               .update({Record.bought_where: ""}, synchronize_session=False))
+    db.session.delete(place)
+    db.session.commit()
+    return jsonify({"records_updated": updated})
 
 def get_record_or_404(rid):
     """A record by id, or a 404 — through Session.get rather than the legacy

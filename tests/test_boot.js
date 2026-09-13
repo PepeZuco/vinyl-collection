@@ -117,6 +117,11 @@ async function boot(hash) {
       ok, status: ok ? 200 : 500, json: async () => body, text: async () => JSON.stringify(body),
     });
     if (u.endsWith('/api/auth/status')) return json({ authed: true });
+    // /api/places answers with a LIST. Without this the fallback below hands
+    // back an object, sortPlaces calls .slice on it, and init() throws before
+    // the page has drawn anything — which fails every test in this file, not
+    // just the ones that care about places.
+    if (u.endsWith('/api/places')) return json([]);
     if (u.includes('/api/records') && (!opts || !opts.method || opts.method === 'GET')) {
       // A fresh copy: the app mutates records in place, and handing it the
       // fixture's own objects let one test's edit rewrite every later one's
