@@ -247,7 +247,27 @@ const VinylGrouping = (function () {
     ];
   }
 
-  return { avgRating, momentOf, lastPlayed, bucketOf, compareByGroup, buildGroups, setupBlocks };
+  /* Where one record stands in the furniture: which of the two blocks holds
+   * it, and how far along that block it is. Counted from one and totalled
+   * against the block rather than the collection, because that is how you
+   * actually find a record on the shelf -- you pick a block, then count in.
+   *
+   * Built off setupBlocks so the number can never disagree with the order the
+   * drawer's scroll is showing at the same moment.
+   *
+   * Null means the record is not standing anywhere: a wishlist copy, which the
+   * caller never passes in, or an id from a collection that has since changed
+   * under it. The drawer disables its furniture toggle on that null. */
+  function shelfPositionOf(records, id) {
+    for (const block of setupBlocks(records)) {
+      const i = block.records.findIndex(r => r.id === id);
+      if (i !== -1) return { block: block.label, index: i + 1, total: block.records.length };
+    }
+    return null;
+  }
+
+  return { avgRating, momentOf, lastPlayed, bucketOf, compareByGroup, buildGroups, setupBlocks,
+           shelfPositionOf };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylGrouping;

@@ -386,10 +386,24 @@ select option{background:var(--surface);color:var(--text)}
   cursor:pointer;transition:background .12s,border-color .12s,color .12s;
 }
 .detail-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
-/* An end of the run is shown, not hidden: a missing arrow moves the other one
-   and reads as a layout glitch, a greyed one says there is nothing that way. */
+/* Flipped, not pressed: the furniture button stays lit for as long as the
+   scroll below it is in shelf order, so the order is never a mystery. */
+.detail-nav-btn.on{border-color:var(--accent);color:var(--accent);
+  background:color-mix(in srgb, var(--accent) 15%, transparent)}
+/* A wishlist record stands nowhere, so there is no shelf order to flip into.
+   Shown greyed rather than hidden: a button that vanishes per record reads as
+   a layout glitch, a greyed one says this record has no place yet. */
 .detail-nav-btn:disabled{opacity:.3;cursor:default}
 .detail-nav-btn:disabled:hover{border-color:var(--border);color:var(--muted)}
+.detail-nav-btn:disabled.on{background:transparent;border-color:var(--border);color:var(--muted)}
+
+/* The spot the open record occupies, printed beside the button that found it.
+   Monospace because it is a pair of counts and the digits should not reflow
+   as you walk the shelf. */
+.detail-shelf-pos{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;
+  color:var(--label);margin-right:2px;white-space:nowrap}
+.detail-shelf-pos b{color:var(--accent);font-weight:700}
+.detail-shelf-pos:empty{display:none}
 
 /* The photo lightbox's own pair. They sit ON the image rather than beside it:
    flanking would cost width the phone does not have, and the photo is already
@@ -2458,8 +2472,8 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-head">
       <span class="modal-title">record detail</span>
       <div class="detail-drawer-nav">
-        <button class="detail-nav-btn prev" id="detailPrevBtn" title="previous record" onclick="navigateDetail(-1)"><i class="ti ti-chevron-left"></i></button>
-        <button class="detail-nav-btn next" id="detailNextBtn" title="next record" onclick="navigateDetail(1)"><i class="ti ti-chevron-right"></i></button>
+        <span class="detail-shelf-pos" id="detailShelfPos"></span>
+        <button class="detail-nav-btn shelf" id="detailShelfBtn" title="show shelf order" onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>
         <button class="detail-nav-btn random" id="detailRandomBtn" title="random record" onclick="randomDetail()"><i class="ti ti-dice-5"></i></button>
         <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><i class="ti ti-x"></i></button>
       </div>
@@ -3852,13 +3866,56 @@ function renderFilters() {
 }
 
 // ── detail modal ───────────────────────────────────────────────────────────
-// The list prev/next, the swipe carousel and the crate-of-spines all walk. In
-// setup mode that's the shelf order the two blocks are drawn in, not whatever
-// the normal filter/sort is set to — the point of setup mode is browsing the
-// physical order, so its own click-through has to follow it too.
+// The swipe carousel, the crate-of-spines and the arrow keys all walk one list.
+// Two separate things put that list in shelf order: the collection page's setup
+// mode, and the drawer's own furniture toggle. Either one means you are looking
+// at the physical order, so the click-through has to follow it too.
 function detailNavRecords() {
-  if (!setupMode) return filtered();
-  return VinylGrouping.setupBlocks(records.filter(r => r.have_it)).flatMap(b => b.records);
+  if (!setupMode && !detailShelfOrder) return filtered();
+  return shelfRecords().length
+    ? VinylGrouping.setupBlocks(shelfRecords()).flatMap(b => b.records)
+    : filtered();
+}
+
+// What is actually standing in the furniture. A wishlist record has no copy to
+// stand anywhere, so it is not part of the shelf at all — which is also why the
+// furniture toggle greys out while one is open.
+function shelfRecords() {
+  return records.filter(r => r.have_it);
+}
+
+// ── furniture toggle: the open record's place on the shelf ──────────────────
+// Flipping it reorders the drawer's scroll into shelf order and names the spot
+// the open record occupies, so a record you have on screen can be found in the
+// furniture without leaving it. Separate from the collection page's setupMode —
+// this one only ever changes the drawer. Like setupMode it is not persisted:
+// reloading comes back to the normal order.
+let detailShelfOrder = false;
+
+function toggleDetailShelfOrder() {
+  if (detailAnimating) return;
+  // Nothing to flip into while a wishlist record is open, and its own scroll
+  // would not contain it. The button is disabled for exactly this reason; the
+  // guard is here too because the keyboard can still reach a disabled-looking
+  // control in some browsers.
+  if (!shelfPositionOf(currentDetailId)) return;
+  detailShelfOrder = !detailShelfOrder;
+  const r = records.find(x => x.id === currentDetailId);
+  if (!r) return;
+  // Same record, new neighbours: rebuild the list around it and put it back
+  // under the eye rather than leaving the scroll parked at the old offset.
+  renderDetailContent(r);
+  updateDetailNavVisibility();
+  if (window.matchMedia('(max-width:760px)').matches) {
+    dmCenterSlide(dmIdx, false);
+    dmCenterCrateThumb(dmIdx, false);
+  } else {
+    ddCenterSlide(dmIdx, false);
+  }
+}
+
+function shelfPositionOf(id) {
+  return id == null ? null : VinylGrouping.shelfPositionOf(shelfRecords(), id);
 }
 
 function renderDetailContent(r) {
@@ -4698,13 +4755,26 @@ function scrollFocusIntoView() {
   if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
 }
 
-// ── prev/next navigation through the currently filtered list ───────────────
+// ── the drawer's header controls, for whatever record is now open ──────────
+// There is one record to look at and nothing to walk to, so the dice has
+// nowhere to land. The furniture button survives that — a collection of one
+// still stands somewhere — and answers only to whether this record is on the
+// shelf at all.
 function updateDetailNavVisibility() {
   const recs = detailNavRecords();
-  const show = recs.length > 1;
-  document.getElementById('detailPrevBtn').style.display = show ? '' : 'none';
-  document.getElementById('detailNextBtn').style.display = show ? '' : 'none';
-  document.getElementById('detailRandomBtn').style.display = show ? '' : 'none';
+  document.getElementById('detailRandomBtn').style.display = recs.length > 1 ? '' : 'none';
+
+  const pos = shelfPositionOf(currentDetailId);
+  const btn = document.getElementById('detailShelfBtn');
+  btn.disabled = !pos;
+  btn.classList.toggle('on', detailShelfOrder && !!pos);
+  btn.title = !pos ? 'not on the shelf yet'
+            : detailShelfOrder ? 'back to the collection order'
+            : 'show shelf order';
+  // The readout is the flipped state's whole point, so it comes and goes with
+  // it rather than sitting there naming a spot the scroll is not showing.
+  document.getElementById('detailShelfPos').innerHTML =
+    (detailShelfOrder && pos) ? `${esc(pos.block)} · <b>${pos.index}</b> / ${pos.total}` : '';
 }
 
 let detailAnimating = false;

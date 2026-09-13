@@ -9,7 +9,8 @@ process.env.TZ = 'America/Sao_Paulo';
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { bucketOf, buildGroups, avgRating, momentOf, lastPlayed, compareByGroup, setupBlocks } = require('../static/grouping.js');
+const { bucketOf, buildGroups, avgRating, momentOf, lastPlayed, compareByGroup, setupBlocks,
+        shelfPositionOf } = require('../static/grouping.js');
 
 // A record only needs the fields the bucket rule reads, so each test builds the
 // smallest one that exercises its rule.
@@ -528,4 +529,62 @@ test('compilations at the end do not change the count-based split', () => {
   const [block1, block2] = setupBlocks(list);
   assert.deepStrictEqual(block1.records.map(r => r.id), [3, 1]);
   assert.deepStrictEqual(block2.records.map(r => r.id), [2]);
+});
+
+// ── shelfPositionOf: where one record stands in the furniture ───────────────
+// The detail drawer's furniture toggle reorders its scroll into shelf order and
+// names the spot the open record occupies. Both come off the same setupBlocks
+// call, so the number it prints can never drift from the order it shows.
+
+test('shelfPositionOf places a record in block 1 and counts from one', () => {
+  const list = [rec({ id: 1, artist: 'ABBA' }), rec({ id: 2, artist: 'Metallica' }),
+                rec({ id: 3, artist: 'Wilco' }), rec({ id: 4, artist: 'Zeca' })];
+  assert.deepStrictEqual(shelfPositionOf(list, 1), { block: 'Block 1', index: 1, total: 2 });
+});
+
+test('shelfPositionOf counts from one again inside block 2', () => {
+  const list = [rec({ id: 1, artist: 'ABBA' }), rec({ id: 2, artist: 'Metallica' }),
+                rec({ id: 3, artist: 'Wilco' }), rec({ id: 4, artist: 'Zeca' })];
+  assert.deepStrictEqual(shelfPositionOf(list, 3), { block: 'Block 2', index: 1, total: 2 });
+  assert.deepStrictEqual(shelfPositionOf(list, 4), { block: 'Block 2', index: 2, total: 2 });
+});
+
+test('shelfPositionOf totals the block the record is in, not the collection', () => {
+  const list = [rec({ id: 1 }), rec({ id: 2 }), rec({ id: 3 })];
+  assert.strictEqual(shelfPositionOf(list, 1).total, 2);
+  assert.strictEqual(shelfPositionOf(list, 3).total, 1);
+});
+
+// The odd-count boundary: block 1 keeps the extra record, so the last record of
+// block 1 and the first of block 2 are the pair most easily mixed up.
+test('shelfPositionOf puts the odd-count boundary record at the end of block 1', () => {
+  const list = [rec({ id: 1, artist: 'A' }), rec({ id: 2, artist: 'B' }), rec({ id: 3, artist: 'C' })];
+  assert.deepStrictEqual(shelfPositionOf(list, 2), { block: 'Block 1', index: 2, total: 2 });
+  assert.deepStrictEqual(shelfPositionOf(list, 3), { block: 'Block 2', index: 1, total: 1 });
+});
+
+test('shelfPositionOf follows the shelf order, not the order given in', () => {
+  const list = [rec({ id: 1, artist: 'Wilco' }), rec({ id: 2, artist: 'ABBA' })];
+  assert.deepStrictEqual(shelfPositionOf(list, 1), { block: 'Block 2', index: 1, total: 1 });
+});
+
+test('a compilation takes its shelf position from the end, where it sits', () => {
+  const list = [rec({ id: 1, artist: 'A; B' }), rec({ id: 2, artist: 'Wilco' })];
+  assert.deepStrictEqual(shelfPositionOf(list, 1), { block: 'Block 2', index: 1, total: 1 });
+});
+
+// A wishlist record is never passed in — it has no copy standing anywhere — and
+// the drawer disables the toggle on the strength of this null.
+test('shelfPositionOf returns null for a record that is not on the shelf', () => {
+  const list = [rec({ id: 1 }), rec({ id: 2 })];
+  assert.strictEqual(shelfPositionOf(list, 99), null);
+});
+
+test('shelfPositionOf returns null for an empty collection', () => {
+  assert.strictEqual(shelfPositionOf([], 1), null);
+});
+
+test('shelfPositionOf matches ids by value, not by string', () => {
+  const list = [rec({ id: 7, artist: 'ABBA' }), rec({ id: 8, artist: 'Wilco' })];
+  assert.deepStrictEqual(shelfPositionOf(list, 7), { block: 'Block 1', index: 1, total: 1 });
 });

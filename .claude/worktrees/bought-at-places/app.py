@@ -578,6 +578,27 @@ def list_places():
     places = Place.query.order_by(func.lower(Place.name)).all()
     return jsonify([p.to_dict() for p in places])
 
+def _ensure_place(name):
+    """Put a bought_where value on the places list if it is not there already.
+
+    The backfill above only runs on the boot that creates the table, and the
+    record form still takes bought_where as free text — so without this, a shop
+    first typed into a record after that boot would never appear in the places
+    popup and could never be given a link. import_records_from_csv_rows already
+    upserts places the same way.
+
+    Matched case-insensitively, because POST /api/places refuses a name that
+    clashes with an existing one only by case: a record write must not create
+    through the back door what the API refuses at the front. The existing row
+    keeps its own spelling; collapsing the two is what the rename-merge is for.
+    """
+    name = (name or "").strip()
+    if not name:
+        return
+    if Place.query.filter(func.lower(Place.name) == name.lower()).first():
+        return
+    db.session.add(Place(name=name, url=""))
+
 @app.route("/api/places", methods=["POST"])
 @require_auth
 def create_place():
@@ -679,6 +700,7 @@ def create_record():
         size        = _size(d.get("size")),
     )
     db.session.add(r)
+    _ensure_place(r.bought_where)
     db.session.commit()
     return jsonify(r.to_dict()), 201
 
@@ -695,7 +717,9 @@ def update_record(rid):
             setattr(r, field, d[field])
     # Trimmed, not passed through: the place table joins to this column by
     # exact name, so a stray space would orphan the record from its link.
-    if "bought_where" in d: r.bought_where = (d["bought_where"] or "").strip()
+    if "bought_where" in d:
+        r.bought_where = (d["bought_where"] or "").strip()
+        _ensure_place(r.bought_where)
     if "my_rating"   in d: r.my_rating   = float(d["my_rating"] or 0)
     if "wife_rating" in d: r.wife_rating  = float(d["wife_rating"] or 0)
     if "have_it"     in d: r.have_it      = bool(d["have_it"])
