@@ -751,6 +751,7 @@ def update_record(rid):
         r.cover_hash = _cover_hash(d["cover_data"]) if d["cover_data"] else None
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
+    if "censored"    in d: r.censored     = bool(d["censored"])
     # disc_count first: the tracks it is about to validate are checked against
     # it. A PUT that sends tracks alone is checked against what the record
     # already is, or every partial update to a double would reject its C side.
