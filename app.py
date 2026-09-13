@@ -1,4 +1,4 @@
-import os, io, base64, csv, json, uuid, hashlib
+import os, io, base64, csv, json, re, uuid, hashlib
 # 64MB per field, not 10: note_images packs every photo on one record into a
 # single field, where the old ceiling (sized for one cover) would reject a
 # photo-heavy row on import — an export that cannot be restored. The whole-upload
@@ -208,6 +208,57 @@ def _size(value):
     return v if v in _SIZES else ""
 
 
+_PLACE_HTTP_PREFIX  = re.compile(r"^https?://", re.I)           # already an http(s) url
+_PLACE_HOST_PORT    = re.compile(r"^[^\s:/?#]+:\d+(?:[/?#]|$)")  # host:port, not a scheme
+_PLACE_OTHER_SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")  # some other scheme — refuse
+_PLACE_HTTP         = re.compile(r"^https?://(?:[^\s/?#@]+@)?[^\s/?#@:]+(?::\d+)?(?:[/?#][^\s]*)?$", re.I)
+
+
+def _place_url(raw):
+    """A place's link: '' for none, the normalized url, or None to refuse it.
+
+    Mirrors normalizeUrl in static/places.js, and is the enforcing copy — the
+    browser's is a courtesy so the form can complain before the round trip.
+    The refusal matters: the drawer renders this value as an href, so a stored
+    'javascript:' url would be a click target.
+
+    host:port is distinguished from a scheme because both look like
+    "token:something" — a bare colon alone can't tell them apart. A scheme
+    token (RFC 3986) never starts with a digit right after the colon's
+    prefix, but the real tell used here is what follows the colon: a run of
+    digits (a port) versus letters (a scheme name like javascript, data,
+    ftp). Treating 'tracksrio.com:8080' as a scheme would refuse a
+    legitimate host:port link; treating every 'word:' as host:port would let
+    'javascript:alert(1)' through as if 'javascript' were a hostname. So
+    host:port is checked, and prepended with https://, before the general
+    scheme check runs.
+
+    A non-string, non-None `raw` (a number, list, dict, bool from a
+    hand-rolled POST body) is refused with None rather than coerced to a
+    string. normalizeUrl in the browser never faces this: it only ever reads
+    input.value, which is always a string. This path is reachable only by a
+    request that skipped the form, and for that caller a typed refusal is
+    more honest than silently turning 12345 into a hostname — the enforcing
+    copy is allowed to be the stricter of the two.
+    """
+    if raw is None:
+        return ""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    if not s:
+        return ""
+    if _PLACE_HTTP_PREFIX.match(s):
+        pass  # already http(s) — leave as typed
+    elif _PLACE_HOST_PORT.match(s):
+        s = "https://" + s
+    elif _PLACE_OTHER_SCHEME.match(s):
+        return None
+    else:
+        s = "https://" + s.lstrip("/")
+    return s if _PLACE_HTTP.match(s) else None
+
+
 def _clean_tracks(raw, disc_count, strict=True):
     """Validated tracks JSON, or ValueError naming what was wrong.
 
@@ -363,6 +414,19 @@ class NoteImage(db.Model):
     data    = db.Column(db.Text)      # base64 data URI, same shape as cover_data
     created = db.Column(db.String(50))  # a stamp — the sweep's grace window reads it
 
+# A place a record was bought at. The NAME is the key, and record.bought_where
+# holds it verbatim — so sort, group, filter, search, the scan autofill and the
+# CSV all keep reading the column they always read, and this table only adds the
+# link. The join is an exact match after trim, which is why every writer of
+# bought_where trims.
+class Place(db.Model):
+    id   = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    url  = db.Column(db.String(500))
+
+    def to_dict(self):
+        return {"id": self.id, "name": self.name or "", "url": self.url or ""}
+
 # One row per Claude API call a scan made. Anthropic publishes no balance or
 # remaining-credits endpoint, so what this app spends is only knowable if this
 # app writes it down — hence a ledger rather than a lookup.
@@ -435,6 +499,21 @@ with app.app_context():
             db.session.commit()
             last_id = rows[-1][0]
 
+    # One-time backfill: the place table is empty, so seed it from the names
+    # already in the collection. Links start empty — there is nowhere to get
+    # them from. Distinct is case-sensitive on purpose: if the data holds both
+    # 'Tracks' and 'tracks' this produces two places and the rename-merge in
+    # PUT /api/places/<id> is how they get collapsed. Picking a canonical
+    # casing here would silently rewrite records during a deploy.
+    if Place.query.first() is None:
+        names = {(n or "").strip() for (n,) in
+                 db.session.query(Record.bought_where).distinct().all()}
+        names.discard("")
+        if names:
+            db.session.execute(db.insert(Place),
+                               [{"name": n, "url": ""} for n in sorted(names)])
+            db.session.commit()
+
     # Photos uploaded into a form that was then abandoned have nothing pointing
     # at them and nothing that will ever call the save-time reap. This is the
     # only thing that collects them.
@@ -492,6 +571,93 @@ def list_records():
     private = is_authed()
     return jsonify([r.to_dict(private=private) for r in recs])
 
+@app.route("/api/places")
+def list_places():
+    # Public, like /api/records: the drawer and the crate headers need the link
+    # for a visitor too, and a place name is already visible on every record.
+    places = Place.query.order_by(func.lower(Place.name)).all()
+    return jsonify([p.to_dict() for p in places])
+
+def _ensure_place(name):
+    """Put a bought_where value on the places list if it is not there already.
+
+    The backfill above only runs on the boot that creates the table, and the
+    record form still takes bought_where as free text — so without this, a shop
+    first typed into a record after that boot would never appear in the places
+    popup and could never be given a link. import_records_from_csv_rows already
+    upserts places the same way.
+
+    Matched case-insensitively, because POST /api/places refuses a name that
+    clashes with an existing one only by case: a record write must not create
+    through the back door what the API refuses at the front. The existing row
+    keeps its own spelling; collapsing the two is what the rename-merge is for.
+    """
+    name = (name or "").strip()
+    if not name:
+        return
+    if Place.query.filter(func.lower(Place.name) == name.lower()).first():
+        return
+    db.session.add(Place(name=name, url=""))
+
+@app.route("/api/places", methods=["POST"])
+@require_auth
+def create_place():
+    d = request.get_json(silent=True) or {}
+    raw_name = d.get("name")
+    name = raw_name.strip() if isinstance(raw_name, str) else ""
+    if not name:
+        return jsonify({"error": "a place needs a name"}), 400
+    url = _place_url(d.get("url"))
+    if url is None:
+        return jsonify({"error": "a link has to be http:// or https://"}), 400
+    clash = Place.query.filter(func.lower(Place.name) == name.lower()).first()
+    if clash:
+        return jsonify({"error": f"'{clash.name}' is already on the list"}), 409
+    p = Place(name=name, url=url)
+    db.session.add(p)
+    db.session.commit()
+    return jsonify(p.to_dict()), 201
+
+@app.route("/api/places/<int:pid>", methods=["PUT"])
+@require_auth
+def update_place(pid):
+    place = db.session.get(Place, pid)
+    if place is None:
+        raise NotFound()
+    d = request.get_json(silent=True) or {}
+    raw_name = d.get("name")
+    name = raw_name.strip() if isinstance(raw_name, str) else ""
+    if not name:
+        return jsonify({"error": "a place needs a name"}), 400
+    url = _place_url(d.get("url"))
+    if url is None:
+        return jsonify({"error": "a link has to be http:// or https://"}), 400
+
+    # Every name this rename has to pull records off: the place's own old name,
+    # plus the name of any place it is being merged into — but only the ones
+    # that actually differ from the typed name. Typing a place's own existing
+    # spelling verbatim (the natural way to merge onto it) must not count
+    # those rows twice, so a name identical to `name` is excluded rather than
+    # rewritten. One bulk UPDATE over the survivors' rowcount is the count:
+    # with a single statement there's no second WHERE to double-match rows
+    # the first one just renamed.
+    absorbed = Place.query.filter(func.lower(Place.name) == name.lower(),
+                                  Place.id != place.id).first()
+    if absorbed:
+        db.session.delete(absorbed)
+
+    candidates = (place.name, absorbed.name) if absorbed else (place.name,)
+    names_to_move = [n for n in candidates if n != name]
+    updated = 0
+    if names_to_move:
+        updated = (Record.query.filter(Record.bought_where.in_(names_to_move))
+                   .update({Record.bought_where: name},
+                           synchronize_session=False))
+    place.name = name
+    place.url = url
+    db.session.commit()
+    return jsonify({"place": place.to_dict(), "records_updated": updated})
+
 def get_record_or_404(rid):
     """A record by id, or a 404 — through Session.get rather than the legacy
     Query.get that get_or_404 still calls under SQLAlchemy 2.0."""
@@ -516,7 +682,7 @@ def create_record():
         year        = d.get("year",""),
         genre       = d.get("genre",""),
         bought_date = d.get("bought_date",""),
-        bought_where= d.get("bought_where",""),
+        bought_where= (d.get("bought_where","") or "").strip(),
         bought_by   = d.get("bought_by",""),
         condition   = d.get("condition",""),
         my_rating   = float(d.get("my_rating") or 0),
@@ -534,6 +700,7 @@ def create_record():
         size        = _size(d.get("size")),
     )
     db.session.add(r)
+    _ensure_place(r.bought_where)
     db.session.commit()
     return jsonify(r.to_dict()), 201
 
@@ -545,9 +712,14 @@ def update_record(rid):
     # Read before the assignment below overwrites it: what the record used to
     # point at is the only way to know what it just stopped pointing at.
     images_before = _note_image_ids(r.notes) if "notes" in d else set()
-    for field in ["artist","album_name","year","genre","bought_date","bought_where","bought_by","condition"]:
+    for field in ["artist","album_name","year","genre","bought_date","bought_by","condition"]:
         if field in d:
             setattr(r, field, d[field])
+    # Trimmed, not passed through: the place table joins to this column by
+    # exact name, so a stray space would orphan the record from its link.
+    if "bought_where" in d:
+        r.bought_where = (d["bought_where"] or "").strip()
+        _ensure_place(r.bought_where)
     if "my_rating"   in d: r.my_rating   = float(d["my_rating"] or 0)
     if "wife_rating" in d: r.wife_rating  = float(d["wife_rating"] or 0)
     if "have_it"     in d: r.have_it      = bool(d["have_it"])
@@ -995,7 +1167,11 @@ def export_csv():
     # be a backup you could restore from.
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size"]
+            "bought_where_url","bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size"]
+    # One dict for the whole export rather than a lookup per row: there are a
+    # few dozen places against hundreds of records, and unlike the note images
+    # below these are short strings, so holding them all costs nothing.
+    place_urls = dict(db.session.query(Place.name, Place.url).all())
 
     def generate():
         yield ",".join(cols) + "\n"
@@ -1003,6 +1179,10 @@ def export_csv():
             d = r.to_dict()
             # to_dict() reports a URL now, but a backup has to carry the bytes.
             d["cover_image_base64"] = r.cover_data or ""
+            # The link belongs to the place, but the backup is one flat table,
+            # so every row carries its place's link and the importer rebuilds
+            # the place table from the pairs it sees.
+            d["bought_where_url"] = place_urls.get((r.bought_where or "").strip(), "") or ""
             # Looked up per row rather than preloaded: this generator streams to
             # keep a whole-collection export off the heap, and a dict of every
             # image would put it straight back.
@@ -1058,7 +1238,7 @@ def _record_mapping(row):
         "year":        row.get("year",""),
         "genre":       row.get("genre",""),
         "bought_date": row.get("bought_date",""),
-        "bought_where":row.get("bought_where",""),
+        "bought_where":(row.get("bought_where","") or "").strip(),
         "bought_by":   row.get("bought_by",""),
         "condition":   row.get("condition",""),
         "my_rating":   float(row.get("my_rating") or 0),
@@ -1106,6 +1286,11 @@ def import_records_from_csv_rows(rows):
     # Only ids, so this stays small however many rows name the same photo.
     seen_images = set()
     stamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    # name -> url, first non-empty url per name wins. Places are NOT wiped like
+    # the records are: a link the CSV does not know about (a place added after
+    # the export) is still true, and losing it would make a restore lossy in a
+    # way the export cannot see.
+    places_seen = {}
 
     def flush():
         if batch:
@@ -1121,10 +1306,26 @@ def import_records_from_csv_rows(rows):
             if image_id not in seen_images:
                 seen_images.add(image_id)
                 image_batch.append({"id": image_id, "data": data, "created": stamp})
+        place_name = (row.get("bought_where","") or "").strip()
+        if place_name:
+            place_url = _place_url(row.get("bought_where_url")) or ""
+            if place_url or place_name not in places_seen:
+                places_seen.setdefault(place_name, "")
+                if place_url:
+                    places_seen[place_name] = place_url
         count += 1
         if len(batch) >= _IMPORT_BATCH_ROWS:
             flush()
     flush()
+    if places_seen:
+        existing = {p.name: p for p in
+                    Place.query.filter(Place.name.in_(list(places_seen))).all()}
+        for name, url in places_seen.items():
+            p = existing.get(name)
+            if p is None:
+                db.session.add(Place(name=name, url=url))
+            elif url:
+                p.url = url
     db.session.commit()
     return count
 

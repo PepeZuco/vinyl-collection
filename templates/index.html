@@ -1659,9 +1659,16 @@ select option{background:var(--surface);color:var(--text)}
 .crate{margin-bottom:6px}
 /* sticky so the crate you are inside stays named while you scroll it; nothing
    else is fixed at the top of the page, so top:0 needs no offset */
-.crate-head{position:sticky;top:0;z-index:5;width:100%;display:flex;align-items:center;gap:10px;
-  padding:9px 2px;background:var(--bg);border:none;border-bottom:1px solid var(--border);
+/* The wrapper is what sticks, not the header button: the place link sits
+   beside the button rather than inside it (the button is the collapse target),
+   and it has to stay pinned with it while the crate scrolls. */
+.crate-head-wrap{position:sticky;top:0;z-index:5;display:flex;align-items:stretch;background:var(--bg)}
+.crate-head{flex:1;min-width:0;display:flex;align-items:center;gap:10px;
+  padding:9px 2px;background:none;border:none;border-bottom:1px solid var(--border);
   color:var(--text);font-family:var(--font);cursor:pointer;text-align:left;transition:color .12s}
+.crate-link{flex:0 0 auto;display:flex;align-items:center;padding:0 4px 0 12px;
+  border-bottom:1px solid var(--border);color:var(--label);text-decoration:none;transition:color .12s}
+.crate-link:hover{color:var(--accent)}
 .crate-head:hover{color:var(--accent)}
 .crate-head .crate-chev{display:flex;color:var(--muted);transition:transform .18s}
 .crate-head:hover .crate-chev{color:var(--accent)}
@@ -1679,12 +1686,38 @@ select option{background:var(--surface);color:var(--text)}
 @media(max-width:760px){
   /* at two columns a hairline header gets lost between rows of covers, and it
      has to be a real tap target */
-  .crate-head{min-height:44px;padding:0 12px;margin:0 -6px;background:var(--surface);
+  .crate-head-wrap{margin:0 -6px;background:var(--surface);
     border:1px solid var(--border);border-radius:6px}
+  .crate-head{min-height:44px;padding:0 12px;border-bottom:none}
+  .crate-link{padding:0 12px 0 4px;border-bottom:none}
   .crate-count{background:var(--card);border:1px solid var(--border);border-radius:999px;padding:2px 8px}
   .crate{margin-bottom:10px}
   .crate-body{padding:12px 0 16px}
 }
+/* places popup — a list of rows that each swap for an inline form in place,
+   so editing one never loses sight of the others */
+.place-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border)}
+.place-name{font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.place-link{display:flex;align-items:center;color:var(--accent);text-decoration:none;flex:0 0 auto}
+.place-count{font-family:var(--font-mono);font-size:11px;color:var(--label);margin-left:auto;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.place-edit{flex:0 0 auto;background:none;border:none;color:var(--muted);cursor:pointer;padding:4px 2px}
+.place-edit:hover{color:var(--accent)}
+.place-empty{font-size:12px;color:var(--muted);padding:10px 2px 14px;line-height:1.5}
+.place-new{display:flex;align-items:center;gap:7px;width:100%;margin-top:12px;padding:10px 2px;
+  background:none;border:none;color:var(--accent);font-family:var(--font);font-size:12px;
+  font-weight:700;cursor:pointer;text-align:left}
+.place-form{display:flex;flex-direction:column;gap:4px;padding:12px;margin:8px 0;
+  background:var(--card);border:1px solid var(--border);border-radius:6px}
+.place-form label{font-size:11px;color:var(--label);text-transform:uppercase;letter-spacing:.06em}
+/* the same treatment .form-group gives its inputs — that rule is scoped to
+   .form-group, and this form is not one */
+.place-form input{width:100%;margin-bottom:4px;background:var(--card);color:var(--text);
+  border:1px solid var(--border);border-radius:7px;padding:9px 10px;font-size:13.5px;
+  outline:none;font-family:var(--font);transition:border-color .12s}
+.place-form input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.place-err{font-size:12px;color:var(--danger);min-height:16px}
+.place-form-foot{display:flex;justify-content:flex-end;gap:8px}
 .detail-notes-body p{margin-bottom:6px}
 .detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
 .detail-notes-body ul,.detail-notes-body ol{padding-left:16px;margin-bottom:6px}
@@ -2157,6 +2190,7 @@ select option{background:var(--surface);color:var(--text)}
         <button class="btn btn-icon" id="moreMenuBtn" title="more actions" onclick="toggleMoreMenu()"><i class="ti ti-dots"></i></button>
         <div class="more-panel hidden" id="morePanel">
           <button class="menu-item" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
+          <button class="menu-item" id="placesBtn" style="display:none" onclick="openPlaces()"><i class="ti ti-map-pin"></i><span>places</span></button>
           <button class="menu-item" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
           <button class="menu-item" id="idleTriggerBtn"><i class="ti ti-disc"></i><span>preview screensaver</span></button>
           <label class="menu-item" id="importLabel" style="display:none">
@@ -2898,6 +2932,20 @@ select option{background:var(--surface);color:var(--text)}
 </div>
 
 <!-- Login modal -->
+<!-- Places — the list behind "bought at", and the one screen where a place's
+     link is set. The record form still takes the name as free text; this is
+     where a name already in use gets its link, its spelling fixed, or is merged
+     into another by being renamed onto it. -->
+<div class="overlay hidden" id="placesOverlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <span class="modal-title">places</span>
+      <button class="btn btn-ghost btn-sm" onclick="closePlaces()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" id="placesBody"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="loginOverlay">
   <div class="modal" style="max-width:340px">
     <div class="modal-head">
@@ -2998,6 +3046,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/notes.js"></script>
+<script src="/static/places.js"></script>
 <script src="/static/tracks.js"></script>
 <script src="/static/spend.js"></script>
 <script src="/static/queue.js"></script>
@@ -3148,6 +3197,9 @@ function setAuthed(val) {
     : '<i class="ti ti-login"></i><span>edit mode</span>';
   document.getElementById('addBtn').style.display = val ? '' : 'none';
   document.getElementById('importLabel').style.display = val ? '' : 'none';
+  // Behind auth for the same reason the record form is: every row in it writes,
+  // and a rename rewrites bought_where on every record pointing at the place.
+  document.getElementById('placesBtn').style.display = val ? '' : 'none';
   // Export goes with import now: it carries the private notes, so it is behind
   // auth, and the button navigates rather than fetches — a visitor pressing it
   // would land on a bare {"error":"Unauthorized"} page with the app gone.
@@ -3157,10 +3209,26 @@ function setAuthed(val) {
   render();
 }
 
+// The places behind bought_where. Named placeList, not places, because
+// populateWhereList already has a local `places` holding the distinct names
+// in the records — this is the table, that is the spellings in use.
+let placeList = [];
+const placeUrlOf = name => VinylPlaces.placeUrl(name, placeList);
+// A place name as a link when its place has one, plain text when it does not.
+const placeLinkHTML = (name, fallback) => VinylPlaces.placeLinkHTML(name, placeList, fallback);
+
+async function loadPlaces() {
+  const r = await fetch('/api/places');
+  if (!r.ok) return;
+  placeList = VinylPlaces.sortPlaces(await r.json());
+}
+
 async function loadRecords() {
   const c = document.getElementById('recordsContainer');
   c.innerHTML = '<div class="spinner"><div class="spinner-disc"></div></div>';
-  const r = await fetch('/api/records');
+  // Both, because a rename rewrites bought_where on the records as well as the
+  // place row, and the crate headers read the two together.
+  const [r] = await Promise.all([fetch('/api/records'), loadPlaces()]);
   records = await r.json();
   calUpdateDateRange();
   render();
@@ -3569,9 +3637,11 @@ function setupHTML(recs, query) {
     const body = shown.length ? recordsHTML(shown)
       : `<div class="empty" style="padding:12px 0"><i class="ti ti-disc"></i>no matches in this block</div>`;
     return `<section class="crate">
-      <div class="crate-head" style="cursor:default">
-        <span class="crate-label">${esc(block.label)}${range ? ` <span style="font-weight:400;opacity:.6">(${esc(range)})</span>` : ''}</span>
-        <span class="crate-count">${count}</span>
+      <div class="crate-head-wrap">
+        <div class="crate-head" style="cursor:default">
+          <span class="crate-label">${esc(block.label)}${range ? ` <span style="font-weight:400;opacity:.6">(${esc(range)})</span>` : ''}</span>
+          <span class="crate-count">${count}</span>
+        </div>
       </div>
       <div class="crate-body">${body}</div>
     </section>`;
@@ -3651,12 +3721,21 @@ function cratesHTML(recs) {
     // genre crates wear their own hue; the unknown-genre crate takes the same
     // neutral the cards without a genre use
     const hue = groupBy === 'genre' ? genreColor(crate.unknown ? '' : crate.label) : null;
+    // Only when the crate IS a place and that place carries a link. It is a
+    // sibling of the header, never a child: the header is the collapse target,
+    // and an anchor inside it would swallow that click.
+    const crateUrl = (groupBy === 'bought_where' && !crate.unknown)
+      ? placeUrlOf(crate.label) : '';
     return `<section class="crate${isShut ? ' collapsed' : ''}">
+      <div class="crate-head-wrap">
       <button class="crate-head" data-crate="${esc(crate.id)}" aria-expanded="${!isShut}"${hue ? ` style="--crate-hue:${hue}"` : ''}>
         <span class="crate-chev"><i class="ti ti-chevron-down"></i></span>
         <span class="crate-label">${crate.code ? flagImgHTML(crate.code, 18) : ''}${esc(crate.label)}</span>
         <span class="crate-count">${crate.records.length} ${crate.records.length === 1 ? 'record' : 'records'}</span>
       </button>
+      ${crateUrl ? `<a class="crate-link" href="${esc(crateUrl)}" target="_blank" rel="noopener noreferrer"
+           title="open ${esc(crate.label)}"><i class="ti ti-external-link"></i></a>` : ''}
+      </div>
       <div class="crate-body">${recordsHTML(crate.records)}</div>
     </section>`;
   }).join('');
@@ -4409,7 +4488,7 @@ function dmInfoTabHTML(r) {
     </div>
     <div class="dm-mgrid">
       <div class="dm-mcell"><label><i class="ti ti-calendar"></i>Bought</label><span>${boughtLabel(r)}</span></div>
-      <div class="dm-mcell"><label><i class="ti ti-map-pin"></i>Bought at</label><span>${esc(r.bought_where||'—')}</span></div>
+      <div class="dm-mcell"><label><i class="ti ti-map-pin"></i>Bought at</label><span>${placeLinkHTML(r.bought_where)}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-certificate"></i>Condition</label><span>${conditionBadgeHTML(r)}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-stack-2"></i>Format</label><span>${formatLabel(r)}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
@@ -7156,6 +7235,129 @@ function showSpotifyError(message){
   const el = document.getElementById('spotifyUrlErr');
   el.textContent = message;
   el.style.display = message ? 'block' : 'none';
+}
+
+// ── places ─────────────────────────────────────────────────────────────────
+/* The list behind "bought at". A place owns its link, not the record: fourteen
+ * records bought at the same store share one url, so the link is edited once,
+ * here, rather than being retyped on every record.
+ *
+ * There is no delete. A place that is no longer wanted is renamed onto another
+ * one, which merges them and rewrites every record on both sides — that is also
+ * the only way to fix a name a typo invented in the record form's free-text
+ * field, so it stays reachable rather than being a hidden API-only route. */
+
+let placeEditingId = null;   // the place the inline form is editing
+let placeFormOpen = false;   // ...or, when this is on with no id, a new one
+
+function openPlaces() {
+  placeEditingId = null;
+  placeFormOpen = false;
+  document.getElementById('placesOverlay').classList.remove('hidden');
+  renderPlaces();
+  loadPlaces().then(renderPlaces);
+}
+
+function closePlaces() {
+  document.getElementById('placesOverlay').classList.add('hidden');
+}
+
+// How many records this place's name is on right now — what a merge is about
+// to move, and worth naming before it happens rather than after.
+function placeRecordCount(name) {
+  const key = (name || '').trim();
+  return key ? records.filter(r => (r.bought_where || '').trim() === key).length : 0;
+}
+
+function renderPlaces() {
+  const body = document.getElementById('placesBody');
+  const rows = placeList.map(p => {
+    if (placeFormOpen && placeEditingId === p.id) return placeFormHTML(p);
+    const n = placeRecordCount(p.name);
+    return `<div class="place-row">
+      <span class="place-name">${esc(p.name)}</span>
+      ${p.url ? `<a class="place-link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer"
+           title="${esc(p.url)}"><i class="ti ti-link"></i></a>` : ''}
+      <span class="place-count">${n} ${n === 1 ? 'record' : 'records'}</span>
+      <button class="place-edit" title="edit ${esc(p.name)}" onclick="editPlace(${p.id})"><i class="ti ti-pencil"></i></button>
+    </div>`;
+  }).join('');
+
+  const adder = (placeFormOpen && placeEditingId === null)
+    ? placeFormHTML(null)
+    : `<button class="place-new" onclick="newPlace()"><i class="ti ti-plus"></i> add a new place</button>`;
+
+  body.innerHTML = (rows || `<div class="place-empty">No places yet — every value typed into a record's "bought at" becomes one.</div>`) + adder;
+
+  const focus = document.getElementById('placeName');
+  if (focus) focus.focus();
+}
+
+function placeFormHTML(p) {
+  return `<div class="place-form">
+    <label>Name</label>
+    <input type="text" id="placeName" value="${esc(p ? p.name : '')}" placeholder="store / city"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();savePlace()}">
+    <label>Link</label>
+    <input type="text" id="placeUrl" value="${esc(p ? p.url : '')}" placeholder="tracksrio.com"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();savePlace()}">
+    <div class="place-err" id="placeErr"></div>
+    <div class="place-form-foot">
+      <button class="btn btn-sm" onclick="cancelPlaceForm()">cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="savePlace()"><i class="ti ti-check"></i> save</button>
+    </div>
+  </div>`;
+}
+
+function editPlace(id) { placeEditingId = id; placeFormOpen = true; renderPlaces(); }
+function newPlace()    { placeEditingId = null; placeFormOpen = true; renderPlaces(); }
+function cancelPlaceForm() { placeFormOpen = false; placeEditingId = null; renderPlaces(); }
+
+function placeFormError(msg) {
+  const el = document.getElementById('placeErr');
+  if (el) el.textContent = msg;
+}
+
+async function savePlace() {
+  const name = document.getElementById('placeName').value;
+  const rawUrl = document.getElementById('placeUrl').value;
+
+  if (!VinylPlaces.validName(name)) return placeFormError('a place needs a name.');
+  // Checked here as well as in app.py so a bad link says so without a round
+  // trip; app.py is still the copy that decides, since it also guards the API.
+  const url = VinylPlaces.normalizeUrl(rawUrl);
+  if (url === null) return placeFormError('a link has to be http:// or https://');
+
+  const editing = placeEditingId !== null
+    ? placeList.find(p => p.id === placeEditingId) : null;
+  const merge = editing ? VinylPlaces.mergeTarget(name, placeList, editing.id) : null;
+  if (merge) {
+    const moving = placeRecordCount(editing.name) + placeRecordCount(merge.name);
+    const ok = confirm(`"${editing.name}" and "${merge.name}" become one place called "${name.trim()}".\n\n`
+      + `${moving} ${moving === 1 ? 'record moves' : 'records move'} onto it, and "${merge.name}" `
+      + `keeps only the link you save here. This cannot be undone.`);
+    if (!ok) return;
+  }
+
+  const r = await fetch(editing ? `/api/places/${editing.id}` : '/api/places', {
+    method: editing ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name.trim(), url })
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    return placeFormError(d.error || 'could not save that place.');
+  }
+  const d = await r.json().catch(() => ({}));
+
+  placeFormOpen = false;
+  placeEditingId = null;
+  // The records too: a rename rewrote bought_where on every one of them, and
+  // the grid behind this popup is still showing the old name.
+  await loadRecords();
+  renderPlaces();
+  const moved = d.records_updated || 0;
+  toast(moved ? `saved — ${moved} ${moved === 1 ? 'record' : 'records'} updated` : 'place saved');
 }
 
 // ── login ──────────────────────────────────────────────────────────────────

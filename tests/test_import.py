@@ -1,3 +1,4 @@
+import csv
 import importlib
 import io
 import os
@@ -134,3 +135,103 @@ def test_a_failed_import_leaves_the_existing_collection_intact(vinyl_app):
 
         assert app_module.Record.query.count() == 4, "the old collection was destroyed"
         assert app_module.Record.query.first().artist == "Original 0"
+
+
+def _reset_records_and_places(vinyl_app):
+    """Wipe Record and Place so a test asserting on the whole table is not at
+    the mercy of what an earlier test in this module-scoped db left behind.
+
+    /api/import already wipes Record, but Place is deliberately NOT wiped by
+    import (a place the CSV doesn't mention is still a real place) — so
+    without this, Place rows from one test leak into the next test's exact-
+    equality assertion on Place.query.all().
+    """
+    with vinyl_app.app.app_context():
+        vinyl_app.Record.query.delete()
+        vinyl_app.Place.query.delete()
+        vinyl_app.db.session.commit()
+
+
+def test_export_carries_each_record_s_place_link(client, vinyl_app):
+    _reset_records_and_places(vinyl_app)
+    # a place with a link, and a record bought there
+    authed = client
+    authed.post("/api/places", json={"name": "Tracks Rio", "url": "tracksrio.com"})
+    authed.post("/api/records", json={"artist": "Tim Maia", "album_name": "Racional",
+                                      "bought_where": "Tracks Rio"})
+
+    body = authed.get("/api/export").get_data(as_text=True)
+    header = body.splitlines()[0].split(",")
+
+    assert header.index("bought_where_url") == header.index("bought_where") + 1
+    rows = list(csv.DictReader(io.StringIO(body)))
+    assert rows[0]["bought_where_url"] == "https://tracksrio.com"
+
+
+def test_import_rebuilds_places_from_the_url_column(client, vinyl_app):
+    _reset_records_and_places(vinyl_app)
+    authed = client
+    csv_text = (
+        "artist,album_name,bought_where,bought_where_url\n"
+        "Tim Maia,Racional,Tracks Rio,https://tracksrio.com\n"
+        "Jorge Ben,A Tábua,Tracks Rio,https://tracksrio.com\n"
+        "Novos Baianos,Acabou,Feira da Glória,\n"
+    )
+    authed.post("/api/import", data={"file": (io.BytesIO(csv_text.encode()), "c.csv")},
+                content_type="multipart/form-data")
+
+    with vinyl_app.app.app_context():
+        got = {p.name: p.url for p in vinyl_app.Place.query.all()}
+    assert got == {"Tracks Rio": "https://tracksrio.com", "Feira da Glória": ""}
+
+
+def test_import_of_an_old_csv_with_no_url_column_still_works(client, vinyl_app):
+    _reset_records_and_places(vinyl_app)
+    authed = client
+    csv_text = "artist,album_name,bought_where\nTim Maia,Racional,Tracks Rio\n"
+    r = authed.post("/api/import", data={"file": (io.BytesIO(csv_text.encode()), "c.csv")},
+                    content_type="multipart/form-data")
+
+    assert r.status_code == 200
+    with vinyl_app.app.app_context():
+        assert {p.name: p.url for p in vinyl_app.Place.query.all()} == {"Tracks Rio": ""}
+
+
+def test_import_leaves_an_existing_link_alone_when_the_csv_has_none(client, vinyl_app):
+    _reset_records_and_places(vinyl_app)
+    authed = client
+    authed.post("/api/places", json={"name": "Tracks Rio", "url": "tracksrio.com"})
+    csv_text = "artist,album_name,bought_where,bought_where_url\nTim Maia,R,Tracks Rio,\n"
+    authed.post("/api/import", data={"file": (io.BytesIO(csv_text.encode()), "c.csv")},
+                content_type="multipart/form-data")
+
+    with vinyl_app.app.app_context():
+        assert (vinyl_app.Place.query.filter_by(name="Tracks Rio").one().url
+                == "https://tracksrio.com")
+
+
+def test_import_trims_bought_where_so_a_later_place_rename_still_finds_it(client, vinyl_app):
+    """Task 4 review: place names join to bought_where by exact match after
+    trim, and import was the one writer that did NOT trim. A record imported
+    with padded whitespace was invisible to a later rename of the place —
+    records_updated stayed 0 and the record kept its padded value. This pins
+    the one-line trim in _record_mapping that closes that orphaning path.
+    """
+    _reset_records_and_places(vinyl_app)
+    authed = client
+    authed.post("/api/places", json={"name": "Tracks", "url": "tracks.com"})
+    csv_text = "artist,album_name,bought_where\nTim Maia,Racional, Tracks \n"
+    r = authed.post("/api/import", data={"file": (io.BytesIO(csv_text.encode()), "c.csv")},
+                    content_type="multipart/form-data")
+    assert r.status_code == 200
+
+    with vinyl_app.app.app_context():
+        place = vinyl_app.Place.query.filter_by(name="Tracks").one()
+
+    resp = authed.put(f"/api/places/{place.id}", json={"name": "Tracks Rio"})
+    assert resp.status_code == 200
+    assert resp.get_json()["records_updated"] == 1
+
+    with vinyl_app.app.app_context():
+        rec = vinyl_app.Record.query.filter_by(artist="Tim Maia").one()
+        assert rec.bought_where == "Tracks Rio"
