@@ -1158,6 +1158,87 @@ test('every other control still redraws immediately', async () => {
     'a saved view deferred its redraw, which only the search box should do');
 });
 
+// ── searching songs turns the covers into tracklists ───────────────────────
+//
+// The overlay is the only part of the card that exists because of what is in
+// the SEARCH BOX rather than what is on the record, so all of these drive the
+// real box and read the real grid. jsdom has no layout and no hover, so what
+// is checked here is the markup the CSS hangs off — which rows are marked, and
+// which side headers carry has-hit, since that class is what survives on the
+// cover when the artwork is uncovered.
+
+/* Type into the real box with the song field on, the way the panel does. */
+async function songSearch(text) {
+  const { win, doc, errors } = await boot();
+  win.toggleSearchField('song');
+  const box = $(doc, '#searchInput');
+  box.value = text;
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+  const card = id => $(doc, '#recordsContainer .vcard[data-id="' + id + '"]');
+  return { win, doc, errors, card };
+}
+
+test('a record whose tracklist matches draws it over the cover', async () => {
+  const { card } = await songSearch('love');
+  const overlay = card(1).querySelector('.vcard-tracks');
+  assert.ok(overlay, 'no tracklist was drawn on the matching record');
+  assert.deepStrictEqual(
+    [...overlay.querySelectorAll('.vct-row.hit')].map(r => r.textContent.trim()),
+    ['1First Love']);
+});
+
+test('the whole tracklist is drawn, not only the songs that matched', async () => {
+  const { card } = await songSearch('love');
+  const rows = card(1).querySelectorAll('.vcard-tracks .vct-row');
+  assert.strictEqual(rows.length, 3, 'the sides around the match were dropped');
+});
+
+test('a record that matched on its album alone keeps its cover', async () => {
+  const { card } = await songSearch('love');
+  assert.ok(card(4), 'A Love Supreme fell out of the shelf');
+  assert.strictEqual(card(4).querySelector('.vcard-tracks'), null,
+    'a record with no matching song drew a tracklist anyway');
+  assert.strictEqual(card(4).classList.contains('song-hit'), false);
+});
+
+test('only the sides holding a match are marked to survive the hover', async () => {
+  const { card } = await songSearch('love');
+  const sides = [...card(2).querySelectorAll('.vcard-tracks .vct-side')];
+  assert.deepStrictEqual(sides.map(s => s.textContent.trim()),
+    ['Disc 1 · Side A', 'Disc 2 · Side C', 'Disc 2 · Side D']);
+  assert.deepStrictEqual(sides.map(s => s.classList.contains('has-hit')),
+    [false, true, false]);
+});
+
+test('the card says how many of its songs matched', async () => {
+  const { card } = await songSearch('love');
+  assert.strictEqual(card(2).querySelector('.vct-count').textContent.trim(), '2 songs');
+  assert.strictEqual(card(1).querySelector('.vct-count').textContent.trim(), '1 song');
+});
+
+test('with the song field off the covers stay covers', async () => {
+  const { doc, win } = await boot();
+  const box = $(doc, '#searchInput');
+  box.value = 'love';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.strictEqual(count(doc, '.vcard-tracks'), 0,
+    'a tracklist was drawn without the song field being on');
+});
+
+test('clearing the box puts every cover back', async () => {
+  const { doc, win } = await songSearch('love');
+  const box = $(doc, '#searchInput');
+  box.value = '';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.strictEqual(count(doc, '.vcard-tracks'), 0,
+    'an empty query left the tracklists on screen');
+});
+
+test('searching songs does not throw on the records that have none', async () => {
+  const { errors } = await songSearch('love');
+  assert.deepStrictEqual(errors, [], errors.join('\n'));
+});
+
 // ── the scan results screen tells the truth about an empty result ───────────
 
 /* Both of these render the same empty candidate list. The words have to

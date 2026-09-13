@@ -74,10 +74,25 @@ def test_page_boots_and_responds(tmp_path):
         base.update(over)
         return base
 
+    # Three of these carry tracklists, which is what the song-search overlay is
+    # drawn from: one single LP with a hit on side A and none on side B, one
+    # double with its hits on side C alone, and — the case that says the
+    # overlay is not just "the search box is on songs" — a record whose ALBUM
+    # carries the word and whose tracklist does not.
     rows = [
-        rec(1), rec(2, genre="Jazz", year="1968", country="US"),
+        rec(1, tracks=json.dumps([
+            {"side": "A", "title": "First Love"},
+            {"side": "A", "title": "Chasing Pavements"},
+            {"side": "B", "title": "Cold Shoulder"}])),
+        rec(2, genre="Jazz", year="1968", country="US", disc_count=2,
+            tracks=json.dumps([
+                {"side": "A", "title": "Keep Ya Head Up"},
+                {"side": "C", "title": "California Love"},
+                {"side": "C", "title": "Unconditional Love"},
+                {"side": "D", "title": "Dear Mama"}])),
         rec(3, genre="", condition="new", cleaned_dates=""),
-        rec(4, genre="Pop", year="1985", cleaned_dates="", play_dates=""),
+        rec(4, genre="Pop", year="1985", cleaned_dates="", play_dates="",
+            album_name="A Love Supreme"),
         rec(5, genre="Jazz", play_dates='["2024-01-05"]'),
         rec(6, genre="Soul & Funk", year="1993", country="US", cleaned_dates="[]"),
         rec(7, genre="Rock", condition="new"),

@@ -231,6 +231,71 @@ const VinylTracks = (function () {
     };
   }
 
+  /* Where a needle sits IN THE STORED TITLE, or null.
+   *
+   * The range is measured against the title as written, never against a folded
+   * copy of it, because the folding is not one character for one character:
+   * relax() DELETES apostrophes, so 'greatest' in "Bill Withers’ Greatest Hits"
+   * starts at 13 folded and at 14 stored. Highlighting with the folded index
+   * would mark one letter short of the match on every title carrying one.
+   *
+   * So the title is folded a character at a time, remembering where each
+   * surviving character came from. That is only valid because relax() has no
+   * rule that spans characters — NFD decomposes one character, the marks and
+   * apostrophes it drops are single characters — and it is why the folding
+   * comes in as an argument rather than being done to the whole string here.
+   *
+   * The needle is expected lower-cased and already folded, which is the shape
+   * the filter model has in hand by the time it asks. */
+  function titleHit(title, needle, relax) {
+    const fold = relax || function (s) { return s; };
+    let folded = '';
+    const from = [];                 // folded position -> position in title
+    for (let i = 0; i < title.length; i++) {
+      const piece = fold(title.charAt(i).toLowerCase());
+      for (let k = 0; k < piece.length; k++) { folded += piece.charAt(k); from.push(i); }
+    }
+    const at = folded.indexOf(needle);
+    if (at === -1) return null;
+    return [from[at], from[at + needle.length - 1] + 1];
+  }
+
+  /* The tracklist a card draws over its cover while the search box is looking
+   * at songs, with the matches marked.
+   *
+   * Whole sides come back, not just the songs that matched: the overlay's job
+   * is to say WHERE on the record the song is, and a bare list of hits with no
+   * record around them answers a different question. Each side counts its own
+   * hits so the card can drop the ones that have none when the artwork is
+   * uncovered, without counting them again in the template.
+   *
+   * A side the record has but has no songs on is left out — there is nothing
+   * to draw under its header. That is the one place this differs from
+   * tracksBySide, which reports the sides the OBJECT has because a half-typed
+   * tracklist is still a double LP. */
+  function matchingTracks(list, needle, discCount, relax) {
+    const want = String(needle == null ? '' : needle).toLowerCase();
+    const sides = tracksBySide(list, discCount)
+      .filter(function (side) { return side.tracks.length; })
+      .map(function (side) {
+        let hits = 0;
+        const tracks = side.tracks.map(function (t) {
+          const out = Object.assign({}, t);
+          const hit = want ? titleHit(t.title, want, relax) : null;
+          // absent, never null — the same shape liked_at and artist use, so
+          // every reader can test truthiness and be right
+          if (hit) { out.hit = hit; hits++; }
+          return out;
+        });
+        return { letter: side.letter, label: sideLabel(side.letter, discCount),
+                 hits: hits, tracks: tracks };
+      });
+    return {
+      sides: sides,
+      hits: sides.reduce(function (n, s) { return n + s.hits; }, 0),
+    };
+  }
+
   /* A name the way it is written on a sleeve: every word starts capital.
    *
    * Only the FIRST letter of each word is touched. Lowercasing the rest would
@@ -275,7 +340,7 @@ const VinylTracks = (function () {
   }
 
   return { parseTracks, serializeTracks, sideLettersFor, discOfSide, sideLabel,
-           tracksBySide, likedTracks, sidesWithTracks, formatTag,
+           tracksBySide, likedTracks, sidesWithTracks, formatTag, matchingTracks,
            discGroups, formatSummary, capitalizeName,
            parsePastedTracklist, artistsInUse };
 })();

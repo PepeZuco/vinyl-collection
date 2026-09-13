@@ -12,7 +12,8 @@ const assert = require('node:assert');
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
         tracksBySide, likedTracks, sidesWithTracks, formatTag,
         discGroups, formatSummary, capitalizeName,
-        parsePastedTracklist, artistsInUse, sideLabel } = require('../static/tracks.js');
+        parsePastedTracklist, artistsInUse, sideLabel,
+        matchingTracks } = require('../static/tracks.js');
 
 // ── parse ───────────────────────────────────────────────────────────────────
 
@@ -413,4 +414,115 @@ test('a lowercase side letter reads the same as the stored uppercase one', () =>
 test('a track with no side has no label to give', () => {
   assert.strictEqual(sideLabel('', 1), '');
   assert.strictEqual(sideLabel(undefined, 2), '');
+});
+
+// ── matchingTracks ──────────────────────────────────────────────────────────
+//
+// What the card draws over its cover when the search box is looking at songs.
+// The sides come back whole — every side the record has songs on, not only the
+// ones that matched — because the overlay shows the tracklist and marks the
+// hits inside it, rather than showing a list of hits with no record around
+// them. Each side counts its own hits so the card can drop the sides that have
+// none when the artwork is uncovered.
+//
+// The hit is a RANGE INTO THE STORED TITLE, not into some folded copy of it.
+// That distinction is the whole reason this is a function and not a regex at
+// the call site: relaxing 'Bill Withers’ Greatest Hits' DELETES a character,
+// so an index measured in the folded string points at the wrong letter in the
+// one actually drawn.
+
+test('every side with songs comes back, hits or not', () => {
+  const list = [{ side: 'A', title: 'Dreams' }, { side: 'B', title: 'Songbird' }];
+  const { sides, hits } = matchingTracks(list, 'dream', 1);
+  assert.deepStrictEqual(sides.map(s => s.letter), ['A', 'B']);
+  assert.strictEqual(hits, 1);
+});
+
+test('a side the record has but never filled in is not drawn', () => {
+  const { sides } = matchingTracks([{ side: 'A', title: 'Dreams' }], 'dream', 1);
+  assert.deepStrictEqual(sides.map(s => s.letter), ['A']);
+});
+
+test('each side carries the label the rest of the app names it by', () => {
+  const list = [{ side: 'A', title: 'one' }, { side: 'C', title: 'two' }];
+  const { sides } = matchingTracks(list, 'two', 2);
+  assert.deepStrictEqual(sides.map(s => s.label),
+    ['Disc 1 · Side A', 'Disc 2 · Side C']);
+});
+
+test('a side counts its own hits, so the card can drop the sides with none', () => {
+  const list = [{ side: 'A', title: 'California Love' },
+                { side: 'A', title: 'Changes' },
+                { side: 'B', title: 'Do For Love' },
+                { side: 'B', title: 'Dear Mama' }];
+  const { sides, hits } = matchingTracks(list, 'love', 1);
+  assert.deepStrictEqual(sides.map(s => s.hits), [1, 1]);
+  assert.strictEqual(hits, 2);
+});
+
+test('a track that did not match carries no hit at all', () => {
+  const { sides } = matchingTracks([{ side: 'A', title: 'Changes' }], 'love', 1);
+  assert.strictEqual('hit' in sides[0].tracks[0], false);
+});
+
+test('the number drawn is the position on the side, not the index in the column', () => {
+  const list = [{ side: 'A', title: 'one' }, { side: 'B', title: 'two' },
+                { side: 'A', title: 'three' }];
+  const { sides } = matchingTracks(list, 'three', 1);
+  assert.deepStrictEqual(sides[0].tracks.map(t => t.pos), [1, 2]);
+  // passed through as stored: capitalising a title is parseTracks's job, and
+  // doing it again here would be a second place that decides how a song reads.
+  assert.deepStrictEqual(sides[0].tracks.map(t => t.title), ['one', 'three']);
+});
+
+test('an empty needle matches nothing, the way an empty query is no query', () => {
+  const { sides, hits } = matchingTracks([{ side: 'A', title: 'Dreams' }], '', 1);
+  assert.strictEqual(hits, 0);
+  assert.strictEqual('hit' in sides[0].tracks[0], false);
+});
+
+test('a record with no tracklist has no sides to draw', () => {
+  assert.deepStrictEqual(matchingTracks([], 'love', 1), { sides: [], hits: 0 });
+  assert.deepStrictEqual(matchingTracks(null, 'love', 1), { sides: [], hits: 0 });
+});
+
+test('the hit is the range the matched letters occupy in the title', () => {
+  const { sides } = matchingTracks([{ side: 'A', title: 'Gold Dust Woman' }], 'dust', 1);
+  assert.deepStrictEqual(sides[0].tracks[0].hit, [5, 9]);
+  const t = sides[0].tracks[0];
+  assert.strictEqual(t.title.slice(t.hit[0], t.hit[1]), 'Dust');
+});
+
+test('matching ignores case, the way the search box does', () => {
+  const { sides } = matchingTracks([{ side: 'A', title: 'SONGBIRD' }], 'bird', 1);
+  assert.deepStrictEqual(sides[0].tracks[0].hit, [4, 8]);
+});
+
+// The two relaxations the search box applies, and the reason the range is
+// measured against the stored title rather than the folded one. relax() is
+// passed in rather than imported: filters.js owns that rule, and a second copy
+// here would be a second thing to keep in step.
+
+test('an accent folds away and still marks the letters actually written', () => {
+  const relax = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const { sides } = matchingTracks([{ side: 'A', title: 'Perfídia' }], 'perfidia', 1, relax);
+  const t = sides[0].tracks[0];
+  assert.deepStrictEqual(t.hit, [0, 8]);
+  assert.strictEqual(t.title.slice(t.hit[0], t.hit[1]), 'Perfídia');
+});
+
+test('a dropped apostrophe does not shift the range off the match', () => {
+  // relax() DELETES the apostrophe, so a range measured in the folded string
+  // would point one letter short of where 'greatest' really starts.
+  const relax = s => s.replace(/['\u2019]/g, '');
+  const list = [{ side: 'A', title: 'Bill Withers’ Greatest Hits' }];
+  const { sides } = matchingTracks(list, 'greatest', 1, relax);
+  const t = sides[0].tracks[0];
+  assert.strictEqual(t.title.slice(t.hit[0], t.hit[1]), 'Greatest');
+});
+
+test('with no relaxation the accented title is only found as written', () => {
+  const list = [{ side: 'A', title: 'Perfídia' }];
+  assert.strictEqual(matchingTracks(list, 'perfidia', 1).hits, 0);
+  assert.strictEqual(matchingTracks(list, 'perfídia', 1).hits, 1);
 });
