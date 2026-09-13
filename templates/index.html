@@ -98,6 +98,11 @@ body.setup-mode .bar{display:none}
   accent-color:var(--accent);cursor:pointer}
 .search-field-check span{white-space:nowrap}
 .search-field-check:hover span{color:var(--accent)}
+/* The matching mode sits under a rule because it is not another field: the
+   list above answers "where do I look", this answers "how hard do I look". */
+.search-mode{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+/* the only label long enough to need two lines in a narrow bar */
+.search-mode .search-field-check span{white-space:normal}
 select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer;transition:background .2s,color .2s,border .2s}
 select:focus{border-color:var(--accent)}
 select option{background:var(--surface);color:var(--text)}
@@ -2168,6 +2173,9 @@ select option{background:var(--surface);color:var(--text)}
             <label class="search-field-check"><input type="checkbox" id="searchField_bought_at" onchange="toggleSearchField('bought_at')"><span>Bought At</span></label>
             <label class="search-field-check"><input type="checkbox" id="searchField_song" onchange="toggleSearchField('song')"><span>Song</span></label>
           </div>
+          <div class="search-mode">
+            <label class="search-field-check"><input type="checkbox" id="searchLooseCheck" onchange="toggleSearchLoose()" checked><span>Ignore accents &amp; apostrophes</span></label>
+          </div>
         </div>
       </div>
       <div class="chiprow" id="filterChips"></div>
@@ -2972,6 +2980,9 @@ let records = [];
 let authed = false;
 let editingId = null;
 let searchFields = { artist: true, album: true, genre: false, notes: false, bought_at: false, song: false };
+// On, because the shelf is largely Brazilian and Spanish and the accents are
+// the part nobody wants to type. The checkbox in the panel turns it off.
+let searchLoose = true;
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
 // True only once the user picks, captures or scans a cover in this session.
@@ -3257,6 +3268,11 @@ function toggleSearchField(field) {
   applyQueryChange();
 }
 
+function toggleSearchLoose() {
+  searchLoose = !searchLoose;
+  applyQueryChange();
+}
+
 function toggleSearchFields() {
   const panel = document.getElementById('searchFieldsPanel');
   panel.classList.toggle('hidden');
@@ -3272,6 +3288,7 @@ function currentQuery() {
   return {
     text: document.getElementById('searchInput').value,
     fields: searchFields,
+    loose: searchLoose,
     ownership: filterState.ownership,
     facets: filterState.facets,
   };

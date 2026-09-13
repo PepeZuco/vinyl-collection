@@ -398,3 +398,83 @@ test('artist search still works on a record whose tracks will not parse', () => 
   const qval = Object.assign(defaultQuery(), { text: 'tim' });
   assert.strictEqual(matches(broken, qval, SONG_DEPS), true);
 });
+
+// ── typing without the accents ──────────────────────────────────────────────
+// A shelf full of Brazilian and Spanish records is a shelf you cannot search
+// on a keyboard you can reach: Milanés, Chitãozinho, Perfídia. And the
+// apostrophe in "Bill Withers’ Greatest Hits" is the curly one, so even
+// spelling it correctly with the key next to Enter missed the record.
+//
+// So both sides of the comparison are stripped of accents and apostrophes
+// before they meet. On by default; the checkbox turns it off for anyone who
+// wants the letters they typed to mean exactly themselves.
+
+const accented = [
+  rec({ artist: 'Pablo Milanés', album_name: 'Canta a Nicolás Guillén' }),
+  rec({ artist: 'Café Tacvba', album_name: 'Re' }),
+  rec({ artist: 'Bill Withers', album_name: 'Bill Withers’ Greatest Hits' }),
+  rec({ artist: 'Chitãozinho & Xororó', album_name: 'Tudo por Amor' }),
+];
+
+test('loose matching is on by default', () => {
+  assert.strictEqual(defaultQuery().loose, true);
+});
+
+test('an unaccented query finds the accented artist', () => {
+  assert.strictEqual(keep(accented, { text: 'milanes' }).length, 1);
+});
+
+test('every accent the shelf uses folds to its bare letter', () => {
+  assert.strictEqual(keep(accented, { text: 'cafe tacvba' }).length, 1);
+  assert.strictEqual(keep(accented, { text: 'chitaozinho' }).length, 1);
+  assert.strictEqual(keep(accented, { text: 'nicolas guillen' }).length, 1);
+});
+
+test('the accented spelling still finds its own record', () => {
+  assert.strictEqual(keep(accented, { text: 'Milanés' }).length, 1);
+});
+
+test('an accented query finds a record spelled without the accent', () => {
+  assert.strictEqual(keep([rec({ artist: 'Los Folkloristas' })], { text: 'fölkloristas' }).length, 1);
+});
+
+test('a dropped apostrophe still matches the word', () => {
+  const records = [rec({ album_name: "Don't Stop" })];
+  assert.strictEqual(keep(records, { text: 'dont stop' }).length, 1);
+});
+
+test('a typed straight quote reaches a curly one in the data', () => {
+  assert.strictEqual(keep(accented, { text: "withers' greatest" }).length, 1);
+});
+
+test('loose matching leaves unrelated records out', () => {
+  assert.strictEqual(keep(accented, { text: 'milanesa' }).length, 0);
+  assert.strictEqual(keep(accented, { text: 'cafes' }).length, 0);
+});
+
+test('turning loose matching off demands the exact letters', () => {
+  assert.strictEqual(keep(accented, { text: 'milanes', loose: false }).length, 0);
+  assert.strictEqual(keep(accented, { text: 'Milanés', loose: false }).length, 1);
+  assert.strictEqual(keep(accented, { text: "withers' greatest", loose: false }).length, 0);
+});
+
+test('loose matching reads the opt-in fields too', () => {
+  const records = [rec({ genre: 'Forró', bought_where: "O'Reilly Discos" })];
+  assert.strictEqual(keep(records, { text: 'forro', fields: { genre: true } }).length, 1);
+  assert.strictEqual(keep(records, { text: 'oreilly', fields: { bought_at: true } }).length, 1);
+});
+
+test('a song title is matched without its accents', () => {
+  const record = { artist: 'Tim Maia', album_name: 'Racional', have_it: true,
+                   tracks: JSON.stringify([{ side: 'A', title: 'Que Beleza É Essa' }]) };
+  const qval = Object.assign(defaultQuery(), { text: 'beleza e essa' });
+  qval.fields.song = true;
+  assert.strictEqual(matches(record, qval, SONG_DEPS), true);
+});
+
+test('a query of nothing but apostrophes constrains nothing', () => {
+  // It relaxes away to the empty string, and an empty needle is inside every
+  // haystack — so without a guard one stray key would "match" all 292 records
+  // while looking like a typo that found something.
+  assert.strictEqual(keep(accented, { text: "'''" }).length, accented.length);
+});
