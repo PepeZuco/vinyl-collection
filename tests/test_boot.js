@@ -2614,3 +2614,193 @@ test('the tracklist step stays clean when nothing on it was touched', async () =
   assert.strictEqual(win.formIsDirty(), false,
     'walking to the tracklist step counts as an edit');
 });
+
+// ── a like in the timeline says which side it is on ─────────────────────────
+// The Tracks tab groups by side already; the timeline used to list a bare song
+// title, so four likes in one sitting read as four unplaced facts.
+
+/* A record whose likes land on one Sunday: two on side A, one on side C. */
+function likedRecord(read, over) {
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, {
+    disc_count: 2,
+    tracks: JSON.stringify([
+      { side: 'A', title: 'Hey Jude',  liked_at: '2026-08-09T19:42:11' },
+      { side: 'A', title: 'Let It Be', liked_at: '2026-08-09T19:44:02' },
+      { side: 'A', title: 'Yesterday' },
+      { side: 'C', title: 'Something', liked_at: '2026-08-09T19:58:40' },
+    ]),
+  }, over || {});
+  return r;
+}
+
+const likeEntries = doc => [...doc.querySelectorAll('#ddInfo .dm-hist-entry.liked')];
+
+test('songs liked on one day and side are one entry, not one each', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.strictEqual(likes.length, 2, 'side A did not collapse into one entry');
+  assert.match(likes[0].textContent, /Hey Jude/);
+  assert.match(likes[0].textContent, /Let It Be/);
+  assert.ok(!/Yesterday/.test(likes[0].textContent),
+    'a song nobody liked reached the timeline');
+  assert.match(likes[1].textContent, /Something/,
+    'the other side must stay its own entry');
+});
+
+test('a like on a double names the disc as well as the side', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /Disc 1 · Side A/);
+  assert.match(likes[1].textContent, /Disc 2 · Side C/,
+    'side C is on the second disc, and the letter alone says so to nobody');
+});
+
+test('a single LP names the side and says no more', async () => {
+  // Disc chrome earns its place only past one disc — the same trade the
+  // Tracks tab makes.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    disc_count: 1,
+    tracks: JSON.stringify([
+      { side: 'A', title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' },
+    ]),
+  });
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /Side A/);
+  assert.ok(!/Disc/.test(likes[0].textContent), 'a single LP is wearing disc chrome');
+});
+
+test('a sitting that ran over several minutes shows the span', async () => {
+  // One clock on a group of four would claim they were all hearted in the same
+  // minute. The span is what actually happened.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /19:42–19:44/);
+  assert.match(likes[1].textContent, /19:58/, 'a lone like still reads as one time');
+  assert.ok(!/19:58–/.test(likes[1].textContent), 'a lone like is not a span');
+});
+
+test('likes carrying only a day show no clock at all', async () => {
+  // editLikeDate writes a bare 'YYYY-MM-DD'. The rest of the drawer refuses to
+  // invent midnight for those, and so does this.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    tracks: JSON.stringify([{ side: 'A', title: 'Hey Jude', liked_at: '2026-08-09' }]),
+  });
+  win.openDetail(r.id);
+  assert.ok(!/\d\d:\d\d/.test(likeEntries(doc)[0].textContent),
+    'a clockless like was given a time anyway');
+});
+
+test('a like entry names the disc and side its songs sit on', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.match(likes[0].textContent, /Disc 1 · Side A/);
+  assert.match(likes[1].textContent, /Disc 2 · Side C/);
+});
+
+test('a single LP names the side with no disc in front of it', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    disc_count: 1,
+    tracks: JSON.stringify([{ side: 'A', title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' }]),
+  });
+  win.openDetail(r.id);
+  const text = likeEntries(doc)[0].textContent;
+  assert.match(text, /Side A/);
+  assert.ok(!/Disc/.test(text), 'a one-disc record has no disc to name');
+});
+
+test('each liked song keeps the clock it was hearted at', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id);
+  const text = likeEntries(doc)[0].textContent;
+  assert.match(text, /19:42/);
+  assert.match(text, /19:44/, 'the second song lost its own time to the group');
+});
+
+test('a like on a song with no side is still listed, with no header naming one', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    disc_count: 1,
+    tracks: JSON.stringify([{ title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' }]),
+  });
+  win.openDetail(r.id);
+  const text = likeEntries(doc)[0].textContent;
+  assert.match(text, /Hey Jude/);
+  assert.ok(!/Side/.test(text), 'a track with no side letter got a header naming one');
+});
+
+test('a like clicked in the timeline lights the group its song belongs to', async () => {
+  // The group is keyed by its EARLIEST like; clicking the second song of the
+  // sitting must still light the one entry that now holds it.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id, 'liked:2026-08-09T19:44:02:1');
+  assert.deepStrictEqual(litKeys(doc), ['liked:2026-08-09T19:42:11:0']);
+});
+
+// todo: the drawer groups likes by side; the calendar's day card still draws
+// one line per song. Drop the todo flag when calRecordDayCard groups them.
+test('the calendar day card names the side of each like', { todo: true }, async () => {
+  const { win, doc, read } = await boot();
+  likedRecord(read);
+  win.openCalDay('2026-08-09');
+  const lines = [...doc.querySelectorAll('#calDayBody .cal-rec-like')];
+  assert.strictEqual(lines.length, 2, 'one line per side, not one per song');
+  assert.match(lines[0].textContent, /Disc 1 · Side A/);
+  assert.match(lines[0].textContent, /Hey Jude/);
+  assert.match(lines[0].textContent, /Let It Be/);
+  assert.match(lines[1].textContent, /Disc 2 · Side C/);
+  assert.match(lines[1].textContent, /Something/);
+});
+
+test('the timeline can still send you to one song inside a group', async () => {
+  // The calendar files one dot per liked song and hands out that song's key.
+  // The drawer now shows the whole side as one entry — which has to answer to
+  // every key it swallowed, not just the first.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  win.openDetail(r.id, 'liked:2026-08-09T19:44:02:1');   // the SECOND like on side A
+  const lit = [...doc.querySelectorAll('#ddInfo .dm-hist-entry.hit')];
+  assert.strictEqual(lit.length, 1, 'the group holding that song did not light');
+  assert.match(lit[0].textContent, /Let It Be/);
+  assert.ok(!/Something/.test(lit[0].textContent), 'the other side lit with it');
+});
+
+test('a day of likes lights both sides and nothing else', async () => {
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read);
+  r.bought_date = '2026-08-09';                  // same day, a different kind of fact
+  win.openDetail(r.id, '2026-08-09~liked');
+  const lit = [...doc.querySelectorAll('#ddInfo .dm-hist-entry.hit')];
+  assert.strictEqual(lit.length, 2);
+  lit.forEach(el => assert.ok(el.classList.contains('liked'),
+    'the purchase lit with the likes'));
+});
+
+test('a song with no side letter is still shown, without a made-up disc', async () => {
+  // The form always writes a side; a hand-edited PUT or a row from somewhere
+  // else may not. The like still happened and still belongs on the timeline.
+  const { win, doc, read } = await boot();
+  const r = likedRecord(read, {
+    tracks: JSON.stringify([{ title: 'Hey Jude', liked_at: '2026-08-09T19:42:11' }]),
+  });
+  win.openDetail(r.id);
+  const likes = likeEntries(doc);
+  assert.strictEqual(likes.length, 1, 'the like was dropped');
+  assert.match(likes[0].textContent, /Hey Jude/);
+  assert.ok(!/Disc|Side/.test(likes[0].textContent),
+    'a sideless song was given a place on the record');
+});

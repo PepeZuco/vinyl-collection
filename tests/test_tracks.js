@@ -12,7 +12,7 @@ const assert = require('node:assert');
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
         tracksBySide, likedTracks, sidesWithTracks, formatTag,
         discGroups, formatSummary, capitalizeName,
-        parsePastedTracklist, artistsInUse } = require('../static/tracks.js');
+        parsePastedTracklist, artistsInUse, sideLabel } = require('../static/tracks.js');
 
 // ── parse ───────────────────────────────────────────────────────────────────
 
@@ -354,4 +354,26 @@ test('artistsInUse matches the name exactly, ignoring only surrounding space', (
   const list = [{ side: 'A', title: 'one', artist: 'Gal Costa' }];
   assert.strictEqual(artistsInUse(list, '  Gal Costa  '), 1);
   assert.strictEqual(artistsInUse(list, 'gal costa'), 0);
+});
+
+// ── sideLabel ───────────────────────────────────────────────────────────────
+
+test('a single LP names the side alone, with no disc to disambiguate', () => {
+  assert.strictEqual(sideLabel('A', 1), 'Side A');
+  assert.strictEqual(sideLabel('B', 1), 'Side B');
+});
+
+test('past one disc the label says which disc the side belongs to', () => {
+  assert.strictEqual(sideLabel('A', 2), 'Disc 1 \u00b7 Side A');
+  assert.strictEqual(sideLabel('C', 2), 'Disc 2 \u00b7 Side C');
+  assert.strictEqual(sideLabel('E', 3), 'Disc 3 \u00b7 Side E');
+});
+
+test('a lowercase side letter reads the same as the stored uppercase one', () => {
+  assert.strictEqual(sideLabel('c', 2), 'Disc 2 \u00b7 Side C');
+});
+
+test('a track with no side has no label to give', () => {
+  assert.strictEqual(sideLabel('', 1), '');
+  assert.strictEqual(sideLabel(undefined, 2), '');
 });

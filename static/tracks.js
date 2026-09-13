@@ -43,6 +43,20 @@ const VinylTracks = (function () {
     return i === -1 ? 0 : Math.floor(i / 2) + 1;
   }
 
+  /* How a side is named wherever it is named away from the tracklist — the
+   * drawer's history, the calendar's day card. A single LP says only the side,
+   * the way the tracklist tab draws no disc chrome for one disc; past that the
+   * disc leads, because side C alone does not say which record to pull out.
+   * A track with no side letter has no label: the callers then print the song
+   * on its own rather than a header naming nothing. */
+  function sideLabel(letter, discCount) {
+    const side = String(letter || '').toUpperCase().slice(0, 1);
+    if (!side || LETTERS.indexOf(side) === -1) return '';
+    const n = Math.max(1, Number(discCount) || 1);
+    return n < 2 ? 'Side ' + side
+                 : 'Disc ' + discOfSide(side) + ' \u00b7 Side ' + side;
+  }
+
   /* Total: this column is read by six consumers straight off /api/records, and
    * a record whose value will not parse — a hand-edited PUT, a CSV from
    * somewhere else — must come back empty rather than take the grid down. */
@@ -247,7 +261,7 @@ const VinylTracks = (function () {
       .filter(Boolean);
   }
 
-  return { parseTracks, serializeTracks, sideLettersFor, discOfSide,
+  return { parseTracks, serializeTracks, sideLettersFor, discOfSide, sideLabel,
            tracksBySide, likedTracks, sidesWithTracks, formatTag,
            discGroups, formatSummary, capitalizeName,
            parsePastedTracklist, artistsInUse };

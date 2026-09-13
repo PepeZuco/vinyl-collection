@@ -698,7 +698,13 @@ select option{background:var(--surface);color:var(--text)}
 .dm-hist-entry.played .dm-hist-icon{color:var(--ev-played)}
 .dm-hist-entry.liked .dm-hist-icon{color:var(--ev-liked)}
 .dm-hist-entry.note .dm-hist-icon{color:var(--ev-note)}
-.dm-hist-song{font-size:12px;font-weight:600;color:var(--text);margin-left:6px}
+/* A liked entry names a PLACE on the record — 'Disc 1 · Side A' — with the
+   songs hearted there stacked under it. The indent sets them under the label
+   and clear of the heart, so a side reads as one block rather than as a run of
+   unplaced titles. */
+.dm-hist-side{font-size:12px;font-weight:700;color:var(--text);margin-left:6px}
+.dm-hist-songs{display:flex;flex-direction:column;margin:1px 0 0 19px}
+.dm-hist-song{font-size:12px;font-weight:600;color:var(--text)}
 
 /* ── mobile detail: cover carousel + crate of spines + info sheet ────────── */
 .detail-mobile-layout{display:none}
@@ -1286,6 +1292,24 @@ select option{background:var(--surface);color:var(--text)}
 .kpi-bars .b{flex:1;background:var(--hue);opacity:.85;border-radius:2px 2px 0 0;min-height:2px}
 .kpi-daylabels{display:flex;gap:4px;margin-top:4px}
 .kpi-daylabels span{flex:1;text-align:center;font-family:var(--font-mono);font-size:9px;color:var(--muted)}
+/* In rotation's tracker: the records behind the number, latest play first —
+   which records are in rotation is the question the count raises, and a trend
+   line could not answer it. The list is absolutely positioned inside a box
+   whose own height matches the sparkline it replaced, so it fills the tile
+   without ever growing the row; fitRotationList then trims it to whole rows so
+   nothing renders half-cut. */
+.kpi-rot{flex:1 1 auto;min-height:42px;padding-top:12px;position:relative}
+.kpi-rot-list{position:absolute;left:0;right:0;top:12px;bottom:0;margin:0;padding:0;list-style:none;
+  display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
+.kpi-rot-item{display:flex;gap:6px;align-items:baseline;font-size:10px;line-height:1.35;white-space:nowrap}
+/* the class's own display would otherwise beat the UA's [hidden] rule, and
+   every trimmed row would stay on screen */
+.kpi-rot-item[hidden]{display:none}
+.kpi-rot-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--label)}
+.kpi-rot-name b{color:var(--text);font-weight:600}
+/* --label, not the tile's hue: at 9px the greens and blues fall under 3:1 on
+   the light ground, and the rail already says which card this is */
+.kpi-rot-when{flex:none;font-family:var(--font-mono);font-size:9px;color:var(--label)}
 /* Never cleaned's composition bar: cleaned vs. not, as two segments of one
    bar rather than a fill over a track, so "not cleaned" reads as its own
    value rather than as empty space. */
@@ -2349,7 +2373,11 @@ select option{background:var(--surface);color:var(--text)}
         <div class="country-rank" id="countryRank"></div>
       </div>
     </div>
-    <div class="chart-box" style="margin-bottom:28px" id="statsTableBox">
+    <!-- The full records table, hidden for now: the collection page lists the
+         same records, and the statistics page reads as charts without it. The
+         table, its sorting and its column definitions are all still here —
+         drop the `hidden` to bring it back. -->
+    <div class="chart-box" style="margin-bottom:28px" id="statsTableBox" hidden>
       <div class="chart-title">records</div>
       <div class="stats-table-wrap" id="statsTableWrap"></div>
     </div>
@@ -3235,7 +3263,7 @@ const FILTER_DEPS = {
   get today() { return today(); },
 };
 
-const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
+const { parseTracks, serializeTracks, sideLettersFor, discOfSide, sideLabel,
         tracksBySide, likedTracks, sidesWithTracks, formatTag,
         discGroups, formatSummary, capitalizeName,
         parsePastedTracklist, artistsInUse } = VinylTracks;
@@ -3898,6 +3926,37 @@ function dmFormatNoteDate(dateStr) {
   return `${Number(d)} - ${DM_MONTHS_PT[Number(mo)-1]} - ${y}`;
 }
 
+/* The likes on this record, one group per day and side.
+ *
+ * An evening spent hearting half of side A is ONE thing that happened, and the
+ * side is what places it — listed song by song the timeline said "you liked a
+ * song" four times and never said where on the record you were.
+ *
+ * Every group carries the raw index of each of its songs: that is what
+ * addresses a track everywhere else, and what the Timeline's keys are built
+ * from. `at`/`i` are the EARLIEST like in the group, so the group files among
+ * the day's plays and notes at the moment the sitting started, and its key is
+ * one the Timeline also builds.
+ *
+ * Songs stay in tracklist order rather than in the order they were hearted:
+ * the group is a side, and a side is read down the sleeve. */
+function dmLikeGroups(list, discCount) {
+  const discs = Math.max(1, Number(discCount) || 1);
+  const groups = new Map();
+  (list || []).forEach((t, i) => {
+    if (!t.liked_at) return;
+    const day = momentOf(t.liked_at).day || String(t.liked_at).slice(0, 10);
+    const key = day + '|' + t.side;
+    if (!groups.has(key)) groups.set(key, { day, discs, side: t.side, songs: [] });
+    groups.get(key).songs.push({ i, title: t.title, liked_at: t.liked_at });
+  });
+  return [...groups.values()].map(g => {
+    const first = g.songs.reduce((a, b) =>
+      momentAt(b.liked_at) < momentAt(a.liked_at) ? b : a);
+    return Object.assign({ at: first.liked_at, i: first.i }, g);
+  });
+}
+
 // merges bought/played/cleaned/notes into one chronological (oldest-first) timeline
 //
 // The keys have to be the ones eventsByDay produces, or a click in the Timeline
@@ -3917,11 +3976,13 @@ function dmHistoryEvents(r) {
   if (r.bought_date) add('bought', r.bought_date);
   parseCleanedDates(r.cleaned_dates).forEach((dt, i) => { if (dt) add('cleaned', dt, { i }); });
   parsePlayDates(r.play_dates).forEach((dt, i) => { if (dt) add('played', dt, { i }); });
-  // The raw index again: an empty title still holds its slot, so filtering
-  // first would renumber every song after it and break keys the Timeline
-  // already handed out.
-  parseTracks(r.tracks).forEach((t, i) => {
-    if (t.liked_at) add('liked', t.liked_at, { i, title: t.title });
+  // One entry per day AND side, not one per song — see dmLikeGroups. The
+  // group is filed under its earliest like, and carries that song's index so
+  // its key is one the Timeline also builds; `keys` holds the rest.
+  dmLikeGroups(parseTracks(r.tracks), r.disc_count).forEach(g => {
+    add('liked', g.at, { i: g.i, side: g.side, discs: g.discs, songs: g.songs,
+                         keys: g.songs.map(s =>
+                           VinylTimeline.keyOf('liked', s.liked_at, s.i)) });
   });
   // The raw index again: an empty note holds its slot, so filtering first would
   // renumber every note after it and break keys the Timeline already handed out.
@@ -4002,7 +4063,31 @@ function focusMatches(focus, ev) {
   const scoped = /^(\d{4}-\d{2}-\d{2})~(\w+)$/.exec(focus);
   if (scoped) return ev.day === scoped[1] && ev.type === scoped[2];
   if (/^\d{4}-\d{2}-\d{2}$/.test(focus)) return ev.day === focus;
+  // A group of likes answers to every key it swallowed: the calendar hands out
+  // one per song, and the entry that shows the song has to be the one that
+  // lights — see dmLikeGroups.
+  if (ev.keys) return ev.keys.indexOf(focus) !== -1;
   return ev.key === focus;
+}
+
+/* When the sitting ran: '19:42' when the likes share a minute, '19:42–19:44'
+ * when they do not — one clock on a group would claim four songs were hearted
+ * in the same minute. A like recorded as a bare day has no clock and is given
+ * none, exactly as the plays and notes beside it. */
+function dmLikeClockHTML(ev) {
+  const times = [...new Set((ev.songs || []).map(s => momentOf(s.liked_at).time)
+                                            .filter(Boolean))].sort();
+  if (!times.length) return '';
+  const span = times.length > 1 ? times[0] + '\u2013' + times[times.length - 1] : times[0];
+  return `<span class="dm-hist-time">${esc(span)}</span>`;
+}
+
+/* Where on the record these likes are. The wording is sideLabel's — the day
+ * card names the same places, and two spellings of 'Disc 1 · Side A' is how
+ * they would drift. A track with no side letter has no label and gets none. */
+function dmLikeSideHTML(ev) {
+  const label = sideLabel(ev.side, ev.discs);
+  return label ? `<span class="dm-hist-side">${esc(label)}</span>` : '';
 }
 
 function dmHistoryEntryHTML(ev) {
@@ -4031,10 +4116,12 @@ function dmHistoryEntryHTML(ev) {
       `<span class="dm-hist-time">${lock}<i class="ti ${DM_HIST_ICON.note} dm-hist-icon"></i>${ev.time ? ' ' + esc(ev.time) : ''}</span></div>`
     : ev.type === 'liked'
     ? `<div class="ht"><i class="ti ${DM_HIST_ICON.liked} dm-hist-icon" title="${DM_HIST_LABEL.liked}"></i>` +
-      `<span class="dm-hist-song">${esc(ev.title || '')}</span>${clock}</div>`
+      `${dmLikeSideHTML(ev)}${dmLikeClockHTML(ev)}` +
+      `<div class="dm-hist-songs">${(ev.songs || []).map(s =>
+         `<span class="dm-hist-song">${esc(s.title || '')}</span>`).join('')}</div></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
   const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
-  return `<div class="dm-hist-entry ${ev.type}${ev.private ? ' private' : ''}${lit}" data-ev="${esc(ev.key)}" data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
+  return `<div class="dm-hist-entry ${ev.type}${ev.private ? ' private' : ''}${lit}" data-ev="${esc(ev.key)}"${ev.keys ? ` data-evs="${esc(ev.keys.join(' '))}"` : ''} data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
 }
 
 function dmHistoryGroupHTML(group) {
@@ -8582,6 +8669,29 @@ function renderHealthRow(scoped) {
     </div></div>`;
   };
 
+  /* In rotation's tracker: the records that make up the number, latest play
+   * first. `h.rotation` counts them with the same cutoff, so the list is that
+   * count spelled out — however many of them the tile has room for. */
+  const rotationList = () => {
+    const cutoff = dayShift(today(), -ROTATION_DAYS);
+    const recent = scoped
+      .filter(r => r.have_it)
+      .map(r => ({ r, at: lastPlayed(r) }))
+      .filter(x => x.at && x.at.slice(0, 10) >= cutoff)
+      .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+    if (!recent.length) return '';
+    // Only as many as could ever fit get built; fitRotationList drops the rest
+    // once the tile's real height is known.
+    const items = recent.slice(0, 12).map(({ r, at }) => {
+      const days = dayGap(at.slice(0, 10), today());
+      return `<li class="kpi-rot-item" title="${esc(artistDisplay(r))} – ${esc(r.album_name)}">
+        <span class="kpi-rot-name"><b>${esc(artistDisplay(r)) || 'unknown'}</b> ${esc(r.album_name) || 'untitled'}</span>
+        <span class="kpi-rot-when">${days === 0 ? 'today' : days + 'd'}</span>
+      </li>`;
+    }).join('');
+    return `<div class="kpi-rot"><ol class="kpi-rot-list">${items}</ol></div>`;
+  };
+
   // How much a trend moved over the window, next to the big number — colored
   // in the tile's hue only when the direction is the good one (up for
   // rotation, down for a shrinking never-cleaned backlog).
@@ -8625,13 +8735,54 @@ function renderHealthRow(scoped) {
     tile('#5FBF7A', 'In rotation', owned ? h.rotation : null,
          owned ? `played in the last ${ROTATION_DAYS} days · ${pct(h.rotation)}% of ${h.owned}`
                : 'a wishlist record has not been played',
-         owned ? spark(h.rotationByDay, '#5FBF7A') : '',
+         owned ? rotationList() : '',
          owned ? delta(h.rotationByDay, 'up', '#5FBF7A') : '') +
     tile('#4AA3C4', 'Never cleaned', owned ? h.neverCleaned : null,
          owned ? `${h.cleanedAtLeastOnce} of ${h.owned} cleaned at least once`
                : 'a wishlist record has not been cleaned',
          owned ? stackBar(h.cleanedAtLeastOnce, h.owned, '#4AA3C4') : '',
          owned ? delta(h.neverCleanedByDay, 'down', '#4AA3C4') : '');
+
+  fitRotationList();
+}
+
+/* Trim In rotation's list to the rows the tile actually has room for. The tile
+ * is sized by its siblings, so how many fit is only knowable after layout —
+ * the list is built long and cut here, from the oldest play back, so what
+ * survives is always the most recent. */
+function fitRotationList() {
+  const list = document.querySelector('#statsCards .kpi-rot-list');
+  if (!list || !list.children.length) return;
+  // A hidden statistics page measures as zero and would swallow the whole
+  // list; leaving it long until the tab is on screen is safe, since the box
+  // clips whatever does not fit either way.
+  if (!list.clientHeight) return;
+  const first = list.firstElementChild;
+  first.hidden = false;
+  // Rows are one line each, so how many fit is a division — scrollHeight
+  // cannot answer it here, since the list is bottom-aligned and what does not
+  // fit overflows the top, which no scroll measurement counts.
+  const rowH = first.getBoundingClientRect().height;
+  const fits = rowH ? Math.max(1, Math.floor(list.clientHeight / rowH)) : 1;
+  // Hidden rather than removed: a resize can hand back the room, and the tile
+  // narrows from four columns to two to one on the way down.
+  [...list.children].forEach((li, i) => { li.hidden = i >= fits; });
+}
+
+window.addEventListener('resize', function () {
+  if (currentTab === 'stats') fitRotationList();
+});
+
+/* `day` shifted by `n` calendar days, and the whole days between two days —
+ * both on the UTC clock, which has no daylight-saving jumps to lose a day to.
+ * Both take and return the 'YYYY-MM-DD' shape momentOf hands back. */
+function dayShift(day, n) {
+  const d = new Date(day + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function dayGap(from, to) {
+  return Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 86400000);
 }
 
 // Labels for the Plays card's weekday tracker, in health.js's Monday-first
@@ -8988,6 +9139,12 @@ function statsRowHTML(r) {
 }
 
 function renderStatsTable(all) {
+  // Hidden for now (see #statsTableBox): sorting a whole collection into rows
+  // nobody can see is pure cost, so the render stops at the door rather than
+  // being unwired — un-hide the box and this comes straight back.
+  const box = document.getElementById('statsTableBox');
+  if (box && box.hidden) return;
+
   // The picker and chip builders this used to call went with the statistics
   // page's own filter widgets; the shared bar above the tabs owns both now.
   const recs = statsSorted(all);
