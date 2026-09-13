@@ -630,8 +630,10 @@ select option{background:var(--surface);color:var(--text)}
 .dm-album .dm-album-t{flex:1;min-width:0}
 .dm-album .dm-year{font-size:14px;color:var(--muted);font-weight:500;margin-left:8px}
 /* Nudged up by the difference between the button and the title's cap height, so
-   it sits on the title's line rather than below it. */
-.dm-album .dm-shelf{flex:0 0 auto;margin-top:-1px}
+   they sit on the title's line rather than below it. The pair is one flex item
+   so a title long enough to wrap squeezes the title, never the buttons. */
+.dm-album .dm-album-btns{flex:0 0 auto;display:flex;gap:6px;margin-top:-1px}
+.dm-album .dm-shelf{flex:0 0 auto}
 .dm-artist{margin-top:4px;font-size:14px;color:var(--muted)}
 .dm-artist .multi-artist-badge{margin-right:0;margin-left:4px}
 .dm-artist-more{display:none}
@@ -1803,6 +1805,12 @@ select option{background:var(--surface);color:var(--text)}
   font-variant-numeric:tabular-nums;letter-spacing:.04em}
 .crate-body{padding:14px 0 20px}
 .crate.collapsed .crate-body{display:none}
+/* Letter index inside a setup-mode block: a full-width row in the card grid,
+   an inline label above the row it precedes in list view. */
+.setup-letter{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted);padding:10px 2px 4px}
+.setup-letter:first-child{padding-top:0}
+.grid .setup-letter{grid-column:1/-1}
 
 @media(max-width:760px){
   /* at two columns a hairline header gets lost between rows of covers, and it
@@ -1907,6 +1915,28 @@ select option{background:var(--surface);color:var(--text)}
 @media (max-width:640px){
   .note-edit-when{grid-template-columns:1fr 1fr}
   .note-edit-actions .grow{flex-basis:100%}
+}
+
+/* A textarea (add row or edit row) plus the button that opens the markdown
+   preview modal on it, pinned to the textarea's own corner. */
+.note-text-wrap{position:relative}
+.note-md-expand{position:absolute;top:6px;right:6px;background:transparent;border:none;
+  color:var(--muted);cursor:pointer;padding:3px 5px;border-radius:3px;font-size:13px;line-height:1}
+.note-md-expand:hover{color:var(--accent)}
+
+/* ── note markdown preview modal ─────────────────────────────────────────────
+   Edits the real textarea it was opened from live, so closing this is just
+   hiding the overlay — nothing here is a copy that needs saving back. */
+.note-md-split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.note-md-split textarea{width:100%;min-height:50vh;resize:vertical;font-family:var(--font-mono);
+  font-size:13px;line-height:1.6;background:var(--card);color:var(--text);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:10px 12px;outline:none}
+.note-md-split textarea:focus{border-color:var(--accent)}
+.note-md-preview{overflow-y:auto;max-height:50vh;padding:10px 12px;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm)}
+@media (max-width:760px){
+  .note-md-split{grid-template-columns:1fr}
+  .note-md-split textarea,.note-md-preview{min-height:32vh;max-height:32vh}
 }
 /* The add row's own switch. */
 .note-private-check{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
@@ -2020,7 +2050,7 @@ select option{background:var(--surface);color:var(--text)}
   #formOverlay .scan-actions{--face:20px}
   #formOverlay .scan-actions button{height:42px;font-size:13px}
   #formOverlay .notes-add-row{grid-template-columns:1fr 1fr}
-  #formOverlay .notes-add-row textarea{grid-column:1 / -1}
+  #formOverlay .notes-add-row .note-text-wrap{grid-column:1 / -1}
   /* Direct child only: the add button is a grid item, the photo buttons are
      flex children of .note-photo-row and would just stretch. */
   #formOverlay .notes-add-row > .btn{grid-column:1 / -1;width:100%;justify-content:center}
@@ -2630,7 +2660,7 @@ select option{background:var(--surface);color:var(--text)}
       <div class="detail-drawer-nav">
         <span class="detail-shelf-pos" id="detailShelfPos"></span>
         <button class="detail-nav-btn shelf-btn" id="detailShelfBtn" title="show shelf order" onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>
-        <button class="detail-nav-btn random" id="detailRandomBtn" title="random record" onclick="randomDetail()"><i class="ti ti-dice-5"></i></button>
+        <button class="detail-nav-btn random-btn" id="detailRandomBtn" title="random record" onclick="randomDetail()"><i class="ti ti-dice-5"></i></button>
         <button class="btn btn-ghost btn-sm" onclick="closeDetail()"><i class="ti ti-x"></i></button>
       </div>
     </div>
@@ -2859,7 +2889,10 @@ select option{background:var(--surface);color:var(--text)}
             <div class="notes-add-row">
               <div class="field"><i class="ti ti-calendar"></i><input type="date" id="fNoteDate"></div>
               <div class="field"><i class="ti ti-clock"></i><input type="time" id="fNoteTime" title="time of the note — leave blank if it does not matter"></div>
-              <textarea id="fNoteText" placeholder="Add a note…"></textarea>
+              <div class="note-text-wrap">
+                <textarea id="fNoteText" placeholder="Add a note…"></textarea>
+                <button type="button" class="note-md-expand" title="markdown preview" onclick="openNoteMdModal(this.previousElementSibling)"><i class="ti ti-arrows-maximize"></i></button>
+              </div>
               <button type="button" class="btn btn-primary btn-sm" style="height:34px;align-self:start" onclick="addNote()"><i class="ti ti-plus"></i> add</button>
               <!-- Photos attach to the note being composed and are uploaded as
                    they are picked, so the record save stays small. -->
@@ -2924,6 +2957,23 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-foot">
       <button class="btn" onclick="closeCamera()">cancel</button>
       <button class="btn btn-primary" onclick="captureFrame()">capture</button>
+    </div>
+  </div>
+</div>
+
+<!-- Markdown preview for a note being written or edited. It edits the real
+     textarea it was opened from live, so closing this is just hiding it. -->
+<div class="overlay hidden" id="noteMdOverlay">
+  <div class="modal modal-wide">
+    <div class="modal-head">
+      <span class="modal-title">note markdown</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeNoteMdModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="note-md-split">
+        <textarea id="noteMdText" placeholder="Add a note…"></textarea>
+        <div class="detail-notes-body note-md-preview" id="noteMdPreview"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -3051,8 +3101,9 @@ select option{background:var(--surface);color:var(--text)}
       <span id="searchSelected" style="font-size:12px;color:var(--label)"></span>
       <span id="searchAddStatus" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--label)">
         <span class="scan-spinner"></span>
-        <span>classifying…</span>
+        <span id="searchAddStatusText">classifying…</span>
       </span>
+      <button class="btn" id="searchWishlistBtn" onclick="addPickedToWishlist()" disabled>add to wishlist</button>
       <button class="btn btn-primary" id="searchAddBtn" onclick="addPickedRecords()" disabled>add records</button>
     </div>
   </div>
@@ -3423,6 +3474,40 @@ function noteHTML(text) {
                                        : esc(words).replace(/\n/g, '<br>');
 }
 
+// ── note markdown preview modal ─────────────────────────────────────────────
+// Opened from either the add row or a note open for editing. It edits the
+// real textarea it was given live rather than a copy of its value, so
+// whatever addNote()/saveNoteEdit() reads off that textarea already has
+// anything typed here — closing the modal is just hiding the overlay.
+let noteMdSource = null;
+
+function openNoteMdModal(textareaEl) {
+  if (!textareaEl) return;
+  noteMdSource = textareaEl;
+  document.getElementById('noteMdText').value = textareaEl.value;
+  renderNoteMdPreview();
+  document.getElementById('noteMdOverlay').classList.remove('hidden');
+  const modalText = document.getElementById('noteMdText');
+  modalText.focus();
+  modalText.setSelectionRange(modalText.value.length, modalText.value.length);
+}
+
+function renderNoteMdPreview() {
+  document.getElementById('noteMdPreview').innerHTML =
+    noteHTML(document.getElementById('noteMdText').value);
+}
+
+function syncNoteMdToSource() {
+  if (!noteMdSource) return;
+  noteMdSource.value = document.getElementById('noteMdText').value;
+  renderNoteMdPreview();
+}
+
+function closeNoteMdModal() {
+  document.getElementById('noteMdOverlay').classList.add('hidden');
+  noteMdSource = null;
+}
+
 // ── multi-artist records ────────────────────────────────────────────────────
 // artist field stores multiple names as "Name A; Name B" — semicolon was chosen
 // over comma because band names can legitimately contain commas (e.g. "Earth,
@@ -3762,8 +3847,11 @@ function setupHTML(recs, query) {
     ) : block.records;
     const count = q ? `${shown.length} / ${block.records.length}` :
       `${block.records.length} ${block.records.length === 1 ? 'record' : 'records'}`;
-    const body = shown.length ? recordsHTML(shown)
-      : `<div class="empty" style="padding:12px 0"><i class="ti ti-disc"></i>no matches in this block</div>`;
+    // Multiple artists is a small, already-alphabetical section -- the letter
+    // index only earns its keep on the two big by-artist blocks.
+    const body = !shown.length
+      ? `<div class="empty" style="padding:12px 0"><i class="ti ti-disc"></i>no matches in this block</div>`
+      : block.label === 'Multiple artists' ? recordsHTML(shown) : setupLetterBodyHTML(shown);
     return `<section class="crate">
       <div class="crate-head-wrap">
         <div class="crate-head" style="cursor:default">
@@ -3774,6 +3862,25 @@ function setupHTML(recs, query) {
       <div class="crate-body">${body}</div>
     </section>`;
   }).join('');
+}
+
+// Same markup as recordsHTML, but with a letter divider inserted above the
+// first record of each new letter -- an index into the alphabetical block,
+// not a grouping of its own, so it's built here rather than in grouping.js.
+function setupLetterBodyHTML(recs) {
+  let lastLetter = null;
+  const pieces = [];
+  for (const r of recs) {
+    const letter = VinylGrouping.setupLetterOf(r);
+    if (letter !== lastLetter) {
+      pieces.push(`<div class="setup-letter">${esc(letter)}</div>`);
+      lastLetter = letter;
+    }
+    pieces.push(viewMode === 'list' ? listRowHTML(r) : cardHTML(r));
+  }
+  return viewMode === 'list'
+    ? `<div class="list-view-wrap"><div class="list-view">${listHeadHTML()}${pieces.join('')}</div></div>`
+    : `<div class="grid">${pieces.join('')}</div>`;
 }
 
 // ── crates ─────────────────────────────────────────────────────────────────
@@ -4701,12 +4808,20 @@ function dmHeaderHTML(r, pane) {
   // carousel, and a button that started life un-lit would read as a toggle that
   // flipped itself back.
   const st = shelfBtnState(r.id);
-  const shelfBtn = pane !== 'dm' ? '' :
-    `<button type="button" class="detail-nav-btn shelf-btn dm-shelf${st.on ? ' on' : ''}"
-       ${st.pos ? '' : 'disabled'} title="${esc(st.title)}"
-       onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>`;
+  // Hidden the same way the desktop's is, and for the same reason -- but
+  // written into the markup rather than set afterwards, because the sheet this
+  // lives in is redrawn on every swipe (see above).
+  const rollable = detailNavRecords().length > 1;
+  const btns = pane !== 'dm' ? '' : `<span class="dm-album-btns">
+      <button type="button" class="detail-nav-btn shelf-btn dm-shelf${st.on ? ' on' : ''}"
+        ${st.pos ? '' : 'disabled'} title="${esc(st.title)}"
+        onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>
+      <button type="button" class="detail-nav-btn random-btn dm-shelf"
+        ${rollable ? '' : 'style="display:none"'} title="random record"
+        onclick="randomDetail()"><i class="ti ti-dice-5"></i></button>
+    </span>`;
   return `
-    <div class="dm-album"><span class="dm-album-t">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></span>${shelfBtn}</div>
+    <div class="dm-album"><span class="dm-album-t">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></span>${btns}</div>
     <div class="dm-artist">${dmArtistHTML(r)}${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}</div>
     <div class="dm-rates">
       <div class="dm-rate pepe"><div class="who">Pepe</div>${(myR>0||authed)?bars(myR,'my_rating'):'<span style="font-size:11px;color:var(--muted)">—</span>'}<div class="rv">${myR>0?myR+'/5':''}</div></div>
@@ -5092,7 +5207,11 @@ function scrollFocusIntoView() {
 // shelf at all.
 function updateDetailNavVisibility() {
   const recs = detailNavRecords();
-  document.getElementById('detailRandomBtn').style.display = recs.length > 1 ? '' : 'none';
+  // Both copies -- the desktop header's and the phone's, in the album row. One
+  // record is nothing to roll for, so the dice goes rather than sitting there
+  // doing nothing when pressed.
+  document.querySelectorAll('.random-btn').forEach(b =>
+    b.style.display = recs.length > 1 ? '' : 'none');
 
   const st = shelfBtnState(currentDetailId);
   // Both copies: the desktop header's, and the phone's in the album row. The
@@ -5876,7 +5995,10 @@ function noteEditHTML() {
       <div class="field"><i class="ti ti-calendar"></i><input type="date" class="ne-date" value="${esc(stampDay(d.date))}"></div>
       <div class="field"><i class="ti ti-clock"></i><input type="time" class="ne-time" value="${esc(stampTime(d.date))}" title="time of the note — leave blank if it does not matter"></div>
     </div>
-    <textarea class="ne-text" placeholder="Add a note…">${esc(d.text)}</textarea>
+    <div class="note-text-wrap">
+      <textarea class="ne-text" placeholder="Add a note…">${esc(d.text)}</textarea>
+      <button type="button" class="note-md-expand" title="markdown preview" onclick="openNoteMdModal(this.previousElementSibling)"><i class="ti ti-arrows-maximize"></i></button>
+    </div>
     ${shots}
     <div class="note-edit-actions">
       <button type="button" class="btn btn-sm" onclick="pickNotePhoto()"><i class="ti ti-photo"></i> photo</button>
@@ -7072,6 +7194,7 @@ function openSearchResults(data){
   // MusicBrainz, so "none of these fit" means the query was wrong, not the art.
   document.getElementById('searchSelected').style.display = '';
   document.getElementById('searchAddBtn').style.display = '';
+  document.getElementById('searchWishlistBtn').style.display = '';
 
   renderSearchResults();
   document.getElementById('scanOverlay').classList.remove('hidden');
@@ -7114,6 +7237,7 @@ function toggleSearchPick(i){
 function renderSearchFoot(){
   const n = searchPicked.size;
   const btn = document.getElementById('searchAddBtn');
+  const wishBtn = document.getElementById('searchWishlistBtn');
   const label = document.getElementById('searchSelected');
   if (addQueue) {
     // Reopening (or searching again) while a queue is running is for looking,
@@ -7122,6 +7246,7 @@ function renderSearchFoot(){
     // record already open in the form. Offering "add N records" here would
     // promise something this screen cannot do.
     btn.style.display = 'none';
+    wishBtn.style.display = 'none';
     label.textContent = 'looking only — you are part-way through adding these';
     return;
   }
@@ -7129,6 +7254,14 @@ function renderSearchFoot(){
   btn.disabled = n === 0 || addPickInFlight;
   btn.textContent = n === 1 ? 'add 1 record' : `add ${n} records`;
   label.textContent = n ? `${n} selected` : 'nothing selected yet';
+
+  // A pick already in the collection would become a second wishlist row for
+  // the same album, so it never counts toward this button — unlike "add
+  // records" above, which still takes it (the per-record form warns there).
+  wishBtn.style.display = '';
+  const nWish = [...searchPicked].filter(i => !searchResults[i].duplicate_of).length;
+  wishBtn.disabled = nWish === 0 || wishlistPickInFlight;
+  wishBtn.textContent = nWish ? `add ${nWish} to wishlist` : 'add to wishlist';
 }
 
 // ── the add queue ───────────────────────────────────────────────────────────
@@ -7139,6 +7272,10 @@ let addQueue = null;
 // Every call costs real credits (a genre classification per record, under one
 // scan_id) — same reason searchInFlight and scanInFlight exist.
 let addPickInFlight = false;
+
+// Guards addPickedToWishlist the same way, and doubles as the other's guard:
+// the two share searchAddStatus's spinner and must never run at once.
+let wishlistPickInFlight = false;
 
 async function addPickedRecords(){
   const picked = [...searchPicked].sort((a,b) => a-b).map(i => searchResults[i]);
@@ -7151,9 +7288,10 @@ async function addPickedRecords(){
   if (live && !confirm(`Start over with these? The ${live} record${live===1?'':'s'} `
                       + `still in the current queue will be dropped.`)) return;
 
-  if (addPickInFlight) return;
+  if (addPickInFlight || wishlistPickInFlight) return;
   addPickInFlight = true;
   document.getElementById('searchAddBtn').disabled = true;
+  document.getElementById('searchAddStatusText').textContent = 'classifying…';
   document.getElementById('searchAddStatus').style.display = 'flex';
   try {
     // One request for the whole queue: the genre work is a single act and is
@@ -7174,6 +7312,62 @@ async function addPickedRecords(){
     refreshScanUsage();
   } finally {
     addPickInFlight = false;
+    document.getElementById('searchAddStatus').style.display = 'none';
+  }
+}
+
+/* The wishlist's whole act is naming the record — no purchase, no condition,
+ * nothing else to fill (see setHaveIt) — so a pick goes straight to
+ * /api/records with the info the search already collected, one POST per
+ * release. No queue, no form: unlike addPickedRecords this never opens
+ * anything, which is the point of a BULK action. Duplicates are left out
+ * (renderSearchFoot already excludes them from the count this reads). */
+async function addPickedToWishlist(){
+  const picked = [...searchPicked].sort((a,b) => a-b).map(i => searchResults[i])
+    .filter(r => !r.duplicate_of);
+  if(!picked.length) return;
+
+  if (addPickInFlight || wishlistPickInFlight) return;
+  wishlistPickInFlight = true;
+  document.getElementById('searchWishlistBtn').disabled = true;
+  document.getElementById('searchAddStatusText').textContent = 'classifying…';
+  document.getElementById('searchAddStatus').style.display = 'flex';
+  try {
+    let genres = [];
+    try{
+      const res = await fetch('/api/search/genres', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({releases: picked.map(r => (
+          {artist: r.artist, album_name: r.album_name}))})});
+      if(res.ok) genres = (await res.json()).genres || [];
+    }catch(e){ /* a record with no genre is a record you set the genre on */ }
+
+    document.getElementById('searchAddStatusText').textContent = 'adding…';
+    const added = [];
+    for (let i = 0; i < picked.length; i++) {
+      const r = picked[i];
+      const body = {
+        artist: r.artist || '', album_name: r.album_name || '',
+        year: r.year || '', genre: genres[i] || '',
+        country: r.country || '', cover_data: r.cover_data || '',
+        have_it: false,
+      };
+      try{
+        const res = await fetch('/api/records', {method:'POST',
+          headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+        if(res.ok) added.push(await res.json());
+      }catch(e){ /* one failed add should not stop the rest of the batch */ }
+    }
+
+    added.forEach(rec => records.push(rec));
+    if(added.length) render();
+    closeScanOverlay();
+    toast(added.length
+      ? `${added.length} added to the wishlist`
+      : 'nothing was added — try again');
+    refreshScanUsage();
+  } finally {
+    wishlistPickInFlight = false;
     document.getElementById('searchAddStatus').style.display = 'none';
   }
 }
@@ -7310,6 +7504,7 @@ function openScanOverlay(data){
   // Scan mode: the Google fallback, no picking.
   document.getElementById('searchSelected').style.display = 'none';
   document.getElementById('searchAddBtn').style.display = 'none';
+  document.getElementById('searchWishlistBtn').style.display = 'none';
 
   const fromPhoto = data.source === 'photo';
   document.getElementById('scanReadoutLabel').textContent =
@@ -7839,9 +8034,12 @@ function bindEvents(){
   });
   document.getElementById('calDayOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDay();});
   document.getElementById('calDatePickerOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDatePicker();});
+  document.getElementById('noteMdOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeNoteMdModal();});
+  document.getElementById('noteMdText').addEventListener('input', syncNoteMdToSource);
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (!document.getElementById('calDayOverlay').classList.contains('hidden')) closeCalDay();
+      if (!document.getElementById('noteMdOverlay').classList.contains('hidden')) closeNoteMdModal();
+      else if (!document.getElementById('calDayOverlay').classList.contains('hidden')) closeCalDay();
       else if (!document.getElementById('calDatePickerOverlay').classList.contains('hidden')) closeCalDatePicker();
     }
   });

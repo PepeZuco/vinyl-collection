@@ -2036,6 +2036,89 @@ test('reopening from a queued record shows the search results again', async () =
   assert.ok(win.document.querySelector('#scanBody .scan-grid.wide'));
 });
 
+// ── search results: bulk add straight to the wishlist ───────────────────────
+// m3 in searched()'s fixture is the duplicate; m1/m2 are not.
+
+test('picking a fresh release enables the wishlist button, counting only it', async () => {
+  const { win } = await boot();
+  await searched(win);
+
+  win.toggleSearchPick(0);   // m1, not a duplicate
+  assert.strictEqual(win.document.getElementById('searchWishlistBtn').disabled, false);
+  assert.match(win.document.getElementById('searchWishlistBtn').textContent,
+               /add 1 to wishlist/);
+
+  win.toggleSearchPick(1);   // m2, not a duplicate
+  assert.match(win.document.getElementById('searchWishlistBtn').textContent,
+               /add 2 to wishlist/);
+});
+
+test('a duplicate pick does not count toward the wishlist button', async () => {
+  const { win } = await boot();
+  await searched(win);
+
+  win.toggleSearchPick(2);   // m3, already in the collection
+  assert.strictEqual(win.document.getElementById('searchWishlistBtn').disabled, true);
+  assert.match(win.document.getElementById('searchWishlistBtn').textContent,
+               /add to wishlist/);
+
+  win.toggleSearchPick(0);   // m1, not a duplicate, added alongside it
+  assert.strictEqual(win.document.getElementById('searchWishlistBtn').disabled, false);
+  assert.match(win.document.getElementById('searchWishlistBtn').textContent,
+               /add 1 to wishlist/);
+});
+
+test('adding picked records to the wishlist creates them without opening the form', async () => {
+  const { win, read } = await boot();
+  await searched(win);
+  win.toggleSearchPick(0);   // Força bruta, 1970
+  win.toggleSearchPick(1);   // Negro é lindo, 1971
+
+  const posted = [];
+  win.fetch = async (url, opts) => {
+    if (url === '/api/search/genres') {
+      return { ok: true, json: async () => ({ genres: ['MPB & Samba', 'MPB & Samba'] }) };
+    }
+    assert.strictEqual(url, '/api/records');
+    const body = JSON.parse(opts.body);
+    posted.push(body);
+    return { ok: true, json: async () => ({ id: 900 + posted.length, ...body }) };
+  };
+
+  await win.addPickedToWishlist();
+
+  assert.strictEqual(posted.length, 2);
+  assert.ok(posted.every(b => b.have_it === false), 'a wishlist entry must not read as owned');
+  assert.deepStrictEqual(posted.map(b => b.album_name), ['Força bruta', 'Negro é lindo']);
+  assert.ok(posted.every(b => b.genre === 'MPB & Samba'));
+
+  assert.ok(win.document.getElementById('scanOverlay').classList.contains('hidden'));
+  // No queue was ever started: unlike addPickedRecords, this never routes a
+  // pick through the per-record form.
+  assert.strictEqual(read('addQueue'), null);
+  assert.strictEqual(win.document.getElementById('fAlbum').value, '',
+    'a wishlist bulk-add must never populate the open add form');
+});
+
+test('adding to the wishlist skips picks already in the collection', async () => {
+  const { win } = await boot();
+  await searched(win);
+  win.toggleSearchPick(0);   // fresh
+  win.toggleSearchPick(2);   // duplicate
+
+  const posted = [];
+  win.fetch = async (url, opts) => {
+    if (url === '/api/search/genres') return { ok: true, json: async () => ({ genres: ['Rock'] }) };
+    posted.push(JSON.parse(opts.body));
+    return { ok: true, json: async () => ({ id: 901, ...JSON.parse(opts.body) }) };
+  };
+
+  await win.addPickedToWishlist();
+
+  assert.strictEqual(posted.length, 1, 'the duplicate must not become a second wishlist row');
+  assert.strictEqual(posted[0].album_name, 'Força bruta');
+});
+
 test('the queue strip marks what is done, current and waiting', async () => {
   const { win } = await boot();
   await queued(win);

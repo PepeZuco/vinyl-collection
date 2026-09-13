@@ -231,20 +231,39 @@ const VinylGrouping = (function () {
    * Compilations have no single artist: they're stored with every performer
    * semicolon-separated, so sorting them by name alone files each one under
    * whoever happens to be listed first and scatters them through the shelf.
-   * They rank last instead, alphabetical among themselves, which is where
-   * they sit on the shelf. A "/" is not the same signal -- it separates the
+   * They live together apart from the two blocks instead, in their own
+   * section appended at the end -- and since they never join the block split,
+   * they can't skew it. Alphabetical among themselves is still how they sit
+   * within that section. A "/" is not the same signal -- it separates the
    * two names of one credit ("Edu Lobo / Chico Buarque"), so it sorts by
-   * letter like any other artist. */
+   * letter like any other artist and stays in the blocks.
+   *
+   * The Multiple artists section is only appended when at least one
+   * compilation exists, so a collection with none still gets exactly the two
+   * blocks. */
   function setupBlocks(records) {
-    const rank = r => ((r.artist || '').includes(';') ? 1 : 0);
+    const isCompilation = r => (r.artist || '').includes(';');
     const name = r => (r.artist || '').trim().toLowerCase();
-    const sorted = [...records].sort((a, b) =>
-      rank(a) - rank(b) || name(a).localeCompare(name(b)));
-    const cut = Math.ceil(sorted.length / 2);
-    return [
-      { label: 'Block 1', records: sorted.slice(0, cut) },
-      { label: 'Block 2', records: sorted.slice(cut) },
+    const byName = (a, b) => name(a).localeCompare(name(b));
+    const singles = records.filter(r => !isCompilation(r)).sort(byName);
+    const compilations = records.filter(isCompilation).sort(byName);
+    const cut = Math.ceil(singles.length / 2);
+    const blocks = [
+      { label: 'Block 1', records: singles.slice(0, cut) },
+      { label: 'Block 2', records: singles.slice(cut) },
     ];
+    if (compilations.length) blocks.push({ label: 'Multiple artists', records: compilations });
+    return blocks;
+  }
+
+  /* The letter divider inside a setup-mode block: the artist's first letter,
+   * uppercased, so the shelf can be skimmed like an index. Anything that
+   * doesn't start with a letter -- or has no artist at all -- files under
+   * '#' rather than being dropped, matching the album-title letter bucket
+   * used elsewhere. */
+  function setupLetterOf(r) {
+    const ch = (r.artist || '').trim().charAt(0).toUpperCase();
+    return /[A-Z]/.test(ch) ? ch : '#';
   }
 
   /* Where one record stands in the furniture: which of the two blocks holds
@@ -267,7 +286,7 @@ const VinylGrouping = (function () {
   }
 
   return { avgRating, momentOf, lastPlayed, bucketOf, compareByGroup, buildGroups, setupBlocks,
-           shelfPositionOf };
+           setupLetterOf, shelfPositionOf };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylGrouping;

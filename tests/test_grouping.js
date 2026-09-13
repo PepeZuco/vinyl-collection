@@ -10,7 +10,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { bucketOf, buildGroups, avgRating, momentOf, lastPlayed, compareByGroup, setupBlocks,
-        shelfPositionOf } = require('../static/grouping.js');
+        shelfPositionOf, setupLetterOf } = require('../static/grouping.js');
 
 // A record only needs the fields the bucket rule reads, so each test builds the
 // smallest one that exercises its rule.
@@ -497,38 +497,48 @@ test('setupBlocks of an empty collection gives two empty blocks', () => {
 
 // ── setupBlocks: various-artists compilations ───────────────────────────────
 // Compilations are stored with every performer semicolon-separated in `artist`,
-// so alphabetical order alone scatters them through the shelf under whichever
-// name happens to be first. On the shelf they live together at the end.
+// so they don't share a shelf letter with any single artist. On the shelf they
+// live together apart from the two blocks, so they get their own section.
 
-test('a semicolon-separated compilation sorts after every named artist', () => {
+test('a semicolon-separated compilation lands in a Multiple artists section, not a block', () => {
   const list = [rec({ id: 1, artist: 'Amaro Ochoa; Pablo Milanés; Quilla Huasi' }),
                 rec({ id: 2, artist: 'Zeca Pagodinho' })];
-  const [block1, block2] = setupBlocks(list);
-  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.id), [2, 1]);
+  const [block1, block2, multi] = setupBlocks(list);
+  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.id), [2]);
+  assert.strictEqual(multi.label, 'Multiple artists');
+  assert.deepStrictEqual(multi.records.map(r => r.id), [1]);
 });
 
-test('compilations stay alphabetical among themselves at the end', () => {
+test('multiple compilations stay alphabetical among themselves in the Multiple artists section', () => {
   const list = [rec({ id: 1, artist: 'Duke Ellington; Artie Shaw' }),
                 rec({ id: 2, artist: 'Wilco' }),
                 rec({ id: 3, artist: 'Chubb Rocky; Time Klub' }),
                 rec({ id: 4, artist: 'ABBA' })];
-  const [block1, block2] = setupBlocks(list);
-  assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.id), [4, 2, 3, 1]);
+  const [, , multi] = setupBlocks(list);
+  assert.deepStrictEqual(multi.records.map(r => r.id), [3, 1]);
 });
 
 test('a slash in an artist name is not a compilation and still sorts by letter', () => {
   const list = [rec({ id: 1, artist: 'Wilco' }),
                 rec({ id: 2, artist: 'Edu Lobo / Chico Buarque' })];
-  const [block1, block2] = setupBlocks(list);
+  const sections = setupBlocks(list);
+  assert.strictEqual(sections.length, 2);
+  const [block1, block2] = sections;
   assert.deepStrictEqual([...block1.records, ...block2.records].map(r => r.id), [2, 1]);
 });
 
-test('compilations at the end do not change the count-based split', () => {
+test('compilations do not count toward the count-based block split', () => {
   const list = [rec({ id: 1, artist: 'A; B' }), rec({ id: 2, artist: 'C; D' }),
-                rec({ id: 3, artist: 'Wilco' })];
-  const [block1, block2] = setupBlocks(list);
-  assert.deepStrictEqual(block1.records.map(r => r.id), [3, 1]);
-  assert.deepStrictEqual(block2.records.map(r => r.id), [2]);
+                rec({ id: 3, artist: 'Wilco' }), rec({ id: 4, artist: 'ABBA' })];
+  const [block1, block2, multi] = setupBlocks(list);
+  assert.deepStrictEqual(block1.records.map(r => r.id), [4]);
+  assert.deepStrictEqual(block2.records.map(r => r.id), [3]);
+  assert.deepStrictEqual(multi.records.map(r => r.id), [1, 2]);
+});
+
+test('setupBlocks omits the Multiple artists section when there are no compilations', () => {
+  const list = [rec({ id: 1, artist: 'Wilco' }), rec({ id: 2, artist: 'ABBA' })];
+  assert.strictEqual(setupBlocks(list).length, 2);
 });
 
 // ── shelfPositionOf: where one record stands in the furniture ───────────────
@@ -568,9 +578,9 @@ test('shelfPositionOf follows the shelf order, not the order given in', () => {
   assert.deepStrictEqual(shelfPositionOf(list, 1), { block: 'Block 2', index: 1, total: 1 });
 });
 
-test('a compilation takes its shelf position from the end, where it sits', () => {
+test('a compilation takes its shelf position from the Multiple artists section', () => {
   const list = [rec({ id: 1, artist: 'A; B' }), rec({ id: 2, artist: 'Wilco' })];
-  assert.deepStrictEqual(shelfPositionOf(list, 1), { block: 'Block 2', index: 1, total: 1 });
+  assert.deepStrictEqual(shelfPositionOf(list, 1), { block: 'Multiple artists', index: 1, total: 1 });
 });
 
 // A wishlist record is never passed in — it has no copy standing anywhere — and
@@ -587,6 +597,25 @@ test('shelfPositionOf returns null for an empty collection', () => {
 test('shelfPositionOf matches ids by value, not by string', () => {
   const list = [rec({ id: 7, artist: 'ABBA' }), rec({ id: 8, artist: 'Wilco' })];
   assert.deepStrictEqual(shelfPositionOf(list, 7), { block: 'Block 1', index: 1, total: 1 });
+});
+
+// ── setupLetterOf: the letter divider inside a setup-mode block ─────────────
+
+test('setupLetterOf reads the first letter of the artist name, uppercased', () => {
+  assert.strictEqual(setupLetterOf(rec({ artist: 'wilco' })), 'W');
+  assert.strictEqual(setupLetterOf(rec({ artist: 'ABBA' })), 'A');
+});
+
+test('setupLetterOf trims leading whitespace before reading the letter', () => {
+  assert.strictEqual(setupLetterOf(rec({ artist: '  Metallica' })), 'M');
+});
+
+test('setupLetterOf buckets a non-letter first character under #', () => {
+  assert.strictEqual(setupLetterOf(rec({ artist: '2Pac' })), '#');
+});
+
+test('setupLetterOf buckets an empty artist under #', () => {
+  assert.strictEqual(setupLetterOf(rec({ artist: '' })), '#');
 });
 
 // ── bucketOf: bought at ─────────────────────────────────────────────────────
