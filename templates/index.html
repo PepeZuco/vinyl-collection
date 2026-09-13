@@ -4209,12 +4209,7 @@ function toggleDetailShelfOrder() {
   // under the eye rather than leaving the scroll parked at the old offset.
   renderDetailContent(r);
   updateDetailNavVisibility();
-  if (window.matchMedia('(max-width:760px)').matches) {
-    dmCenterSlide(dmIdx, false);
-    dmCenterCrateThumb(dmIdx, false);
-  } else {
-    ddCenterSlide(dmIdx, false);
-  }
+  detailCenterOnCurrent();
 }
 
 function shelfPositionOf(id) {
@@ -4905,6 +4900,19 @@ function dmSetCurrent(idx) {
   dmMeasureChrome();
 }
 
+/* Put whichever layout is on screen back on the current record. Only one of
+ * the two is laid out at a time -- CSS hides the other -- so centring the wrong
+ * one scrolls nothing. Called by every path that changes which record the
+ * drawer is showing while it stays open. */
+function detailCenterOnCurrent() {
+  if (window.matchMedia('(max-width:760px)').matches) {
+    dmCenterSlide(dmIdx, false);
+    dmCenterCrateThumb(dmIdx, false);
+  } else {
+    ddCenterSlide(dmIdx, false);
+  }
+}
+
 function dmCenterSlide(idx, smooth) {
   const car = document.getElementById('dmCarousel');
   const s = car && car.children[idx];
@@ -5060,12 +5068,7 @@ function openDetail(id, focus) {
   dmMeasureChrome();
   ddSyncSpy();
   syncUrl(true);
-  if (window.matchMedia('(max-width:760px)').matches) {
-    dmCenterSlide(dmIdx, false);
-    dmCenterCrateThumb(dmIdx, false);
-  } else {
-    ddCenterSlide(dmIdx, false);
-  }
+  detailCenterOnCurrent();
   // .overlay.hidden is display:none, so there is no layout to scroll until the
   // line above. Doing it here, in the same task, means the browser paints once
   // with the entry already in view — rather than painting the top of a long
@@ -5139,6 +5142,12 @@ function goToDetailRecord(nextRecord, delta) {
     renderDetailContent(nextRecord);
     syncUrl();
     updateDetailNavVisibility();
+    // dmSetCurrent re-centres the desktop carousel and the phone's crate strip,
+    // but not the phone's cover carousel -- which would leave a record arrived
+    // at by dice or arrow key showing the PREVIOUS record's cover. Nothing
+    // caught it before: until the phone got a dice, no control on that layout
+    // reached this function.
+    detailCenterOnCurrent();
     body.classList.remove(outClass);
     body.classList.add(inClass);
     const onInEnd = () => {
