@@ -1,6 +1,6 @@
 /* The tracks column's parse/serialize rules.
  *
- * Tracks are stored as JSON: [{side, title, liked_at?}]. The side LETTER
+ * Tracks are stored as JSON: [{side, title, artist?, liked_at?}]. The side LETTER
  * carries which disc a song is on, the way a real sleeve carries it — disc 1
  * is A/B, disc 2 is C/D — so there is no disc field on a track and nothing to
  * keep in sync.
@@ -13,6 +13,15 @@
  * liked_at is a stamp in the same format as play_dates — a LOCAL wall clock,
  * never UTC — so momentOf() reads it and the Timeline files it on the right
  * day. Absent means the song is not liked; there is no false to store.
+ *
+ * artist is only ever set on a compilation: it names WHICH of the record's
+ * semicolon-separated artists played this song. The NAME is stored, not an
+ * index into the artist field — an index silently points at the wrong person
+ * the first time the artist list is reordered. Absent means unassigned, the
+ * same "absent, never falsy" shape liked_at uses. Nothing here checks the name
+ * against the record's artist list: the picker in the form is what keeps the
+ * two in step, and a PUT that sends tracks alone must not be rejected because
+ * the artist column moved in some other request.
  *
  * Loaded as a plain script in the browser, where `const VinylTracks` lands in
  * the global lexical scope for the inline script below it; required as a
@@ -49,6 +58,8 @@ const VinylTracks = (function () {
           side: String(t.side || '').toUpperCase().slice(0, 1),
           title: typeof t.title === 'string' ? t.title : '',
         };
+        const artist = String(t.artist || '').trim();
+        if (artist) out.artist = artist;
         if (t.liked_at) out.liked_at = String(t.liked_at);
         return out;
       });
@@ -64,6 +75,8 @@ const VinylTracks = (function () {
           side: String(t.side || 'A').toUpperCase().slice(0, 1),
           title: t.title.trim(),
         };
+        const artist = String(t.artist || '').trim();
+        if (artist) out.artist = artist;
         if (t.liked_at) out.liked_at = String(t.liked_at);
         return out;
       });
@@ -89,6 +102,7 @@ const VinylTracks = (function () {
           .filter(function (x) { return x.t.side === letter; })
           .map(function (x, k) {
             const out = { i: x.i, pos: k + 1, title: x.t.title };
+            if (x.t.artist) out.artist = x.t.artist;
             if (x.t.liked_at) out.liked_at = x.t.liked_at;
             return out;
           }),
@@ -103,6 +117,19 @@ const VinylTracks = (function () {
       .map(function (x) {
         return { i: x.i, title: x.t.title, liked_at: x.t.liked_at };
       });
+  }
+
+  /* How many songs are credited to this name, so removing an artist row can
+   * refuse rather than silently unassign them — the same trade sidesWithTracks
+   * makes for the disc count. Matched exactly apart from surrounding space:
+   * two artists on one sleeve can differ only by case ("will.i.am"), and
+   * folding them together here would reassign somebody else's song. */
+  function artistsInUse(list, name) {
+    const want = String(name || '').trim();
+    if (!want) return 0;
+    return (list || []).filter(function (t) {
+      return t && String(t.artist || '').trim() === want;
+    }).length;
   }
 
   /* The sides that actually hold songs, so lowering the disc count can refuse
@@ -144,7 +171,7 @@ const VinylTracks = (function () {
 
   return { parseTracks, serializeTracks, sideLettersFor, discOfSide,
            tracksBySide, likedTracks, sidesWithTracks, discMarks,
-           parsePastedTracklist };
+           parsePastedTracklist, artistsInUse };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylTracks;

@@ -112,7 +112,20 @@ const VinylFilters = (function (grouping) {
   /* The text a record offers to the search box, given which fields are on. */
   function haystack(record, fields, deps) {
     const parts = [];
-    if (fields.artist)    parts.push(record.artist || '');
+    // Two fields read the tracks column; parse it once, since this runs for
+    // every record on every keystroke.
+    const tracks = (fields.artist || fields.song)
+      ? ((deps && deps.parseTracks) || (() => []))(record.tracks)
+      : [];
+    if (fields.artist) {
+      parts.push(record.artist || '');
+      // A compilation credits each song to one of its artists, and a guest who
+      // plays on a single track is often missing from the artist column
+      // entirely — the song is then the only place their name appears. This
+      // sits under the artist field rather than the song field because "who is
+      // on this record" is one question to the person typing.
+      parts.push(tracks.map(t => (t && t.artist) || '').join(' '));
+    }
     if (fields.album)     parts.push(record.album_name || '');
     if (fields.genre)     parts.push(record.genre || '');
     if (fields.bought_at) parts.push(record.bought_where || '');
@@ -121,8 +134,7 @@ const VinylFilters = (function (grouping) {
       parts.push(parse(record.notes).map(n => (n && n.text) || '').join(' '));
     }
     if (fields.song) {
-      const parse = (deps && deps.parseTracks) || (() => []);
-      parts.push(parse(record.tracks).map(t => (t && t.title) || '').join(' '));
+      parts.push(tracks.map(t => (t && t.title) || '').join(' '));
     }
     return parts.join(' ').toLowerCase();
   }

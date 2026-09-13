@@ -11,7 +11,7 @@ const assert = require('node:assert');
 
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
         tracksBySide, likedTracks, sidesWithTracks, discMarks,
-        parsePastedTracklist } = require('../static/tracks.js');
+        parsePastedTracklist, artistsInUse } = require('../static/tracks.js');
 
 // ── parse ───────────────────────────────────────────────────────────────────
 
@@ -181,4 +181,58 @@ test('trailing durations are stripped', () => {
 
 test('a title that merely starts with a number survives intact', () => {
   assert.deepStrictEqual(parsePastedTracklist('10 Years Gone'), ['10 Years Gone']);
+});
+
+// ── the per-song artist ─────────────────────────────────────────────────────
+// Only a compilation carries these: the name says WHICH of the record's
+// semicolon-separated artists played this song. Absent means unassigned, the
+// same "absent, never falsy" shape liked_at already uses.
+
+test('a track keeps the artist it was assigned', () => {
+  const raw = JSON.stringify([{ side: 'A', title: 'Aquarela do Brasil', artist: 'Gal Costa' }]);
+  assert.deepStrictEqual(parseTracks(raw),
+    [{ side: 'A', title: 'Aquarela do Brasil', artist: 'Gal Costa' }]);
+});
+
+test('an unassigned track carries no artist key at all', () => {
+  const parsed = parseTracks(JSON.stringify([{ side: 'A', title: 'Taj Mahal' }]));
+  assert.strictEqual('artist' in parsed[0], false);
+});
+
+test('a blank artist parses as unassigned rather than an empty name', () => {
+  const parsed = parseTracks(JSON.stringify([{ side: 'A', title: 'x', artist: '   ' }]));
+  assert.strictEqual('artist' in parsed[0], false);
+});
+
+test('an artist survives serialize, trimmed', () => {
+  assert.strictEqual(serializeTracks([{ side: 'A', title: 'Ponteio', artist: '  Edu Lobo  ' }]),
+                     JSON.stringify([{ side: 'A', title: 'Ponteio', artist: 'Edu Lobo' }]));
+});
+
+test('clearing the picker drops the artist key instead of storing an empty one', () => {
+  assert.strictEqual(serializeTracks([{ side: 'A', title: 'Ponteio', artist: '' }]),
+                     JSON.stringify([{ side: 'A', title: 'Ponteio' }]));
+});
+
+test('the side view carries the artist through to the renderers', () => {
+  const sides = tracksBySide([{ side: 'A', title: 'Ponteio', artist: 'Edu Lobo' },
+                              { side: 'A', title: 'Upa Neguinho' }], 1);
+  assert.strictEqual(sides[0].tracks[0].artist, 'Edu Lobo');
+  assert.strictEqual('artist' in sides[0].tracks[1], false);
+});
+
+test('artistsInUse counts the songs assigned to a name', () => {
+  const list = [{ side: 'A', title: 'one', artist: 'Gal Costa' },
+                { side: 'A', title: 'two' },
+                { side: 'B', title: 'three', artist: 'Gal Costa' },
+                { side: 'B', title: 'four', artist: 'Edu Lobo' }];
+  assert.strictEqual(artistsInUse(list, 'Gal Costa'), 2);
+  assert.strictEqual(artistsInUse(list, 'Edu Lobo'), 1);
+  assert.strictEqual(artistsInUse(list, 'Nobody'), 0);
+});
+
+test('artistsInUse matches the name exactly, ignoring only surrounding space', () => {
+  const list = [{ side: 'A', title: 'one', artist: 'Gal Costa' }];
+  assert.strictEqual(artistsInUse(list, '  Gal Costa  '), 1);
+  assert.strictEqual(artistsInUse(list, 'gal costa'), 0);
 });

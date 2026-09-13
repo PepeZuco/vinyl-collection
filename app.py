@@ -253,6 +253,15 @@ def _clean_tracks(raw, disc_count, strict=True):
                     f"side {side!r} is not on a record with {_disc_count(disc_count)} disc(s)")
             continue
         row = {"side": side, "title": title}
+        # The per-song artist names WHICH of a compilation's semicolon-separated
+        # artists played this song. It is deliberately NOT checked against the
+        # record's own artist column: a PUT may send tracks alone, long after
+        # that column moved in some other request, and refusing then would leave
+        # a stale tab unable to save. The picker in the form is what keeps the
+        # two lists in step; here the name is only trimmed.
+        artist = str(t.get("artist") or "").strip()
+        if artist:
+            row["artist"] = artist
         liked = str(t.get("liked_at") or "").strip()
         if liked:
             row["liked_at"] = liked

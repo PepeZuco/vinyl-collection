@@ -579,6 +579,7 @@ select option{background:var(--surface);color:var(--text)}
 .tl-row .num{width:14px;text-align:right;font-size:10.5px;color:var(--muted);
   font-variant-numeric:tabular-nums;flex:0 0 14px}
 .tl-row .ttl{flex:1;font-size:12.5px;min-width:0}
+.tl-row .tl-by{display:block;font-size:10px;color:var(--muted);margin-top:1px}
 .tl-row.liked .ttl{color:var(--text);font-weight:600}
 .tl-row .when{font-size:9.5px;color:var(--muted);flex:0 0 auto}
 .tl-empty{font-size:11px;color:var(--muted);padding:4px 3px 4px 26px;font-style:italic}
@@ -1675,6 +1676,9 @@ select option{background:var(--surface);color:var(--text)}
 .track-row .tnum{width:26px;flex:0 0 26px;text-align:center;font-size:11px;color:var(--muted)}
 .track-row input{flex:1;background:var(--bg);border:1px solid var(--border);
   border-radius:var(--radius-sm);padding:5px 8px;color:var(--text);font-size:12.5px;font-family:var(--font)}
+.track-row .tartist{flex:0 1 118px;min-width:0;background:var(--bg);
+  border:1px solid var(--border);color:var(--text);border-radius:5px;
+  padding:5px 4px;font-size:11px;font-family:inherit}
 .track-row button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px}
 .track-row .tlike.on{color:var(--ev-liked)}
 .track-row button:hover{color:var(--accent)}
@@ -3168,7 +3172,7 @@ const FILTER_DEPS = {
 
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
         tracksBySide, likedTracks, sidesWithTracks, discMarks,
-        parsePastedTracklist } = VinylTracks;
+        parsePastedTracklist, artistsInUse } = VinylTracks;
 
 /* Re-render whatever surface is on screen. Every control that changes the
  * query calls this, so the collection and the statistics page can never drift
@@ -4231,9 +4235,16 @@ function dmTrackRowHTML(r, t) {
          title="${on ? 'remove this like' : 'liked this one'}"
          aria-label="${on ? 'liked' : 'not liked'}"><i class="ti ti-heart${on ? '-filled' : ''}"></i></button>`
     : `<i class="ti ti-heart${on ? '-filled' : ''} tl-heart-static${on ? ' on' : ''}"></i>`;
+  // The credit is shown whenever the song carries one, without asking whether
+  // the record still reads as a compilation: if the artist column was later
+  // collapsed to one name, the song's own credit is the last place that fact
+  // survives, and hiding it would hide real data.
+  const by = t.artist
+    ? `<span class="tl-by">${esc(t.artist)}</span>`
+    : '';
   return `<div class="tl-row${on ? ' liked' : ''}">
     <span class="num">${t.pos}</span>
-    <span class="ttl">${esc(t.title)}</span>
+    <span class="ttl">${esc(t.title)}${by}</span>
     ${on ? (authed
       ? `<button class="when when-btn" onclick="editLikeDate(${r.id}, ${t.i})"
            title="change the date">${esc(dmFormatLikeDate(t.liked_at))} <i class="ti ti-pencil"></i></button>`
@@ -4747,6 +4758,7 @@ function renderTracksForm() {
     `<button type="button" class="${formDiscCount === n ? 'on' : ''}"
        onclick="setFormDiscCount(${n})">${n}</button>`).join('');
 
+  const artists = formArtistOptions();
   const sides = tracksBySide(formTracks, formDiscCount);
   let html = '';
   let lastDisc = 0;
@@ -4763,6 +4775,7 @@ function renderTracksForm() {
         <span class="tnum">${t.pos}</span>
         <input value="${esc(t.title)}" placeholder="song title"
                onchange="updateTrackTitle(${t.i}, this.value)">
+        ${trackArtistPickerHTML(t, artists)}
         <button type="button" class="tlike${t.liked_at ? ' on' : ''}" onclick="toggleFormLike(${t.i})"
           title="${t.liked_at ? 'liked' : 'mark as liked'}"><i class="ti ti-heart${t.liked_at ? '-filled' : ''}"></i></button>
         <button type="button" onclick="deleteTrack(${t.i})" title="remove"><i class="ti ti-x"></i></button>
@@ -4797,6 +4810,47 @@ function setFormDiscCount(n) {
   }
   formDiscCount = n;
   renderTracksForm();
+}
+
+/* The artists a song can be credited to: whichever editor is on screen holds
+ * the list, since the multi-artist rows and the single field are two views of
+ * the same semicolon-separated column. */
+function formArtistOptions() {
+  const multi = document.getElementById('fMultiArtist');
+  const names = (multi && multi.checked)
+    ? formArtists
+    : (document.getElementById('fArtist').value || '').split(';');
+  return names.map(s => s.trim()).filter(Boolean);
+}
+
+/* Offered only where there is a choice to make — a record with one artist has
+ * already answered the question by existing, and a picker on every song of a
+ * normal LP is furniture.
+ *
+ * A credit whose artist is no longer on the record still gets an option of its
+ * own. Without it the select would render blank, and the next thing the user
+ * touched on that row would look like it cleared a field that was never shown
+ * to them. */
+function trackArtistPickerHTML(t, artists) {
+  if (artists.length < 2) return '';
+  const names = t.artist && artists.indexOf(t.artist) === -1
+    ? artists.concat([t.artist])
+    : artists;
+  const options = ['<option value="">— who plays it —</option>'].concat(
+    names.map(n =>
+      `<option value="${esc(n)}"${n === t.artist ? ' selected' : ''}>${esc(n)}</option>`));
+  return `<select class="tartist" title="who plays this one"
+            onchange="updateTrackArtist(${t.i}, this.value)">${options.join('')}</select>`;
+}
+
+/* No re-render: the select already shows the new value, and rebuilding the
+ * rows mid-edit would take focus off it. */
+function updateTrackArtist(i, value) {
+  const t = formTracks[i];
+  if (!t) return;
+  const name = String(value || '').trim();
+  if (name) t.artist = name; else delete t.artist;
+  formChanged();
 }
 
 function addTrack(letter) {
@@ -5031,15 +5085,56 @@ function addArtistRow() {
   renderArtistsForm();
 }
 
-// no re-render here: rebuilding the inputs mid-edit would steal focus
+/* A rename carries the songs with it: the credit stores the NAME, so leaving
+ * it behind would strand every song this artist plays under a name the record
+ * no longer has.
+ *
+ * Blanking the name is a removal by another route, and is refused the same
+ * way — see deleteArtistRow.
+ *
+ * The artist inputs are not re-rendered here (that would steal focus mid-edit),
+ * but the track pickers are: their options ARE this list. */
 function updateArtistRow(idx, value) {
+  const was = String(formArtists[idx] || '').trim();
+  const now = String(value || '').trim();
+  if (was === now) { formArtists[idx] = value; return; }
+
+  if (!now) {
+    const credited = artistsInUse(formTracks, was);
+    if (credited) {
+      toast(`${credited} song${credited > 1 ? 's' : ''} still credit${credited > 1 ? '' : 's'} ${was}`);
+      renderArtistsForm();           // put the name the user erased back
+      return;
+    }
+  }
+  if (was) {
+    formTracks.forEach(t => { if (t.artist === was) t.artist = now; });
+    if (!now) formTracks.forEach(t => { if (!t.artist) delete t.artist; });
+  }
   formArtists[idx] = value;
+  refreshTrackPickers();
 }
 
+/* Removing an artist would leave their songs crediting somebody the record no
+ * longer lists. Refuse and say how many, the way lowering the disc count
+ * refuses to strand a side — losing a credit must be an explicit act. */
 function deleteArtistRow(idx) {
+  const credited = artistsInUse(formTracks, formArtists[idx]);
+  if (credited) {
+    toast(`${credited} song${credited > 1 ? 's' : ''} still credit${credited > 1 ? '' : 's'} ` +
+          `${String(formArtists[idx]).trim()} — clear ${credited > 1 ? 'them' : 'it'} first`);
+    return;
+  }
   formArtists.splice(idx, 1);
   if (!formArtists.length) formArtists.push('');
   renderArtistsForm();
+  refreshTrackPickers();
+}
+
+/* The pickers list the record's artists, so they go stale the moment that list
+ * is edited. Only worth doing while the tracklist step is actually built. */
+function refreshTrackPickers() {
+  if (document.getElementById('fTracksSides')) renderTracksForm();
 }
 
 function toggleMultiArtist() {
@@ -5517,6 +5612,7 @@ const FORM_STEPS = [
   { n: 3, label: 'Log',      sub: 'what happens to it' },
   { n: 4, label: 'Tracklist', sub: 'what is on it' },
 ];
+const TRACKLIST_STEP = 4;
 let formStep = 1;
 
 function setFormStep(n) {
@@ -5531,6 +5627,11 @@ function setFormStep(n) {
   });
   document.getElementById('formBackBtn').disabled = formStep === 1;
   document.getElementById('formNextBtn').disabled = formStep === FORM_STEPS.length;
+  // The song pickers ARE the record's artist list, and the artists are typed on
+  // an earlier step. Rebuilding on arrival is what makes every route here — the
+  // spine, the next button, the detail drawer's "add the songs" — offer the
+  // artists the record actually has by now.
+  if (formStep === TRACKLIST_STEP) renderTracksForm();
   document.getElementById('formSpine').innerHTML = FORM_STEPS.map(st => `
     <button type="button" class="fstep${st.n === formStep ? ' on' : ''}${st.n < formStep ? ' done' : ''}"
             onclick="setFormStep(${st.n})">

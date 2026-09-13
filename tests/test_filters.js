@@ -347,3 +347,54 @@ test('a record with no tracks never throws when song search is on', () => {
   qval.fields.song = true;
   assert.strictEqual(matches({ artist: 'x', album_name: 'y' }, qval, SONG_DEPS), false);
 });
+// ── searching a compilation by the artist of one song ───────────────────────
+// The record-level artist column usually lists every performer, so searching a
+// name would find the record anyway. Every test here therefore searches for a
+// name the column does NOT spell — a guest credited only on the song — which
+// is the only way to prove the assignment itself is being read.
+//
+// The artist field is what reads it, not the song field: to a searcher "who is
+// on this record" is one question, and a song artist is an artist.
+
+const guestSong = {
+  artist: 'Edu Lobo; Gal Costa', album_name: 'Festival', have_it: true,
+  tracks: JSON.stringify([
+    { side: 'A', title: 'Ponteio', artist: 'Marilia Medalha' },
+    { side: 'B', title: 'Aquarela do Brasil', artist: 'Gal Costa' },
+  ]),
+};
+
+test('a song artist missing from the artist column is found by default', () => {
+  const qval = Object.assign(defaultQuery(), { text: 'medalha' });
+  assert.strictEqual(qval.fields.song, false);
+  assert.strictEqual(matches(guestSong, qval, SONG_DEPS), true);
+});
+
+test('turning the artist field off hides the song artists too', () => {
+  const qval = Object.assign(defaultQuery(), { text: 'medalha' });
+  qval.fields.artist = false;
+  assert.strictEqual(matches(guestSong, qval, SONG_DEPS), false);
+});
+
+test('a song artist does not leak into song search, which is about titles', () => {
+  const qval = Object.assign(defaultQuery(), { text: 'medalha' });
+  qval.fields.artist = false;
+  qval.fields.song = true;
+  assert.strictEqual(matches(guestSong, qval, SONG_DEPS), false);
+});
+
+test('an unassigned song contributes no artist text of its own', () => {
+  const unassigned = {
+    artist: 'Tim Maia', album_name: 'Racional', have_it: true,
+    tracks: JSON.stringify([{ side: 'A', title: 'Que Beleza' }]),
+  };
+  const qval = Object.assign(defaultQuery(), { text: 'beleza' });
+  assert.strictEqual(matches(unassigned, qval, SONG_DEPS), false);
+});
+
+test('artist search still works on a record whose tracks will not parse', () => {
+  const broken = { artist: 'Tim Maia', album_name: 'Racional', have_it: true,
+                   tracks: 'not json at all' };
+  const qval = Object.assign(defaultQuery(), { text: 'tim' });
+  assert.strictEqual(matches(broken, qval, SONG_DEPS), true);
+});

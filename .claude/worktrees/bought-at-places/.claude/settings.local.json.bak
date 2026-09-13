@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import ast; print\\('ok'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(python3 *)",
+      "Bash(pip3 --version)",
+      "Bash(apt list *)",
+      "Read(//home/jujuz/.claude/plugins/cache/claude-plugins-official/superpowers/6.2.0/skills/subagent-driven-development/**)",
+      "Read(//home/jujuz/.claude/plugins/cache/claude-plugins-official/superpowers/6.2.0/skills/subagent-driven-development/scripts/**)",
+      "Bash($SKILL_DIR/scripts/sdd-workspace $PLAN *)",
+      "Bash(git check-ignore *)",
+      "Bash(git commit *)",
+      "Bash($SKILL_DIR/scripts/task-brief $PLAN *)",
+      "Bash(node *)",
+      "Bash(/home/jujuz/.claude/plugins/cache/claude-plugins-official/superpowers/6.2.0/skills/subagent-driven-development/scripts/review-package *)",
+      "Bash(/home/jujuz/.claude/plugins/cache/claude-plugins-official/superpowers/6.2.0/skills/subagent-driven-development/scripts/task-brief *)",
+      "Bash(git -C \"$\\(git rev-parse --git-common-dir\\)/..\" rev-parse --show-toplevel)",
+      "Bash(git stash *)",
+      "Bash(git merge *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git worktree *)"
+    ]
+  }
+}

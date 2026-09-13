@@ -1,0 +1,12 @@
+{
+  "name": "Live at Carnegie Hall",
+  "release_date": "2015-06-01",
+  "release_date_precision": "day",
+  "genres": [],
+  "label": "Sussex",
+  "artists": [{"name": "Bill Withers", "id": "3XHO7cRUPCLOr6jwp8vsx5"}],
+  "images": [
+    {"url": "https://i.scdn.co/image/big", "height": 640, "width": 640},
+    {"url": "https://i.scdn.co/image/small", "height": 64, "width": 64}
+  ]
+}

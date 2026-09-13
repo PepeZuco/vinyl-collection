@@ -2462,3 +2462,155 @@ test('closing the photo takes its words with it', async () => {
   win.closeShot();
   assert.strictEqual(shotWords(doc), '', 'the words outlived the photo');
 });
+
+// ── crediting each song on a compilation ────────────────────────────────────
+// A compilation's artist column already lists every performer. What was
+// missing was saying WHICH of them plays WHICH song, so the picker is offered
+// only where there is a choice to make — a single-artist record answers the
+// question by existing.
+
+const COMP_ARTISTS = 'Edu Lobo; Gal Costa';
+const COMP_TRACKS = JSON.stringify([
+  { side: 'A', title: 'Ponteio', artist: 'Edu Lobo' },
+  { side: 'A', title: 'Aquarela do Brasil' },
+]);
+
+/* A compilation open on the tracklist step of the form. */
+function openComp(win, read, over) {
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { artist: COMP_ARTISTS, tracks: COMP_TRACKS, disc_count: 1 }, over || {});
+  win.openEdit(r.id);
+  win.setFormStep(4);
+  return r;
+}
+
+const pickers = doc => [...doc.querySelectorAll('#fTracksSides .track-row .tartist')];
+const optionsOf = sel => [...sel.options].map(o => o.value);
+
+test('a compilation offers an artist picker on every song', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read);
+  assert.strictEqual(pickers(doc).length, 2, 'not one picker per song');
+  assert.deepStrictEqual(optionsOf(pickers(doc)[0]), ['', 'Edu Lobo', 'Gal Costa'],
+    'the picker must offer exactly the record\'s own artists, plus unassigned');
+});
+
+test('a record with one artist gets no picker, there is nothing to choose', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read, { artist: 'Edu Lobo' });
+  assert.deepStrictEqual(pickers(doc), []);
+});
+
+test('the picker opens on the artist the song is already credited to', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read);
+  assert.strictEqual(pickers(doc)[0].value, 'Edu Lobo');
+  assert.strictEqual(pickers(doc)[1].value, '', 'an uncredited song must start blank');
+});
+
+test('picking an artist credits the song, and blank uncredits it', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateTrackArtist(1, 'Gal Costa');
+  assert.strictEqual(read('formTracks')[1].artist, 'Gal Costa');
+  win.updateTrackArtist(1, '');
+  assert.strictEqual('artist' in read('formTracks')[1], false,
+    'clearing must drop the key, not store an empty name');
+});
+
+test('renaming an artist follows every song credited to them', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateArtistRow(0, 'Edu Lobo & Marilia Medalha');
+  assert.strictEqual(read('formTracks')[0].artist, 'Edu Lobo & Marilia Medalha');
+  assert.strictEqual(read('formArtists')[0], 'Edu Lobo & Marilia Medalha');
+});
+
+test('removing an artist with songs is refused, and says how many', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateTrackArtist(1, 'Edu Lobo');       // now both songs are his
+  win.deleteArtistRow(0);
+  assert.deepStrictEqual([...read('formArtists')], ['Edu Lobo', 'Gal Costa'],
+    'the artist was removed even though songs still credit them');
+  assert.strictEqual(read('formTracks')[0].artist, 'Edu Lobo');
+});
+
+test('clearing an artist name is refused the same way removing them is', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.updateArtistRow(0, '   ');
+  assert.strictEqual(read('formArtists')[0], 'Edu Lobo', 'the name was blanked out');
+  assert.strictEqual(read('formTracks')[0].artist, 'Edu Lobo');
+});
+
+test('an artist nobody is credited to is removed without a fuss', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  win.deleteArtistRow(1);                      // Gal Costa has no songs
+  assert.deepStrictEqual([...read('formArtists')], ['Edu Lobo']);
+});
+
+test('a credit whose artist is no longer listed stays pickable, not silently lost', async () => {
+  const { win, doc, read } = await boot();
+  openComp(win, read, {
+    artist: 'Edu Lobo; Gal Costa',
+    tracks: JSON.stringify([{ side: 'A', title: 'Ponteio', artist: 'Marilia Medalha' }]),
+  });
+  assert.strictEqual(pickers(doc)[0].value, 'Marilia Medalha');
+  assert.ok(optionsOf(pickers(doc)[0]).includes('Marilia Medalha'),
+    'a stored credit must survive a render even when it left the artist list');
+});
+
+test('saving sends the credits', async () => {
+  const { win, read } = await boot();
+  const r = openComp(win, read);
+  win.updateTrackArtist(1, 'Gal Costa');
+  let sent = null;
+  const realFetch = win.fetch;
+  win.fetch = async (url, opts) => {
+    if (opts && opts.method === 'PUT') sent = JSON.parse(opts.body);
+    return realFetch(url, opts);
+  };
+  await win.submitForm();
+  assert.ok(sent, 'nothing was sent');
+  assert.deepStrictEqual(JSON.parse(sent.tracks).map(t => t.artist),
+    ['Edu Lobo', 'Gal Costa']);
+  assert.ok(r);
+});
+
+test('the tracks tab names who played each song', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { artist: COMP_ARTISTS, tracks: COMP_TRACKS });
+  win.openDetail(r.id);
+  win.setDetailTab('tracks');
+  // The drawer renders the tracklist in more than one place (the tab and the
+  // section layout), so this asks what each ROW says rather than counting them.
+  const rows = [...doc.querySelectorAll('#detailBody .tl-row')];
+  const rowsFor = re => rows.filter(el => re.test(el.textContent));
+  assert.ok(rowsFor(/Ponteio/).length, 'no tracklist rendered');
+  rowsFor(/Ponteio/).forEach(el => assert.match(el.textContent, /Edu Lobo/));
+  rowsFor(/Aquarela/).forEach(el =>
+    assert.ok(!/Edu Lobo|Gal Costa/.test(el.textContent),
+      'an uncredited song must not borrow the record\'s artists'));
+});
+
+test('artists typed on step one light the pickers on the tracklist step', async () => {
+  // Every route to the tracklist step has to arrive with a current artist
+  // list: the pickers ARE that list, and one built before the artists were
+  // typed offers nothing to choose.
+  const { win, doc } = await boot();
+  win.openAdd();
+  win.addTrack('A');            // the tracklist is built while there are no artists
+  $(doc, '#fArtist').value = 'Edu Lobo; Gal Costa';
+  win.setFormStep(4);           // ...and only now do they exist
+  assert.deepStrictEqual(optionsOf(pickers(doc)[0]), ['', 'Edu Lobo', 'Gal Costa']);
+});
+
+test('the tracklist step stays clean when nothing on it was touched', async () => {
+  const { win, read } = await boot();
+  openComp(win, read);
+  assert.strictEqual(win.formIsDirty(), false,
+    'walking to the tracklist step counts as an edit');
+});
