@@ -726,10 +726,13 @@ select option{background:var(--surface);color:var(--text)}
     background:var(--bg);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
   }
 
+  /* Solid, not the fade it used to be: the fade was drawn when the only thing
+     that ever passed under the header was the cover carousel. With the whole
+     record stacked below, a tracklist scrolls through it. */
   .dm-top{
     display:flex;align-items:center;justify-content:space-between;
     padding:12px 14px 8px;position:sticky;top:0;z-index:6;
-    background:linear-gradient(var(--bg) 55%,transparent);flex-shrink:0;
+    background:var(--bg);flex-shrink:0;
   }
   .dm-close{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);
     background:var(--card);color:var(--muted);display:flex;align-items:center;
@@ -776,6 +779,18 @@ select option{background:var(--surface);color:var(--text)}
   /* info sheet below the crate — content classes (dm-album, dm-rates, etc.)
      live outside this media query so the desktop drawer can reuse them too */
   .dm-info{padding:16px 16px 4px}
+  /* The tab row pins under the header rather than at the top of the viewport,
+     and runs the full width of the sheet — the blocks pass behind it, so it
+     cannot leave a gutter of moving text down either side. What scrolls here
+     is the whole sheet (#dmLayout), not this column: the cover carousel and
+     the crate scroll away with everything else. */
+  .dm-info .dd-tabs{top:var(--dm-top-h,56px);z-index:5;background:var(--bg);
+    margin:12px -16px 0;padding:0 16px}
+  /* The last block has to be able to reach the row like the other two, which
+     takes a sheet's worth of room below its start. The desktop's
+     `min-height:100%` cannot say that here: the sheet has no definite height,
+     so the percentage resolves against nothing. dmMeasureChrome() measures it. */
+  .dm-info .dd-sec:last-child{min-height:var(--dm-sec-min,60vh)}
   /* delete/edit sit after the notes, scrolling with the content */
   .dm-foot{display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;
     margin:16px 16px 0;padding:14px 0 32px;border-top:1px solid var(--border)}
@@ -3831,7 +3846,7 @@ function renderDetailContent(r) {
       </div>
     </div>
     <div class="detail-mobile-layout" id="dmLayout">
-      <div class="dm-top">
+      <div class="dm-top" id="dmTop">
         <button class="dm-close" onclick="closeDetail()" title="close"><i class="ti ti-x"></i></button>
         <span class="dm-count" id="dmCount"></span>
         <span class="dm-top-spacer"></span>
@@ -3845,6 +3860,7 @@ function renderDetailContent(r) {
   dmBind();
   ddBind();
   dmSetCurrent(dmIdx);
+  dmMeasureChrome();
   const dd = document.getElementById('ddInfo');
   if (dd && keepScroll) dd.scrollTop = keepScroll;
   ddBindSections();
@@ -3853,36 +3869,6 @@ function renderDetailContent(r) {
 
 // ── mobile crate carousel ───────────────────────────────────────────────────
 let dmList = [], dmIdx = 0;
-
-/* Which tab the drawer is showing. Sticky while the drawer is open, so paging
- * through records with the arrows does not throw you back to Info every time.
- *
- * Tracks is the default because it is what you open a record to see — but the
- * collection starts with no tracklists at all, so a record with none falls
- * back to Info rather than opening on an empty tab. That fallback is only for
- * the *automatic* default, though: once the user explicitly clicks a tab
- * (setDetailTab), detailTabPinned goes true and the fallback stops applying —
- * otherwise the empty Tracks tab (its "no tracklist yet" / "+ add the songs"
- * state) could never be reached by clicking it. Pinning resets on close so the
- * next record you open still gets the automatic default. */
-let detailTab = 'tracks';
-let detailTabPinned = false;
-
-function activeDetailTab(r) {
-  if (!detailTabPinned && detailTab === 'tracks' && !parseTracks(r.tracks).length) return 'info';
-  return detailTab;
-}
-
-function setDetailTab(tab) {
-  detailTab = tab;
-  detailTabPinned = true;
-  const rec = records.find(x => x.id === currentDetailId);
-  if (!rec) return;
-  const info = document.getElementById('dmInfo');
-  if (info) info.innerHTML = dmInfoHTML(rec);
-  // no desktop half any more: over there the three blocks are all on screen
-  // and the tabs scroll between them (ddGoToSection) instead of swapping one in
-}
 
 function dmSlideHTML(rec) {
   const img = rec.cover_url
@@ -4160,97 +4146,130 @@ function lastCleanedLabel(r) {
     + (dates.length > 1 ? `<span class="sub">${dates.length}×</span>` : '');
 }
 
-function dmInfoHTML(r) {
-  const tab = activeDetailTab(r);
+/* A record's three blocks, stacked in order under a tab row that is navigation
+ * over them rather than a switch: the row pins to the top of whatever is
+ * scrolling, clicking a tab scrolls that block's start up under the row, and
+ * the highlight follows whatever you have scrolled to.
+ *
+ * Both panes draw it — the desktop drawer's info column and the phone's sheet
+ * — which is why every id carries the pane's prefix. Both layouts are in the
+ * DOM at once and CSS hides one, so a shared id would have the phone's tab row
+ * scrolling the desktop's column, and the spy marking the hidden pane's tabs.
+ *
+ * The phone used to swap one block in at a time. It had the screen for only
+ * one, the argument went — but it also meant a record you opened showed its
+ * tracklist OR its history and never said the other existed, and the cover
+ * carousel above scrolls away anyway. */
+function detailSectionsHTML(r, pane) {
   const tabBtn = (id, label) =>
-    `<button class="dm-tab${tab === id ? ' on' : ''}" onclick="setDetailTab('${id}')">${label}</button>`;
+    `<button class="dm-tab" data-ddsec="${id}" onclick="detailGoToSection('${pane}','${id}')">${label}</button>`;
   return dmHeaderHTML(r) + `
-    <div class="dm-tabs">
-      ${tabBtn('info', 'Info')}${tabBtn('tracks', 'Tracks')}${tabBtn('timeline', 'Timeline')}
-    </div>` +
-    (tab === 'tracks'   ? dmTracksTabHTML(r)
-   : tab === 'timeline' ? dmTimelineTabHTML(r)
-   :                      dmInfoTabHTML(r));
-}
-
-/* The desktop drawer shows all three blocks at once, in order, and the tab row
- * becomes navigation over them: it pins to the top of the scrolling info
- * column, clicking a tab scrolls that block's start up under the row, and the
- * highlight follows whatever you have scrolled to. The phone still switches
- * one tab at a time (dmInfoHTML above) — there, reaching Timeline would mean
- * scrolling past a metadata grid and a full tracklist first. */
-function ddInfoHTML(r) {
-  const tabBtn = (id, label) =>
-    `<button class="dm-tab" data-ddsec="${id}" onclick="ddGoToSection('${id}')">${label}</button>`;
-  return dmHeaderHTML(r) + `
-    <div class="dm-tabs dd-tabs" id="ddTabs">
+    <div class="dm-tabs dd-tabs" id="${pane}Tabs">
       ${tabBtn('info', 'Info')}${tabBtn('tracks', 'Tracks')}${tabBtn('timeline', 'Timeline')}
     </div>
-    <section class="dd-sec" id="ddSec-info">${dmInfoTabHTML(r)}</section>
-    <section class="dd-sec" id="ddSec-tracks">${dmTracksTabHTML(r)}</section>
-    <section class="dd-sec" id="ddSec-timeline">${dmTimelineTabHTML(r)}</section>`;
+    <section class="dd-sec" id="${pane}Sec-info">${dmInfoTabHTML(r)}</section>
+    <section class="dd-sec" id="${pane}Sec-tracks">${dmTracksTabHTML(r)}</section>
+    <section class="dd-sec" id="${pane}Sec-timeline">${dmTimelineTabHTML(r)}</section>`;
 }
 
+function dmInfoHTML(r) { return detailSectionsHTML(r, 'dm'); }
+function ddInfoHTML(r) { return detailSectionsHTML(r, 'dd'); }
+
 const DD_SECTIONS = ['info', 'tracks', 'timeline'];
+
+/* What each pane scrolls, and what else is pinned above its tab row. The
+ * desktop's info column scrolls on its own with nothing over it; on the phone
+ * the whole sheet scrolls and the header carrying the close button pins above
+ * the row, so both have to clear the line a block is measured against. */
+const DETAIL_PANES = {
+  dd: { scroller: 'ddInfo',   chrome: null    },
+  dm: { scroller: 'dmLayout', chrome: 'dmTop' },
+};
 
 /* A click scrolls smoothly, passing through every block between here and the
  * target. The spy would repaint the highlight for each one on the way, so it
  * stands down until the scroll has had time to settle. */
 let ddSpyLockUntil = 0;
 
-function ddBarHeight() {
-  const bar = document.getElementById('ddTabs');
-  return bar ? bar.offsetHeight : 0;
+function detailScroller(pane) {
+  const p = DETAIL_PANES[pane];
+  return p ? document.getElementById(p.scroller) : null;
 }
 
-function ddMarkSection(id) {
-  document.querySelectorAll('#ddInfo .dd-tabs .dm-tab').forEach(b =>
+/* Everything pinned over the blocks: the tab row, plus whatever the pane keeps
+ * above it. */
+function detailBarHeight(pane) {
+  const el = id => { const n = id && document.getElementById(id); return n ? n.offsetHeight : 0; };
+  return el(pane + 'Tabs') + el(DETAIL_PANES[pane].chrome);
+}
+
+function detailMarkSection(pane, id) {
+  document.querySelectorAll('#' + pane + 'Tabs .dm-tab').forEach(b =>
     b.classList.toggle('on', b.dataset.ddsec === id));
 }
 
-function ddGoToSection(id) {
-  const col = document.getElementById('ddInfo');
-  const sec = document.getElementById('ddSec-' + id);
+function detailGoToSection(pane, id) {
+  const col = detailScroller(pane);
+  const sec = document.getElementById(pane + 'Sec-' + id);
   if (!col || !sec) return;
   ddSpyLockUntil = Date.now() + 700;
-  ddMarkSection(id);
+  detailMarkSection(pane, id);
   const top = col.scrollTop + sec.getBoundingClientRect().top
-            - col.getBoundingClientRect().top - ddBarHeight();
+            - col.getBoundingClientRect().top - detailBarHeight(pane);
   col.scrollTo({top: Math.max(0, top), behavior: 'smooth'});
 }
 
-/* Which block the column is actually showing: the last one whose start has
- * passed the underside of the pinned row. Without this the highlight would sit
+/* Which block a pane is actually showing: the last one whose start has passed
+ * the underside of the pinned row. Without this the highlight would sit
  * wherever it was last clicked while you scrolled somewhere else entirely. */
-function ddSyncSpy() {
-  const col = document.getElementById('ddInfo');
+function detailSyncSpy(pane) {
+  const col = detailScroller(pane);
   if (!col || Date.now() < ddSpyLockUntil) return;
   // renderDetailContent runs while the overlay is still .hidden, and a
-  // display:none column measures every block at zero — which reads as all
-  // three having passed the row, and highlights the last one. openDetail syncs
-  // again once the drawer is on screen and can actually be measured.
+  // display:none pane measures every block at zero — which reads as all three
+  // having passed the row, and highlights the last one. openDetail syncs again
+  // once the drawer is on screen and can actually be measured. It is also what
+  // keeps the hidden pane of the two from being marked at all.
   if (!col.clientHeight) return;
-  const line = col.getBoundingClientRect().top + ddBarHeight() + 4;
+  const line = col.getBoundingClientRect().top + detailBarHeight(pane) + 4;
   let active = DD_SECTIONS[0];
   DD_SECTIONS.forEach(id => {
-    const sec = document.getElementById('ddSec-' + id);
+    const sec = document.getElementById(pane + 'Sec-' + id);
     if (sec && sec.getBoundingClientRect().top <= line) active = id;
   });
-  // A short last block can never reach the row — the column runs out of scroll
-  // first — so a column scrolled to its end names its last block regardless,
+  // A short last block can never reach the row — the pane runs out of scroll
+  // first — so a pane scrolled to its end names its last block regardless,
   // which is also what clicking that tab leaves you looking at. Only when
-  // there is something to scroll: a column with no overflow is at its end too,
+  // there is something to scroll: a pane with no overflow is at its end too,
   // and that one is showing Info.
   const over = col.scrollHeight - col.clientHeight;
   if (over > 2 && col.scrollTop >= over - 2) active = DD_SECTIONS[DD_SECTIONS.length - 1];
-  ddMarkSection(active);
+  detailMarkSection(pane, active);
 }
 
+function ddSyncSpy() { Object.keys(DETAIL_PANES).forEach(detailSyncSpy); }
+
 function ddBindSections() {
-  const col = document.getElementById('ddInfo');
-  if (!col) return;
-  col.addEventListener('scroll', ddSyncSpy, {passive: true});
+  Object.keys(DETAIL_PANES).forEach(pane => {
+    const col = detailScroller(pane);
+    if (col) col.addEventListener('scroll', () => detailSyncSpy(pane), {passive: true});
+  });
   ddSyncSpy();
+}
+
+/* The phone's sticky header height, and the room its last block needs to be
+ * able to reach the tab row like the other two. Measured rather than written
+ * into the stylesheet twice: the header's height is its padding plus a button,
+ * and a literal would drift the first time either changed. The desktop needs
+ * neither — its last block gets `min-height:100%` off a column that has a
+ * definite height, which the sheet does not. */
+function dmMeasureChrome() {
+  const lay = document.getElementById('dmLayout');
+  if (!lay) return;
+  const h = id => { const n = document.getElementById(id); return n ? n.offsetHeight : 0; };
+  const room = lay.clientHeight - h('dmTop') - h('dmTabs') - h('dmFoot');
+  lay.style.setProperty('--dm-top-h', h('dmTop') + 'px');
+  lay.style.setProperty('--dm-sec-min', Math.max(0, room) + 'px');
 }
 
 function dmHeaderHTML(r) {
@@ -4456,6 +4475,9 @@ function dmSetCurrent(idx) {
     ddSyncSpy();
   }
   renderDetailFoot(rec.id);
+  // the tab row and the foot were both just rewritten, so the sheet's two
+  // measurements are stale — and the foot's height is part of one of them
+  dmMeasureChrome();
 }
 
 function dmCenterSlide(idx, smooth) {
@@ -4605,18 +4627,13 @@ function openDetail(id, focus) {
   confirmDeleteId = null;
   currentDetailId = id;
   focusDetail(focus);
-  // A focus points at an entry in the Timeline block. On a phone, where one
-  // tab shows at a time, a tab other than Timeline means that entry never
-  // reaches the DOM and scrollFocusIntoView below finds nothing to scroll to —
-  // so a focused open always lands on Timeline, no matter what the drawer was
-  // showing last. Set before rendering: dmInfoHTML reads detailTab during
-  // renderDetailContent, so this has to land before that call, not after.
-  // Desktop needs none of it: all three blocks are always rendered there.
-  if (focus) { detailTab = 'timeline'; detailTabPinned = false; }
   renderDetailContent(r);
   updateDetailNavVisibility();
   document.getElementById('detailOverlay').classList.remove('hidden');
-  ddSyncSpy();   // first measurable moment — see the guard in ddSyncSpy
+  // first measurable moment — until the line above, .overlay.hidden is
+  // display:none and everything below measures zero
+  dmMeasureChrome();
+  ddSyncSpy();
   syncUrl(true);
   if (window.matchMedia('(max-width:760px)').matches) {
     dmCenterSlide(dmIdx, false);
@@ -4716,8 +4733,6 @@ function renderDetailFoot(id) {
 function closeDetail(){
   document.getElementById('detailOverlay').classList.add('hidden');
   confirmDeleteId=null;currentDetailId=null;focusDetail(null);
-  detailTab = 'tracks';
-  detailTabPinned = false;
   // closing ends the desktop column's scroll position too — detailBody keeps
   // its markup until the next open, and reopening the same record should start
   // at the top the way any other record does
@@ -8771,6 +8786,9 @@ function fitRotationList() {
 
 window.addEventListener('resize', function () {
   if (currentTab === 'stats') fitRotationList();
+  // a rotation changes the height the sheet's last block needs, and crossing
+  // the 760px line changes whether the phone's chrome is on screen at all
+  if (currentDetailId) dmMeasureChrome();
 });
 
 /* `day` shifted by `n` calendar days, and the whole days between two days —

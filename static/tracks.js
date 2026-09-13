@@ -59,7 +59,15 @@ const VinylTracks = (function () {
 
   /* Total: this column is read by six consumers straight off /api/records, and
    * a record whose value will not parse — a hand-edited PUT, a CSV from
-   * somewhere else — must come back empty rather than take the grid down. */
+   * somewhere else — must come back empty rather than take the grid down.
+   *
+   * Names are capitalised HERE, on the way out, rather than only where a title
+   * is typed. The column holds tracklists that predate that rule and ones no
+   * field ever saw — written by a scan, an import, a PUT — and a sleeve should
+   * read the same whichever wrote it. One place to do it also means the
+   * tracklist tab, the timeline, the drawer and search cannot disagree about a
+   * song's name, and the edit form (which loads through here) shows the
+   * capitals, so the next save persists what was already on screen. */
   function parseTracks(raw) {
     if (!raw) return [];
     let parsed;
@@ -70,9 +78,9 @@ const VinylTracks = (function () {
       .map(function (t) {
         const out = {
           side: String(t.side || '').toUpperCase().slice(0, 1),
-          title: typeof t.title === 'string' ? t.title : '',
+          title: typeof t.title === 'string' ? capitalizeName(t.title) : '',
         };
-        const artist = String(t.artist || '').trim();
+        const artist = capitalizeName(String(t.artist || '').trim());
         if (artist) out.artist = artist;
         if (t.liked_at) out.liked_at = String(t.liked_at);
         return out;
@@ -234,9 +242,11 @@ const VinylTracks = (function () {
    * cannot quietly re-flow text on its way through. Trimming belongs to
    * serializeTracks, which already does it.
    *
-   * Applied where a human ENTERS a title (the song-title field, the paste
-   * box), never in serializeTracks: a title that came from a Spotify scan or
-   * an imported CSV must not be rewritten by an unrelated save. */
+   * Applied where a human ENTERS a title (the song-title field, the paste box)
+   * and again in parseTracks, which is what covers the tracklists no field
+   * ever saw — a Spotify scan, an imported CSV, a hand-written PUT. Still not
+   * in serializeTracks: everything reaching it has come through one of those
+   * two, so a save has nothing left to rewrite. */
   function capitalizeName(name) {
     return String(name == null ? '' : name)
       .replace(/(^|\s)(\S)/g, function (m, gap, first) { return gap + first.toUpperCase(); });

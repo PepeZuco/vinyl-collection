@@ -2063,7 +2063,6 @@ test('the drawer marks a private note in the history', async () => {
     { date: '2026-08-10', text: 'paid too much', private: true },
   ]);
   win.openDetail(r.id);
-  win.setDetailTab('timeline');   // where the history has lived since the tabs
   assert.strictEqual(count(doc, '#ddInfo .dm-hist-entry.note.private'), 1,
     'a private note looks exactly like a public one in the drawer');
 });
@@ -2250,7 +2249,6 @@ test('a link in a note opens in a new tab', async () => {
   const r = read('records').find(x => x.have_it);
   r.notes = JSON.stringify([{ date: '2026-08-10', text: 'found it at [the shop](https://example.com)' }]);
   win.openDetail(r.id);
-  win.setDetailTab('timeline');   // where the history has lived since the tabs
   const link = $(doc, '#ddInfo .dm-hist-entry.note a');
   assert.ok(link, 'the note rendered no link at all');
   assert.strictEqual(link.getAttribute('target'), '_blank');
@@ -2294,13 +2292,11 @@ function withPhotos(read, notes) {
 // history and would double every photo.
 const shotThumbs = doc => [...doc.querySelectorAll('#ddInfo .note-shot')];
 
-/* The photos hang off the record's history, and the history is the Timeline
- * tab — the drawer opens on Tracks/Info. Opening the record is not enough to
- * put a thumbnail on the page, so every test here asks for the tab that holds
- * them, the way a person reaching a photo has to. */
+/* The photos hang off the record's history, which the drawer stacks under the
+ * tracklist. Opening the record renders all three blocks, so the thumbnails
+ * are on the page without a tab being asked for — only scrolled past. */
 function openPhotoRun(win, id) {
   win.openDetail(id);
-  win.setDetailTab('timeline');
 }
 const openShotId = doc =>
   ($(doc, '#shotImage').getAttribute('src') || '').split('/').pop();
@@ -2584,9 +2580,8 @@ test('the tracks tab names who played each song', async () => {
   const r = read('records').find(x => x.have_it);
   Object.assign(r, { artist: COMP_ARTISTS, tracks: COMP_TRACKS });
   win.openDetail(r.id);
-  win.setDetailTab('tracks');
-  // The drawer renders the tracklist in more than one place (the tab and the
-  // section layout), so this asks what each ROW says rather than counting them.
+  // The drawer renders the tracklist in more than one place — once per pane,
+  // desktop and phone — so this asks what each ROW says, not how many there are.
   const rows = [...doc.querySelectorAll('#detailBody .tl-row')];
   const rowsFor = re => rows.filter(el => re.test(el.textContent));
   assert.ok(rowsFor(/Ponteio/).length, 'no tracklist rendered');
@@ -2594,6 +2589,41 @@ test('the tracks tab names who played each song', async () => {
   rowsFor(/Aquarela/).forEach(el =>
     assert.ok(!/Edu Lobo|Gal Costa/.test(el.textContent),
       'an uncredited song must not borrow the record\'s artists'));
+});
+
+// ── a sleeve reads with capitals wherever it came from ─────────────────────
+// The tracklists already in the column were written before the song field
+// capitalised anything, and a scan or an import never passed that field at
+// all. parseTracks raises them on the way out, so what the tab shows and what
+// the form offers to edit are the same words.
+
+const SENTENCE_TRACKS = JSON.stringify([
+  { side: 'A', title: 'down bad' },
+  { side: 'A', title: 'the tortured poets department' },
+  { side: 'B', title: 'so long, London' },
+  { side: 'B', title: 'guilty as sin?' },
+]);
+
+test('a tracklist stored in sentence case is shown with capitals', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { tracks: SENTENCE_TRACKS, disc_count: 1 });
+  win.openDetail(r.id);
+  const text = doc.querySelector('#detailBody').textContent;
+  ['Down Bad', 'The Tortured Poets Department', 'So Long, London', 'Guilty As Sin?']
+    .forEach(title => assert.ok(text.includes(title), `the tracklist still reads "${title}" flat`));
+  assert.ok(!text.includes('down bad'), 'a stored lower-case title reached the drawer');
+});
+
+test('the edit form shows the capitals, so the next save keeps them', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  Object.assign(r, { tracks: SENTENCE_TRACKS, disc_count: 1 });
+  win.openEdit(r.id);
+  win.setFormStep(4);
+  const titles = [...doc.querySelectorAll('#fTracksSides .track-row input')].map(el => el.value);
+  assert.deepStrictEqual(titles, ['Down Bad', 'The Tortured Poets Department',
+                                  'So Long, London', 'Guilty As Sin?']);
 });
 
 test('artists typed on step one light the pickers on the tracklist step', async () => {
@@ -2803,4 +2833,89 @@ test('a song with no side letter is still shown, without a made-up disc', async 
   assert.match(likes[0].textContent, /Hey Jude/);
   assert.ok(!/Disc|Side/.test(likes[0].textContent),
     'a sideless song was given a place on the record');
+});
+
+// ── the phone shows the whole record, like the desktop drawer ───────────────
+//
+// The phone used to swap one block into the sheet at a time, so opening a
+// record showed Tracks OR Info OR Timeline and the other two were not in the
+// DOM at all. It now stacks all three under a pinned tab row, the way the
+// desktop column has always done, and a tab is navigation over them.
+//
+// jsdom lays nothing out, so where a scroll lands is not assertable here. What
+// is: that all three blocks are rendered at once, that a tab press leaves them
+// alone, and that the press asks the sheet to scroll.
+
+const PHONE_SECS = ['info', 'tracks', 'timeline'];
+
+/* A record with something in every one of the three blocks, so an empty one
+ * cannot pass for a missing one. */
+function fullRecord(read) {
+  const r = busySunday(read);
+  r.tracks = JSON.stringify([
+    { side: 'A', title: 'Ponteio' },
+    { side: 'B', title: 'Aquarela' },
+  ]);
+  return r;
+}
+
+/* Record what the sheet is asked to scroll to. The element's own scrollTo
+ * shadows the prototype stub the harness installs. */
+function watchSheetScroll(doc) {
+  const calls = [];
+  $(doc, '#dmLayout').scrollTo = opts => calls.push(opts);
+  return calls;
+}
+
+test('the phone sheet holds all three blocks at once', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  PHONE_SECS.forEach(id => assert.ok($(doc, '#dmInfo #dmSec-' + id),
+    `the phone sheet has no ${id} block`));
+});
+
+test('the phone sheet has the tracklist and the history without asking for a tab', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  assert.ok(count(doc, '#dmSec-tracks .tl-row'), 'no tracklist on the phone sheet');
+  assert.ok(count(doc, '#dmSec-timeline .dm-hist-entry'), 'no history on the phone sheet');
+  assert.ok(count(doc, '#dmSec-info .dm-chip'), 'no info block on the phone sheet');
+});
+
+test('pressing a phone tab leaves the other two blocks in place', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  const tab = $(doc, '#dmTabs .dm-tab[data-ddsec="timeline"]');
+  assert.ok(tab, 'the phone tab row does not name its blocks');
+  press(win, tab);
+  PHONE_SECS.forEach(id => assert.ok($(doc, '#dmInfo #dmSec-' + id),
+    `pressing Timeline took the ${id} block away`));
+});
+
+test('pressing a phone tab scrolls the sheet', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  const calls = watchSheetScroll(doc);
+  press(win, $(doc, '#dmTabs .dm-tab[data-ddsec="tracks"]'));
+  assert.strictEqual(calls.length, 1, 'the tab did not scroll the sheet');
+  assert.strictEqual(calls[0].behavior, 'smooth');
+});
+
+test('the phone tab row marks the block it scrolled to', async () => {
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id);
+  press(win, $(doc, '#dmTabs .dm-tab[data-ddsec="timeline"]'));
+  const on = [...doc.querySelectorAll('#dmTabs .dm-tab.on')].map(b => b.dataset.ddsec);
+  assert.deepStrictEqual(on, ['timeline']);
+});
+
+test('a focused history entry reaches the phone sheet without hiding the rest', async () => {
+  // Opening on a timeline event used to force the phone onto the Timeline tab,
+  // because that was the only way the entry reached the DOM at all.
+  const { win, doc, read } = await boot();
+  win.openDetail(fullRecord(read).id, 'note:2026-08-09:0');
+  assert.strictEqual(count(doc, '#dmSec-timeline .dm-hist-entry.hit'), 1,
+    'the focused entry is not lit on the phone sheet');
+  assert.ok(count(doc, '#dmSec-tracks .tl-row'),
+    'the focused open cost the phone sheet its tracklist');
 });

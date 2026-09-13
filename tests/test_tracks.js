@@ -44,6 +44,43 @@ test('side is upper-cased and cut to one letter', () => {
   assert.strictEqual(parsed[0].side, 'B');
 });
 
+// A title is capitalised on the way OUT of the column, not only where one is
+// typed: the tracklists already stored were written before that rule existed,
+// and the ones a scan or a CSV wrote never passed a field at all. Doing it
+// here is what makes every consumer — the tracklist tab, the timeline, the
+// drawer, search — read a sleeve the same way, and what makes the edit form
+// show the capitals so the next save keeps them.
+
+test('a stored title reads with each word capital', () => {
+  const raw = JSON.stringify([{ side: 'A', title: 'down bad' }]);
+  assert.strictEqual(parseTracks(raw)[0].title, 'Down Bad');
+});
+
+test('a sentence-cased tracklist is raised word by word', () => {
+  const raw = JSON.stringify([{ side: 'B', title: 'So long, London' },
+                              { side: 'B', title: 'But daddy i love him' }]);
+  assert.deepStrictEqual(parseTracks(raw).map(t => t.title),
+                         ['So Long, London', 'But Daddy I Love Him']);
+});
+
+test('the stored casing of every letter but the first survives the read', () => {
+  const raw = JSON.stringify([{ side: 'C', title: 'guilty as sin?' },
+                              { side: 'C', title: '10ml' },
+                              { side: 'C', title: 'DNA' }]);
+  assert.deepStrictEqual(parseTracks(raw).map(t => t.title),
+                         ['Guilty As Sin?', '10ml', 'DNA']);
+});
+
+test('a missing title is still the empty string', () => {
+  assert.strictEqual(parseTracks(JSON.stringify([{ side: 'A' }]))[0].title, '');
+  assert.strictEqual(parseTracks(JSON.stringify([{ side: 'A', title: 7 }]))[0].title, '');
+});
+
+test('the artist credit on a song is capitalised the same way', () => {
+  const raw = JSON.stringify([{ side: 'A', title: 'aquarela', artist: 'toquinho' }]);
+  assert.strictEqual(parseTracks(raw)[0].artist, 'Toquinho');
+});
+
 // ── serialize ───────────────────────────────────────────────────────────────
 
 test('an empty list serializes to the empty string, not "[]"', () => {
@@ -310,7 +347,7 @@ test('a title that merely starts with a number survives intact', () => {
 test('a track keeps the artist it was assigned', () => {
   const raw = JSON.stringify([{ side: 'A', title: 'Aquarela do Brasil', artist: 'Gal Costa' }]);
   assert.deepStrictEqual(parseTracks(raw),
-    [{ side: 'A', title: 'Aquarela do Brasil', artist: 'Gal Costa' }]);
+    [{ side: 'A', title: 'Aquarela Do Brasil', artist: 'Gal Costa' }]);
 });
 
 test('an unassigned track carries no artist key at all', () => {
