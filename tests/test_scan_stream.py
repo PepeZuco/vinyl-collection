@@ -117,7 +117,54 @@ def test_a_bad_input_becomes_an_error_event_carrying_its_status(client):
 
 def test_spend_is_banked_even_when_the_client_never_reads_the_stream(client):
     """Cancel abandons the result but not the bill — the call was billed the
-    moment it returned. The generator's finally is what guarantees this."""
+    moment it returned. The generator's finally is what guarantees this.
+
+    The Flask test client normally drains the whole response before handing
+    it back, so a naive post()-then-assert never actually disconnects — it
+    only proves the ordinary completion path, which would pass even against
+    a route that doesn't stream at all. To exercise a real client hang-up we
+    have to reach past the helper and close the un-buffered app iterator
+    ourselves after pulling just one frame, which is what drops the
+    generator via GeneratorExit the way an abandoned request would.
+    """
     with patch.object(app_module, "_record_scan_spend") as banked:
-        client.post("/api/scan", headers=SSE, json={"image": "data:image/jpeg;base64,x"})
+        response = client.post("/api/scan", headers=SSE,
+                               json={"image": "data:image/jpeg;base64,x"},
+                               buffered=False)
+        iterator = iter(response.response)  # the un-drained stream
+        next(iterator)                      # one frame only
+        iterator.close()                    # the client hangs up here
     assert banked.called
+
+
+def test_spend_lands_in_the_database_while_streaming(client):
+    """stream_with_context exists so the generator can still touch db.session
+    once it is running outside the view function's own request handling —
+    without it, _record_scan_spend's insert/commit would raise "working
+    outside of application context" the moment a real API call had billed
+    anything. The other streaming tests never catch this: their stub
+    extract_from_image leaves usage_out empty, so _record_scan_spend
+    early-returns before touching the database at all. Here the stub
+    actually appends a call, forcing a real ScanSpend row through the
+    generator mid-stream.
+    """
+    def spending_extract(image, genres, usage_out=None):
+        if usage_out is not None:
+            usage_out.append({"model": "claude-sonnet-5",
+                              "input_tokens": 1000, "output_tokens": 200})
+        return {"artist": "Jorge Ben", "album_name": "Africa Brasil",
+                "genre": "Samba", "label": None, "catalog_number": None}
+
+    with app_module.app.app_context():
+        app_module.ScanSpend.query.delete()
+        app_module.db.session.commit()
+
+    with patch.object(app_module.scan, "extract_from_image", side_effect=spending_extract):
+        frames(client.post("/api/scan", headers=SSE,
+                           json={"image": "data:image/jpeg;base64,x"}))
+
+    with app_module.app.app_context():
+        rows = app_module.ScanSpend.query.all()
+    assert len(rows) == 1
+    assert rows[0].source == "photo"
+    assert rows[0].model == "claude-sonnet-5"
