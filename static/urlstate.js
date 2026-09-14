@@ -33,7 +33,7 @@ const VinylUrlState = (function () {
     recordId: null,
   };
 
-  const TABS = ['collection', 'timeline', 'stats'];
+  const TABS = ['collection', 'timeline', 'stats', 'features'];
   const OWNERSHIPS = ['owned', 'wishlist'];
   const DIRS = ['asc', 'desc'];
   const VIEWS = ['grid', 'list'];

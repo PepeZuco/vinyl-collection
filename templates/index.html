@@ -1259,6 +1259,55 @@ select option{background:var(--surface);color:var(--text)}
 .nav-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700;
   background:color-mix(in srgb, var(--accent) 12%, transparent)}
 
+/* features page — the tab is public: no login shows visitors what the admin
+   tools above (Claude photo scan, Spotify matching, MusicBrainz search) do,
+   since only the admin ever sees them run. Upload controls are gated purely
+   in CSS on body.is-authed, same switch the record grid's pencil uses. */
+.features-page{display:none}
+.features-page.visible{display:block}
+.features-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  flex-wrap:wrap;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+.features-hero h1{font-size:21px;font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+.features-hero p{margin:0;color:var(--label);font-size:13.5px;max-width:58ch;line-height:1.5}
+.features-linkedin{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;
+  border-radius:var(--radius);background:var(--accent);color:#141414;font-weight:700;
+  font-size:13.5px;text-decoration:none;flex-shrink:0;transition:opacity .15s}
+.features-linkedin:hover{opacity:.82}
+[data-theme="light"] .features-linkedin{color:#fff}
+
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+.feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;display:flex;flex-direction:column;gap:11px}
+.feature-card-head{display:flex;align-items:center;gap:10px}
+.feature-card-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;background:color-mix(in srgb, var(--accent) 16%, transparent);
+  color:var(--accent);font-size:17px;flex-shrink:0}
+.feature-card h3{margin:0;font-size:15px;font-weight:700}
+.feature-card p{margin:0;font-size:12.5px;line-height:1.55;color:var(--label)}
+
+.feature-media{position:relative;border-radius:var(--radius-sm);overflow:hidden;
+  background:var(--bg);border:1px solid var(--border);aspect-ratio:16/9}
+.feature-media video{width:100%;height:100%;object-fit:cover;display:block}
+.feature-media-empty{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:11.5px;
+  text-align:center;padding:10px}
+.feature-media-empty i{font-size:24px}
+
+/* upload/replace/remove — visible only in edit mode, same gate as the grid's pencil */
+.feature-upload{display:none}
+body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.feature-upload label{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
+  padding:6px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  cursor:pointer;color:var(--label);transition:all .15s}
+.feature-upload label:hover{color:var(--text);border-color:var(--accent)}
+.feature-upload input[type=file]{display:none}
+.feature-upload button{font-size:11.5px;color:var(--danger);background:none;border:none;
+  cursor:pointer;padding:6px 2px}
+.feature-upload .fu-status{font-size:11px;color:var(--muted)}
+@media(max-width:760px){
+  .features-hero{flex-direction:column;align-items:flex-start}
+}
+
 /* stats page */
 .stats-page{display:none}
 .stats-page.visible{display:block}
@@ -1693,6 +1742,17 @@ select option{background:var(--surface);color:var(--text)}
     box-shadow:0 6px 18px rgba(245,197,24,.35);
   }
   [data-theme="light"] .mtab-fab{color:#fff;box-shadow:0 6px 18px rgba(160,120,32,.35)}
+
+  /* the bottom bar's own "more" popover — Search moved here to free a slot for
+     Features, since Stats already has one and two new items would not fit */
+  .mtab-more{position:relative;flex:1;height:100%}
+  .mtab-more .mtab-item{width:100%}
+  .mtab-more-panel{position:absolute;bottom:calc(100% + 8px);right:6px;
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    min-width:160px;z-index:81;box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden;
+    padding:4px;display:flex;flex-direction:column;gap:1px}
+  .mtab-more-panel.hidden{display:none}
+  .mtab-more-panel .menu-item{text-transform:none;letter-spacing:normal;font-size:13px}
 }
 
 /* smart filter chips — only rendered once a filter is restricted from its default */
@@ -2416,6 +2476,7 @@ select option{background:var(--surface);color:var(--text)}
     <button class="nav-tab active" id="tabCollection"><i class="ti ti-layout-grid"></i> Collection</button>
     <button class="nav-tab" id="tabTimeline"><i class="ti ti-calendar-month"></i> Timeline</button>
     <button class="nav-tab" id="tabStats"><i class="ti ti-chart-bar"></i> Statistics</button>
+    <button class="nav-tab" id="tabFeatures"><i class="ti ti-sparkles"></i> Features</button>
   </div>
 
   <!-- The filter bar, above the tabs' content because it belongs to all of
@@ -2681,6 +2742,27 @@ select option{background:var(--surface);color:var(--text)}
     </div>
   </div>
 
+  <!-- features page — public, no auth required. The AI/API work (Claude
+       vision scans, Spotify resolution, MusicBrainz search) only ever runs
+       for the admin, so without this tab a visitor would never see it. Each
+       card gets one uploaded clip (see /api/feature-media); the upload
+       controls stay hidden behind body.is-authed exactly like the record
+       grid's edit pencil. -->
+  <div class="features-page" id="featuresPage">
+    <div class="features-hero">
+      <div>
+        <h1>Behind the collection</h1>
+        <p>A look at the AI and API integrations that run this project — built to explore
+          Claude's API, Spotify's API and the MusicBrainz discography database.</p>
+      </div>
+      <a class="features-linkedin" id="featuresLinkedinLink" href="#" target="_blank" rel="noopener">
+        <i class="ti ti-brand-linkedin"></i> Connect on LinkedIn
+      </a>
+    </div>
+
+    <div class="features-grid" id="featuresGrid"></div>
+  </div>
+
   <!-- collection page -->
   <div class="collection-page" id="collectionPage">
     <div id="recordsContainer"></div>
@@ -2702,9 +2784,15 @@ select option{background:var(--surface);color:var(--text)}
   <button class="mtab-item" id="mtabStats" onclick="switchTab('stats')">
     <span class="mtab-icon-wrap"><i class="ti ti-chart-bar"></i></span><span>Stats</span>
   </button>
-  <button class="mtab-item" id="mtabSearch" onclick="focusSearch()">
-    <span class="mtab-icon-wrap"><i class="ti ti-search"></i></span><span>Search</span>
-  </button>
+  <div class="mtab-more" id="mtabMore">
+    <button class="mtab-item" id="mtabMoreBtn" onclick="toggleMobileMore()">
+      <span class="mtab-icon-wrap"><i class="ti ti-dots"></i></span><span>More</span>
+    </button>
+    <div class="mtab-more-panel hidden" id="mtabMorePanel">
+      <button class="menu-item" onclick="closeMobileMore();focusSearch()"><i class="ti ti-search"></i><span>Search</span></button>
+      <button class="menu-item" id="mtabFeatures" onclick="closeMobileMore();switchTab('features')"><i class="ti ti-sparkles"></i><span>Features</span></button>
+    </div>
+  </div>
 </nav>
 
 <!-- Detail modal -->
@@ -2740,6 +2828,14 @@ select option{background:var(--surface);color:var(--text)}
     <div class="modal-body">
       <div id="scanDupWarning" style="display:none;margin-bottom:12px;padding:10px;
            border:1px solid var(--danger);border-radius:var(--radius);font-size:13px">
+      </div>
+      <!-- Spotify will resolve anything, including albums that were never
+           records. Not a --danger border: it is a caution, not a mistake, and
+           the databases are wrong about Brazilian pressings often enough that
+           the record in your hands still wins. -->
+      <div id="scanVinylWarning" style="display:none;margin-bottom:12px;padding:10px;
+           border:1px solid var(--border);border-radius:var(--radius);font-size:13px;
+           color:var(--label)">
       </div>
       <!-- Three steps in the order a record actually arrives: work out what it
            is, record how you got it, then log what happens to it afterwards.
@@ -6381,6 +6477,7 @@ function openAdd(){
   scanPhotoUri = '';
   pendingSpotifyUrl = '';
   document.getElementById('scanDupWarning').style.display = 'none';
+  document.getElementById('scanVinylWarning').style.display = 'none';
   document.getElementById('spotifyUrlInput').value = '';
   showSpotifyError('');
   ['fArtist','fAlbum','fYear','fWhere','fCountry','fSpotifyUrl'].forEach(id=>document.getElementById(id).value='');
@@ -6445,6 +6542,7 @@ function openEdit(id){
   scanPhotoUri = '';
   pendingSpotifyUrl = '';
   document.getElementById('scanDupWarning').style.display = 'none';
+  document.getElementById('scanVinylWarning').style.display = 'none';
   document.getElementById('spotifyUrlInput').value = '';
   showSpotifyError('');
   if (isMultiArtist(r)) {
@@ -7327,6 +7425,16 @@ async function runSearch(query){
 }
 
 let searchPicked = new Set();
+// Off by default: the grid already sorts pressings to the front, so the first
+// thing you see is the records you can buy — and a real pressing MusicBrainz
+// never catalogued is still one scroll away rather than gone.
+let searchVinylOnly = false;
+
+function toggleSearchVinylOnly(on){
+  searchVinylOnly = !!on;
+  renderSearchResults();
+}
+
 
 function openSearchResults(data){
   document.getElementById('scanResultsTitle').textContent = 'search results';
@@ -7366,19 +7474,52 @@ function renderSearchResults(){
     return;
   }
   const owned = searchResults.filter(r => r.duplicate_of).length;
-  const cards = searchResults.map((c,i) => scanCardHtml(c, {
+  const pressed = searchResults.filter(r => r.vinyl !== 'none').length;
+
+  // The index passed to toggleSearchPick is the one in searchResults, never
+  // the one in this filtered view: searchPicked holds indices and
+  // addPickedRecords reads them back by index, so a filtered position would
+  // add a different record than the one that was ticked. Same reason the
+  // server, not this function, does the vinyl-first sort.
+  const shown = searchResults
+    .map((c, i) => [c, i])
+    .filter(([c]) => !searchVinylOnly || c.vinyl !== 'none');
+
+  const cards = shown.map(([c, i]) => scanCardHtml(c, {
     selectable: true,
     selected: searchPicked.has(i),
     duplicate: !!c.duplicate_of,
     onclick: `toggleSearchPick(${i})`,
   })).join('');
+
+  const hidden = searchResults.length - shown.length;
   const count = `${searchResults.length} release${searchResults.length===1?'':'s'}`
+    + ` · ${pressed} on vinyl`
     + (owned ? ` · ${owned} already yours` : '')
+    + (hidden ? ` · ${hidden} hidden` : '')
     + ' · tick the ones you have';
-  body.innerHTML = `<div class="scan-count">${esc(count)}</div>
-     <div class="scan-grid wide">${cards}</div>`;
+
+  const grid = shown.length
+    ? `<div class="scan-grid wide">${cards}</div>`
+    : `<div class="scan-empty">
+         <i class="ti ti-disc-off"></i>
+         <div class="scan-empty-title">nothing here was pressed</div>
+         <div class="scan-empty-text">every release found for this search looks
+           like it only ever existed digitally. Untick "vinyl only" to see them
+           anyway — MusicBrainz misses plenty of real pressings.</div>
+       </div>`;
+
+  body.innerHTML =
+    `<div class="scan-count-row">
+       <div class="scan-count">${esc(count)}</div>
+       <label class="scan-vinyl-toggle">
+         <input type="checkbox" ${searchVinylOnly ? 'checked' : ''}
+                onchange="toggleSearchVinylOnly(this.checked)"> vinyl only
+       </label>
+     </div>${grid}`;
   renderSearchFoot();
 }
+
 
 function toggleSearchPick(i){
   if(searchPicked.has(i)) searchPicked.delete(i); else searchPicked.add(i);
@@ -7612,6 +7753,19 @@ function applyScanResult(data){
   // clear them rather than let them ride along with a different album.
   applyCandidate({});
 
+  // The album's own verdict, not the best candidate's — it is the one that
+  // survives MusicBrainz having no release group at all, which is exactly the
+  // case a Spotify link hits when the album was never pressed.
+  const vinylWarning = document.getElementById('scanVinylWarning');
+  if(data.vinyl === 'none'){
+    vinylWarning.innerHTML = `<i class="ti ti-disc-off"></i> No vinyl pressing found for
+      <strong>${esc(data.album_name || 'this album')}</strong> — it may only ever have
+      existed digitally. Save it anyway if you are holding one.`;
+    vinylWarning.style.display = 'block';
+  } else {
+    vinylWarning.style.display = 'none';
+  }
+
   scanDuplicateOf = data.duplicate_of || null;
   const warning = document.getElementById('scanDupWarning');
   if(scanDuplicateOf){
@@ -7728,6 +7882,30 @@ function sameAlbumTitle(a, b){
  * results: the two screens differ in how a card is chosen, not in what a
  * release looks like. `opts.selectable` adds the checkbox, `opts.selected`
  * marks it, and `opts.onclick` is the handler name to bind. */
+/* Was this album ever actually manufactured as a record?
+
+   Three states, because there are two sources and they are not equally sure
+   of themselves. "confirmed" is a pressing MusicBrainz has on file. "none" is
+   both MusicBrainz and Claude coming up empty. "likely" is everything between
+   — which includes most Brazilian pressings, so it gets no warning colour and
+   no dimming, only the absence of the green. An unknown value (a card from a
+   response that predates this) draws nothing rather than guessing. */
+const VINYL_BADGES = {
+  confirmed: {icon: 'disc', text: 'vinyl'},
+  likely:    {icon: 'help', text: 'likely vinyl'},
+  none:      {icon: 'disc-off', text: 'no vinyl'},
+};
+
+function vinylBadgeHtml(state){
+  const badge = VINYL_BADGES[state];
+  if(!badge) return '';
+  const title = state === 'confirmed' ? 'a vinyl pressing is catalogued'
+              : state === 'none' ? 'no vinyl pressing known — this may never have been a record'
+              : 'probably pressed, but no catalogued pressing to prove it';
+  return `<span class="scan-badge-vinyl ${state}" title="${esc(title)}"
+     ><i class="ti ti-${badge.icon}"></i>${esc(badge.text)}</span>`;
+}
+
 function scanCardHtml(c, opts){
   opts = opts || {};
   const art = c.cover_data
@@ -7746,9 +7924,10 @@ function scanCardHtml(c, opts){
   const meta = [c.year || '?', c.country ? countryLabelFromCode(c.country) : null,
                 (c.type && c.type !== 'Album') ? c.type.toLowerCase() : null]
     .filter(Boolean).join(' · ');
-  return `<button type="button" class="scan-card${opts.selected ? ' picked' : ''}"
+  return `<button type="button" class="scan-card${opts.selected ? ' picked' : ''}${
+       c.vinyl === 'none' ? ' no-vinyl' : ''}"
      onclick="${opts.onclick}">
-     <div class="scan-card-cover">${art}${best}${box}${dup}</div>
+     <div class="scan-card-cover">${art}${best}${box}${vinyl}${dup}</div>
      <div class="scan-card-body">
        <div class="scan-card-album">${esc(c.album_name||'')}</div>
        <div class="scan-card-meta">${esc(c.artist||'')}</div>
@@ -8079,6 +8258,7 @@ document.getElementById('idleTriggerBtn').addEventListener('click', fireIdleSpot
 function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
+  document.getElementById('tabFeatures').addEventListener('click', () => switchTab('features'));
   document.getElementById('racePlayBtn').addEventListener('click', function () {
     histPlaying ? histPause() : histPlay();
   });
@@ -8895,12 +9075,15 @@ function switchTab(tab) {
   document.getElementById('collectionPage').classList.toggle('hidden', tab !== 'collection');
   document.getElementById('statsPage').classList.toggle('visible', tab === 'stats');
   document.getElementById('timelinePage').classList.toggle('visible', tab === 'timeline');
+  document.getElementById('featuresPage').classList.toggle('visible', tab === 'features');
   document.getElementById('tabCollection').classList.toggle('active', tab === 'collection');
   document.getElementById('tabStats').classList.toggle('active', tab === 'stats');
   document.getElementById('tabTimeline').classList.toggle('active', tab === 'timeline');
-  // The filter row is on every surface — it is what they all describe. The
-  // arrange row is the shelf's: the Timeline arranges itself by scale, and
-  // there is nothing to arrange on a page of charts.
+  document.getElementById('tabFeatures').classList.toggle('active', tab === 'features');
+  // The filter row is on every surface that describes the collection — but
+  // Features is a static portfolio page, nothing on it is filtered by a
+  // query, so the whole bar (not just Arrange) is out of place there.
+  document.getElementById('filterBar').style.display = tab === 'features' ? 'none' : '';
   document.getElementById('arrangeRow').style.display = tab === 'collection' ? '' : 'none';
   closeFacetPop();
   syncMobileTabbar();
@@ -8911,6 +9094,7 @@ function switchTab(tab) {
 
   if (tab === 'stats') renderStats();
   if (tab === 'timeline') renderTimeline();
+  if (tab === 'features') renderFeatures();
   syncUrl(true);
 }
 
@@ -8922,6 +9106,150 @@ function syncMobileTabbar() {
   // Every tab now has an item of its own, so nothing has to lie about where
   // you are — History used to light up Stats because it had no slot at all.
   document.getElementById('mtabStats').classList.toggle('active', currentTab === 'stats');
+  // Features lives behind "More" rather than its own slot, so the bar button
+  // that lights up is the one the finger actually sees, not a hidden one.
+  document.getElementById('mtabMoreBtn').classList.toggle('active', currentTab === 'features');
+  document.getElementById('mtabFeatures').classList.toggle('active', currentTab === 'features');
+}
+
+// ── mobile bottom bar's "more" popover — Search and Features share the slot
+// Search vacated; see the markup comment on #mtabMore. ──────────────────────
+function toggleMobileMore() {
+  document.getElementById('mtabMorePanel').classList.toggle('hidden');
+}
+function closeMobileMore() {
+  document.getElementById('mtabMorePanel').classList.add('hidden');
+}
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('mtabMore');
+  const path = e.composedPath ? e.composedPath() : [];
+  const clickedInside = wrap && (path.includes(wrap) || wrap.contains(e.target));
+  if (wrap && !clickedInside) closeMobileMore();
+});
+
+// ── features page — a public "how this was built" tab. Content is hardcoded
+// here rather than editable through the app: there is exactly one author, so
+// a CMS for it would be solving a problem that does not exist. Only the video
+// per card comes from the server, keyed by slot (see /api/feature-media). ──
+const FEATURE_CARDS = [
+  {
+    slot: 'ai_scan', icon: 'ti-camera',
+    title: 'AI Sleeve Recognition',
+    text: 'Point a phone camera at a record sleeve and Claude’s vision model reads the ' +
+      'artist, album and pressing details straight off the photo, then researches the release ' +
+      'to fill in genre, year and tracklist automatically. Built to explore multimodal ' +
+      'prompting and structured extraction with the Claude API.',
+  },
+  {
+    slot: 'spotify_match', icon: 'ti-brand-spotify',
+    title: 'Spotify Link Resolution',
+    text: 'Paste a shared Spotify link — including the shortened spotify.link share-sheet ' +
+      'format — and the app resolves it through Spotify’s API to the exact album or ' +
+      'track, then cross-references it against the collection to catch duplicates before ' +
+      'they’re added.',
+  },
+  {
+    slot: 'musicbrainz', icon: 'ti-database',
+    title: 'MusicBrainz Metadata Search',
+    text: 'Behind every scan and search, a ranking layer queries MusicBrainz’s open ' +
+      'discography database, scores candidate releases against what the sleeve or Spotify ' +
+      'link actually says, and throttles and retries around MusicBrainz’s rate limits — ' +
+      'the plumbing that makes the AI features reliable.',
+  },
+  {
+    slot: 'timeline_stats', icon: 'ti-chart-bar',
+    title: 'Timeline & Stats Dashboard',
+    text: 'The Timeline replays the whole collection’s growth as an animated bar-chart ' +
+      'race by genre, and Statistics turns hundreds of records into charts — ratings by ' +
+      'genre, a world map of pressing countries, release-year distribution — all built ' +
+      'from scratch rather than a charting-library skin.',
+  },
+];
+
+let featureMediaManifest = {};
+
+function featureMediaHtml(slot) {
+  const url = featureMediaManifest[slot];
+  return url
+    ? `<video src="${esc(url)}" controls preload="metadata"></video>`
+    : `<div class="feature-media-empty"><i class="ti ti-video"></i>
+         <span>video coming soon</span></div>`;
+}
+
+function featureUploadHtml(slot) {
+  const has = !!featureMediaManifest[slot];
+  return `<div class="feature-upload">
+    <label><i class="ti ti-upload"></i><span>${has ? 'replace' : 'upload'} video</span>
+      <input type="file" accept="video/*" onchange="uploadFeatureMedia('${slot}', this)">
+    </label>
+    ${has ? `<button onclick="removeFeatureMedia('${slot}')">remove</button>` : ''}
+    <span class="fu-status" id="fuStatus-${slot}"></span>
+  </div>`;
+}
+
+function featureCardHtml(card) {
+  return `<div class="feature-card" id="featureCard-${card.slot}">
+    <div class="feature-card-head">
+      <span class="feature-card-icon"><i class="ti ${card.icon}"></i></span>
+      <h3>${esc(card.title)}</h3>
+    </div>
+    <p>${esc(card.text)}</p>
+    <div class="feature-media" id="featureMedia-${card.slot}">${featureMediaHtml(card.slot)}</div>
+    ${featureUploadHtml(card.slot)}
+  </div>`;
+}
+
+function renderFeaturesGrid() {
+  document.getElementById('featuresGrid').innerHTML = FEATURE_CARDS.map(featureCardHtml).join('');
+}
+
+async function renderFeatures() {
+  renderFeaturesGrid();   // placeholders first paint immediately, no flash of nothing
+  try {
+    const res = await fetch('/api/feature-media');
+    if (res.ok) featureMediaManifest = await res.json();
+  } catch (e) { /* offline — placeholders stay, nothing worse happens */ }
+  renderFeaturesGrid();
+}
+
+async function uploadFeatureMedia(slot, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById(`fuStatus-${slot}`);
+  status.textContent = 'uploading…';
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const res = await fetch(`/api/feature-media/${slot}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      toast(body.error || 'upload failed');
+      status.textContent = '';
+      return;
+    }
+    toast('video uploaded');
+    await renderFeatures();
+  } catch (e) {
+    toast('upload failed');
+    status.textContent = '';
+  } finally {
+    input.value = '';
+  }
+}
+
+async function removeFeatureMedia(slot) {
+  if (!confirm('Remove this video?')) return;
+  const res = await fetch(`/api/feature-media/${slot}`, { method: 'DELETE' });
+  if (!res.ok) { toast('could not remove video'); return; }
+  await renderFeatures();
 }
 
 // ── history: the collection's growth as a bar chart race ───────────────────

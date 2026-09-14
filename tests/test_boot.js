@@ -1884,6 +1884,134 @@ test('the search grid is wider than the scan grid', async () => {
   assert.ok(win.document.querySelector('#scanBody .scan-grid.wide'));
 });
 
+// The server sorts pressings to the front and stamps each row, so the grid
+// arrives in display order. These build that shape by hand.
+async function searchedWithVinyl(win, results) {
+  win.openAdd();
+  win.fetch = async () => ({
+    ok: true,
+    json: async () => ({ query: 'jorge ben', artist: 'Jorge Ben Jor',
+                         album: null, results }),
+  });
+  await win.runSearch('jorge ben');
+  return win;
+}
+
+function release(mbid, album, vinyl) {
+  return { mbid, artist: 'Jorge Ben', album_name: album, year: '1970',
+           country: 'BR', type: 'Album', cover_data: null,
+           duplicate_of: null, vinyl };
+}
+
+const PRESSED_AND_NOT = [
+  release('m1', 'Força bruta', 'confirmed'),
+  release('m2', 'Negro é lindo', 'likely'),
+  release('m3', 'Stream Only', 'none'),
+];
+
+test('a release that was never pressed is badged and dimmed', async () => {
+  const { win } = await boot();
+  await searchedWithVinyl(win, PRESSED_AND_NOT);
+
+  const cards = win.document.querySelectorAll('#scanBody .scan-card');
+  assert.strictEqual(cards.length, 3, 'nothing is hidden by default');
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-badge-vinyl.confirmed').length, 1);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-badge-vinyl.likely').length, 1);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-badge-vinyl.none').length, 1);
+  // Only the unpressed one is dimmed — "likely" covers most Brazilian
+  // pressings and must not be treated as a negative.
+  const dimmed = win.document.querySelectorAll('#scanBody .scan-card.no-vinyl');
+  assert.strictEqual(dimmed.length, 1);
+  assert.match(dimmed[0].textContent, /Stream Only/);
+});
+
+test('the count line says how many of the releases are records', async () => {
+  const { win } = await boot();
+  await searchedWithVinyl(win, PRESSED_AND_NOT);
+
+  assert.match(win.document.querySelector('#scanBody .scan-count').textContent,
+               /3 releases · 2 on vinyl/);
+});
+
+test('vinyl only hides the unpressed releases and says so', async () => {
+  const { win } = await boot();
+  await searchedWithVinyl(win, PRESSED_AND_NOT);
+
+  win.toggleSearchVinylOnly(true);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-card').length, 2);
+  assert.match(win.document.querySelector('#scanBody .scan-count').textContent,
+               /1 hidden/);
+
+  win.toggleSearchVinylOnly(false);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-card').length, 3);
+});
+
+test('a filtered grid still ticks the record that was ticked', async () => {
+  // searchPicked holds indices into searchResults and addPickedRecords reads
+  // them back by index, so a card must carry its index in the FULL list, not
+  // its position in the filtered view. Ordered unpressed-first here on purpose:
+  // that is what makes the two differ.
+  const { win } = await boot();
+  await searchedWithVinyl(win, [
+    release('m1', 'Stream Only', 'none'),
+    release('m2', 'Força bruta', 'confirmed'),
+    release('m3', 'Negro é lindo', 'confirmed'),
+  ]);
+
+  win.toggleSearchVinylOnly(true);
+  const cards = win.document.querySelectorAll('#scanBody .scan-card');
+  assert.strictEqual(cards.length, 2);
+
+  // The first VISIBLE card is index 1 of searchResults, not 0. jsdom does not
+  // compile inline handlers, so the attribute is what there is to read — and
+  // it is exactly what a real click would run.
+  assert.strictEqual(cards[0].getAttribute('onclick'), 'toggleSearchPick(1)');
+  assert.strictEqual(cards[1].getAttribute('onclick'), 'toggleSearchPick(2)');
+
+  win.toggleSearchPick(1);
+  const ticked = win.document.querySelectorAll('#scanBody .scan-card.picked');
+  assert.strictEqual(ticked.length, 1);
+  assert.match(ticked[0].textContent, /Força bruta/);
+});
+
+test('filtering everything out explains itself rather than going blank', async () => {
+  const { win } = await boot();
+  await searchedWithVinyl(win, [release('m1', 'Stream Only', 'none')]);
+
+  win.toggleSearchVinylOnly(true);
+  assert.strictEqual(win.document.querySelectorAll('#scanBody .scan-card').length, 0);
+  assert.match(win.document.getElementById('scanBody').textContent,
+               /nothing here was pressed/i);
+});
+
+test('a scan of an album that was never pressed warns on the form', async () => {
+  const { win } = await boot();
+  win.openAdd();
+  win.applyScanResult({
+    source: 'spotify', artist: 'Some Band', album_name: 'Streaming Only',
+    genre: 'Rock', vinyl: 'none', candidates: [], lookup_failed: false,
+    duplicate_of: null, search_string: 'Some Band Streaming Only vinyl cover',
+  });
+
+  const warning = win.document.getElementById('scanVinylWarning');
+  assert.notStrictEqual(warning.style.display, 'none');
+  assert.match(warning.textContent, /No vinyl pressing found/i);
+  assert.match(warning.textContent, /Streaming Only/);
+});
+
+test('a scan of a real pressing says nothing about vinyl', async () => {
+  const { win } = await boot();
+  win.openAdd();
+  win.applyScanResult({
+    source: 'photo', artist: 'Jorge Ben', album_name: 'Força bruta',
+    genre: 'MPB & Samba', vinyl: 'confirmed', candidates: [], lookup_failed: false,
+    duplicate_of: null, search_string: 'Jorge Ben Força bruta vinyl cover',
+  });
+
+  assert.strictEqual(
+    win.document.getElementById('scanVinylWarning').style.display, 'none');
+});
+
 test('a search that matched no artist explains itself', async () => {
   const { win } = await boot();
   win.openAdd();

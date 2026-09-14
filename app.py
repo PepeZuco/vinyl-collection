@@ -418,6 +418,20 @@ class NoteImage(db.Model):
     data    = db.Column(db.Text)      # base64 data URI, same shape as cover_data
     created = db.Column(db.String(50))  # a stamp — the sweep's grace window reads it
 
+# One clip per Features-tab card. Unlike NoteImage there is no content-hash id
+# and no reaping: the slot set is fixed (one row per card on the tab), so a
+# re-upload replaces the row in place rather than orphaning the old one. hash
+# rides along exactly as Record.cover_hash does, so the manifest can hand out
+# a URL that changes when the clip does — see /api/feature-media.
+FEATURE_MEDIA_SLOTS = frozenset({"ai_scan", "spotify_match", "musicbrainz", "timeline_stats"})
+_FEATURE_MEDIA_MAX_BYTES = 40 * 1024 * 1024
+
+class FeatureVideo(db.Model):
+    slot    = db.Column(db.String(30), primary_key=True)
+    data    = db.Column(db.Text)      # base64 data URI
+    hash    = db.Column(db.String(64))
+    created = db.Column(db.String(50))
+
 # A place a record was bought at. The NAME is the key, and record.bought_where
 # holds it verbatim — so sort, group, filter, search, the scan autofill and the
 # CSV all keep reading the column they always read, and this table only adds the
@@ -878,6 +892,76 @@ def note_image(image_id):
     resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     resp.set_etag(image_id)
     return resp.make_conditional(request)
+
+
+# ── feature-tab media (About/Features page) ─────────────────────────────────
+
+@app.route("/api/feature-media")
+def list_feature_media():
+    """Which slots have a clip, and the (cache-busted) URL to fetch each one.
+
+    Public — the whole point of the tab is that visitors see it without
+    logging in. Only filled slots are listed; the page treats an absent key as
+    an empty placeholder.
+    """
+    rows = db.session.query(FeatureVideo.slot, FeatureVideo.hash).all()
+    return jsonify({slot: f"/api/feature-media/{slot}?v={h}" for slot, h in rows if h})
+
+
+@app.route("/api/feature-media/<slot>")
+def feature_media(slot):
+    """Serve one slot's clip. Public, and immutable like record_cover: the `v`
+    the manifest hands out is the content hash, so a stale cache entry can
+    only be served under a URL nothing links to any more."""
+    if slot not in FEATURE_MEDIA_SLOTS:
+        return jsonify({"error": "Unknown slot"}), 404
+    row = db.session.query(FeatureVideo.data).filter(FeatureVideo.slot == slot).first()
+    decoded = _decode_data_uri(row[0]) if row else None
+    if decoded is None:
+        return jsonify({"error": "No video"}), 404
+    data, mime = decoded
+    resp = app.response_class(data, mimetype=mime)
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    resp.set_etag(_cover_hash(row[0]))
+    return resp.make_conditional(request)
+
+
+@app.route("/api/feature-media/<slot>", methods=["PUT"])
+@require_auth
+def upload_feature_media(slot):
+    if slot not in FEATURE_MEDIA_SLOTS:
+        return jsonify({"error": "Unknown slot"}), 404
+    d = request.get_json(silent=True) or {}
+    data = d.get("data", "")
+    if not isinstance(data, str) or not data.startswith("data:"):
+        return jsonify({"error": "Not a video"}), 400
+    if len(data.encode("utf-8")) > _FEATURE_MEDIA_MAX_BYTES:
+        return jsonify({"error": "File too large"}), 413
+    if _decode_data_uri(data) is None:
+        return jsonify({"error": "Not a video"}), 400
+    h = _cover_hash(data)
+    row = db.session.get(FeatureVideo, slot)
+    if row is None:
+        db.session.add(FeatureVideo(
+            slot=slot, data=data, hash=h,
+            created=datetime.now().strftime("%Y-%m-%dT%H:%M:%S")))
+    else:
+        row.data = data
+        row.hash = h
+    db.session.commit()
+    return jsonify({"slot": slot, "url": f"/api/feature-media/{slot}?v={h}"}), 201
+
+
+@app.route("/api/feature-media/<slot>", methods=["DELETE"])
+@require_auth
+def delete_feature_media(slot):
+    if slot not in FEATURE_MEDIA_SLOTS:
+        return jsonify({"error": "Unknown slot"}), 404
+    row = db.session.get(FeatureVideo, slot)
+    if row is not None:
+        db.session.delete(row)
+        db.session.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/records/<int:rid>", methods=["DELETE"])

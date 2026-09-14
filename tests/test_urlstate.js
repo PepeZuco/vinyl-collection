@@ -32,6 +32,10 @@ test('a tab other than the shelf is carried', () => {
   assert.strictEqual(decode(encode(state({ tab: 'timeline' }))).tab, 'timeline');
 });
 
+test('the features tab is a valid destination', () => {
+  assert.strictEqual(decode(encode(state({ tab: 'features' }))).tab, 'features');
+});
+
 test('search text is carried, spaces and all', () => {
   const got = decode(encode(state({ text: 'chico buarque' })));
   assert.strictEqual(got.text, 'chico buarque');
