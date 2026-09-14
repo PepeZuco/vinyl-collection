@@ -137,12 +137,26 @@ def test_spend_is_banked_even_when_the_client_never_reads_the_stream(client):
     assert banked.called
 
 
-def test_spend_lands_in_the_database_while_streaming(client):
+def test_spend_lands_in_the_database_while_streaming():
     """stream_with_context exists so the generator can still touch db.session
     once it is running outside the view function's own request handling —
-    without it, _record_scan_spend's insert/commit would raise "working
-    outside of application context" the moment a real API call had billed
-    anything. The other streaming tests never catch this: their stub
+    without it, the request context Flask pushed for the view call is gone
+    the instant the view returns a Response object, and _record_scan_spend's
+    insert/commit (running inside the generator's `finally`, drained lazily
+    as the client reads the stream) would hit "working outside of
+    application context" the moment a real API call had billed anything.
+
+    Deliberately NOT using the shared `client` fixture: that fixture opens
+    the test client with `with app_module.app.test_client() as test_client:`,
+    which pushes an ambient application context that stays alive for the
+    whole test. Under that ambient context db.session stays legal on its own,
+    regardless of stream_with_context — which would make this test pass even
+    with stream_with_context deleted, guarding nothing. Building the client
+    here without that `with` wrapper leaves no context bleeding in, so the
+    generator's ability to touch db.session mid-stream depends on
+    stream_with_context alone, the way it does in production.
+
+    The other streaming tests never catch any of this: their stub
     extract_from_image leaves usage_out empty, so _record_scan_spend
     early-returns before touching the database at all. Here the stub
     actually appends a call, forcing a real ScanSpend row through the
@@ -159,9 +173,14 @@ def test_spend_lands_in_the_database_while_streaming(client):
         app_module.ScanSpend.query.delete()
         app_module.db.session.commit()
 
+    app_module.app.config["TESTING"] = True
+    test_client = app_module.app.test_client()  # no `with` — no ambient context
+    with test_client.session_transaction() as session:
+        session["authed"] = True
+
     with patch.object(app_module.scan, "extract_from_image", side_effect=spending_extract):
-        frames(client.post("/api/scan", headers=SSE,
-                           json={"image": "data:image/jpeg;base64,x"}))
+        frames(test_client.post("/api/scan", headers=SSE,
+                                json={"image": "data:image/jpeg;base64,x"}))
 
     with app_module.app.app_context():
         rows = app_module.ScanSpend.query.all()
