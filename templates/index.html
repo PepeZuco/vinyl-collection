@@ -6724,7 +6724,10 @@ function applyDraft(d){
   formTracks = parseTracks(d.tracks);
   formDiscCount = Math.max(1, Number(d.disc_count) || 1);
   formSize = d.size || '';
+  formVinylColor = d.vinyl_color || '';
+  formLabelColor = d.label_color || '';
   renderTracksForm();
+  renderPaintForm();
   if (d.cover_data) applyCover(d.cover_data);
   formBaseline = formValues();
 }
@@ -6775,7 +6778,9 @@ function openAdd(){
   renderNoteShots();
   renderNotesForm();
   formTracks = []; formDiscCount = 1; formSize = '';
+  formVinylColor = ''; formLabelColor = '';
   renderTracksForm();
+  renderPaintForm();
   document.getElementById('fCensored').checked = false;
   populateGenreSelect();
   populateCountryList();
@@ -6862,7 +6867,10 @@ function openEdit(id){
   formTracks = parseTracks(r.tracks);
   formDiscCount = Math.max(1, Number(r.disc_count) || 1);
   formSize = r.size || '';
+  formVinylColor = r.vinyl_color || '';
+  formLabelColor = r.label_color || '';
   renderTracksForm();
+  renderPaintForm();
   const previewSrc = VinylCover.coverPreviewSrc(r, coverDataUri);
   if(previewSrc){ showCover(previewSrc); } else { clearCover(); }
   updateRatingUI();
@@ -7046,6 +7054,8 @@ function formValues(){
     size:formSize,
     censored:document.getElementById('fCensored').checked,
     spotify_url:document.getElementById('fSpotifyUrl').value.trim(),
+    vinyl_color:formVinylColor,
+    label_color:formLabelColor,
   };
 }
 
