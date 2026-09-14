@@ -3496,7 +3496,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
         <span class="scan-spinner"></span>
         <span id="searchAddStatusText">classifying…</span>
       </span>
-      <button class="btn" id="searchWishlistBtn" onclick="addPickedToWishlist()" disabled>add to wishlist</button>
+      <button class="btn" id="searchWishlistBtn" disabled><i class="ti ti-shopping-cart"></i> add to wishlist</button>
       <button class="btn btn-primary" id="searchAddBtn" onclick="addPickedRecords()" disabled>add records</button>
     </div>
   </div>
@@ -7106,7 +7106,7 @@ async function submitForm(){
   }
   const rec=await res.json();
   if(editingId){records=records.map(x=>x.id===editingId?rec:x);toast('changes saved');}
-  else{records.push(rec);toast('record added');}
+  else{records.push(rec);toast(rec.have_it ? 'record added' : 'added to the wishlist');}
   render();
   // A queue with more in it re-opens the form instead of closing it.
   if(addQueue && !VinylQueue.isLast(addQueue)){ advanceQueue(); return; }
@@ -8054,7 +8054,9 @@ function openSearchResults(data){
   // MusicBrainz, so "none of these fit" means the query was wrong, not the art.
   document.getElementById('searchSelected').style.display = '';
   document.getElementById('searchAddBtn').style.display = '';
-  document.getElementById('searchWishlistBtn').style.display = '';
+  const wishBtn = document.getElementById('searchWishlistBtn');
+  wishBtn.style.display = '';
+  wishBtn.onclick = addPickedToWishlist;
 
   renderSearchResults();
   document.getElementById('scanOverlay').classList.remove('hidden');
@@ -8154,7 +8156,8 @@ function renderSearchFoot(){
   wishBtn.style.display = '';
   const nWish = [...searchPicked].filter(i => !searchResults[i].duplicate_of).length;
   wishBtn.disabled = nWish === 0 || wishlistPickInFlight;
-  wishBtn.textContent = nWish ? `add ${nWish} to wishlist` : 'add to wishlist';
+  wishBtn.innerHTML = `<i class="ti ti-shopping-cart"></i> `
+    + (nWish ? `add ${nWish} to wishlist` : 'add to wishlist');
 }
 
 // ── the add queue ───────────────────────────────────────────────────────────
@@ -8254,7 +8257,10 @@ async function addPickedToWishlist(){
 
     added.forEach(rec => records.push(rec));
     if(added.length) render();
-    closeScanOverlay();
+    // Unlike addPickedRecords, nothing here queues a record for the form to
+    // fill in — the wishlist add is already complete, so closing all the way
+    // back to the collection (not just this overlay) is where it should land.
+    closeForm(true);
     toast(added.length
       ? `${added.length} added to the wishlist`
       : 'nothing was added — try again');
@@ -8263,6 +8269,17 @@ async function addPickedToWishlist(){
     wishlistPickInFlight = false;
     document.getElementById('searchAddStatus').style.display = 'none';
   }
+}
+
+/* The scan/Spotify screen is one candidate set for the one record already
+ * open in the form (applyScanResult wrote artist/album/genre into it before
+ * this overlay ever showed), not a batch like the search grid — so there is
+ * nothing to POST directly here. Flipping the same owned/wishlist switch the
+ * form already has and reusing submitForm gets the queue-advance and
+ * closeForm(true) behaviour for free, instead of duplicating it here. */
+async function addScannedToWishlist(){
+  setHaveIt(false);
+  await submitForm();
 }
 
 /* Open the form on the queue's current record. Also the advance path, so the
@@ -8415,10 +8432,18 @@ function setScanSearch(text){ scanSearchQuery = text || ''; }
 
 function openScanOverlay(data){
   document.getElementById('scanResultsTitle').textContent = 'scan results';
-  // Scan mode: the Google fallback, no picking.
+  // Scan mode: the Google fallback, no picking — but the match is still one
+  // record, so the wishlist shortcut still applies (see addScannedToWishlist).
   document.getElementById('searchSelected').style.display = 'none';
   document.getElementById('searchAddBtn').style.display = 'none';
-  document.getElementById('searchWishlistBtn').style.display = 'none';
+  const wishBtn = document.getElementById('searchWishlistBtn');
+  wishBtn.style.display = '';
+  wishBtn.onclick = addScannedToWishlist;
+  // A duplicate is already in the collection — wishlisting it would add a
+  // second row for the same album, the same reason the search grid excludes
+  // duplicates from its own wishlist count.
+  wishBtn.disabled = !!data.duplicate_of;
+  wishBtn.innerHTML = '<i class="ti ti-shopping-cart"></i> add to wishlist';
 
   const fromPhoto = data.source === 'photo';
   document.getElementById('scanReadoutLabel').textContent =
