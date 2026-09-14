@@ -1090,7 +1090,12 @@ select option{background:var(--surface);color:var(--text)}
 
 /* The panel replaces the cover drop while a scan is out. It is the same
    footprint, so the form does not jump when it swaps in. */
-.analysing{border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:9px;
+/* --face is owned here, one value per breakpoint, rather than left for each
+   consumer to fall back on its own: tickScanPanel's calc(var(--face) * n) has
+   no fallback of its own, so if this custom property were ever undefined the
+   whole background-position-x declaration would be dropped at computed-value
+   time and the face would go visibly, silently static. */
+.analysing{--face:92px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:9px;
   background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--card)),var(--card));
   overflow:hidden}
 
@@ -1172,11 +1177,16 @@ select option{background:var(--surface);color:var(--text)}
 .an-cancel:hover{border-color:var(--danger);color:var(--danger)}
 
 /* ── wide variant: same parts, laid out for the full 920px form ─────────── */
-.analysing.wide{display:grid;grid-template-columns:270px 1fr}
+/* --face lives on this same selector as the grid switch, not buried on
+   .an-face, so both halves of "what wide means" are declared in one place. */
+.analysing.wide{display:grid;grid-template-columns:270px 1fr;--face:128px}
+/* [hidden]'s UA rule loses to a two-class selector's specificity, so without
+   this the panel would render through `hidden` the instant it goes wide —
+   see the identical fix already applied to .kpi-rot-item[hidden]. */
+.analysing.wide[hidden]{display:none}
 .analysing.wide .an-head{flex-direction:column;text-align:center;justify-content:center;gap:12px;
   padding:26px 20px;border-right:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
 .analysing.wide .an-head-main{flex:0}
-.analysing.wide .an-face{--face:128px}
 .analysing.wide .an-title{justify-content:center}
 .analysing.wide .an-bar{width:180px;margin-left:auto;margin-right:auto}
 .analysing.wide .an-steps{border-top:none;padding:10px 0}
@@ -1222,6 +1232,16 @@ select option{background:var(--surface);color:var(--text)}
 /* form — split layout: cover left, fields right (mirrors detail-layout) */
 .form-layout{display:grid;grid-template-columns:330px 1fr;gap:20px;align-items:start}
 @media(max-width:760px){.form-layout{grid-template-columns:1fr}}
+/* The desktop takeover: while a scan is out, scanPanelSetWide(true) moves
+   #scanPanel here as a direct child (escaping the 330px cover column, which
+   is too narrow for the 270px/1fr wide variant) and adds .scan-wide, which
+   hides the two columns' normal content — the fields are about to be
+   overwritten by the scan anyway, so there is nothing to protect by leaving
+   them visible, and hiding them is what stops the user typing into a field
+   the result is seconds from clobbering. */
+.form-layout.scan-wide > .form-cover-col,
+.form-layout.scan-wide > .form-section{display:none}
+.form-layout > .analysing.wide{grid-column:1/-1}
 .form-cover-col{display:flex;flex-direction:column}
 .form-cover-col .cover-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px}
 /* Empty, the drop is a fixed-height target to aim a file at. With a cover in
@@ -7443,6 +7463,33 @@ let scanPanelState = {};
 let scanPanelStart = 0;
 let scanAbort = null;
 
+// The wide takeover only fits once the form itself has room for it — reusing
+// the form-layout breakpoint means "desktop" means the same viewport width
+// everywhere in this form, not a second number to keep in sync with it.
+const SCAN_WIDE_BREAKPOINT = 760;
+
+// Moves #scanPanel between the 330px cover column (its home) and a direct
+// child of .form-layout (where .analysing.wide's grid-column:1/-1 can make it
+// span the whole 920px form) and toggles the classes that go with each. Idempotent
+// either way, so buildScanPanel can call it unconditionally on every scan and
+// setScanBusy can call it unconditionally on every exit.
+function scanPanelSetWide(wide){
+  const layout = document.querySelector('.form-layout');
+  const panel = document.getElementById('scanPanel');
+  const coverCol = document.querySelector('.form-cover-col');
+  if(!layout || !panel || !coverCol) return;
+  panel.classList.toggle('wide', wide);
+  layout.classList.toggle('scan-wide', wide);
+  if(wide){
+    if(panel.parentElement !== layout){
+      const fields = layout.querySelector('.form-section');
+      layout.insertBefore(panel, fields);
+    }
+  } else if(panel.parentElement !== coverCol){
+    coverCol.appendChild(panel);
+  }
+}
+
 function buildScanPanel(source){
   scanPanelState = {};
   const rows = SCAN_STAGES[source].map(id => {
@@ -7458,6 +7505,10 @@ function buildScanPanel(source){
   document.querySelector('#scanPanel .an-steps').innerHTML = rows;
   document.querySelector('#scanPanel .an-cost').textContent =
     VinylSpend.scanHintText({armed: true, source, usage: scanUsage, verb: 'analyse'});
+  // Decided fresh on every scan, from the CURRENT viewport, so a panel that
+  // went wide once cannot get stuck that way if the next scan opens narrow —
+  // and a resize while the form sits closed never leaves a stale choice behind.
+  scanPanelSetWide(window.innerWidth > SCAN_WIDE_BREAKPOINT);
   document.getElementById('scanPanel').hidden = false;
 }
 
@@ -7527,6 +7578,10 @@ function setScanBusy(busy){
   // window, error and abandoned-scan paths included.
   if(!busy){
     document.getElementById('scanPanel').hidden = true;
+    // Every exit — success, error, cancel, or the form closed mid-scan — comes
+    // through here, so restoring the fields the takeover hid belongs here too
+    // rather than in a second cleanup path that could drift from this one.
+    scanPanelSetWide(false);
     cancelAnimationFrame(scanPanelRaf);
     scanPanelRaf = 0;
   }
