@@ -169,7 +169,8 @@ CSS are in the mockup; the shape is:
 
 Desktop takes the whole 920px form (`.analysing.wide`, a `270px 1fr` grid).
 Phone keeps the panel in the cover section, where the form is already one
-column under 760px. The face is 128px on desktop, 84px on phone.
+column under 760px. The face is 128px on desktop, 92px on phone — chosen to
+match the cover-drop footprint it takes over from.
 
 ### A new sprite
 
