@@ -6642,7 +6642,7 @@ function openAdd(){
   document.getElementById('fNoteText').value='';
   // A fresh form starts public. The switch is sticky only within one sitting.
   document.getElementById('fNotePrivate').checked=false;
-  scanToken++;   // strand any note-photo upload still in the air
+  abandonScan();   // strand any note-photo upload still in the air
   formNoteImages=[];
   renderNoteShots();
   renderNotesForm();
@@ -6715,7 +6715,7 @@ function openEdit(id){
   renderCondSwitch();
   resetNoteEdit();
   formNotes=parseNotes(r.notes, r.bought_date||today());
-  scanToken++;   // strand any note-photo upload still in the air
+  abandonScan();   // strand any note-photo upload still in the air
   formNoteImages=[];
   renderNoteShots();
   // keep the recorded time — slicing to 10 chars used to wipe it off every play
@@ -6847,7 +6847,7 @@ function closeForm(force){
   closeSpotifyOverlay();
   closeScanOverlay();
   closeSearchOverlay();
-  scanToken++;
+  abandonScan();
   setScanBusy(false);
 }
 
@@ -7502,11 +7502,20 @@ function tickScanPanel(){
   scanPanelRaf = requestAnimationFrame(tickScanPanel);
 }
 
+// Bumping scanToken alone abandons the RESULT but leaves the request running:
+// its late frames still match [data-id] rows in whatever panel replaces this
+// one, since the panel doesn't rebuild the id it's looking for. Every place
+// that gives up on the in-flight scan routes through here so none of them can
+// forget the abort half.
+function abandonScan(){
+  scanToken++;
+  if(scanAbort){ scanAbort.abort(); scanAbort = null; }
+}
+
 function cancelScan(){
   // Abandons the result, not the bill: the call was billed the moment it
-  // returned. Bumping scanToken is the same abandon path closeForm uses.
-  scanToken++;
-  if(scanAbort) scanAbort.abort();
+  // returned. abandonScan is the same abandon path closeForm/openAdd/openEdit use.
+  abandonScan();
   setScanBusy(false);
 }
 
@@ -7566,12 +7575,22 @@ async function runScan(body){
       for(;;){
         const {value, done} = await reader.read();
         if(done) break;
+        // abandonScan aborts the read, but a chunk already decoded by the time
+        // that abort lands is still sitting right here in this tick — without
+        // this check it paints onto whatever panel the next scan just built,
+        // since the rows it targets by data-id exist there too.
+        if(myToken !== scanToken) break;
         for(const frame of parser.push(decode.decode(value, {stream:true}))){
+          if(myToken !== scanToken) break;
           if(frame.event === 'step') applyScanStep(frame.data);
           else if(frame.event === 'done') data = frame.data;
           else if(frame.event === 'error') streamError = frame.data;
         }
       }
+      // Abandoned mid-stream: there is no result to apply and nothing failed,
+      // so return before the shaping below can mistake "abandoned" for "failed"
+      // and toast an error the user never caused.
+      if(myToken !== scanToken) return;
       // The stream always answers 200, so an error arrives as an event. Shape
       // it back into what the code below already expects from !res.ok.
       if(streamError){
