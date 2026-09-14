@@ -174,7 +174,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
    thing the user can still decide. */
 .an-foot{display:flex;align-items:center;gap:8px;padding:9px 15px;
   border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
-.an-cost{font-size:10.5px;color:var(--muted);flex:1}
+.an-cost{font-size:10.5px;color:var(--muted);flex:1;min-width:0;line-height:1.35}
 .an-cancel{height:26px;padding:0 10px;border-radius:var(--radius-sm);font-size:11.5px;cursor:pointer;
   border:1px solid var(--border);background:transparent;color:var(--label);font-family:var(--font)}
 .an-cancel:hover{border-color:var(--danger);color:var(--danger)}
@@ -191,7 +191,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .analysing.wide .an-step{grid-template-columns:26px 1fr;padding:9px 18px}
 .analysing.wide .an-step::before{left:30px}
 .analysing.wide .an-detail{white-space:normal}
-.analysing.wide-foot{grid-column:1/-1}
+/* Descendant, not a compound: the foot is a child of .analysing.wide, so
+   `.analysing.wide-foot` matched nothing and the grid left it in column 1. */
+.analysing.wide .an-foot{grid-column:1/-1}
 
 @media (prefers-reduced-motion:reduce){
   .an-step.run .an-badge{animation:none}
@@ -444,8 +446,10 @@ function paint(now){
   const doneCount = finished ? steps.length : cur;
 
   panels.forEach(panel=>{
+    // Positioned in --face units, not percentages — same as setAnalyseFrame in
+    // index.html, so it cannot drift out of step with background-size.
     panel.querySelector('.an-face').style.backgroundPositionX =
-      `-${Math.floor(loop / FACE_MS * FRAMES) % FRAMES * 100 / (FRAMES-1)}%`;
+      `calc(var(--face) * ${-(Math.floor(loop / FACE_MS * FRAMES) % FRAMES)})`;
     panel.querySelector('.an-n').textContent =
       finished ? '' : ` ${cur+1}/${steps.length}`;
     panel.querySelector('.an-stage').textContent =
@@ -463,17 +467,17 @@ function paint(now){
       const tail = row.querySelector('.tail');
       if(state==='done'){
         detail.textContent = s.done;
-        tail.className = 'tick ti ti-check';
+        tail.className = 'tail tick ti ti-check';
         tail.textContent = '';
       }else if(state==='run'){
         detail.textContent = s.pips
           ? `${s.sub} — ${Math.min(s.pips, Math.floor(frac*s.pips)+1)} of ${s.pips}`
           : s.sub + '…';
-        tail.className = 'secs';
+        tail.className = 'tail secs';
         tail.textContent = (s.ms*frac/1000).toFixed(1)+'s';
       }else{
         detail.textContent = s.sub;
-        tail.className = '';
+        tail.className = 'tail';
         tail.textContent = '';
       }
       if(s.pips){
