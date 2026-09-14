@@ -7490,6 +7490,25 @@ function scanPanelSetWide(wide){
   }
 }
 
+// scanHintText's armed line — "nothing is sent until you tap analyse" — is a
+// PRE-scan promise: true under the Analyse button and in the search popup,
+// both of which show it before anything has gone out. This panel only ever
+// shows AFTER the request is already on the wire, so that line would be a lie
+// the instant it appeared next to a live progress bar. Worse, the call is
+// billed the moment it returns whether or not the result is ever used — see
+// test_spend_is_banked_even_when_the_client_never_reads_the_stream — so the
+// footer must say the charge is already committed, not implied refundable by
+// Cancel. Kept separate from scanHintText rather than editing it, since that
+// helper is shared with the two callers where the pre-scan wording is correct.
+function scanPanelCostText(source){
+  const estimate = scanUsage ? (scanUsage.estimate || {})[source] : null;
+  const month = scanUsage ? VinylSpend.formatMoney(scanUsage.month_usd) + ' this month' : null;
+  const spent = estimate != null
+    ? 'this one ≈ ' + VinylSpend.formatMoney(estimate) + ', already committed — cancelling stops the wait, not the charge'
+    : 'already committed — cancelling stops the wait, not the charge';
+  return month ? spent + ' · ' + month : spent;
+}
+
 function buildScanPanel(source){
   scanPanelState = {};
   const rows = SCAN_STAGES[source].map(id => {
@@ -7503,8 +7522,7 @@ function buildScanPanel(source){
       </div></div>`;
   }).join('');
   document.querySelector('#scanPanel .an-steps').innerHTML = rows;
-  document.querySelector('#scanPanel .an-cost').textContent =
-    VinylSpend.scanHintText({armed: true, source, usage: scanUsage, verb: 'analyse'});
+  document.querySelector('#scanPanel .an-cost').textContent = scanPanelCostText(source);
   // Decided fresh on every scan, from the CURRENT viewport, so a panel that
   // went wide once cannot get stuck that way if the next scan opens narrow —
   // and a resize while the form sits closed never leaves a stale choice behind.
