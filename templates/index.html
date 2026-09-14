@@ -1109,7 +1109,7 @@ select option{background:var(--surface);color:var(--text)}
 /* The panel replaces the cover drop while a scan is out. It is the same
    footprint, so the form does not jump when it swaps in. */
 /* --face is owned here, one value per breakpoint, rather than left for each
-   consumer to fall back on its own: tickScanPanel's calc(var(--face) * n) has
+   consumer to fall back on its own: startPanelTick's calc(var(--face) * n) has
    no fallback of its own, so if this custom property were ever undefined the
    whole background-position-x declaration would be dropped at computed-value
    time and the face would go visibly, silently static. */
@@ -3072,12 +3072,12 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
                lookups and up to three cover fetches. Rather than a spinner and
                a guess at the worst case, the panel names each stage as it
                happens and says which service is being asked. Built by
-               buildScanPanel and painted from the event stream by
-               applyScanStep, with tickScanPanel driving the face and clock;
+               buildPanel and painted from the event stream by
+               applyPanelStep, with startPanelTick driving the face and clock;
                see static/scanstream.js for the stream parser itself. -->
           <div class="analysing" id="scanPanel" hidden>
             <div class="an-head">
-              <div class="an-face" id="scanPanelFace"></div>
+              <div class="an-face"></div>
               <div class="an-head-main">
                 <div class="an-title">analysing<em class="an-n"></em></div>
                 <div class="an-sub"><span class="an-stage">starting…</span><span class="dot">·</span><span class="an-clock">0.0s</span></div>
@@ -3427,11 +3427,26 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
       <div class="scan-hint" id="searchHint"></div>
 
       <!-- Measured against live MusicBrainz, a real search takes about 30
-           seconds — load-shedding retries pay a one-second throttle each —
-           far longer than a disabled button explains on its own. -->
-      <div id="searchStatus" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--label)">
-        <span class="scan-spinner"></span>
-        <span>searching… can take up to 30 seconds — MusicBrainz sheds load and each retry waits a beat</span>
+           seconds — load-shedding retries pay a one-second throttle each — so
+           rather than a spinner and a guess at the worst case, the same panel
+           the record form uses names each stage as it happens. Never `wide`:
+           that takeover is for the 920px form, and this modal is 460px with
+           nothing to take over. -->
+      <div class="analysing" id="searchPanel" hidden style="margin-top:10px">
+        <div class="an-head">
+          <div class="an-face"></div>
+          <div class="an-head-main">
+            <div class="an-title">searching<em class="an-n"></em></div>
+            <div class="an-sub"><span class="an-stage">starting…</span><span class="dot">·</span><span class="an-clock">0.0s</span></div>
+            <div class="an-bar"><i></i></div>
+          </div>
+        </div>
+        <div class="an-steps"></div>
+        <div class="an-foot">
+          <span class="an-cost"></span>
+          <button type="button" class="an-cancel" id="searchCancelBtn"
+                  onclick="cancelSearch()"><i class="ti ti-x"></i> cancel</button>
+        </div>
       </div>
     </div>
     <div class="modal-foot">
@@ -7526,7 +7541,6 @@ let scanInFlight = false;
 let scanToken = 0;
 // requestAnimationFrame handle for the panel's clock tick, so hiding the panel
 // can cancel it — otherwise the loop keeps ticking a clock nobody sees.
-let scanPanelRaf = 0;
 // Fields a scan has written during THIS form session. A later scan may clear a
 // field an earlier scan filled — that value came from a scan and is now stale —
 // but must never clear a value the user typed or that openEdit loaded from the
@@ -7590,6 +7604,10 @@ function setScanField(id, value){
 const SCAN_STAGES = {
   photo:   ['vision', 'mb', 'cover', 'vinyl', 'shelf'],
   spotify: ['spotify', 'genre', 'mb', 'cover', 'vinyl', 'shelf'],
+  // Search is its own pipeline, not a variant of the two above: it starts from
+  // a typed phrase rather than a sleeve, and walks an artist's whole
+  // discography instead of matching one release group.
+  search:  ['parse', 'artist', 'discography', 'covers', 'vinyl', 'shelf'],
 };
 const STAGE_META = {
   vision:  {src:'claude',  icon:'ti-sparkles',        label:'reading the sleeve',      sub:'Claude vision'},
@@ -7599,9 +7617,13 @@ const STAGE_META = {
   cover:   {src:'mb',      icon:'ti-photo-search',    label:'fetching cover art',      sub:'Cover Art Archive'},
   vinyl:   {src:'claude',  icon:'ti-vinyl',           label:'confirming it is vinyl',  sub:'Claude'},
   shelf:   {src:'shelf',   icon:'ti-checklist',       label:'checking your shelf',     sub:'local'},
+  // search-only stages
+  parse:       {src:'claude', icon:'ti-quote',           label:'reading your words',      sub:'Claude'},
+  artist:      {src:'mb',     icon:'ti-microphone-2',    label:'finding the artist',      sub:'MusicBrainz'},
+  discography: {src:'mb',     icon:'ti-list-search',     label:'fetching the releases',   sub:'discography'},
+  covers:      {src:'mb',     icon:'ti-photo-search',    label:'fetching cover art',      sub:'Cover Art Archive'},
 };
 
-let scanPanelStart = 0;
 let scanAbort = null;
 
 // The wide takeover only fits once the form itself has room for it — reusing
@@ -7612,7 +7634,7 @@ const SCAN_WIDE_BREAKPOINT = 760;
 // Moves #scanPanel between the 330px cover column (its home) and a direct
 // child of .form-layout (where .analysing.wide's grid-column:1/-1 can make it
 // span the whole 920px form) and toggles the classes that go with each. Idempotent
-// either way, so buildScanPanel can call it unconditionally on every scan and
+// either way, so buildPanel can call it unconditionally on every scan and
 // setScanBusy can call it unconditionally on every exit.
 function scanPanelSetWide(wide){
   const layout = document.querySelector('.form-layout');
@@ -7641,7 +7663,7 @@ function scanPanelSetWide(wide){
 // footer must say the charge is already committed, not implied refundable by
 // Cancel. Kept separate from scanHintText rather than editing it, since that
 // helper is shared with the two callers where the pre-scan wording is correct.
-function scanPanelCostText(source){
+function panelCostText(source){
   const estimate = scanUsage ? (scanUsage.estimate || {})[source] : null;
   const month = scanUsage ? VinylSpend.formatMoney(scanUsage.month_usd) + ' this month' : null;
   const spent = estimate != null
@@ -7650,7 +7672,10 @@ function scanPanelCostText(source){
   return month ? spent + ' · ' + month : spent;
 }
 
-function buildScanPanel(source){
+// `root` is the panel element: the form's #scanPanel or the search popup's
+// #searchPanel. One painter for both — a second copy would drift from this one
+// exactly as the duplicated scanToken++ sites did.
+function buildPanel(root, source){
   const rows = SCAN_STAGES[source].map(id => {
     const m = STAGE_META[id];
     return `<div class="an-step wait" data-src="${m.src}" data-id="${id}">
@@ -7661,27 +7686,31 @@ function buildScanPanel(source){
         <div class="an-pips" hidden></div>
       </div></div>`;
   }).join('');
-  document.querySelector('#scanPanel .an-steps').innerHTML = rows;
-  document.querySelector('#scanPanel .an-cost').textContent = scanPanelCostText(source);
+  root.querySelector('.an-steps').innerHTML = rows;
+  root.querySelector('.an-cost').textContent = panelCostText(source);
   // .an-steps and .an-cost above are rebuilt wholesale by the innerHTML/text
-  // assignment, but these three are mutated in place by applyScanStep, so
+  // assignment, but these three are mutated in place by applyPanelStep, so
   // without resetting them here scan #2 opens still showing scan #1's
   // finished state — "5/5 · checking your shelf · 100%" — for the one
   // round-trip before its first frame arrives.
-  document.querySelector('#scanPanel .an-bar i').style.width = '0%';
-  document.querySelector('#scanPanel .an-n').textContent = '';
-  document.querySelector('#scanPanel .an-stage').textContent = 'starting…';
-  // Decided fresh on every scan, from the CURRENT viewport, so a panel that
-  // went wide once cannot get stuck that way if the next scan opens narrow —
-  // and a resize while the form sits closed never leaves a stale choice behind.
-  scanPanelSetWide(window.innerWidth > SCAN_WIDE_BREAKPOINT);
-  document.getElementById('scanPanel').hidden = false;
+  root.querySelector('.an-bar i').style.width = '0%';
+  root.querySelector('.an-n').textContent = '';
+  root.querySelector('.an-stage').textContent = 'starting…';
+  // The wide takeover is specific to the 920px record form; the search popup is
+  // a 460px modal with nothing to take over, so it never goes wide.
+  if(root.id === 'scanPanel')
+    // Decided fresh on every scan, from the CURRENT viewport, so a panel that
+    // went wide once cannot get stuck that way if the next scan opens narrow —
+    // and a resize while the form sits closed never leaves a stale choice behind.
+    scanPanelSetWide(window.innerWidth > SCAN_WIDE_BREAKPOINT);
+  root.hidden = false;
+  startPanelTick(root);
 }
 
 // One step event. The server is the only source of truth for state here — the
 // panel never advances a row on its own, so a stage that hangs visibly hangs.
-function applyScanStep(p){
-  const row = document.querySelector(`#scanPanel .an-step[data-id="${p.id}"]`);
+function applyPanelStep(root, p){
+  const row = root.querySelector(`.an-step[data-id="${p.id}"]`);
   if(!row) return;
   row.classList.remove('wait','run','done','skip');
   row.classList.add(p.state);
@@ -7698,24 +7727,38 @@ function applyScanStep(p){
     if(p.state === 'run' && p.n)
       detail.textContent = `${STAGE_META[p.id].sub} — ${p.n} of ${p.of}`;
   }
-  const stages = [...document.querySelectorAll('#scanPanel .an-step')];
+  const stages = [...root.querySelectorAll('.an-step')];
   const settled = stages.filter(r => r.classList.contains('done') || r.classList.contains('skip')).length;
-  document.querySelector('#scanPanel .an-bar i').style.width =
-    (settled / stages.length * 100) + '%';
-  document.querySelector('#scanPanel .an-n').textContent = ` ${Math.min(settled+1, stages.length)}/${stages.length}`;
+  root.querySelector('.an-bar i').style.width = (settled / stages.length * 100) + '%';
+  root.querySelector('.an-n').textContent = ` ${Math.min(settled+1, stages.length)}/${stages.length}`;
   if(p.state === 'run')
-    document.querySelector('#scanPanel .an-stage').textContent = STAGE_META[p.id].sub;
+    root.querySelector('.an-stage').textContent = STAGE_META[p.id].sub;
 }
 
 // The face and the clock are the only things driven locally — everything else
 // waits on the server. Same 30-frame strip and 1010ms cadence as the button's,
 // positioned in --face units for the reason setAnalyseFrame gives.
-function tickScanPanel(){
-  const elapsed = performance.now() - scanPanelStart;
-  document.getElementById('scanPanelFace').style.backgroundPositionX =
-    `calc(var(--face) * ${-(Math.floor(elapsed / ANALYSE_MS * ANALYSE_FRAMES) % ANALYSE_FRAMES)})`;
-  document.querySelector('#scanPanel .an-clock').textContent = (elapsed/1000).toFixed(1)+'s';
-  scanPanelRaf = requestAnimationFrame(tickScanPanel);
+//
+// The handle lives on the element, not in a module-level variable, because two
+// panels can exist at once (the form's and the search popup's) and a single
+// shared raf id would let whichever started last cancel the other's loop.
+function startPanelTick(root){
+  stopPanelTick(root);
+  const face = root.querySelector('.an-face');
+  const clock = root.querySelector('.an-clock');
+  const started = performance.now();
+  const step = () => {
+    const elapsed = performance.now() - started;
+    face.style.backgroundPositionX =
+      `calc(var(--face) * ${-(Math.floor(elapsed / ANALYSE_MS * ANALYSE_FRAMES) % ANALYSE_FRAMES)})`;
+    clock.textContent = (elapsed/1000).toFixed(1)+'s';
+    root._panelRaf = requestAnimationFrame(step);
+  };
+  root._panelRaf = requestAnimationFrame(step);
+}
+
+function stopPanelTick(root){
+  if(root && root._panelRaf){ cancelAnimationFrame(root._panelRaf); root._panelRaf = 0; }
 }
 
 // Bumping scanToken alone abandons the RESULT but leaves the request running:
@@ -7748,13 +7791,13 @@ function setScanBusy(busy){
   // overwrite. setScanBusy is the one place that knows the whole in-flight
   // window, error and abandoned-scan paths included.
   if(!busy){
-    document.getElementById('scanPanel').hidden = true;
+    const panel = document.getElementById('scanPanel');
+    panel.hidden = true;
     // Every exit — success, error, cancel, or the form closed mid-scan — comes
     // through here, so restoring the fields the takeover hid belongs here too
     // rather than in a second cleanup path that could drift from this one.
     scanPanelSetWide(false);
-    cancelAnimationFrame(scanPanelRaf);
-    scanPanelRaf = 0;
+    stopPanelTick(panel);
   }
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
    'coverPickerFile','coverPickerCamera','notePickerFile','notePickerCamera'].forEach(id=>{
@@ -7785,10 +7828,7 @@ async function runScan(body){
     let res, data;
     try{
       const source = body.spotify_url ? 'spotify' : 'photo';
-      buildScanPanel(source);
-      scanPanelStart = performance.now();
-      cancelAnimationFrame(scanPanelRaf);
-      scanPanelRaf = requestAnimationFrame(tickScanPanel);
+      buildPanel(document.getElementById('scanPanel'), source);
       scanAbort = new AbortController();
       res = await fetch('/api/scan', {method:'POST',
         headers:{'Content-Type':'application/json', 'Accept':'text/event-stream'},
@@ -7808,7 +7848,7 @@ async function runScan(body){
         if(myToken !== scanToken) break;
         for(const frame of parser.push(decode.decode(value, {stream:true}))){
           if(myToken !== scanToken) break;
-          if(frame.event === 'step') applyScanStep(frame.data);
+          if(frame.event === 'step') applyPanelStep(document.getElementById('scanPanel'), frame.data);
           else if(frame.event === 'done') data = frame.data;
           else if(frame.event === 'error') streamError = frame.data;
         }
@@ -7879,6 +7919,11 @@ function openSearchOverlay(){
 }
 
 function closeSearchOverlay(){
+  // Abandon any search still in flight. Without this the stream keeps running
+  // behind a hidden overlay, its rAF keeps ticking, and searchInFlight stays
+  // true — which silently blocks every later search. Exactly the orphan-stream
+  // bug the scan side had to be fixed for; abandoned here at the one exit.
+  if(searchInFlight) cancelSearch();
   document.getElementById('searchOverlay').classList.add('hidden');
 }
 
@@ -7894,11 +7939,30 @@ function showSearchError(message){
   el.style.display = message ? '' : 'none';
 }
 
+let searchAbort = null;
+
 function setSearchBusy(busy){
   searchInFlight = busy;
   document.getElementById('searchSubmitBtn').disabled = busy;
   document.getElementById('searchQueryInput').disabled = busy;
-  document.getElementById('searchStatus').style.display = busy ? 'flex' : 'none';
+  // The hint says "nothing is sent until you tap search" — a PRE-search promise
+  // that turns false the moment the request is on the wire, and would then sit
+  // directly above a panel footer saying the charge is already committed. Two
+  // contradictory money claims on screen at once; hide it while in flight.
+  document.getElementById('searchHint').hidden = busy;
+  if(!busy){
+    const panel = document.getElementById('searchPanel');
+    panel.hidden = true;
+    stopPanelTick(panel);
+  }
+}
+
+// Abandons the result, not the bill: like a scan, the call is billed the moment
+// it returns and the server banks the spend even if we hang up. Aborting only
+// stops us waiting for an answer we no longer want.
+function cancelSearch(){
+  if(searchAbort){ searchAbort.abort(); searchAbort = null; }
+  setSearchBusy(false);
 }
 
 async function runSearch(query){
@@ -7910,11 +7974,38 @@ async function runSearch(query){
   try{
     let res, data;
     try{
+      buildPanel(document.getElementById('searchPanel'), 'search');
+      searchAbort = new AbortController();
       res = await fetch('/api/search', {method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({query})});
-      data = await res.json();
+        headers:{'Content-Type':'application/json', 'Accept':'text/event-stream'},
+        body: JSON.stringify({query}), signal: searchAbort.signal});
+      const parser = VinylScanStream.createParser();
+      const reader = res.body.getReader();
+      const decode = new TextDecoder();
+      const panel = document.getElementById('searchPanel');
+      let streamError = null;
+      data = null;
+      for(;;){
+        const {value, done} = await reader.read();
+        if(done) break;
+        for(const frame of parser.push(decode.decode(value, {stream:true}))){
+          if(frame.event === 'step') applyPanelStep(panel, frame.data);
+          else if(frame.event === 'done') data = frame.data;
+          else if(frame.event === 'error') streamError = frame.data;
+        }
+      }
+      // The stream always answers 200, so an error arrives as an event. Shape
+      // it back into what the !res.ok branch below already expects.
+      if(streamError){
+        res = {ok:false};
+        data = {error: streamError.error};
+      } else if(!data){
+        throw new Error('stream ended without a result');
+      } else {
+        res = {ok:true};
+      }
     }catch(e){
+      if(e.name === 'AbortError') return;   // the user cancelled; not a failure
       showSearchError('search failed — try again');
       return;
     }
@@ -7928,6 +8019,7 @@ async function runSearch(query){
     closeSearchOverlay();
     openSearchResults(data);
   } finally {
+    searchAbort = null;
     setSearchBusy(false);
     refreshScanUsage();
   }
