@@ -675,26 +675,6 @@ select option{background:var(--surface);color:var(--text)}
 .dm-qbtn.play:hover{border-color:#5FBF7A;color:#5FBF7A}
 .dm-qbtn.clean:hover{border-color:#4AA3C4;color:#4AA3C4}
 
-/* paint the record: a swatch + a precise hex field per color, both writing
- * the same field, so a quick pick and an exact value are equally one step. */
-.dm-paint{background:var(--card);border:1px solid var(--border);border-radius:8px;
-  padding:11px 12px;margin-top:14px}
-.dm-paint-hd{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--muted);display:flex;align-items:center;gap:5px;margin-bottom:10px}
-.dm-paint-hd i{font-size:12px;color:var(--accent)}
-.dm-paint-row{display:flex;align-items:center;gap:12px}
-.dm-paint-fields{display:flex;flex:1;gap:14px;flex-wrap:wrap}
-.dm-paint-field{display:flex;align-items:center;gap:6px}
-.dm-paint-field span{font-size:11px;font-weight:600;color:var(--muted)}
-.dm-paint-field input[type=color]{width:26px;height:26px;padding:0;border:1px solid var(--border);
-  border-radius:6px;background:none;cursor:pointer}
-.dm-paint-hex{width:76px;font:600 12px var(--font-mono);background:var(--surface);
-  color:var(--text);border:1px solid var(--border);border-radius:5px;padding:5px 7px;
-  text-transform:lowercase}
-.dm-paint-hex:focus{outline:none;border-color:var(--accent)}
-.dm-paint-reset{width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;
-  flex:0 0 auto}
-
 .dm-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .dm-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
   background:var(--card);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted)}
@@ -1040,6 +1020,21 @@ select option{background:var(--surface);color:var(--text)}
 .form-section > header .count{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500;opacity:.6}
 .form-section .sec-body{padding:13px}
 .form-section .form-group:last-child{margin-bottom:0}
+
+/* paint the record: a swatch + a precise hex field per color, both writing
+ * the same field, so a quick pick and an exact value are equally one step. */
+.paint-row{display:flex;align-items:center;gap:12px}
+.paint-fields{display:flex;flex:1;gap:14px;flex-wrap:wrap}
+.paint-field{display:flex;align-items:center;gap:6px}
+.paint-field span{font-size:11px;font-weight:600;color:var(--muted)}
+.paint-field input[type=color]{width:26px;height:26px;padding:0;border:1px solid var(--border);
+  border-radius:6px;background:none;cursor:pointer}
+.paint-hex{width:76px;font:600 12px var(--font-mono);background:var(--surface);
+  color:var(--text);border:1px solid var(--border);border-radius:5px;padding:5px 7px;
+  text-transform:lowercase}
+.paint-hex:focus{outline:none;border-color:var(--accent)}
+.paint-reset{width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;
+  flex:0 0 auto}
 
 /* ratings — segmented bars in each person's colour, mirroring .dm-rate in the
    detail drawer so a record reads the same in both views */
@@ -3264,6 +3259,30 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
             <div class="seg-pick" id="fDiscPick"></div>
           </div>
         </div>
+        <div class="form-section">
+          <header><i class="ti ti-palette"></i> Paint the record</header>
+          <div class="sec-body">
+            <div class="paint-row">
+              <span class="disc" id="fPaintPreview" style="--d:34px"></span>
+              <div class="paint-fields">
+                <label class="paint-field">
+                  <span>Vinyl</span>
+                  <input type="color" id="fVinylColor" onchange="setFormVinylColor(this.value)">
+                  <input type="text" class="paint-hex" id="fVinylHex" maxlength="7" placeholder="#000000"
+                         onchange="setFormVinylHex(this.value)">
+                </label>
+                <label class="paint-field">
+                  <span>Label</span>
+                  <input type="color" id="fLabelColor" onchange="setFormLabelColor(this.value)">
+                  <input type="text" class="paint-hex" id="fLabelHex" maxlength="7" placeholder="#ffffff"
+                         onchange="setFormLabelHex(this.value)">
+                </label>
+              </div>
+              <button type="button" class="btn btn-sm paint-reset" title="reset to black/white"
+                      onclick="resetFormPaint()"><i class="ti ti-arrow-back-up"></i></button>
+            </div>
+          </div>
+        </div>
         <div id="fTracksSides"></div>
       </div>
     </div>
@@ -5267,38 +5286,7 @@ function dmInfoTabHTML(r) {
       <button class="dm-qbtn clean" onclick="logCleaned(${r.id})">
         <i class="ti ti-droplet"></i>Cleaned today
       </button>
-    </div>` : ''}
-    ${authed ? dmPaintHTML(r) : ''}`;
-}
-
-/* Paint the record: two hex colors, vinyl and label, each editable by
- * swatch or by typing the value. Unset renders black/white (recVinylColor,
- * recLabelColor) — reset just clears both fields back to that. */
-function dmPaintHTML(r) {
-  const vinyl = recVinylColor(r);
-  const label = recLabelColor(r);
-  return `<div class="dm-paint">
-    <div class="dm-paint-hd"><i class="ti ti-palette"></i>Paint the record</div>
-    <div class="dm-paint-row">
-      <span class="disc" style="${discStyle(r, '--d:34px')}"></span>
-      <div class="dm-paint-fields">
-        <label class="dm-paint-field">
-          <span>Vinyl</span>
-          <input type="color" value="${vinyl}" onchange="paintSwatch(${r.id},'vinyl_color',this.value)">
-          <input type="text" class="dm-paint-hex" value="${vinyl}" maxlength="7"
-                 onchange="paintHex(${r.id},'vinyl_color',this.value)">
-        </label>
-        <label class="dm-paint-field">
-          <span>Label</span>
-          <input type="color" value="${label}" onchange="paintSwatch(${r.id},'label_color',this.value)">
-          <input type="text" class="dm-paint-hex" value="${label}" maxlength="7"
-                 onchange="paintHex(${r.id},'label_color',this.value)">
-        </label>
-      </div>
-      <button type="button" class="btn btn-sm dm-paint-reset" title="reset to black/white"
-              onclick="resetPaint(${r.id})"><i class="ti ti-arrow-back-up"></i></button>
-    </div>
-  </div>`;
+    </div>` : ''}`;
 }
 
 /* An unpainted record renders black vinyl / white label rather than the old
@@ -5962,9 +5950,60 @@ let formArtists = []; // ditto for the multi-artist editor
 let formTracks = [];
 let formDiscCount = 1;
 let formSize = '';
+// '' means unpainted — recVinylColor/recLabelColor render that as black/white.
+let formVinylColor = '';
+let formLabelColor = '';
 
 const SIZE_OPTIONS = ['7', '10', '12'];
 const DISC_OPTIONS = [1, 2, 3, 4];
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/* The swatch (native <input type=color>) always yields a valid #rrggbb, so it
+ * writes straight to state. The hex field takes free text, so it validates
+ * and normalizes first — same rule the server applies on save. */
+function setFormVinylColor(v) { formVinylColor = v; renderPaintForm(); formChanged(); }
+function setFormLabelColor(v) { formLabelColor = v; renderPaintForm(); formChanged(); }
+
+function normalizedHexOrKeep(raw, current) {
+  let value = String(raw || '').trim();
+  if (!value) return '';
+  if (!value.startsWith('#')) value = '#' + value;
+  if (!HEX_COLOR.test(value)) {
+    toast('Enter a hex color like #ff8800');
+    return current;
+  }
+  return value.toLowerCase();
+}
+
+function setFormVinylHex(raw) {
+  formVinylColor = normalizedHexOrKeep(raw, formVinylColor);
+  renderPaintForm();
+  formChanged();
+}
+function setFormLabelHex(raw) {
+  formLabelColor = normalizedHexOrKeep(raw, formLabelColor);
+  renderPaintForm();
+  formChanged();
+}
+
+function resetFormPaint() {
+  formVinylColor = '';
+  formLabelColor = '';
+  renderPaintForm();
+  formChanged();
+}
+
+/* Swatches need a real value to show (a bare '#rrggbb'), even when the record
+ * is unpainted — the hex fields are what actually show blank in that case. */
+function renderPaintForm() {
+  const vinyl = formVinylColor || '#000000';
+  const label = formLabelColor || '#ffffff';
+  document.getElementById('fVinylColor').value = vinyl;
+  document.getElementById('fVinylHex').value = formVinylColor;
+  document.getElementById('fLabelColor').value = label;
+  document.getElementById('fLabelHex').value = formLabelColor;
+  document.getElementById('fPaintPreview').setAttribute('style', `--vinyl:${vinyl};--lab:${label};--d:34px`);
+}
 
 function renderTracksForm() {
   document.getElementById('fSizePick').innerHTML = SIZE_OPTIONS.map(v =>
@@ -9094,32 +9133,6 @@ function logPlayed(id) {
   const dates = [...parsePlayDates(record.play_dates), nowStamp()];
   patchRecord(id, { play_count: (record.play_count || 0) + 1, play_dates: JSON.stringify(dates) });
   toast('Played today');
-}
-
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-
-/* The swatch (native <input type=color>) always yields a valid #rrggbb, so
- * it can save straight away. The hex field takes free text — see
- * paintHex — so it validates first. */
-function paintSwatch(id, field, value) {
-  patchRecord(id, { [field]: value });
-}
-
-function paintHex(id, field, raw) {
-  const record = records.find(r => r.id === id);
-  if (!record) return;
-  let value = String(raw || '').trim();
-  if (value && !value.startsWith('#')) value = '#' + value;
-  if (!HEX_COLOR.test(value)) {
-    toast('Enter a hex color like #ff8800');
-    if (currentDetailId === id) renderDetailContent(record);
-    return;
-  }
-  patchRecord(id, { [field]: value.toLowerCase() });
-}
-
-function resetPaint(id) {
-  patchRecord(id, { vinyl_color: '', label_color: '' });
 }
 
 /* 53 of 129 owned records had never been cleaned, and the only way to record
