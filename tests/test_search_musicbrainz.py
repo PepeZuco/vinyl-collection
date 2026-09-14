@@ -47,6 +47,25 @@ def test_a_weak_top_score_returns_none():
         assert scan.lookup_artist("jorge ben") is None
 
 
+def test_an_exact_name_match_outranks_a_higher_score():
+    """Reproduced live against MusicBrainz: searching "Bob Marley" scores Bob
+    Dylan at 100 — his alias list is dense with "Bob" and "Dylan" — ahead of
+    the real Bob Marley at 97. The exact name is right there in the results;
+    taking MusicBrainz's raw top score threw it away."""
+    payload = {"count": 3, "artists": [
+        {"id": "dylan", "name": "Bob Dylan", "score": 100, "country": "US",
+         "aliases": [{"name": "Bob D"}, {"name": "Robert Dylan"}]},
+        {"id": "wailers", "name": "Bob Marley & The Wailers", "score": 99,
+         "country": "JM", "aliases": [{"name": "Bob Marley and The Wailers"}]},
+        {"id": "marley", "name": "Bob Marley", "score": 97, "country": "JM",
+         "aliases": [{"name": "Marley"}]},
+    ]}
+    with patch.object(scan.requests, "get", return_value=_response(payload)):
+        found = scan.lookup_artist("Bob Marley")
+
+    assert found == {"mbid": "marley", "name": "Bob Marley", "country": "JM"}
+
+
 def test_an_unreachable_musicbrainz_propagates():
     with patch.object(scan, "_mb_get",
                       side_effect=scan.MusicBrainzUnavailable("down")):

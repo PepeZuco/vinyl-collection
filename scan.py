@@ -466,13 +466,24 @@ def lookup_artist(name: str) -> dict | None:
     if not name:
         return None
     payload = _mb_get("/artist/", {"query": f"artist:({_lucene_escape(name)})",
-                                   "limit": 3})
+                                   "limit": 5})
     artists = (payload or {}).get("artists") or []
-    if not artists:
+    candidates = [a for a in artists if (a.get("score") or 0) >= MB_MIN_SCORE]
+    if not candidates:
         return None
-    best = artists[0]
-    if (best.get("score") or 0) < MB_MIN_SCORE:
-        return None
+
+    # MusicBrainz's own order is score alone, and an unquoted OR query can get
+    # that wrong the same way _rank_candidates already documents for release
+    # groups: searching "Bob Marley" scores Bob Dylan — whose alias list is
+    # dense with "Bob" and "Dylan" — at 100, ahead of the real Bob Marley at
+    # 97. An exact name (or alias) match outranks a raw score, the same
+    # precedent as an exact title there.
+    wanted = _normalise(name)
+    best = next((a for a in candidates
+                if _normalise(a.get("name") or "") == wanted
+                or any(_normalise(alias.get("name") or "") == wanted
+                       for alias in a.get("aliases") or [])),
+               candidates[0])
     return {"mbid": best.get("id"), "name": best.get("name") or name,
             "country": best.get("country")}
 
