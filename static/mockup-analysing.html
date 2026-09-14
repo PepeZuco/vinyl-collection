@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup — analysing progress</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<style>
+/* ── the app's own tokens, copied verbatim from index.html so the mockup is
+      judged on the real ground, not an approximation ─────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+[data-theme="dark"]{
+  --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#3A2C1D;
+  --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#f1c23f;--danger:#c0392b;
+  --search-bg:#101010;
+}
+[data-theme="light"]{
+  --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#CBB596;
+  --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#7A5A00;--danger:#c0392b;
+  --search-bg:#e7e3d9;
+}
+:root{--font:'Inter',system-ui,sans-serif;--font-mono:'Courier Prime',monospace;--radius:4px;--radius-sm:3px}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;letter-spacing:-.01em;padding:0 0 80px}
+
+/* ── mockup page chrome (NOT part of the design under review) ───────────── */
+.page{max-width:1100px;margin:0 auto;padding:0 20px}
+.page-head{padding:26px 0 18px;border-bottom:1px solid var(--border);margin-bottom:22px}
+.page-head h1{font-size:17px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-family:var(--font-mono)}
+.page-head p{font-size:13px;color:var(--label);margin-top:7px;max-width:62ch;line-height:1.5}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:20;
+  background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);
+  padding:12px 0;margin-bottom:22px;border-bottom:1px solid var(--border)}
+.ctl{height:32px;padding:0 12px;border-radius:var(--radius-sm);font-size:12.5px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:transparent;
+  color:var(--label);font-family:var(--font);transition:all .12s}
+.ctl:hover{border-color:var(--text);color:var(--text)}
+.ctl.on{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.ctl-group{display:flex;gap:0}
+.ctl-group .ctl{border-radius:0}
+.ctl-group .ctl:first-child{border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+.ctl-group .ctl:last-child{border-radius:0 var(--radius-sm) var(--radius-sm) 0;border-left:none}
+.ctl-sep{width:1px;height:22px;background:var(--border);margin:0 6px}
+
+.frame{margin-bottom:40px}
+.frame-cap{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.frame-cap b{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--accent)}
+.frame-cap span{font-size:12px;color:var(--label)}
+.frame-note{font-size:12px;color:var(--label);line-height:1.5;margin-top:10px;max-width:70ch}
+.frame-note code{font-family:var(--font-mono);color:var(--text);font-size:11.5px}
+
+/* the phone shell — 390px viewport, the app's own form at that width */
+.phone{width:390px;max-width:100%;border:9px solid #2a2a2a;border-radius:34px;overflow:hidden;
+  background:var(--bg);box-shadow:0 14px 44px rgba(0,0,0,.5)}
+[data-theme="light"] .phone{border-color:#b9b2a4}
+.phone-bar{height:26px;display:flex;align-items:center;justify-content:center;font-size:10px;
+  color:var(--muted);font-family:var(--font-mono);letter-spacing:.1em}
+.phone-scroll{height:640px;overflow:hidden;padding:0 12px 16px}
+
+/* ── the real app classes this mockup reuses ────────────────────────────── */
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px}
+.modal.modal-wide{max-width:920px}
+.modal-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.modal-title{font-size:13px;font-weight:600;color:var(--label)}
+.modal-body-pad{padding:16px}
+.form-layout{display:grid;grid-template-columns:330px 1fr;gap:20px;align-items:start}
+.form-section{border:1px solid var(--border);border-radius:9px;background:var(--bg);overflow:hidden;margin-bottom:12px}
+.form-section > header{display:flex;align-items:center;gap:7px;padding:9px 13px;background:var(--card);
+  border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--label)}
+.form-section > header i{font-size:13px;color:var(--accent)}
+.form-section .sec-body{padding:13px}
+.form-group label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--label);margin-bottom:5px}
+.field{display:flex;align-items:center;gap:7px;background:var(--search-bg);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:0 9px;height:34px;font-size:13px;color:var(--muted)}
+.field i{font-size:14px;color:var(--muted)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.scan-actions{display:flex;gap:7px;margin-top:10px}
+.scan-actions button{flex:1;height:34px;border-radius:7px;border:1px solid var(--border);background:var(--card);
+  color:var(--text);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;
+  align-items:center;justify-content:center;gap:6px}
+.scan-actions button.scan-ai{border-color:color-mix(in srgb,var(--accent) 45%,transparent);
+  color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.scan-actions button.scan-sp{border-color:rgba(30,215,96,.4);color:#1DB954;background:rgba(30,215,96,.07)}
+.scan-actions button:disabled{opacity:.45;cursor:not-allowed}
+.scan-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
+.cover-drop{border:1px dashed var(--border);border-radius:9px;padding:18px;text-align:center;background:var(--card);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px;gap:8px}
+.cover-drop i{font-size:26px;color:var(--muted)}
+.cover-drop span{font-size:12px;color:var(--label)}
+.sec-off{opacity:.38;pointer-events:none;filter:saturate(.4)}
+
+/* ════════════════════════════════════════════════════════════════════════
+   THE DESIGN UNDER REVIEW — the analysing panel
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* The panel replaces the cover drop while a scan is out. It is the same
+   footprint, so the form does not jump when it swaps in. */
+.analysing{border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:9px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--card)),var(--card));
+  overflow:hidden}
+
+/* ── the head: the big face, what it is doing, how long it has been ────── */
+.an-head{display:flex;align-items:center;gap:14px;padding:16px 15px 14px}
+/* The thinking face, now cut at 128px per frame from the same source.gif.
+   Stepped by hand exactly as the 44px button strip is — see .analyse-face. */
+.an-face{flex-shrink:0;width:var(--face,92px);height:var(--face,92px);
+  background-image:url('/static/analyse-sprite-128.png');background-repeat:no-repeat;
+  background-size:calc(var(--face,92px) * 30) var(--face,92px);background-position:0 0}
+.an-head-main{min-width:0;flex:1}
+.an-title{font-size:15px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:7px}
+.an-title em{font-style:normal;color:var(--accent)}
+.an-sub{font-size:11.5px;color:var(--label);margin-top:3px;font-variant-numeric:tabular-nums}
+.an-sub .dot{opacity:.4;margin:0 5px}
+
+/* One hairline that fills as steps complete — the only thing on screen that
+   answers "how much is left" at a glance, from across the room. */
+.an-bar{height:3px;background:color-mix(in srgb,var(--border) 60%,transparent);margin-top:9px;
+  border-radius:2px;overflow:hidden}
+.an-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;
+  transition:width .45s cubic-bezier(.4,0,.2,1)}
+
+/* ── the step list: what is actually being done, one row per stage ─────── */
+.an-steps{border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent);padding:6px 0 8px}
+.an-step{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:7px 15px;position:relative;
+  transition:background .2s}
+.an-step.run{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+/* the rail joining the stages into one sequence */
+.an-step::before{content:'';position:absolute;left:27px;top:0;bottom:0;width:1px;
+  background:color-mix(in srgb,var(--border) 70%,transparent)}
+.an-step:first-child::before{top:50%}
+.an-step:last-child::before{bottom:50%}
+
+/* the service badge — Spotify green, MusicBrainz orange, Claude clay, gold for
+   work done on your own shelf. The colour is the point: it says WHO is being
+   asked, which is the thing the user cannot otherwise see. */
+.an-badge{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;position:relative;z-index:1;border:1px solid var(--bdr,var(--border));
+  background:var(--bgc,var(--card));color:var(--fg,var(--muted));transition:all .25s}
+.an-step[data-src="spotify"]{--fg:#1DB954;--bdr:rgba(30,215,96,.45);--bgc:rgba(30,215,96,.10)}
+.an-step[data-src="mb"]     {--fg:#EB743B;--bdr:rgba(235,116,59,.45);--bgc:rgba(235,116,59,.10)}
+.an-step[data-src="claude"] {--fg:#D97757;--bdr:rgba(217,119,87,.45);--bgc:rgba(217,119,87,.10)}
+.an-step[data-src="shelf"]  {--fg:var(--accent);--bdr:color-mix(in srgb,var(--accent) 45%,transparent);
+                             --bgc:color-mix(in srgb,var(--accent) 10%,transparent)}
+/* A stage not started yet is drained of its colour — the badge lighting up IS
+   the signal that this service is now being talked to. */
+.an-step.wait .an-badge{--fg:var(--muted);--bdr:var(--border);--bgc:transparent;opacity:.5}
+.an-step.run .an-badge{animation:an-pulse 1.5s ease-in-out infinite}
+@keyframes an-pulse{0%,100%{box-shadow:0 0 0 0 var(--bdr)}50%{box-shadow:0 0 0 4px transparent}}
+
+.an-body{min-width:0;padding-top:2px}
+.an-label{font-size:12.5px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
+.an-step.wait .an-label{color:var(--label);font-weight:500}
+.an-label .tick{font-size:14px;color:var(--accent);margin-left:auto;flex-shrink:0}
+.an-label .secs{font-size:10.5px;font-weight:500;color:var(--muted);margin-left:auto;flex-shrink:0;
+  font-variant-numeric:tabular-nums}
+/* What it found — the payoff line. Empty until there is something true to say,
+   so the panel never invents detail to fill space. */
+.an-detail{font-size:11.5px;color:var(--label);margin-top:2px;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.an-detail.mono{font-family:var(--font-mono);font-size:11px}
+.an-step.wait .an-detail{display:none}
+
+/* Counted work (4 MusicBrainz lookups, 3 cover fetches) gets pips rather than
+   a number buried in prose — you can see the rate it is chewing through them,
+   which is what tells you a stall from slow progress. */
+.an-pips{display:flex;gap:3px;margin-top:5px}
+.an-pips i{width:14px;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.an-pips i.on{background:var(--fg)}
+
+/* Cancel sits on the panel, not beside it: while this is up it is the only
+   thing the user can still decide. */
+.an-foot{display:flex;align-items:center;gap:8px;padding:9px 15px;
+  border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.an-cost{font-size:10.5px;color:var(--muted);flex:1}
+.an-cancel{height:26px;padding:0 10px;border-radius:var(--radius-sm);font-size:11.5px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--label);font-family:var(--font)}
+.an-cancel:hover{border-color:var(--danger);color:var(--danger)}
+
+/* ── wide variant: same parts, laid out for the full 920px form ─────────── */
+.analysing.wide{display:grid;grid-template-columns:270px 1fr}
+.analysing.wide .an-head{flex-direction:column;text-align:center;justify-content:center;gap:12px;
+  padding:26px 20px;border-right:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.analysing.wide .an-head-main{flex:0}
+.analysing.wide .an-face{--face:128px}
+.analysing.wide .an-title{justify-content:center}
+.analysing.wide .an-bar{width:180px;margin-left:auto;margin-right:auto}
+.analysing.wide .an-steps{border-top:none;padding:10px 0}
+.analysing.wide .an-step{grid-template-columns:26px 1fr;padding:9px 18px}
+.analysing.wide .an-step::before{left:30px}
+.analysing.wide .an-detail{white-space:normal}
+.analysing.wide-foot{grid-column:1/-1}
+
+@media (prefers-reduced-motion:reduce){
+  .an-step.run .an-badge{animation:none}
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="page-head">
+    <h1>Analysing — progress mockup</h1>
+    <p>Three framings of the same panel, driven by one shared clock so they stay in step.
+       The step timings here are a stand-in; the real thing is fed by events streamed from
+       <code style="font-family:var(--font-mono)">/api/scan</code>, so a slow stage will visibly sit there rather than tick along.</p>
+  </div>
+
+  <div class="controls">
+    <div class="ctl-group">
+      <button class="ctl on" id="pPhoto"><i class="ti ti-camera"></i> photo path</button>
+      <button class="ctl" id="pSpotify"><i class="ti ti-brand-spotify"></i> spotify path</button>
+    </div>
+    <span class="ctl-sep"></span>
+    <div class="ctl-group">
+      <button class="ctl" id="s1">1×</button>
+      <button class="ctl on" id="s3">3×</button>
+    </div>
+    <span class="ctl-sep"></span>
+    <button class="ctl" id="replay"><i class="ti ti-refresh"></i> replay</button>
+    <button class="ctl" id="theme"><i class="ti ti-sun"></i> light</button>
+  </div>
+
+  <!-- ══ 1. PHONE ══════════════════════════════════════════════════════ -->
+  <div class="frame">
+    <div class="frame-cap">
+      <b>Phone — 390px</b>
+      <span>the form is already one column here, so the panel simply takes the cover's place</span>
+    </div>
+    <div class="phone">
+      <div class="phone-bar">9:41</div>
+      <div class="phone-scroll">
+        <div class="form-section">
+          <header><i class="ti ti-photo"></i> Cover</header>
+          <div class="sec-body">
+            <div class="analysing" data-panel style="--face:84px"></div>
+            <div class="scan-actions">
+              <button class="scan-ai" disabled><span style="width:16px;height:16px;flex-shrink:0"></span> Analyse</button>
+              <button class="scan-sp" disabled><i class="ti ti-brand-spotify"></i> Spotify</button>
+              <button disabled><i class="ti ti-list-search"></i> Search</button>
+            </div>
+            <div class="scan-hint">nothing else can be sent until this finishes</div>
+          </div>
+        </div>
+        <div class="form-section sec-off">
+          <header><i class="ti ti-disc"></i> The record</header>
+          <div class="sec-body">
+            <div class="form-group" style="margin-bottom:12px">
+              <label><i class="ti ti-microphone-2"></i> Artist</label>
+              <div class="field"><i class="ti ti-microphone-2"></i>artist name</div>
+            </div>
+            <div class="form-group">
+              <label><i class="ti ti-vinyl"></i> Album name</label>
+              <div class="field"><i class="ti ti-vinyl"></i>album title</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">The panel occupies the same box the cover drop did (min-height 190px), so nothing
+      below it moves when the scan starts or ends. The face is 84px here — big enough to read as the app's
+      own character, small enough that two steps are still visible without scrolling.</div>
+  </div>
+
+  <!-- ══ 2. DESKTOP A — in the cover column ═══════════════════════════════ -->
+  <div class="frame">
+    <div class="frame-cap">
+      <b>Desktop A — in the cover column</b>
+      <span>920px form, panel confined to the 330px left column; fields stay visible but inert</span>
+    </div>
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <button class="ctl" style="pointer-events:none"><i class="ti ti-arrow-left"></i> back</button>
+        <span class="modal-title" style="flex:1;text-align:right">add a record</span>
+      </div>
+      <div class="modal-body-pad">
+        <div class="form-layout">
+          <div class="form-cover-col">
+            <div class="form-section" style="margin-bottom:0">
+              <header><i class="ti ti-photo"></i> Cover</header>
+              <div class="sec-body">
+                <div class="analysing" data-panel style="--face:92px"></div>
+                <div class="scan-actions">
+                  <button class="scan-ai" disabled><span style="width:16px;height:16px"></span> Analyse</button>
+                  <button class="scan-sp" disabled><i class="ti ti-brand-spotify"></i> Spotify</button>
+                  <button disabled><i class="ti ti-list-search"></i> Search</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="sec-off">
+            <div class="form-section">
+              <header><i class="ti ti-disc"></i> The record</header>
+              <div class="sec-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label><i class="ti ti-microphone-2"></i> Artist</label>
+                    <div class="field"><i class="ti ti-microphone-2"></i>artist name</div>
+                  </div>
+                  <div class="form-group">
+                    <label><i class="ti ti-vinyl"></i> Album name</label>
+                    <div class="field"><i class="ti ti-vinyl"></i>album title</div>
+                  </div>
+                  <div class="form-group">
+                    <label><i class="ti ti-calendar"></i> Year</label>
+                    <div class="field"><i class="ti ti-calendar"></i>1976</div>
+                  </div>
+                  <div class="form-group">
+                    <label><i class="ti ti-tag"></i> Genre</label>
+                    <div class="field"><i class="ti ti-tag"></i>—</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="form-section">
+              <header><i class="ti ti-building-store"></i> Purchase</header>
+              <div class="sec-body">
+                <div class="form-grid">
+                  <div class="form-group">
+                    <label><i class="ti ti-map-pin"></i> Bought at</label>
+                    <div class="field"><i class="ti ti-map-pin"></i>place</div>
+                  </div>
+                  <div class="form-group">
+                    <label><i class="ti ti-coin"></i> Price</label>
+                    <div class="field"><i class="ti ti-coin"></i>0.00</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="frame-note">Cheapest to build — one swap inside the existing column, no layout change. The
+      cost is that the step detail lines clip at 330px (<code>África Brasil · 1976 · BR</code> fits; a long
+      title will not), and the whole thing reads as a sidebar event rather than the main thing happening.</div>
+  </div>
+
+  <!-- ══ 3. DESKTOP B — takeover ═════════════════════════════════════════ -->
+  <div class="frame">
+    <div class="frame-cap">
+      <b>Desktop B — the panel takes the form</b>
+      <span>the fields are about to be overwritten anyway, so the whole 920px goes to the work</span>
+    </div>
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <button class="ctl" style="pointer-events:none"><i class="ti ti-arrow-left"></i> back</button>
+        <span class="modal-title" style="flex:1;text-align:right">add a record</span>
+      </div>
+      <div class="modal-body-pad">
+        <div class="analysing wide" data-panel data-wide></div>
+      </div>
+    </div>
+    <div class="frame-note">The face gets to be 128px — the native cut, no upscaling — and every detail line
+      has room to say what it actually found. It also stops the user typing into fields the scan is about to
+      overwrite, which the greyed-out form only half does today. Costs a real show/hide of the form body and
+      a decision about what the panel collapses back to on error.</div>
+  </div>
+</div>
+
+<script>
+// ── the pipeline, as the two paths actually run it in app.py:scan_record ────
+// Phone/desktop panels all render from this one definition, so a step added
+// here appears in every frame at once.
+const PIPELINES = {
+  photo: [
+    {src:'claude',  icon:'ti-sparkles',       label:'reading the sleeve',
+     sub:'Claude vision', ms:4200, done:'Jorge Ben — África Brasil', mono:false},
+    {src:'mb',      icon:'ti-database-search', label:'matching on MusicBrainz',
+     sub:'release groups', ms:6800, pips:4, done:'4 pressings, best is 1976 BR'},
+    {src:'mb',      icon:'ti-photo-search',    label:'fetching cover art',
+     sub:'Cover Art Archive', ms:5000, pips:3, done:'2 of 3 had artwork'},
+    {src:'claude',  icon:'ti-vinyl',           label:'confirming it is vinyl',
+     sub:'Claude', ms:3500, done:'LP — pressed on vinyl in 1976'},
+    {src:'shelf',   icon:'ti-checklist',       label:'checking your shelf',
+     sub:'local', ms:700, done:'not a duplicate'},
+  ],
+  spotify: [
+    {src:'spotify', icon:'ti-brand-spotify',   label:'reading the album',
+     sub:'Spotify API', ms:1600, done:'Jorge Ben — África Brasil'},
+    {src:'claude',  icon:'ti-tag',             label:'placing it in a genre',
+     sub:'Claude', ms:2600, done:'Samba Rock'},
+    {src:'mb',      icon:'ti-database-search', label:'matching on MusicBrainz',
+     sub:'release groups', ms:6800, pips:4, done:'4 pressings, best is 1976 BR'},
+    {src:'mb',      icon:'ti-photo-search',    label:'fetching cover art',
+     sub:'Cover Art Archive', ms:5000, pips:3, done:'Spotify art + 2 others'},
+    {src:'claude',  icon:'ti-vinyl',           label:'confirming it is vinyl',
+     sub:'Claude', ms:3500, done:'LP — pressed on vinyl in 1976'},
+    {src:'shelf',   icon:'ti-checklist',       label:'checking your shelf',
+     sub:'local', ms:700, done:'not a duplicate'},
+  ],
+};
+const COST = {photo:'about $0.006 of API credit', spotify:'about $0.0004 of API credit'};
+
+let path = 'photo', speed = 3, t0 = 0, raf = 0;
+const panels = [...document.querySelectorAll('[data-panel]')];
+
+// One markup builder for every frame — the wide variant differs only in CSS.
+function build(panel){
+  const steps = PIPELINES[path];
+  const wide = panel.hasAttribute('data-wide');
+  panel.innerHTML = `
+    <div class="an-head">
+      <div class="an-face"></div>
+      <div class="an-head-main">
+        <div class="an-title">analysing<em class="an-n"></em></div>
+        <div class="an-sub"><span class="an-stage">starting…</span><span class="dot">·</span><span class="an-clock">0.0s</span></div>
+        <div class="an-bar"><i></i></div>
+      </div>
+    </div>
+    <div class="an-steps">${steps.map((s,i)=>`
+      <div class="an-step wait" data-src="${s.src}" data-i="${i}">
+        <div class="an-badge"><i class="ti ${s.icon}"></i></div>
+        <div class="an-body">
+          <div class="an-label"><span>${s.label}</span><span class="tail"></span></div>
+          <div class="an-detail">${s.sub}</div>
+          ${s.pips?`<div class="an-pips">${'<i></i>'.repeat(s.pips)}</div>`:''}
+        </div>
+      </div>`).join('')}</div>
+    <div class="an-foot ${wide?'wide-foot':''}">
+      <span class="an-cost">${COST[path]} · nothing is saved until you pick a match</span>
+      <button class="an-cancel"><i class="ti ti-x"></i> cancel</button>
+    </div>`;
+}
+
+// The 30-frame thinking face, stepped by hand exactly as the button's 44px
+// strip is — one pass per 1010ms, same cadence as .analyse-face.
+const FRAMES = 30, FACE_MS = 1010;
+function paint(now){
+  const steps = PIPELINES[path];
+  const total = steps.reduce((a,s)=>a+s.ms,0);
+  const el = (now - t0) * speed;           // simulated elapsed
+  const loop = el % (total + 1400);        // pause on completion, then restart
+
+  // which step, and how far into it
+  let acc = 0, cur = -1, frac = 0;
+  for(let i=0;i<steps.length;i++){
+    if(loop < acc + steps[i].ms){ cur = i; frac = (loop - acc)/steps[i].ms; break; }
+    acc += steps[i].ms;
+  }
+  const finished = cur === -1;
+  const doneCount = finished ? steps.length : cur;
+
+  panels.forEach(panel=>{
+    panel.querySelector('.an-face').style.backgroundPositionX =
+      `-${Math.floor(loop / FACE_MS * FRAMES) % FRAMES * 100 / (FRAMES-1)}%`;
+    panel.querySelector('.an-n').textContent =
+      finished ? '' : ` ${cur+1}/${steps.length}`;
+    panel.querySelector('.an-stage').textContent =
+      finished ? 'done — pick a match' : steps[cur].sub;
+    panel.querySelector('.an-clock').textContent = (loop/1000).toFixed(1)+'s';
+    panel.querySelector('.an-bar i').style.width =
+      (finished ? 100 : (doneCount + frac)/steps.length*100) + '%';
+
+    panel.querySelectorAll('.an-step').forEach((row,i)=>{
+      const state = finished || i < cur ? 'done' : i === cur ? 'run' : 'wait';
+      row.classList.toggle('wait', state==='wait');
+      row.classList.toggle('run',  state==='run');
+      const s = steps[i];
+      const detail = row.querySelector('.an-detail');
+      const tail = row.querySelector('.tail');
+      if(state==='done'){
+        detail.textContent = s.done;
+        tail.className = 'tick ti ti-check';
+        tail.textContent = '';
+      }else if(state==='run'){
+        detail.textContent = s.pips
+          ? `${s.sub} — ${Math.min(s.pips, Math.floor(frac*s.pips)+1)} of ${s.pips}`
+          : s.sub + '…';
+        tail.className = 'secs';
+        tail.textContent = (s.ms*frac/1000).toFixed(1)+'s';
+      }else{
+        detail.textContent = s.sub;
+        tail.className = '';
+        tail.textContent = '';
+      }
+      if(s.pips){
+        const lit = state==='done' ? s.pips : state==='run' ? Math.floor(frac*s.pips)+1 : 0;
+        row.querySelectorAll('.an-pips i').forEach((p,j)=>p.classList.toggle('on', j<lit));
+      }
+    });
+  });
+  raf = requestAnimationFrame(paint);
+}
+
+function restart(){
+  panels.forEach(build);
+  t0 = performance.now();
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(paint);
+}
+
+// ── mockup controls ────────────────────────────────────────────────────────
+function pick(onId, offId, fn){
+  document.getElementById(onId).onclick = ()=>{
+    document.getElementById(onId).classList.add('on');
+    document.getElementById(offId).classList.remove('on');
+    fn(); restart();
+  };
+}
+pick('pPhoto','pSpotify',()=>path='photo');
+pick('pSpotify','pPhoto',()=>path='spotify');
+pick('s1','s3',()=>speed=1);
+pick('s3','s1',()=>speed=3);
+document.getElementById('replay').onclick = restart;
+document.getElementById('theme').onclick = e=>{
+  const dark = document.documentElement.dataset.theme === 'dark';
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  e.currentTarget.innerHTML = dark
+    ? '<i class="ti ti-moon"></i> dark' : '<i class="ti ti-sun"></i> light';
+};
+
+restart();
+</script>
+</body>
+</html>
