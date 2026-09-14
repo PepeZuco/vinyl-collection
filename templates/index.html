@@ -1195,6 +1195,14 @@ select option{background:var(--surface);color:var(--text)}
 .an-cancel:hover{border-color:var(--danger);color:var(--danger)}
 
 /* ── wide variant: same parts, laid out for the full 920px form ─────────── */
+/* scanPanelSetWide only ever turns .wide on above SCAN_WIDE_BREAKPOINT (760px),
+   but CSS doesn't know that — without this media guard, narrowing the window
+   mid-scan (or a panel left wide by a race) still renders the 270px/1fr grid
+   at phone widths, overflowing horizontally, while .form-layout.scan-wide's
+   own guard below keeps the phone-layout fields hidden underneath it. Scoping
+   both to the same breakpoint the JS already uses is what makes narrowing
+   mid-scan degrade to the ordinary phone layout instead of leaking it. */
+@media(min-width:761px){
 /* --face lives on this same selector as the grid switch, not buried on
    .an-face, so both halves of "what wide means" are declared in one place. */
 .analysing.wide{display:grid;grid-template-columns:270px 1fr;--face:128px}
@@ -1214,6 +1222,7 @@ select option{background:var(--surface);color:var(--text)}
 /* Descendant, not a compound: the foot is a child of .analysing.wide, so
    `.analysing.wide-foot` matched nothing and the grid left it in column 1. */
 .analysing.wide .an-foot{grid-column:1/-1}
+}
 
 /* MusicBrainz being unreachable is a normal outcome, not a failure — the
    route degrades to lookup_failed on purpose. So a skipped stage reads as
@@ -1257,9 +1266,15 @@ select option{background:var(--surface);color:var(--text)}
    overwritten by the scan anyway, so there is nothing to protect by leaving
    them visible, and hiding them is what stops the user typing into a field
    the result is seconds from clobbering. */
+/* Same breakpoint as .analysing.wide above, and for the same reason: without
+   it, narrowing the window mid-scan keeps the fields hidden here even though
+   the wide grid above has already stopped applying, leaving a phone-width
+   form with no fields at all. */
+@media(min-width:761px){
 .form-layout.scan-wide > .form-cover-col,
 .form-layout.scan-wide > .form-section{display:none}
 .form-layout > .analysing.wide{grid-column:1/-1}
+}
 .form-cover-col{display:flex;flex-direction:column}
 .form-cover-col .cover-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px}
 /* Empty, the drop is a fixed-height target to aim a file at. With a cover in
@@ -3056,8 +3071,10 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
           <!-- A scan is a vision call, up to four rate-limited MusicBrainz
                lookups and up to three cover fetches. Rather than a spinner and
                a guess at the worst case, the panel names each stage as it
-               happens and says which service is being asked. Painted from the
-               event stream by paintScanPanel; see static/scanstream.js. -->
+               happens and says which service is being asked. Built by
+               buildScanPanel and painted from the event stream by
+               applyScanStep, with tickScanPanel driving the face and clock;
+               see static/scanstream.js for the stream parser itself. -->
           <div class="analysing" id="scanPanel" hidden>
             <div class="an-head">
               <div class="an-face" id="scanPanelFace"></div>
@@ -6983,8 +7000,7 @@ function closeForm(force){
   closeSpotifyOverlay();
   closeScanOverlay();
   closeSearchOverlay();
-  abandonScan();
-  setScanBusy(false);
+  abandonScan();   // tears down the busy state itself now
 }
 
 /* Keeps the last edit recoverable across a closed tab, not merely warned
@@ -7373,6 +7389,14 @@ function updateScanControls(){
     source: pendingSpotifyUrl ? 'spotify' : 'photo',
     usage: scanUsage,
   });
+  // scanHintText's "nothing is sent until you tap analyse" is a PRE-scan
+  // promise. Once a scan is in flight the panel's own footer (already
+  // committed — cancelling stops the wait, not the charge) is the true one,
+  // and on phone the two sit ~20px apart — hide this one so they never
+  // contradict each other on screen at once. updateScanControls runs on
+  // every setScanBusy(true/false), so this stays in sync with scanInFlight
+  // on every exit path without a second place to remember to flip it back.
+  document.getElementById('scanHint').hidden = scanInFlight;
   document.getElementById('scanRepickBtn')
     .classList.toggle('on', scanCandidates.length > 1);
 }
@@ -7577,7 +7601,6 @@ const STAGE_META = {
   shelf:   {src:'shelf',   icon:'ti-checklist',       label:'checking your shelf',     sub:'local'},
 };
 
-let scanPanelState = {};
 let scanPanelStart = 0;
 let scanAbort = null;
 
@@ -7628,7 +7651,6 @@ function scanPanelCostText(source){
 }
 
 function buildScanPanel(source){
-  scanPanelState = {};
   const rows = SCAN_STAGES[source].map(id => {
     const m = STAGE_META[id];
     return `<div class="an-step wait" data-src="${m.src}" data-id="${id}">
@@ -7641,6 +7663,14 @@ function buildScanPanel(source){
   }).join('');
   document.querySelector('#scanPanel .an-steps').innerHTML = rows;
   document.querySelector('#scanPanel .an-cost').textContent = scanPanelCostText(source);
+  // .an-steps and .an-cost above are rebuilt wholesale by the innerHTML/text
+  // assignment, but these three are mutated in place by applyScanStep, so
+  // without resetting them here scan #2 opens still showing scan #1's
+  // finished state — "5/5 · checking your shelf · 100%" — for the one
+  // round-trip before its first frame arrives.
+  document.querySelector('#scanPanel .an-bar i').style.width = '0%';
+  document.querySelector('#scanPanel .an-n').textContent = '';
+  document.querySelector('#scanPanel .an-stage').textContent = 'starting…';
   // Decided fresh on every scan, from the CURRENT viewport, so a panel that
   // went wide once cannot get stuck that way if the next scan opens narrow —
   // and a resize while the form sits closed never leaves a stale choice behind.
@@ -7653,7 +7683,6 @@ function buildScanPanel(source){
 function applyScanStep(p){
   const row = document.querySelector(`#scanPanel .an-step[data-id="${p.id}"]`);
   if(!row) return;
-  scanPanelState[p.id] = p.state;
   row.classList.remove('wait','run','done','skip');
   row.classList.add(p.state);
   const tail = row.querySelector('.tail');
@@ -7697,13 +7726,19 @@ function tickScanPanel(){
 function abandonScan(){
   scanToken++;
   if(scanAbort){ scanAbort.abort(); scanAbort = null; }
+  // Every abandon path (openAdd, openEdit, closeForm, cancelScan) must also
+  // tear down the busy state, or a form reopened mid-scan inherits a hidden
+  // scanPanel and a scan-wide layout with no fields ever un-hidden underneath
+  // it — the reopened form renders empty and Analyse stays permanently dead.
+  // Folded in here, once, so no future caller can forget the second half.
+  setScanBusy(false);
 }
 
 function cancelScan(){
   // Abandons the result, not the bill: the call was billed the moment it
-  // returned. abandonScan is the same abandon path closeForm/openAdd/openEdit use.
+  // returned. abandonScan is the same abandon path closeForm/openAdd/openEdit
+  // use, and it now tears down the busy state itself.
   abandonScan();
-  setScanBusy(false);
 }
 
 function setScanBusy(busy){

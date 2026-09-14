@@ -82,6 +82,26 @@ def test_photo_scan_streams_its_stages_in_order(client):
     assert ids == ["vision", "mb", "cover", "vinyl", "shelf"]
 
 
+def test_spotify_scan_streams_spotify_then_genre_never_vision(client):
+    """Spec: 'a Spotify scan emits spotify and genre where the photo path
+    emits vision.' Pins SCAN_STAGES.spotify's ids and order in templates/
+    index.html against what the server actually streams — nothing enforced
+    that before this test existed."""
+    with patch.object(app_module.scan, "extract_from_spotify",
+                      return_value={"artist": "Jorge Ben", "album_name": "Africa Brasil",
+                                    "image_url": None}), \
+         patch.object(app_module.scan, "classify_genre", return_value="Samba"):
+        got = frames(client.post("/api/scan", headers=SSE,
+                                 json={"spotify_url": "https://open.spotify.com/album/x"}))
+    assert [e for e, _ in got][-1] == "done"
+    ids = []
+    for e, p in got:
+        if e == "step" and p["state"] == "run" and (not ids or ids[-1] != p["id"]):
+            ids.append(p["id"])
+    assert ids == ["spotify", "genre", "mb", "cover", "vinyl", "shelf"]
+    assert "vision" not in [p["id"] for e, p in got if e == "step"]
+
+
 def test_done_payload_matches_the_json_path(client):
     streamed = frames(client.post("/api/scan", headers=SSE,
                                   json={"image": "data:image/jpeg;base64,x"}))[-1][1]

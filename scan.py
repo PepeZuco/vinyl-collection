@@ -426,6 +426,8 @@ def lookup_musicbrainz(artist: str, album: str, on_progress=None) -> list[dict]:
 
     candidates = []
     country_cache: dict = {}
+    # Ranked before the cut, not after: the exact match is regularly not the hit
+    # MusicBrainz put first, so truncating first can drop the right answer.
     ranked = _rank_candidates(groups, album, artist)[:3]
     # The search is itself one of the rate-limited lookups, so it counts as
     # progress the moment it lands — total is only knowable from here on.
