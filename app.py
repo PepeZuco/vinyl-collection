@@ -208,6 +208,18 @@ def _size(value):
     return v if v in _SIZES else ""
 
 
+_HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _hex_color(value):
+    """A stored color is a bare '#rrggbb' or '' — '' means unpainted, which
+    the renderer treats as black vinyl / white label rather than a color
+    nobody chose. Anything that isn't a valid hex triplet is dropped rather
+    than stored malformed, since it lands straight in a CSS custom property."""
+    v = str(value or "").strip()
+    return v if _HEX_COLOR.match(v) else ""
+
+
 _PLACE_HTTP_PREFIX  = re.compile(r"^https?://", re.I)           # already an http(s) url
 _PLACE_HOST_PORT    = re.compile(r"^[^\s:/?#]+:\d+(?:[/?#]|$)")  # host:port, not a scheme
 _PLACE_OTHER_SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")  # some other scheme — refuse
@@ -370,6 +382,8 @@ class Record(db.Model):
     size        = db.Column(db.String(5))   # '' | '7' | '10' | '12', in inches
     censored    = db.Column(db.Boolean, default=False)  # cover has explicit art; blurred client-side until revealed
     spotify_url = db.Column(db.String(500))  # free text: whatever link the scan or the user handed in
+    vinyl_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as black
+    label_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as white
 
     def to_dict(self, private=True):
         """The record as the API sends it.
@@ -405,6 +419,8 @@ class Record(db.Model):
             "size": self.size or "",
             "censored": bool(self.censored),
             "spotify_url": self.spotify_url or "",
+            "vinyl_color": self.vinyl_color or "",
+            "label_color": self.label_color or "",
         }
 
 # One row per distinct note image, addressed by its own content hash.
@@ -478,6 +494,8 @@ with app.app_context():
         "size": "VARCHAR(5)",
         "censored": "BOOLEAN",
         "spotify_url": "VARCHAR(500)",
+        "vinyl_color": "VARCHAR(7)",
+        "label_color": "VARCHAR(7)",
     }
     added_cleaned_dates = "cleaned_dates" not in existing_cols
     added_cover_hash = "cover_hash" not in existing_cols
@@ -736,6 +754,8 @@ def create_record():
         size        = _size(d.get("size")),
         censored    = bool(d.get("censored", False)),
         spotify_url = d.get("spotify_url",""),
+        vinyl_color = _hex_color(d.get("vinyl_color")),
+        label_color = _hex_color(d.get("label_color")),
     )
     db.session.add(r)
     _ensure_place(r.bought_where)
@@ -771,6 +791,8 @@ def update_record(rid):
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
     if "censored"    in d: r.censored     = bool(d["censored"])
     if "spotify_url" in d: r.spotify_url  = d["spotify_url"]
+    if "vinyl_color" in d: r.vinyl_color  = _hex_color(d["vinyl_color"])
+    if "label_color" in d: r.label_color  = _hex_color(d["label_color"])
     # disc_count first: the tracks it is about to validate are checked against
     # it. A PUT that sends tracks alone is checked against what the record
     # already is, or every partial update to a double would reject its C side.
@@ -1303,7 +1325,7 @@ def export_csv():
     # be a backup you could restore from.
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_where_url","bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size"]
+            "bought_where_url","bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size","vinyl_color","label_color"]
     # One dict for the whole export rather than a lookup per row: there are a
     # few dozen places against hundreds of records, and unlike the note images
     # below these are short strings, so holding them all costs nothing.
@@ -1399,6 +1421,8 @@ def _record_mapping(row):
         "tracks":      _clean_tracks(row.get("tracks",""), disc_count, strict=False),
         "disc_count":  disc_count,
         "size":        _size(row.get("size")),
+        "vinyl_color": _hex_color(row.get("vinyl_color")),
+        "label_color": _hex_color(row.get("label_color")),
     }
 
 

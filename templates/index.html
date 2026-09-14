@@ -32,7 +32,6 @@ html,body{touch-action:pan-x pan-y}
   /* the month cell's glass over a record sleeve — see .cal-slice */
   --cal-glass:8,8,8; --cal-ink:#e8e8e0; --cal-sleeve:brightness(.85) saturate(.9);
   --toggle-icon:'☀';
-  --vinyl-a:#141414;--vinyl-b:#0a0a0a;--vinyl-edge:#2e2e2e;
 }
 [data-theme="light"]{
   --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#CBB596;
@@ -44,7 +43,6 @@ html,body{touch-action:pan-x pan-y}
      to be pale too or the icons sit dark-on-dark over the artwork. */
   --cal-glass:250,249,245; --cal-ink:#1a1a18; --cal-sleeve:brightness(1.02) saturate(.9);
   --toggle-icon:'☾';
-  --vinyl-a:#2a2622;--vinyl-b:#161310;--vinyl-edge:#4a443c;
 }
 
 /* Pepe and Jenni's colours. Deliberately the same in both themes: the bars are
@@ -192,7 +190,7 @@ select option{background:var(--surface);color:var(--text)}
   transform:translateX(0);transition:transform .16s ease}
 /* the tag's own little record, so the number is attached to the thing it
    counts rather than floating as a bare figure */
-.vcard-fmt .disc{--d:11px;--lab:var(--accent)}
+.vcard-fmt .disc{--d:11px}
 .vcard-fmt .disc::after{background:#000}
 
 /* artist overlay on the cover */
@@ -677,6 +675,26 @@ select option{background:var(--surface);color:var(--text)}
 .dm-qbtn.play:hover{border-color:#5FBF7A;color:#5FBF7A}
 .dm-qbtn.clean:hover{border-color:#4AA3C4;color:#4AA3C4}
 
+/* paint the record: a swatch + a precise hex field per color, both writing
+ * the same field, so a quick pick and an exact value are equally one step. */
+.dm-paint{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:11px 12px;margin-top:14px}
+.dm-paint-hd{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);display:flex;align-items:center;gap:5px;margin-bottom:10px}
+.dm-paint-hd i{font-size:12px;color:var(--accent)}
+.dm-paint-row{display:flex;align-items:center;gap:12px}
+.dm-paint-fields{display:flex;flex:1;gap:14px;flex-wrap:wrap}
+.dm-paint-field{display:flex;align-items:center;gap:6px}
+.dm-paint-field span{font-size:11px;font-weight:600;color:var(--muted)}
+.dm-paint-field input[type=color]{width:26px;height:26px;padding:0;border:1px solid var(--border);
+  border-radius:6px;background:none;cursor:pointer}
+.dm-paint-hex{width:76px;font:600 12px var(--font-mono);background:var(--surface);
+  color:var(--text);border:1px solid var(--border);border-radius:5px;padding:5px 7px;
+  text-transform:lowercase}
+.dm-paint-hex:focus{outline:none;border-color:var(--accent)}
+.dm-paint-reset{width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;
+  flex:0 0 auto}
+
 .dm-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .dm-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;
   background:var(--card);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted)}
@@ -726,14 +744,19 @@ select option{background:var(--surface);color:var(--text)}
 
 /* ── the record, drawn ──────────────────────────────────────────────────────
    One rule draws every disc in the app, sized by --d, so a 7" and a 12" can
-   be put side by side and be honestly different widths. Black wax in
-   repeating groove bands, the house gold for the label, the spindle hole
-   punched through in the page ground. --vinyl-* rather than literals because
-   near-black grooves disappear into a light-mode ground. */
+   be put side by side and be honestly different widths. Repeating groove
+   bands over a spindle hole punched through in the page ground.
+   --vinyl feeds a single hex per record (black when unpainted, see
+   recVinylColor()); the groove highlight and edge are derived from it with
+   color-mix rather than stored separately, so a painted record still reads
+   as grooved wax and not a flat disc. */
 .disc{position:relative;display:block;width:var(--d);height:var(--d);flex:0 0 var(--d);
   border-radius:50%;
+  --vinyl-b:var(--vinyl,#000);
+  --vinyl-a:color-mix(in srgb, var(--vinyl-b) 80%, white);
+  --vinyl-edge:color-mix(in srgb, var(--vinyl-b) 70%, white);
   background:
-    radial-gradient(circle at 50% 50%, var(--lab,var(--accent)) 0 32%, transparent 32.4%),
+    radial-gradient(circle at 50% 50%, var(--lab,#fff) 0 32%, transparent 32.4%),
     repeating-radial-gradient(circle at 50% 50%,
       var(--vinyl-a) 0 1.6px, var(--vinyl-b) 1.6px 3.2px),
     var(--vinyl-b);
@@ -4387,7 +4410,7 @@ function cardHTML(r) {
   // inch mark, which closes the title attribute early if it goes in raw.
   const tag = formatTag(r.disc_count, r.size);
   const fmtTag = tag
-    ? `<div class="vcard-fmt" title="${esc(tag)}"><span class="disc"></span>${esc(tag)}</div>`
+    ? `<div class="vcard-fmt" title="${esc(tag)}"><span class="disc" style="${discStyle(r)}"></span>${esc(tag)}</div>`
     : '';
 
   const myR  = Number(r.my_rating)  || 0;
@@ -5094,7 +5117,53 @@ function dmInfoTabHTML(r) {
       <button class="dm-qbtn clean" onclick="logCleaned(${r.id})">
         <i class="ti ti-droplet"></i>Cleaned today
       </button>
-    </div>` : ''}`;
+    </div>` : ''}
+    ${authed ? dmPaintHTML(r) : ''}`;
+}
+
+/* Paint the record: two hex colors, vinyl and label, each editable by
+ * swatch or by typing the value. Unset renders black/white (recVinylColor,
+ * recLabelColor) — reset just clears both fields back to that. */
+function dmPaintHTML(r) {
+  const vinyl = recVinylColor(r);
+  const label = recLabelColor(r);
+  return `<div class="dm-paint">
+    <div class="dm-paint-hd"><i class="ti ti-palette"></i>Paint the record</div>
+    <div class="dm-paint-row">
+      <span class="disc" style="${discStyle(r, '--d:34px')}"></span>
+      <div class="dm-paint-fields">
+        <label class="dm-paint-field">
+          <span>Vinyl</span>
+          <input type="color" value="${vinyl}" onchange="paintSwatch(${r.id},'vinyl_color',this.value)">
+          <input type="text" class="dm-paint-hex" value="${vinyl}" maxlength="7"
+                 onchange="paintHex(${r.id},'vinyl_color',this.value)">
+        </label>
+        <label class="dm-paint-field">
+          <span>Label</span>
+          <input type="color" value="${label}" onchange="paintSwatch(${r.id},'label_color',this.value)">
+          <input type="text" class="dm-paint-hex" value="${label}" maxlength="7"
+                 onchange="paintHex(${r.id},'label_color',this.value)">
+        </label>
+      </div>
+      <button type="button" class="btn btn-sm dm-paint-reset" title="reset to black/white"
+              onclick="resetPaint(${r.id})"><i class="ti ti-arrow-back-up"></i></button>
+    </div>
+  </div>`;
+}
+
+/* An unpainted record renders black vinyl / white label rather than the old
+ * theme-accent look — see the .disc rule. A stored value always wins. */
+function recVinylColor(r) { return r.vinyl_color || '#000000'; }
+function recLabelColor(r) { return r.label_color || '#ffffff'; }
+
+/* The inline custom properties every .disc for THIS record is drawn with,
+ * so a painted record shows its colors everywhere its disc appears — the
+ * card tag, the tracks header, the multi-disc pips — not just in the
+ * detail view where it was painted. `extra` is any other inline style the
+ * call site already needs (e.g. --d for size), appended after so it can
+ * still win on its own properties. */
+function discStyle(r, extra) {
+  return `--vinyl:${recVinylColor(r)};--lab:${recLabelColor(r)}${extra ? ';' + extra : ''}`;
 }
 
 /* Size and disc count in one cell rather than two: on a shelf they are one
@@ -5132,7 +5201,7 @@ function dmFormatHeaderHTML(r) {
   if (!f.size && f.discs < 2) return '';
   const px = Math.round(DM_DISC_12IN * (f.size || 12) / 12);
   const platters = Array.from({ length: Math.min(DM_PLATTERS_MAX, f.discs) },
-    () => `<span class="disc" style="--d:${px}px"></span>`).join('');
+    () => `<span class="disc" style="${discStyle(r, `--d:${px}px`)}"></span>`).join('');
   const big = f.size
     ? `${f.discs > 1 ? `${f.discs} <em>×</em> ` : ''}${f.size}<em>"</em>`
     : `${f.discs} <em>discs</em>`;
@@ -5172,7 +5241,7 @@ function dmTracksTabHTML(r) {
   return header + discGroups(list, discs).map(g => `
     <div class="tl-group">
       <div class="hd">
-        <span class="pip"><span class="disc" style="--d:16px"></span></span>
+        <span class="pip"><span class="disc" style="${discStyle(r, '--d:16px')}"></span></span>
         <span class="t">Disc ${g.disc}</span>
         <span class="m">· ${g.letters.join('/')} · ${g.songs} song${g.songs === 1 ? '' : 's'}</span>
       </div>
@@ -8676,6 +8745,32 @@ function logPlayed(id) {
   const dates = [...parsePlayDates(record.play_dates), nowStamp()];
   patchRecord(id, { play_count: (record.play_count || 0) + 1, play_dates: JSON.stringify(dates) });
   toast('Played today');
+}
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/* The swatch (native <input type=color>) always yields a valid #rrggbb, so
+ * it can save straight away. The hex field takes free text — see
+ * paintHex — so it validates first. */
+function paintSwatch(id, field, value) {
+  patchRecord(id, { [field]: value });
+}
+
+function paintHex(id, field, raw) {
+  const record = records.find(r => r.id === id);
+  if (!record) return;
+  let value = String(raw || '').trim();
+  if (value && !value.startsWith('#')) value = '#' + value;
+  if (!HEX_COLOR.test(value)) {
+    toast('Enter a hex color like #ff8800');
+    if (currentDetailId === id) renderDetailContent(record);
+    return;
+  }
+  patchRecord(id, { [field]: value.toLowerCase() });
+}
+
+function resetPaint(id) {
+  patchRecord(id, { vinyl_color: '', label_color: '' });
 }
 
 /* 53 of 129 owned records had never been cleaned, and the only way to record
