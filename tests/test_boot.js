@@ -2552,6 +2552,75 @@ test('a link in a note opens in a new tab', async () => {
   assert.match(link.getAttribute('rel') || '', /noopener/);
 });
 
+// ── linking a record into a note from the markdown modal ───────────────────
+// Copying a record's own deep link off the address bar and pasting it back
+// into a note it was found on is the whole reason this picker exists —
+// searched here by artist/album, straight from `records`, no round trip.
+
+test('linking a record from the markdown modal inserts its deep link', async () => {
+  const { win, doc, read } = await boot();
+  openNoted(win, read, [{ date: '2026-08-10', text: 'found this one' }]);
+  press(win, pencils(doc)[0]);
+  press(win, $(doc, '#noteEditRow .note-md-expand'));
+  assert.ok(!$(doc, '#noteMdOverlay').classList.contains('hidden'), 'the markdown modal did not open');
+  assert.ok($(doc, '#noteLinkPicker').classList.contains('hidden'), 'the picker started open');
+
+  press(win, $(doc, "button[title='link a record']"));
+  assert.ok(!$(doc, '#noteLinkPicker').classList.contains('hidden'), 'the picker did not open');
+
+  const box = $(doc, '#noteLinkQuery');
+  box.value = 'Album 3';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+
+  const rows = [...doc.querySelectorAll('.note-link-row')];
+  assert.strictEqual(rows.length, 1, 'expected exactly one match for "Album 3"');
+  press(win, rows[0]);
+
+  assert.ok($(doc, '#noteLinkPicker').classList.contains('hidden'), 'the picker stayed open after picking a record');
+  const mdText = $(doc, '#noteMdText').value;
+  assert.match(mdText, /^found this one \[Artist 3 – Album 3\]\([^)]*#rec=3\)$/,
+    'expected the link appended after the note s existing text, space-separated');
+  assert.strictEqual($(doc, '#noteEditRow .ne-text').value, mdText, 'the edit row was not synced live');
+});
+
+test('linking into an empty note starts the link with no leading space', async () => {
+  const { win, doc } = await boot();
+  win.openNoteMdModal(doc.createElement('textarea'));
+  press(win, $(doc, "button[title='link a record']"));
+  const box = $(doc, '#noteLinkQuery');
+  box.value = 'Album 3';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+  press(win, $(doc, '.note-link-row'));
+  assert.match($(doc, '#noteMdText').value, /^\[Artist 3 – Album 3\]/);
+});
+
+test('an empty search hints, and a search with no match says so', async () => {
+  const { win, doc } = await boot();
+  win.openNoteMdModal(doc.createElement('textarea'));
+  press(win, $(doc, "button[title='link a record']"));
+  assert.match($(doc, '#noteLinkResults').textContent, /type to search/);
+
+  const box = $(doc, '#noteLinkQuery');
+  box.value = 'no record is named this';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.match($(doc, '#noteLinkResults').textContent, /no records found/);
+  assert.strictEqual(count(doc, '.note-link-row'), 0);
+});
+
+test('Escape closes the record picker first, and the modal on the next press', async () => {
+  const { win, doc } = await boot();
+  win.openNoteMdModal(doc.createElement('textarea'));
+  press(win, $(doc, "button[title='link a record']"));
+  assert.ok(!$(doc, '#noteLinkPicker').classList.contains('hidden'));
+
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.ok($(doc, '#noteLinkPicker').classList.contains('hidden'), 'Escape did not close the picker');
+  assert.ok(!$(doc, '#noteMdOverlay').classList.contains('hidden'), 'Escape closed the modal on the same press');
+
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.ok($(doc, '#noteMdOverlay').classList.contains('hidden'), 'Escape did not close the modal on the next press');
+});
+
 /* Export carries the private notes, so it is behind auth now. The button has
  * to go with it: it navigates rather than fetches, so a visitor pressing it
  * would leave the app standing on a bare {"error":"Unauthorized"} page. */

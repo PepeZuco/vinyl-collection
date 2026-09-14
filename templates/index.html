@@ -2755,7 +2755,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
         <p>A look at the AI and API integrations that run this project — built to explore
           Claude's API, Spotify's API and the MusicBrainz discography database.</p>
       </div>
-      <a class="features-linkedin" id="featuresLinkedinLink" href="#" target="_blank" rel="noopener">
+      <a class="features-linkedin" id="featuresLinkedinLink" href="https://www.linkedin.com/in/jo%C3%A3o-pedro-martins-longo-zucoloto-169638182/" target="_blank" rel="noopener">
         <i class="ti ti-brand-linkedin"></i> Connect on LinkedIn
       </a>
     </div>
@@ -3717,20 +3717,25 @@ function renderNoteLinkResults(query) {
 }
 
 // Inserted at the cursor (replacing any selection), matching how a real
-// editor's "insert link" action behaves rather than always appending.
+// editor's "insert link" action behaves rather than always appending. Picked
+// right after opening the modal, the cursor sits at the end of whatever the
+// note already says — so a leading space goes in unless it would follow
+// nothing, or something that already leaves space of its own.
 function insertNoteLink(id) {
   const r = records.find(rec => rec.id === id);
   if (!r) return;
   const label = [r.artist, r.album_name].filter(Boolean).join(' – ') || 'record';
   const url = location.origin + location.pathname + '#' + VinylUrlState.encode({ recordId: id });
-  const snippet = `[${label}](${url})`;
   const ta = document.getElementById('noteMdText');
   const start = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
   const end = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
-  ta.value = ta.value.slice(0, start) + snippet + ta.value.slice(end);
+  const before = ta.value.slice(0, start);
+  const pad = before && !/\s$/.test(before) ? ' ' : '';
+  const snippet = pad + `[${label}](${url})`;
+  ta.value = before + snippet + ta.value.slice(end);
   closeNoteLinkPicker();
   ta.focus();
-  const caret = start + snippet.length;
+  const caret = before.length + snippet.length;
   ta.setSelectionRange(caret, caret);
   syncNoteMdToSource();
 }
