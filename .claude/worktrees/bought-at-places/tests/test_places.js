@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl, placeLinkHTML } =
+const { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl, placeLinkHTML, placeLatLng } =
   require('../static/places.js');
 
 // ── normalizeUrl ────────────────────────────────────────────────────────────
@@ -188,4 +188,31 @@ test('a quote inside a url cannot break out of the href', () => {
   const html = placeLinkHTML('Shop', [{ id: 1, name: 'Shop', url }]);
   assert.ok(!html.includes('onmouseover="'), html);
   assert.match(html, /&quot;onmouseover=&quot;/);
+});
+
+// ── placeLatLng ─────────────────────────────────────────────────────────────
+// Google Maps place links carry two coordinate pairs: the pinned place's own
+// spot as !3d<lat>!4d<lng> in the data block, and the viewport center the
+// link happened to be generated at as @<lat>,<lng>,<zoom>z. The former is
+// the actual place, so it wins when both are present.
+
+test('a place link with both pairs uses the pinned !3d/!4d coordinate, not the viewport center', () => {
+  const url = 'https://www.google.com/maps/place/Feira+de+arte/@-23.5581555,-46.683178,17z/data=!4m10!1m2!2m1!1sbenedito+calixto!3m6!1s0x94ce576c76b5ac9b:0xf52fb74b24edd951!8m2!3d-23.558226!4d-46.6806175!15sChBiZW5lZGl0byBjYWxpeHRv';
+  assert.deepStrictEqual(placeLatLng(url), { lat: -23.558226, lng: -46.6806175 });
+});
+
+test('a link with only the @lat,lng viewport falls back to it', () => {
+  const url = 'https://www.google.com/maps/@-23.5581555,-46.683178,17z';
+  assert.deepStrictEqual(placeLatLng(url), { lat: -23.5581555, lng: -46.683178 });
+});
+
+test('a url with no embedded coordinates (a short link, a non-maps site) resolves to null', () => {
+  assert.strictEqual(placeLatLng('https://maps.app.goo.gl/abc123'), null);
+  assert.strictEqual(placeLatLng('https://tracksrio.com'), null);
+});
+
+test('no link at all resolves to null', () => {
+  assert.strictEqual(placeLatLng(''), null);
+  assert.strictEqual(placeLatLng(null), null);
+  assert.strictEqual(placeLatLng(undefined), null);
 });

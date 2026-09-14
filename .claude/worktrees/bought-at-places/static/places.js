@@ -94,7 +94,23 @@ const VinylPlaces = (function () {
       + esc(shown) + ' <i class="ti ti-external-link"></i></a>';
   }
 
-  return { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl, placeLinkHTML };
+  // Google Maps place links can carry two coordinate pairs: the pinned
+  // place's own spot as !3d<lat>!4d<lng> inside the data block, and the
+  // viewport center the link happened to be generated at, as
+  // @<lat>,<lng>,<zoom>z. The pinned pair wins when both are present — it is
+  // the actual place, the @ pair is just wherever the map was scrolled to.
+  // A short link (goo.gl/maps/...) or a non-maps url has neither and yields
+  // null; there is no redirect to follow from here to recover one.
+  const PLACE_3D_4D = /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/;
+  const PLACE_AT     = /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/;
+
+  function placeLatLng(url) {
+    const s = str(url);
+    const m = PLACE_3D_4D.exec(s) || PLACE_AT.exec(s);
+    return m ? { lat: parseFloat(m[1]), lng: parseFloat(m[2]) } : null;
+  }
+
+  return { normalizeUrl, validName, sortPlaces, mergeTarget, placeUrl, placeLinkHTML, placeLatLng };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylPlaces;

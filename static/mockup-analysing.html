@@ -205,9 +205,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 <div class="page">
   <div class="page-head">
     <h1>Analysing — progress mockup</h1>
-    <p>Three framings of the same panel, driven by one shared clock so they stay in step.
-       The step timings here are a stand-in; the real thing is fed by events streamed from
-       <code style="font-family:var(--font-mono)">/api/scan</code>, so a slow stage will visibly sit there rather than tick along.</p>
+    <p>The chosen design at both breakpoints, driven by one shared clock so they stay in step.
+       Running at <b>1× — real time</b>: a photo scan is about 20s, a Spotify scan about 20s,
+       and the stage durations are measured from what the pipeline actually does. The timings
+       are still a stand-in, though; the real thing is fed by events streamed from
+       <code style="font-family:var(--font-mono)">/api/scan</code>, so a slow stage will visibly
+       sit there rather than tick along.</p>
   </div>
 
   <div class="controls">
@@ -217,8 +220,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
     </div>
     <span class="ctl-sep"></span>
     <div class="ctl-group">
-      <button class="ctl" id="s1">1×</button>
-      <button class="ctl on" id="s3">3×</button>
+      <button class="ctl on" id="s1">1× real time</button>
+      <button class="ctl" id="s3">3×</button>
     </div>
     <span class="ctl-sep"></span>
     <button class="ctl" id="replay"><i class="ti ti-refresh"></i> replay</button>
@@ -266,85 +269,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
       own character, small enough that two steps are still visible without scrolling.</div>
   </div>
 
-  <!-- ══ 2. DESKTOP A — in the cover column ═══════════════════════════════ -->
+  <!-- ══ 2. DESKTOP — the panel takes the form ═══════════════════════════ -->
   <div class="frame">
     <div class="frame-cap">
-      <b>Desktop A — in the cover column</b>
-      <span>920px form, panel confined to the 330px left column; fields stay visible but inert</span>
-    </div>
-    <div class="modal modal-wide">
-      <div class="modal-head">
-        <button class="ctl" style="pointer-events:none"><i class="ti ti-arrow-left"></i> back</button>
-        <span class="modal-title" style="flex:1;text-align:right">add a record</span>
-      </div>
-      <div class="modal-body-pad">
-        <div class="form-layout">
-          <div class="form-cover-col">
-            <div class="form-section" style="margin-bottom:0">
-              <header><i class="ti ti-photo"></i> Cover</header>
-              <div class="sec-body">
-                <div class="analysing" data-panel style="--face:92px"></div>
-                <div class="scan-actions">
-                  <button class="scan-ai" disabled><span style="width:16px;height:16px"></span> Analyse</button>
-                  <button class="scan-sp" disabled><i class="ti ti-brand-spotify"></i> Spotify</button>
-                  <button disabled><i class="ti ti-list-search"></i> Search</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="sec-off">
-            <div class="form-section">
-              <header><i class="ti ti-disc"></i> The record</header>
-              <div class="sec-body">
-                <div class="form-grid">
-                  <div class="form-group">
-                    <label><i class="ti ti-microphone-2"></i> Artist</label>
-                    <div class="field"><i class="ti ti-microphone-2"></i>artist name</div>
-                  </div>
-                  <div class="form-group">
-                    <label><i class="ti ti-vinyl"></i> Album name</label>
-                    <div class="field"><i class="ti ti-vinyl"></i>album title</div>
-                  </div>
-                  <div class="form-group">
-                    <label><i class="ti ti-calendar"></i> Year</label>
-                    <div class="field"><i class="ti ti-calendar"></i>1976</div>
-                  </div>
-                  <div class="form-group">
-                    <label><i class="ti ti-tag"></i> Genre</label>
-                    <div class="field"><i class="ti ti-tag"></i>—</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="form-section">
-              <header><i class="ti ti-building-store"></i> Purchase</header>
-              <div class="sec-body">
-                <div class="form-grid">
-                  <div class="form-group">
-                    <label><i class="ti ti-map-pin"></i> Bought at</label>
-                    <div class="field"><i class="ti ti-map-pin"></i>place</div>
-                  </div>
-                  <div class="form-group">
-                    <label><i class="ti ti-coin"></i> Price</label>
-                    <div class="field"><i class="ti ti-coin"></i>0.00</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="frame-note">Cheapest to build — one swap inside the existing column, no layout change. The
-      cost is that the step detail lines clip at 330px (<code>África Brasil · 1976 · BR</code> fits; a long
-      title will not), and the whole thing reads as a sidebar event rather than the main thing happening.</div>
-  </div>
-
-  <!-- ══ 3. DESKTOP B — takeover ═════════════════════════════════════════ -->
-  <div class="frame">
-    <div class="frame-cap">
-      <b>Desktop B — the panel takes the form</b>
-      <span>the fields are about to be overwritten anyway, so the whole 920px goes to the work</span>
+      <b>Desktop — 920px form</b>
+      <span>the panel takes the whole form — the fields are about to be overwritten anyway</span>
     </div>
     <div class="modal modal-wide">
       <div class="modal-head">
@@ -355,10 +284,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
         <div class="analysing wide" data-panel data-wide></div>
       </div>
     </div>
-    <div class="frame-note">The face gets to be 128px — the native cut, no upscaling — and every detail line
-      has room to say what it actually found. It also stops the user typing into fields the scan is about to
-      overwrite, which the greyed-out form only half does today. Costs a real show/hide of the form body and
-      a decision about what the panel collapses back to on error.</div>
+    <div class="frame-note">The face is 128px here — the native cut from <code>source.gif</code>, no upscaling.
+      Every detail line has room to say what it actually found, and taking the whole form stops the user typing
+      into fields the scan is about to overwrite, which the greyed-out form only half does today. The build cost
+      is a real show/hide of the form body, plus a decision about what the panel collapses back to on error.</div>
   </div>
 </div>
 
@@ -396,7 +325,9 @@ const PIPELINES = {
 };
 const COST = {photo:'about $0.006 of API credit', spotify:'about $0.0004 of API credit'};
 
-let path = 'photo', speed = 3, t0 = 0, raf = 0;
+// 1× is the default: the whole point of watching this is judging the real
+// pacing — how long a stage actually sits there before anything moves.
+let path = 'photo', speed = 1, t0 = 0, raf = 0;
 const panels = [...document.querySelectorAll('[data-panel]')];
 
 // One markup builder for every frame — the wide variant differs only in CSS.

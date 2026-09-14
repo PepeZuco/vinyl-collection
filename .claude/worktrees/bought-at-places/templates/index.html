@@ -9477,6 +9477,53 @@ function renderWorldMap(all) {
       tooltip.style.top = `${Math.max(y - 12, 0)}px`;
     })
     .on('mouseleave', () => { tooltip.style.opacity = '0'; });
+
+  renderPlaceMarkers(svg, projection, tooltip, wrap, all);
+}
+
+// Point markers for where records were bought, layered on top of the country
+// choropleth using the same projection so both read as one map. Only places
+// whose link is a Google Maps url with an embeddable coordinate get a marker
+// — a place with no link, a different site, or a share link with no
+// coordinates in it just has none; it is still counted everywhere else.
+function renderPlaceMarkers(svg, projection, tooltip, wrap, all) {
+  const recordsByPlace = {};
+  all.forEach(r => {
+    const name = (r.bought_where || '').trim();
+    if (!name) return;
+    (recordsByPlace[name] = recordsByPlace[name] || []).push(r);
+  });
+
+  const markers = placeList
+    .map(p => ({ place: p, recs: recordsByPlace[p.name] || [], latLng: VinylPlaces.placeLatLng(p.url) }))
+    .filter(m => m.recs.length && m.latLng);
+
+  if (!markers.length) return;
+
+  const maxCount = Math.max(1, ...markers.map(m => m.recs.length));
+  const radius = d3.scaleSqrt().domain([0, maxCount]).range([0, 10]);
+
+  svg.append('g').selectAll('circle')
+    .data(markers)
+    .join('circle')
+    .attr('transform', m => {
+      const p = projection([m.latLng.lng, m.latLng.lat]);
+      return p ? `translate(${p[0]},${p[1]})` : null;
+    })
+    .attr('r', m => Math.max(3, radius(m.recs.length)))
+    .attr('fill', '#4f8ff7').attr('fill-opacity', 0.75)
+    .attr('stroke', '#1b3f8f').attr('stroke-width', 1)
+    .style('cursor', 'pointer')
+    .on('mousemove', (event, m) => {
+      const wrapRect = wrap.getBoundingClientRect();
+      const x = event.clientX - wrapRect.left;
+      const y = event.clientY - wrapRect.top;
+      tooltip.innerHTML = chartTooltipHTML(m.place.name, m.recs);
+      tooltip.style.opacity = '1';
+      tooltip.style.left = `${Math.min(x + 12, wrapRect.width - tooltip.offsetWidth - 8)}px`;
+      tooltip.style.top = `${Math.max(y - 12, 0)}px`;
+    })
+    .on('mouseleave', () => { tooltip.style.opacity = '0'; });
 }
 
 // The ranked column beside the map: every country that has records, most
