@@ -981,6 +981,15 @@ def delete_record(rid):
 
 # ── scan (photo / Spotify autofill) ───────────────────────────────────────────
 
+def _sse(event, payload):
+    """One Server-Sent Events frame.
+
+    separators keeps the JSON on a single line: a raw newline inside the data
+    would terminate the frame early, and the client would see one event torn
+    into two halves it cannot parse.
+    """
+    return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
+
 @app.route("/api/scan", methods=["POST"])
 @require_auth
 def scan_record():
