@@ -3526,6 +3526,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <script src="/static/places.js"></script>
 <script src="/static/tracks.js"></script>
 <script src="/static/spend.js"></script>
+<script src="/static/scanstream.js"></script>
 <script src="/static/queue.js"></script>
 <script src="/static/idle-spotlight.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
@@ -7420,6 +7421,95 @@ function setScanField(id, value){
   formChanged();   // a field the scan filled
 }
 
+// ── the analysing panel ─────────────────────────────────────────────────────
+// Labels for the stages app.py streams. The order here is display order; the
+// server decides which of them actually run, so the spotify-only stages simply
+// never arrive on a photo scan.
+const SCAN_STAGES = {
+  photo:   ['vision', 'mb', 'cover', 'vinyl', 'shelf'],
+  spotify: ['spotify', 'genre', 'mb', 'cover', 'vinyl', 'shelf'],
+};
+const STAGE_META = {
+  vision:  {src:'claude',  icon:'ti-sparkles',        label:'reading the sleeve',      sub:'Claude vision'},
+  spotify: {src:'spotify', icon:'ti-brand-spotify',   label:'reading the album',       sub:'Spotify API'},
+  genre:   {src:'claude',  icon:'ti-tag',             label:'placing it in a genre',   sub:'Claude'},
+  mb:      {src:'mb',      icon:'ti-database-search', label:'matching on MusicBrainz', sub:'release groups'},
+  cover:   {src:'mb',      icon:'ti-photo-search',    label:'fetching cover art',      sub:'Cover Art Archive'},
+  vinyl:   {src:'claude',  icon:'ti-vinyl',           label:'confirming it is vinyl',  sub:'Claude'},
+  shelf:   {src:'shelf',   icon:'ti-checklist',       label:'checking your shelf',     sub:'local'},
+};
+
+let scanPanelState = {};
+let scanPanelStart = 0;
+let scanAbort = null;
+
+function buildScanPanel(source){
+  scanPanelState = {};
+  const rows = SCAN_STAGES[source].map(id => {
+    const m = STAGE_META[id];
+    return `<div class="an-step wait" data-src="${m.src}" data-id="${id}">
+      <div class="an-badge"><i class="ti ${m.icon}"></i></div>
+      <div class="an-body">
+        <div class="an-label"><span>${m.label}</span><span class="tail"></span></div>
+        <div class="an-detail">${m.sub}</div>
+        <div class="an-pips" hidden></div>
+      </div></div>`;
+  }).join('');
+  document.querySelector('#scanPanel .an-steps').innerHTML = rows;
+  document.querySelector('#scanPanel .an-cost').textContent =
+    VinylSpend.scanHintText({armed: true, source, usage: scanUsage, verb: 'analyse'});
+  document.getElementById('scanPanel').hidden = false;
+}
+
+// One step event. The server is the only source of truth for state here — the
+// panel never advances a row on its own, so a stage that hangs visibly hangs.
+function applyScanStep(p){
+  const row = document.querySelector(`#scanPanel .an-step[data-id="${p.id}"]`);
+  if(!row) return;
+  scanPanelState[p.id] = p.state;
+  row.classList.remove('wait','run','done','skip');
+  row.classList.add(p.state);
+  const tail = row.querySelector('.tail');
+  const detail = row.querySelector('.an-detail');
+  if(p.detail) detail.textContent = p.detail;
+  tail.className = p.state === 'done' ? 'tail tick ti ti-check' : 'tail';
+  if(p.of){
+    const pips = row.querySelector('.an-pips');
+    pips.hidden = false;
+    if(pips.children.length !== p.of)
+      pips.innerHTML = '<i></i>'.repeat(p.of);
+    [...pips.children].forEach((el,i)=>el.classList.toggle('on', i < (p.n||0)));
+    if(p.state === 'run' && p.n)
+      detail.textContent = `${STAGE_META[p.id].sub} — ${p.n} of ${p.of}`;
+  }
+  const stages = [...document.querySelectorAll('#scanPanel .an-step')];
+  const settled = stages.filter(r => r.classList.contains('done') || r.classList.contains('skip')).length;
+  document.querySelector('#scanPanel .an-bar i').style.width =
+    (settled / stages.length * 100) + '%';
+  document.querySelector('#scanPanel .an-n').textContent = ` ${Math.min(settled+1, stages.length)}/${stages.length}`;
+  if(p.state === 'run')
+    document.querySelector('#scanPanel .an-stage').textContent = STAGE_META[p.id].sub;
+}
+
+// The face and the clock are the only things driven locally — everything else
+// waits on the server. Same 30-frame strip and 1010ms cadence as the button's,
+// positioned in --face units for the reason setAnalyseFrame gives.
+function tickScanPanel(){
+  const elapsed = performance.now() - scanPanelStart;
+  document.getElementById('scanPanelFace').style.backgroundPositionX =
+    `calc(var(--face) * ${-(Math.floor(elapsed / ANALYSE_MS * ANALYSE_FRAMES) % ANALYSE_FRAMES)})`;
+  document.querySelector('#scanPanel .an-clock').textContent = (elapsed/1000).toFixed(1)+'s';
+  scanPanelRaf = requestAnimationFrame(tickScanPanel);
+}
+
+function cancelScan(){
+  // Abandons the result, not the bill: the call was billed the moment it
+  // returned. Bumping scanToken is the same abandon path closeForm uses.
+  scanToken++;
+  if(scanAbort) scanAbort.abort();
+  setScanBusy(false);
+}
+
 function setScanBusy(busy){
   scanInFlight = busy;
   // Not a toast: a scan outlives the 2.5s a toast gets, and a form that looks
@@ -7448,11 +7538,6 @@ function setScanBusy(busy){
   if(busy) playAnalyseFace(); else stopAnalyseFace();
 }
 
-// Replaced in the next step by the real cancel, which also aborts the
-// in-flight stream. Until then this at least closes the panel rather
-// than throwing.
-function cancelScan(){ setScanBusy(false); }
-
 async function runScan(body){
   // Three triggers reach here — paste-autosubmit, Enter, and the arrow button.
   // Without this guard, paste-then-Enter fires two concurrent /api/scan calls,
@@ -7464,10 +7549,41 @@ async function runScan(body){
   try{
     let res, data;
     try{
+      const source = body.spotify_url ? 'spotify' : 'photo';
+      buildScanPanel(source);
+      scanPanelStart = performance.now();
+      cancelAnimationFrame(scanPanelRaf);
+      scanPanelRaf = requestAnimationFrame(tickScanPanel);
+      scanAbort = new AbortController();
       res = await fetch('/api/scan', {method:'POST',
-        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-      data = await res.json();
+        headers:{'Content-Type':'application/json', 'Accept':'text/event-stream'},
+        body:JSON.stringify(body), signal: scanAbort.signal});
+      const parser = VinylScanStream.createParser();
+      const reader = res.body.getReader();
+      const decode = new TextDecoder();
+      let streamError = null;
+      data = null;
+      for(;;){
+        const {value, done} = await reader.read();
+        if(done) break;
+        for(const frame of parser.push(decode.decode(value, {stream:true}))){
+          if(frame.event === 'step') applyScanStep(frame.data);
+          else if(frame.event === 'done') data = frame.data;
+          else if(frame.event === 'error') streamError = frame.data;
+        }
+      }
+      // The stream always answers 200, so an error arrives as an event. Shape
+      // it back into what the code below already expects from !res.ok.
+      if(streamError){
+        res = {ok:false};
+        data = {error: streamError.error};
+      } else if(!data){
+        throw new Error('stream ended without a result');
+      } else {
+        res = {ok:true};
+      }
     }catch(e){
+      if(e.name === 'AbortError') return;   // the user cancelled; not a failure
       // The fields still hold the last scan's values, but the search string is
       // this scan's only output — leaving it would point at the wrong album.
       if(myToken === scanToken) setScanSearch('');
