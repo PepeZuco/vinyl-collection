@@ -400,7 +400,7 @@ def _rank_candidates(groups: list[dict], album: str,
     ]
 
 
-def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
+def lookup_musicbrainz(artist: str, album: str, on_progress=None) -> list[dict]:
     """Return up to 3 release-group candidates with year and artist country.
 
     An empty list means MusicBrainz has nothing that matches — either the
@@ -408,6 +408,12 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
     It raises
     MusicBrainzUnavailable when MusicBrainz could not be reached at all —
     the caller must not word that as "nothing matched".
+
+    on_progress, when given, is called as on_progress(done, total) — once when
+    the search returns and the candidate count is known, then once per
+    candidate detailed. It exists so a streaming caller can show which of the
+    four rate-limited lookups is in flight; these calls are internal and
+    invisible from outside otherwise.
     """
     if not artist:
         return []
@@ -420,9 +426,12 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
 
     candidates = []
     country_cache: dict = {}
-    # Ranked before the cut, not after: the exact match is regularly not the
-    # hit MusicBrainz put first, so truncating first can drop the right answer.
-    for group in _rank_candidates(groups, album, artist)[:3]:
+    ranked = _rank_candidates(groups, album, artist)[:3]
+    # The search is itself one of the rate-limited lookups, so it counts as
+    # progress the moment it lands — total is only knowable from here on.
+    if on_progress:
+        on_progress(0, len(ranked))
+    for group in ranked:
         credit = (group.get("artist-credit") or [{}])[0].get("artist") or {}
         released = group.get("first-release-date") or ""
         candidates.append({
@@ -437,6 +446,8 @@ def lookup_musicbrainz(artist: str, album: str) -> list[dict]:
             # rather than looking like the LP the user is holding.
             "type": group.get("primary-type"),
         })
+        if on_progress:
+            on_progress(len(candidates), len(ranked))
     return candidates
 
 

@@ -363,3 +363,20 @@ whether the estimate matches a real photo, so:
       and worth knowing.
 - [ ] Log out and reload. The hint falls back to its old wording with no price
       — the readout is auth-gated and must fail quietly, not error.
+
+---
+
+## Analysing progress panel
+
+1. Open the form, attach a sleeve photo, tap Analyse.
+   - On desktop (windows wider than 760px), the panel replaces the whole form: a 128px thinking face on the left, stages and footer on the right, form fields hidden.
+   - On phone (windows 760px or narrower), the panel replaces the cover area: a 92px thinking face above the stage list, footer below.
+   - Stages light up in order: reading the sleeve → matching on MusicBrainz → fetching cover art → confirming it is vinyl → checking your shelf.
+   - Each badge takes its service's colour only once that stage starts.
+2. Paste a Spotify link instead.
+   - The first two stages are "reading the album" (green Spotify badge) and "placing it in a genre" — the photo path's "reading the sleeve" stage never appears.
+3. Hit cancel mid-scan.
+   - The panel closes, no error toast appears, and the footer says the charge is committed: "already committed — cancelling stops the wait, not the charge."
+4. With MusicBrainz unreachable (block `musicbrainz.org` in /etc/hosts):
+   - The MusicBrainz row goes grey and struck through, reading "MusicBrainz unavailable — no year or alternates".
+   - The scan still finishes and the form still fills from the sleeve.

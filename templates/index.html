@@ -1107,6 +1107,129 @@ select option{background:var(--surface);color:var(--text)}
    sent yet. */
 .scan-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
 
+/* ════════════════════════════════════════════════════════════════════════
+   THE DESIGN UNDER REVIEW — the analysing panel
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* The panel replaces the cover drop while a scan is out. It is the same
+   footprint, so the form does not jump when it swaps in. */
+/* --face is owned here, one value per breakpoint, rather than left for each
+   consumer to fall back on its own: tickScanPanel's calc(var(--face) * n) has
+   no fallback of its own, so if this custom property were ever undefined the
+   whole background-position-x declaration would be dropped at computed-value
+   time and the face would go visibly, silently static. */
+.analysing{--face:92px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:9px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--card)),var(--card));
+  overflow:hidden}
+
+/* ── the head: the big face, what it is doing, how long it has been ────── */
+.an-head{display:flex;align-items:center;gap:14px;padding:16px 15px 14px}
+/* The thinking face, now cut at 128px per frame from the same source.gif.
+   Stepped by hand exactly as the 44px button strip is — see .analyse-face. */
+.an-face{flex-shrink:0;width:var(--face,92px);height:var(--face,92px);
+  background-image:url('/static/analyse-sprite-128.png');background-repeat:no-repeat;
+  background-size:calc(var(--face,92px) * 30) var(--face,92px);background-position:0 0}
+.an-head-main{min-width:0;flex:1}
+.an-title{font-size:15px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:7px}
+.an-title em{font-style:normal;color:var(--accent)}
+.an-sub{font-size:11.5px;color:var(--label);margin-top:3px;font-variant-numeric:tabular-nums}
+.an-sub .dot{opacity:.4;margin:0 5px}
+
+/* One hairline that fills as steps complete — the only thing on screen that
+   answers "how much is left" at a glance, from across the room. */
+.an-bar{height:3px;background:color-mix(in srgb,var(--border) 60%,transparent);margin-top:9px;
+  border-radius:2px;overflow:hidden}
+.an-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;
+  transition:width .45s cubic-bezier(.4,0,.2,1)}
+
+/* ── the step list: what is actually being done, one row per stage ─────── */
+.an-steps{border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent);padding:6px 0 8px}
+.an-step{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:7px 15px;position:relative;
+  transition:background .2s}
+.an-step.run{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+/* the rail joining the stages into one sequence */
+.an-step::before{content:'';position:absolute;left:27px;top:0;bottom:0;width:1px;
+  background:color-mix(in srgb,var(--border) 70%,transparent)}
+.an-step:first-child::before{top:50%}
+.an-step:last-child::before{bottom:50%}
+
+/* the service badge — Spotify green, MusicBrainz orange, Claude clay, gold for
+   work done on your own shelf. The colour is the point: it says WHO is being
+   asked, which is the thing the user cannot otherwise see. */
+.an-badge{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;position:relative;z-index:1;border:1px solid var(--bdr,var(--border));
+  background:var(--bgc,var(--card));color:var(--fg,var(--muted));transition:all .25s}
+.an-step[data-src="spotify"]{--fg:#1DB954;--bdr:rgba(30,215,96,.45);--bgc:rgba(30,215,96,.10)}
+.an-step[data-src="mb"]     {--fg:#EB743B;--bdr:rgba(235,116,59,.45);--bgc:rgba(235,116,59,.10)}
+.an-step[data-src="claude"] {--fg:#D97757;--bdr:rgba(217,119,87,.45);--bgc:rgba(217,119,87,.10)}
+.an-step[data-src="shelf"]  {--fg:var(--accent);--bdr:color-mix(in srgb,var(--accent) 45%,transparent);
+                             --bgc:color-mix(in srgb,var(--accent) 10%,transparent)}
+/* A stage not started yet is drained of its colour — the badge lighting up IS
+   the signal that this service is now being talked to. */
+.an-step.wait .an-badge{--fg:var(--muted);--bdr:var(--border);--bgc:transparent;opacity:.5}
+.an-step.run .an-badge{animation:an-pulse 1.5s ease-in-out infinite}
+@keyframes an-pulse{0%,100%{box-shadow:0 0 0 0 var(--bdr)}50%{box-shadow:0 0 0 4px transparent}}
+
+.an-body{min-width:0;padding-top:2px}
+.an-label{font-size:12.5px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
+.an-step.wait .an-label{color:var(--label);font-weight:500}
+.an-label .tick{font-size:14px;color:var(--accent);margin-left:auto;flex-shrink:0}
+.an-label .secs{font-size:10.5px;font-weight:500;color:var(--muted);margin-left:auto;flex-shrink:0;
+  font-variant-numeric:tabular-nums}
+/* What it found — the payoff line. Empty until there is something true to say,
+   so the panel never invents detail to fill space. */
+.an-detail{font-size:11.5px;color:var(--label);margin-top:2px;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.an-detail.mono{font-family:var(--font-mono);font-size:11px}
+.an-step.wait .an-detail{display:none}
+
+/* Counted work (4 MusicBrainz lookups, 3 cover fetches) gets pips rather than
+   a number buried in prose — you can see the rate it is chewing through them,
+   which is what tells you a stall from slow progress. */
+.an-pips{display:flex;gap:3px;margin-top:5px}
+.an-pips i{width:14px;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.an-pips i.on{background:var(--fg)}
+
+/* Cancel sits on the panel, not beside it: while this is up it is the only
+   thing the user can still decide. */
+.an-foot{display:flex;align-items:center;gap:8px;padding:9px 15px;
+  border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.an-cost{font-size:10.5px;color:var(--muted);flex:1;min-width:0;line-height:1.35}
+.an-cancel{height:26px;padding:0 10px;border-radius:var(--radius-sm);font-size:11.5px;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--label);font-family:var(--font)}
+.an-cancel:hover{border-color:var(--danger);color:var(--danger)}
+
+/* ── wide variant: same parts, laid out for the full 920px form ─────────── */
+/* --face lives on this same selector as the grid switch, not buried on
+   .an-face, so both halves of "what wide means" are declared in one place. */
+.analysing.wide{display:grid;grid-template-columns:270px 1fr;--face:128px}
+/* [hidden]'s UA rule loses to a two-class selector's specificity, so without
+   this the panel would render through `hidden` the instant it goes wide —
+   see the identical fix already applied to .kpi-rot-item[hidden]. */
+.analysing.wide[hidden]{display:none}
+.analysing.wide .an-head{flex-direction:column;text-align:center;justify-content:center;gap:12px;
+  padding:26px 20px;border-right:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.analysing.wide .an-head-main{flex:0}
+.analysing.wide .an-title{justify-content:center}
+.analysing.wide .an-bar{width:180px;margin-left:auto;margin-right:auto}
+.analysing.wide .an-steps{border-top:none;padding:10px 0}
+.analysing.wide .an-step{grid-template-columns:26px 1fr;padding:9px 18px}
+.analysing.wide .an-step::before{left:30px}
+.analysing.wide .an-detail{white-space:normal}
+/* Descendant, not a compound: the foot is a child of .analysing.wide, so
+   `.analysing.wide-foot` matched nothing and the grid left it in column 1. */
+.analysing.wide .an-foot{grid-column:1/-1}
+
+/* MusicBrainz being unreachable is a normal outcome, not a failure — the
+   route degrades to lookup_failed on purpose. So a skipped stage reads as
+   information: no colour, no alarm, just struck through and explained. */
+.an-step.skip .an-badge{--fg:var(--muted);--bdr:var(--border);--bgc:transparent}
+.an-step.skip .an-label > span:first-child{text-decoration:line-through;
+  text-decoration-color:color-mix(in srgb,var(--muted) 60%,transparent);color:var(--label)}
+.an-step.skip .an-detail{color:var(--muted);font-style:italic}
+
+@media(prefers-reduced-motion:reduce){.an-step.run .an-badge{animation:none}}
+
 /* A record that isn't owned yet can't have been bought, played or cleaned.
    The purchase block is removed outright; the rest stays visible but inert so
    the form doesn't change shape twice. */
@@ -1132,6 +1255,16 @@ select option{background:var(--surface);color:var(--text)}
 /* form — split layout: cover left, fields right (mirrors detail-layout) */
 .form-layout{display:grid;grid-template-columns:330px 1fr;gap:20px;align-items:start}
 @media(max-width:760px){.form-layout{grid-template-columns:1fr}}
+/* The desktop takeover: while a scan is out, scanPanelSetWide(true) moves
+   #scanPanel here as a direct child (escaping the 330px cover column, which
+   is too narrow for the 270px/1fr wide variant) and adds .scan-wide, which
+   hides the two columns' normal content — the fields are about to be
+   overwritten by the scan anyway, so there is nothing to protect by leaving
+   them visible, and hiding them is what stops the user typing into a field
+   the result is seconds from clobbering. */
+.form-layout.scan-wide > .form-cover-col,
+.form-layout.scan-wide > .form-section{display:none}
+.form-layout > .analysing.wide{grid-column:1/-1}
 .form-cover-col{display:flex;flex-direction:column}
 .form-cover-col .cover-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px}
 /* Empty, the drop is a fixed-height target to aim a file at. With a cover in
@@ -2926,11 +3059,27 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
           <div class="scan-hint" id="scanHint"></div>
 
           <!-- A scan is a vision call, up to four rate-limited MusicBrainz
-               lookups and up to three cover fetches — far longer than a toast
-               lives, so its progress has to stay on screen for the duration. -->
-          <div id="scanStatus" style="display:none;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--label)">
-            <span class="scan-spinner"></span>
-            <span>scanning… this can take up to a minute</span>
+               lookups and up to three cover fetches. Rather than a spinner and
+               a guess at the worst case, the panel names each stage as it
+               happens and says which service is being asked. Painted from the
+               event stream by paintScanPanel; see static/scanstream.js. -->
+          <div class="analysing" id="scanPanel" hidden>
+            <div class="an-head">
+              <div class="an-face" id="scanPanelFace"></div>
+              <div class="an-head-main">
+                <div class="an-title">analysing<em class="an-n"></em></div>
+                <div class="an-sub"><span class="an-stage">starting…</span><span class="dot">·</span><span class="an-clock">0.0s</span></div>
+                <div class="an-bar"><i></i></div>
+              </div>
+            </div>
+            <div class="an-steps"></div>
+            <div class="an-foot">
+              <!-- Not "nothing is charged until you pick": the call is billed
+                   the moment it returns, and cancel does not refund it. -->
+              <span class="an-cost"></span>
+              <button type="button" class="an-cancel" id="scanCancelBtn"
+                      onclick="cancelScan()"><i class="ti ti-x"></i> cancel</button>
+            </div>
           </div>
         </div>
 
@@ -3420,6 +3569,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <script src="/static/places.js"></script>
 <script src="/static/tracks.js"></script>
 <script src="/static/spend.js"></script>
+<script src="/static/scanstream.js"></script>
 <script src="/static/queue.js"></script>
 <script src="/static/idle-spotlight.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
@@ -6581,7 +6731,7 @@ function openAdd(){
   document.getElementById('fNoteText').value='';
   // A fresh form starts public. The switch is sticky only within one sitting.
   document.getElementById('fNotePrivate').checked=false;
-  scanToken++;   // strand any note-photo upload still in the air
+  abandonScan();   // strand any note-photo upload still in the air
   formNoteImages=[];
   renderNoteShots();
   renderNotesForm();
@@ -6654,7 +6804,7 @@ function openEdit(id){
   renderCondSwitch();
   resetNoteEdit();
   formNotes=parseNotes(r.notes, r.bought_date||today());
-  scanToken++;   // strand any note-photo upload still in the air
+  abandonScan();   // strand any note-photo upload still in the air
   formNoteImages=[];
   renderNoteShots();
   // keep the recorded time — slicing to 10 chars used to wipe it off every play
@@ -6786,7 +6936,7 @@ function closeForm(force){
   closeSpotifyOverlay();
   closeScanOverlay();
   closeSearchOverlay();
-  scanToken++;
+  abandonScan();
   setScanBusy(false);
 }
 
@@ -7301,6 +7451,9 @@ let scanCandidates = [];
 let scanLookupFailed = false;
 let scanInFlight = false;
 let scanToken = 0;
+// requestAnimationFrame handle for the panel's clock tick, so hiding the panel
+// can cancel it — otherwise the loop keeps ticking a clock nobody sees.
+let scanPanelRaf = 0;
 // Fields a scan has written during THIS form session. A later scan may clear a
 // field an earlier scan filled — that value came from a scan and is now stale —
 // but must never clear a value the user typed or that openEdit loaded from the
@@ -7357,13 +7510,168 @@ function setScanField(id, value){
   formChanged();   // a field the scan filled
 }
 
+// ── the analysing panel ─────────────────────────────────────────────────────
+// Labels for the stages app.py streams. The order here is display order; the
+// server decides which of them actually run, so the spotify-only stages simply
+// never arrive on a photo scan.
+const SCAN_STAGES = {
+  photo:   ['vision', 'mb', 'cover', 'vinyl', 'shelf'],
+  spotify: ['spotify', 'genre', 'mb', 'cover', 'vinyl', 'shelf'],
+};
+const STAGE_META = {
+  vision:  {src:'claude',  icon:'ti-sparkles',        label:'reading the sleeve',      sub:'Claude vision'},
+  spotify: {src:'spotify', icon:'ti-brand-spotify',   label:'reading the album',       sub:'Spotify API'},
+  genre:   {src:'claude',  icon:'ti-tag',             label:'placing it in a genre',   sub:'Claude'},
+  mb:      {src:'mb',      icon:'ti-database-search', label:'matching on MusicBrainz', sub:'release groups'},
+  cover:   {src:'mb',      icon:'ti-photo-search',    label:'fetching cover art',      sub:'Cover Art Archive'},
+  vinyl:   {src:'claude',  icon:'ti-vinyl',           label:'confirming it is vinyl',  sub:'Claude'},
+  shelf:   {src:'shelf',   icon:'ti-checklist',       label:'checking your shelf',     sub:'local'},
+};
+
+let scanPanelState = {};
+let scanPanelStart = 0;
+let scanAbort = null;
+
+// The wide takeover only fits once the form itself has room for it — reusing
+// the form-layout breakpoint means "desktop" means the same viewport width
+// everywhere in this form, not a second number to keep in sync with it.
+const SCAN_WIDE_BREAKPOINT = 760;
+
+// Moves #scanPanel between the 330px cover column (its home) and a direct
+// child of .form-layout (where .analysing.wide's grid-column:1/-1 can make it
+// span the whole 920px form) and toggles the classes that go with each. Idempotent
+// either way, so buildScanPanel can call it unconditionally on every scan and
+// setScanBusy can call it unconditionally on every exit.
+function scanPanelSetWide(wide){
+  const layout = document.querySelector('.form-layout');
+  const panel = document.getElementById('scanPanel');
+  const coverCol = document.querySelector('.form-cover-col');
+  if(!layout || !panel || !coverCol) return;
+  panel.classList.toggle('wide', wide);
+  layout.classList.toggle('scan-wide', wide);
+  if(wide){
+    if(panel.parentElement !== layout){
+      const fields = layout.querySelector('.form-section');
+      layout.insertBefore(panel, fields);
+    }
+  } else if(panel.parentElement !== coverCol){
+    coverCol.appendChild(panel);
+  }
+}
+
+// scanHintText's armed line — "nothing is sent until you tap analyse" — is a
+// PRE-scan promise: true under the Analyse button and in the search popup,
+// both of which show it before anything has gone out. This panel only ever
+// shows AFTER the request is already on the wire, so that line would be a lie
+// the instant it appeared next to a live progress bar. Worse, the call is
+// billed the moment it returns whether or not the result is ever used — see
+// test_spend_is_banked_even_when_the_client_never_reads_the_stream — so the
+// footer must say the charge is already committed, not implied refundable by
+// Cancel. Kept separate from scanHintText rather than editing it, since that
+// helper is shared with the two callers where the pre-scan wording is correct.
+function scanPanelCostText(source){
+  const estimate = scanUsage ? (scanUsage.estimate || {})[source] : null;
+  const month = scanUsage ? VinylSpend.formatMoney(scanUsage.month_usd) + ' this month' : null;
+  const spent = estimate != null
+    ? 'this one ≈ ' + VinylSpend.formatMoney(estimate) + ', already committed — cancelling stops the wait, not the charge'
+    : 'already committed — cancelling stops the wait, not the charge';
+  return month ? spent + ' · ' + month : spent;
+}
+
+function buildScanPanel(source){
+  scanPanelState = {};
+  const rows = SCAN_STAGES[source].map(id => {
+    const m = STAGE_META[id];
+    return `<div class="an-step wait" data-src="${m.src}" data-id="${id}">
+      <div class="an-badge"><i class="ti ${m.icon}"></i></div>
+      <div class="an-body">
+        <div class="an-label"><span>${m.label}</span><span class="tail"></span></div>
+        <div class="an-detail">${m.sub}</div>
+        <div class="an-pips" hidden></div>
+      </div></div>`;
+  }).join('');
+  document.querySelector('#scanPanel .an-steps').innerHTML = rows;
+  document.querySelector('#scanPanel .an-cost').textContent = scanPanelCostText(source);
+  // Decided fresh on every scan, from the CURRENT viewport, so a panel that
+  // went wide once cannot get stuck that way if the next scan opens narrow —
+  // and a resize while the form sits closed never leaves a stale choice behind.
+  scanPanelSetWide(window.innerWidth > SCAN_WIDE_BREAKPOINT);
+  document.getElementById('scanPanel').hidden = false;
+}
+
+// One step event. The server is the only source of truth for state here — the
+// panel never advances a row on its own, so a stage that hangs visibly hangs.
+function applyScanStep(p){
+  const row = document.querySelector(`#scanPanel .an-step[data-id="${p.id}"]`);
+  if(!row) return;
+  scanPanelState[p.id] = p.state;
+  row.classList.remove('wait','run','done','skip');
+  row.classList.add(p.state);
+  const tail = row.querySelector('.tail');
+  const detail = row.querySelector('.an-detail');
+  if(p.detail) detail.textContent = p.detail;
+  tail.className = p.state === 'done' ? 'tail tick ti ti-check' : 'tail';
+  if(p.of){
+    const pips = row.querySelector('.an-pips');
+    pips.hidden = false;
+    if(pips.children.length !== p.of)
+      pips.innerHTML = '<i></i>'.repeat(p.of);
+    [...pips.children].forEach((el,i)=>el.classList.toggle('on', i < (p.n||0)));
+    if(p.state === 'run' && p.n)
+      detail.textContent = `${STAGE_META[p.id].sub} — ${p.n} of ${p.of}`;
+  }
+  const stages = [...document.querySelectorAll('#scanPanel .an-step')];
+  const settled = stages.filter(r => r.classList.contains('done') || r.classList.contains('skip')).length;
+  document.querySelector('#scanPanel .an-bar i').style.width =
+    (settled / stages.length * 100) + '%';
+  document.querySelector('#scanPanel .an-n').textContent = ` ${Math.min(settled+1, stages.length)}/${stages.length}`;
+  if(p.state === 'run')
+    document.querySelector('#scanPanel .an-stage').textContent = STAGE_META[p.id].sub;
+}
+
+// The face and the clock are the only things driven locally — everything else
+// waits on the server. Same 30-frame strip and 1010ms cadence as the button's,
+// positioned in --face units for the reason setAnalyseFrame gives.
+function tickScanPanel(){
+  const elapsed = performance.now() - scanPanelStart;
+  document.getElementById('scanPanelFace').style.backgroundPositionX =
+    `calc(var(--face) * ${-(Math.floor(elapsed / ANALYSE_MS * ANALYSE_FRAMES) % ANALYSE_FRAMES)})`;
+  document.querySelector('#scanPanel .an-clock').textContent = (elapsed/1000).toFixed(1)+'s';
+  scanPanelRaf = requestAnimationFrame(tickScanPanel);
+}
+
+// Bumping scanToken alone abandons the RESULT but leaves the request running:
+// its late frames still match [data-id] rows in whatever panel replaces this
+// one, since the panel doesn't rebuild the id it's looking for. Every place
+// that gives up on the in-flight scan routes through here so none of them can
+// forget the abort half.
+function abandonScan(){
+  scanToken++;
+  if(scanAbort){ scanAbort.abort(); scanAbort = null; }
+}
+
+function cancelScan(){
+  // Abandons the result, not the bill: the call was billed the moment it
+  // returned. abandonScan is the same abandon path closeForm/openAdd/openEdit use.
+  abandonScan();
+  setScanBusy(false);
+}
+
 function setScanBusy(busy){
   scanInFlight = busy;
   // Not a toast: a scan outlives the 2.5s a toast gets, and a form that looks
   // idle invites the user to start typing into fields the scan is about to
   // overwrite. setScanBusy is the one place that knows the whole in-flight
   // window, error and abandoned-scan paths included.
-  document.getElementById('scanStatus').style.display = busy ? 'flex' : 'none';
+  if(!busy){
+    document.getElementById('scanPanel').hidden = true;
+    // Every exit — success, error, cancel, or the form closed mid-scan — comes
+    // through here, so restoring the fields the takeover hid belongs here too
+    // rather than in a second cleanup path that could drift from this one.
+    scanPanelSetWide(false);
+    cancelAnimationFrame(scanPanelRaf);
+    scanPanelRaf = 0;
+  }
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
    'coverPickerFile','coverPickerCamera','notePickerFile','notePickerCamera'].forEach(id=>{
     const el = document.getElementById(id);
@@ -7392,10 +7700,51 @@ async function runScan(body){
   try{
     let res, data;
     try{
+      const source = body.spotify_url ? 'spotify' : 'photo';
+      buildScanPanel(source);
+      scanPanelStart = performance.now();
+      cancelAnimationFrame(scanPanelRaf);
+      scanPanelRaf = requestAnimationFrame(tickScanPanel);
+      scanAbort = new AbortController();
       res = await fetch('/api/scan', {method:'POST',
-        headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-      data = await res.json();
+        headers:{'Content-Type':'application/json', 'Accept':'text/event-stream'},
+        body:JSON.stringify(body), signal: scanAbort.signal});
+      const parser = VinylScanStream.createParser();
+      const reader = res.body.getReader();
+      const decode = new TextDecoder();
+      let streamError = null;
+      data = null;
+      for(;;){
+        const {value, done} = await reader.read();
+        if(done) break;
+        // abandonScan aborts the read, but a chunk already decoded by the time
+        // that abort lands is still sitting right here in this tick — without
+        // this check it paints onto whatever panel the next scan just built,
+        // since the rows it targets by data-id exist there too.
+        if(myToken !== scanToken) break;
+        for(const frame of parser.push(decode.decode(value, {stream:true}))){
+          if(myToken !== scanToken) break;
+          if(frame.event === 'step') applyScanStep(frame.data);
+          else if(frame.event === 'done') data = frame.data;
+          else if(frame.event === 'error') streamError = frame.data;
+        }
+      }
+      // Abandoned mid-stream: there is no result to apply and nothing failed,
+      // so return before the shaping below can mistake "abandoned" for "failed"
+      // and toast an error the user never caused.
+      if(myToken !== scanToken) return;
+      // The stream always answers 200, so an error arrives as an event. Shape
+      // it back into what the code below already expects from !res.ok.
+      if(streamError){
+        res = {ok:false};
+        data = {error: streamError.error};
+      } else if(!data){
+        throw new Error('stream ended without a result');
+      } else {
+        res = {ok:true};
+      }
     }catch(e){
+      if(e.name === 'AbortError') return;   // the user cancelled; not a failure
       // The fields still hold the last scan's values, but the search string is
       // this scan's only output — leaving it would point at the wrong album.
       if(myToken === scanToken) setScanSearch('');

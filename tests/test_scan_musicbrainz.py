@@ -120,3 +120,29 @@ def test_throttle_enforces_one_second_gap():
             scan._throttle_musicbrainz()
 
     assert sleeps and sleeps[0] > 0
+
+
+def test_on_progress_reports_the_search_then_each_candidate(monkeypatch):
+    """The callback is the only way the route can count MusicBrainz work:
+    the lookups are internal, so progress has to be pushed out."""
+    groups = {"release-groups": [
+        {"id": f"rg{i}", "title": "Africa Brasil", "first-release-date": "1976-01-01",
+         "score": 100,
+         "artist-credit": [{"artist": {"id": f"ar{i}", "name": "Jorge Ben"}}]}
+        for i in range(3)]}
+    monkeypatch.setattr(scan, "_mb_get", lambda path, params, **kw:
+                        groups if path == "/release-group/" else {"country": "BR"})
+
+    seen = []
+    scan.lookup_musicbrainz("Jorge Ben", "Africa Brasil",
+                            on_progress=lambda done, total: seen.append((done, total)))
+
+    assert seen[0] == (0, 3), "the search finishing is itself progress"
+    assert seen[-1] == (3, 3)
+    assert [done for done, _ in seen] == [0, 1, 2, 3]
+
+
+def test_on_progress_is_optional(monkeypatch):
+    """Every existing caller passes nothing and must be unaffected."""
+    monkeypatch.setattr(scan, "_mb_get", lambda path, params, **kw: {"release-groups": []})
+    assert scan.lookup_musicbrainz("Jorge Ben", "Africa Brasil") == []
