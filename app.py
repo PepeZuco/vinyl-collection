@@ -1285,7 +1285,9 @@ def search_records():
     """Releases matching a loose artist/album query.
 
     Unlike /api/scan this returns a LIST of releases rather than one record's
-    fields, which is why it is its own route.
+    fields, which is why it is its own route. Same streaming/JSON split as
+    scan_record, and the same reason: one generator so the two paths cannot
+    answer differently.
     """
     d = request.get_json(silent=True) or {}
     query = (d.get("query") or "").strip()
@@ -1294,42 +1296,142 @@ def search_records():
         Record.id, Record.artist, Record.album_name, Record.genre
     ).all()
 
+    # Filled by parse_search_query / flag_vinyl and banked in the finally —
+    # same load-bearing reason as scan_record's `spent`: a call is billed the
+    # moment it returns, so a client that hangs up mid-stream must not make
+    # that spend vanish.
     spent = []
-    try:
-        parsed = scan.parse_search_query(query, usage_out=spent)
-        artist = scan.lookup_artist(parsed["artist"])
-        if artist is None:
-            results = []
-        else:
-            results = scan.lookup_discography(artist["mbid"], parsed["album"])
-            scan.search_covers(results)
-            scan.flag_vinyl(results, arid=artist["mbid"], usage_out=spent)
+
+    def run():
+        """The whole pipeline, yielding one frame per stage.
+
+        Unlike /api/scan, an unreachable MusicBrainz is FATAL here: a scan
+        still has a sleeve photo to show even with no year or alternates, but
+        a search has nothing at all without MusicBrainz, so
+        MusicBrainzUnavailable becomes an "error" event, never a "skip".
+        lookup_artist returning None is a different thing entirely — a
+        legitimate "no such artist" — so that one plus every stage after it
+        degrades to "skip" and the stream still ends in a normal "done" with
+        an empty results list, exactly like the JSON path's 200.
+        """
+        try:
+            yield _sse("step", {"id": "parse", "state": "run"})
+            parsed = scan.parse_search_query(query, usage_out=spent)
+            yield _sse("step", {"id": "parse", "state": "done",
+                                "detail": parsed["artist"] +
+                                          (f" — {parsed['album']}" if parsed.get("album") else "")})
+
+            yield _sse("step", {"id": "artist", "state": "run"})
+            artist = scan.lookup_artist(parsed["artist"])
+            if artist is None:
+                yield _sse("step", {"id": "artist", "state": "skip",
+                                    "detail": "no artist matched"})
+            else:
+                yield _sse("step", {"id": "artist", "state": "done",
+                                    "detail": artist["name"]})
+
+            # discography's "skip" fires only when there was no artist to ask
+            # about at all — a call that ran and found zero releases is still
+            # a "done", the same way scan's mb stage reports "no match" as
+            # done rather than skip.
+            yield _sse("step", {"id": "discography", "state": "run"})
+            if artist is None:
+                results = []
+                yield _sse("step", {"id": "discography", "state": "skip",
+                                    "detail": "no artist to search"})
+            else:
+                results = scan.lookup_discography(artist["mbid"], parsed["album"])
+                yield _sse("step", {"id": "discography", "state": "done",
+                                    "detail": f"{len(results)} release(s) found"
+                                              if results else "no releases found"})
+
+            # covers/vinyl/shelf all key off whether there is anything to work
+            # on, not off why: an empty `results` means the same "nothing to
+            # do" whether the artist was unmatched or the discography was
+            # empty — mirrors scan's cover stage skipping on empty candidates
+            # regardless of whether that emptiness came from a real miss or a
+            # degraded mb lookup.
+            yield _sse("step", {"id": "covers", "state": "run"})
+            if results:
+                scan.search_covers(results)
+                found = sum(1 for r in results if r.get("cover_data"))
+                yield _sse("step", {"id": "covers", "state": "done",
+                                    "detail": f"{found} of {len(results)} had artwork"})
+            else:
+                yield _sse("step", {"id": "covers", "state": "skip",
+                                    "detail": "nothing to fetch artwork for"})
+
+            yield _sse("step", {"id": "vinyl", "state": "run"})
+            if results:
+                scan.flag_vinyl(results, arid=artist["mbid"], usage_out=spent)
+                confirmed = sum(1 for r in results if r.get("vinyl") == "confirmed")
+                yield _sse("step", {"id": "vinyl", "state": "done",
+                                    "detail": f"{confirmed} confirmed on vinyl"})
+            else:
+                yield _sse("step", {"id": "vinyl", "state": "skip",
+                                    "detail": "nothing to flag"})
+            # Sorted unconditionally (a no-op on an empty list): matches the
+            # JSON path, which only ever sorted after flag_vinyl ran.
             results.sort(key=lambda r: _VINYL_ORDER.get(r.get("vinyl"), 1))
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except scan.MusicBrainzUnavailable:
-        app.logger.warning("MusicBrainz unavailable for search %r", query)
-        return jsonify({"error": "Couldn't reach MusicBrainz — try again in "
-                                 "a moment"}), 502
-    except RuntimeError as e:
-        message = str(e)
-        return jsonify({"error": message}), 503 if "not set" in message else 502
-    except Exception as e:
-        return jsonify({"error": str(e)}), 502
-    finally:
-        _record_scan_spend("search", spent)
 
-    existing = [{"id": r.id, "artist": r.artist or "",
-                 "album_name": r.album_name or ""} for r in rows]
-    for row in results:
-        row["duplicate_of"] = _search_duplicate(row, existing)
+            yield _sse("step", {"id": "shelf", "state": "run"})
+            if results:
+                existing = [{"id": r.id, "artist": r.artist or "",
+                             "album_name": r.album_name or ""} for r in rows]
+                dupes = 0
+                for row in results:
+                    row["duplicate_of"] = _search_duplicate(row, existing)
+                    if row["duplicate_of"]:
+                        dupes += 1
+                yield _sse("step", {"id": "shelf", "state": "done",
+                                    "detail": f"{dupes} already on your shelf"})
+            else:
+                yield _sse("step", {"id": "shelf", "state": "skip",
+                                    "detail": "nothing to check"})
 
-    return jsonify({
-        "query": query,
-        "artist": artist["name"] if artist else None,
-        "album": parsed["album"],
-        "results": results,
-    })
+            yield _sse("done", {
+                "query": query,
+                "artist": artist["name"] if artist else None,
+                "album": parsed["album"],
+                "results": results,
+            })
+        except ValueError as e:
+            yield _sse("error", {"error": str(e), "status": 400})
+        except scan.MusicBrainzUnavailable:
+            # Fatal here, unlike scan's mb stage: there is no sleeve reading
+            # to fall back on, so the caller gets nothing and must be told to
+            # retry rather than shown an empty results list.
+            app.logger.warning("MusicBrainz unavailable for search %r", query)
+            yield _sse("error", {"error": "Couldn't reach MusicBrainz — try again in "
+                                          "a moment", "status": 502})
+        except RuntimeError as e:
+            message = str(e)
+            yield _sse("error", {"error": message,
+                                 "status": 503 if "not set" in message else 502})
+        except Exception as e:
+            yield _sse("error", {"error": str(e), "status": 502})
+        finally:
+            # Inside the generator, not the route: Flask closes the generator
+            # when the client disconnects, and a cancelled search was still
+            # billed the moment the API answered.
+            _record_scan_spend("search", spent)
+
+    if "text/event-stream" in (request.headers.get("Accept") or ""):
+        return app.response_class(stream_with_context(run()),
+                                  mimetype="text/event-stream",
+                                  headers={"Cache-Control": "no-cache",
+                                           "X-Accel-Buffering": "no"})
+
+    # The JSON path runs the same generator and keeps only its last frame, so
+    # the two can never answer differently.
+    last = None
+    for frame in run():
+        last = frame
+    event, _, data = last.partition("\ndata: ")
+    payload = json.loads(data.strip())
+    if event == "event: error":
+        return jsonify({"error": payload["error"]}), payload["status"]
+    return jsonify(payload)
 
 
 @app.route("/api/search/genres", methods=["POST"])

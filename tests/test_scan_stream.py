@@ -207,3 +207,138 @@ def test_spend_lands_in_the_database_while_streaming():
     assert len(rows) == 1
     assert rows[0].source == "photo"
     assert rows[0].model == "claude-sonnet-5"
+
+
+# ── the streaming half of /api/search ───────────────────────────────────────
+#
+# _pipeline_offline (above) is autouse for this whole module. It stubs
+# scan.flag_vinyl (setdefault "yes") and scan.find_duplicate (None) — both
+# used by the search pipeline too — so the tests below only need to patch the
+# search-specific calls: parse_search_query, lookup_artist,
+# lookup_discography, search_covers.
+
+_SEARCH_DISCOGRAPHY = [
+    {"mbid": "m1", "year": "1970", "country": "BR", "artist": "Jorge Ben",
+     "credited": "Jorge Ben", "canonical": "Jorge Ben Jor",
+     "album_name": "Força bruta", "type": "Album", "label": None},
+    {"mbid": "m2", "year": "1976", "country": "BR", "artist": "Jorge Ben",
+     "credited": "Jorge Ben", "canonical": "Jorge Ben Jor",
+     "album_name": "África Brasil", "type": "Album", "label": None},
+]
+
+
+def _search_patches():
+    return [
+        patch.object(app_module.scan, "parse_search_query",
+                     return_value={"artist": "Jorge Ben", "album": None}),
+        patch.object(app_module.scan, "lookup_artist",
+                     return_value={"mbid": "19499124", "name": "Jorge Ben Jor",
+                                   "country": "BR"}),
+        patch.object(app_module.scan, "lookup_discography",
+                     return_value=[dict(r) for r in _SEARCH_DISCOGRAPHY]),
+        patch.object(app_module.scan, "search_covers"),
+    ]
+
+
+def test_search_streams_its_stages_in_order(client):
+    patches = _search_patches()
+    for p in patches:
+        p.start()
+    try:
+        got = frames(client.post("/api/search", headers=SSE,
+                                 json={"query": "jorge ben"}))
+    finally:
+        for p in reversed(patches):
+            p.stop()
+    assert [e for e, _ in got][-1] == "done"
+    ids = []
+    for e, p in got:
+        if e == "step" and p["state"] == "run" and (not ids or ids[-1] != p["id"]):
+            ids.append(p["id"])
+    assert ids == ["parse", "artist", "discography", "covers", "vinyl", "shelf"]
+
+
+def test_search_done_payload_matches_the_json_path(client):
+    patches = _search_patches()
+    for p in patches:
+        p.start()
+    try:
+        streamed = frames(client.post("/api/search", headers=SSE,
+                                      json={"query": "jorge ben"}))[-1][1]
+        plain = client.post("/api/search", json={"query": "jorge ben"}).get_json()
+    finally:
+        for p in reversed(patches):
+            p.stop()
+    assert streamed == plain
+
+
+def test_search_json_path_is_untouched_without_the_accept_header(client):
+    patches = _search_patches()
+    for p in patches:
+        p.start()
+    try:
+        response = client.post("/api/search", json={"query": "jorge ben"})
+    finally:
+        for p in reversed(patches):
+            p.stop()
+    assert response.status_code == 200
+    assert response.mimetype == "application/json"
+
+
+def test_search_unreachable_musicbrainz_is_an_error_not_a_skip(client):
+    """Unlike /api/scan, an unreachable MusicBrainz is fatal for a search —
+    there is no sleeve photo to fall back on, so this must be an "error"
+    event carrying 502, and no stage may report "skip" on the way there."""
+    with patch.object(app_module.scan, "parse_search_query",
+                      return_value={"artist": "Jorge Ben", "album": None}), \
+         patch.object(app_module.scan, "lookup_artist",
+                      side_effect=app_module.scan.MusicBrainzUnavailable("down")):
+        got = frames(client.post("/api/search", headers=SSE,
+                                 json={"query": "jorge ben"}))
+    assert not [e for e, p in got if e == "step" and p.get("state") == "skip"]
+    assert got[-1] == ("error", {
+        "error": "Couldn't reach MusicBrainz — try again in a moment",
+        "status": 502})
+
+
+def test_search_no_such_artist_skips_and_still_ends_with_done(client):
+    """lookup_artist returning None is a legitimate empty result, not a
+    failure: the artist stage (and everything downstream of it) reports
+    "skip", but the stream still ends in a normal "done" with results: []."""
+    with patch.object(app_module.scan, "parse_search_query",
+                      return_value={"artist": "Zzz", "album": None}), \
+         patch.object(app_module.scan, "lookup_artist", return_value=None):
+        got = frames(client.post("/api/search", headers=SSE,
+                                 json={"query": "zzzzz"}))
+    assert not [e for e, _ in got if e == "error"]
+    assert ("step", {"id": "artist", "state": "skip",
+                     "detail": "no artist matched"}) in got
+    assert got[-1][0] == "done"
+    assert got[-1][1]["results"] == []
+
+
+def test_search_spend_is_banked_even_when_the_client_never_reads_the_stream(client):
+    """Same load-bearing rule as the scan route's version of this test: the
+    Claude call inside parse_search_query is billed the moment it returns,
+    so an abandoned request must not make that spend vanish. Confirmed (by
+    hand, not by a test in this file) to fail when _record_scan_spend is
+    moved out of the generator's finally — see the backend report for that
+    evidence.
+    """
+    def spending_parse(query, usage_out=None):
+        if usage_out is not None:
+            usage_out.append({"model": "claude-haiku-4-5",
+                              "input_tokens": 50, "output_tokens": 10})
+        return {"artist": "Jorge Ben", "album": None}
+
+    with patch.object(app_module, "_record_scan_spend") as banked, \
+         patch.object(app_module.scan, "parse_search_query",
+                      side_effect=spending_parse):
+        response = client.post("/api/search", headers=SSE,
+                               json={"query": "jorge ben"},
+                               buffered=False)
+        iterator = iter(response.response)  # the un-drained stream
+        next(iterator)                      # one frame only ("parse" run)
+        iterator.close()                    # the client hangs up here
+    assert banked.called
+    assert banked.call_args.args[0] == "search"
