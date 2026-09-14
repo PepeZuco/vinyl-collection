@@ -19,3 +19,105 @@ def test_sse_payload_is_one_line_even_when_nested():
     body = [ln for ln in frame.split("\n") if ln.startswith("data: ")]
     assert len(body) == 1
     assert json.loads(body[0][6:])["candidates"][0]["album_name"] == "A\nB"
+
+
+SSE = {"Accept": "text/event-stream"}
+
+
+def frames(response):
+    """Parse an SSE body into [(event, payload), …]."""
+    out = []
+    for block in response.get_data(as_text=True).split("\n\n"):
+        if not block.strip():
+            continue
+        event = data = None
+        for line in block.split("\n"):
+            if line.startswith("event: "):
+                event = line[7:]
+            elif line.startswith("data: "):
+                data = json.loads(line[6:])
+        out.append((event, data))
+    return out
+
+
+@pytest.fixture
+def client():
+    app_module.app.config["TESTING"] = True
+    with app_module.app.test_client() as test_client:
+        with test_client.session_transaction() as session:
+            session["authed"] = True
+        yield test_client
+
+
+@pytest.fixture(autouse=True)
+def _pipeline_offline():
+    """Every outbound call stubbed; these tests are about the event sequence."""
+    with patch.object(app_module.scan, "extract_from_image",
+                      return_value={"artist": "Jorge Ben", "album_name": "Africa Brasil",
+                                    "genre": "Samba", "label": None, "catalog_number": None}), \
+         patch.object(app_module.scan, "lookup_musicbrainz",
+                      return_value=[{"mbid": "rg1", "year": "1976", "country": "BR",
+                                     "artist": "Jorge Ben", "album_name": "Africa Brasil",
+                                     "type": "Album", "label": None}]), \
+         patch.object(app_module.scan, "fetch_cover", return_value=None), \
+         patch.object(app_module.scan, "flag_vinyl",
+                      side_effect=lambda rows, **kw: [r.setdefault("vinyl", "yes") for r in rows]), \
+         patch.object(app_module.scan, "find_duplicate", return_value=None):
+        yield
+
+
+def test_photo_scan_streams_its_stages_in_order(client):
+    got = frames(client.post("/api/scan", headers=SSE,
+                             json={"image": "data:image/jpeg;base64,x"}))
+    assert [e for e, _ in got][-1] == "done"
+    # Collect the order of DISTINCT stages entering "run", collapsing
+    # consecutive repeats: the cover stage opens with a bare
+    # {"id":"cover","state":"run"} and then emits one
+    # {"id":"cover","state":"run","n":i+1,"of":N} per candidate, so "cover"
+    # legitimately repeats and a naive collection would see it twice.
+    ids = []
+    for e, p in got:
+        if e == "step" and p["state"] == "run" and (not ids or ids[-1] != p["id"]):
+            ids.append(p["id"])
+    assert ids == ["vision", "mb", "cover", "vinyl", "shelf"]
+
+
+def test_done_payload_matches_the_json_path(client):
+    streamed = frames(client.post("/api/scan", headers=SSE,
+                                  json={"image": "data:image/jpeg;base64,x"}))[-1][1]
+    plain = client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"}).get_json()
+    assert streamed == plain
+
+
+def test_json_path_is_untouched_without_the_accept_header(client):
+    response = client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"})
+    assert response.status_code == 200
+    assert response.mimetype == "application/json"
+
+
+def test_unreachable_musicbrainz_is_a_skip_not_an_error(client):
+    with patch.object(app_module.scan, "lookup_musicbrainz",
+                      side_effect=app_module.scan.MusicBrainzUnavailable("down")):
+        got = frames(client.post("/api/scan", headers=SSE,
+                                 json={"image": "data:image/jpeg;base64,x"}))
+    assert not [e for e, _ in got if e == "error"]
+    assert ("step", {"id": "mb", "state": "skip",
+                     "detail": "MusicBrainz unavailable — no year or alternates"}) in got
+    assert got[-1][0] == "done"
+    assert got[-1][1]["lookup_failed"] is True
+
+
+def test_a_bad_input_becomes_an_error_event_carrying_its_status(client):
+    with patch.object(app_module.scan, "extract_from_image",
+                      side_effect=ValueError("that is not a sleeve")):
+        got = frames(client.post("/api/scan", headers=SSE,
+                                 json={"image": "data:image/jpeg;base64,x"}))
+    assert got[-1] == ("error", {"error": "that is not a sleeve", "status": 400})
+
+
+def test_spend_is_banked_even_when_the_client_never_reads_the_stream(client):
+    """Cancel abandons the result but not the bill — the call was billed the
+    moment it returned. The generator's finally is what guarantees this."""
+    with patch.object(app_module, "_record_scan_spend") as banked:
+        client.post("/api/scan", headers=SSE, json={"image": "data:image/jpeg;base64,x"})
+    assert banked.called

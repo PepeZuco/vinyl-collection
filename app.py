@@ -1012,91 +1012,155 @@ def scan_record():
     # was billed the moment it returned, and nothing downstream refunds it.
     spent = []
 
-    # The whole pipeline runs inside one try/except: lookup_musicbrainz,
-    # fetch_cover and find_duplicate are documented never to raise, but that
-    # contract isn't airtight (e.g. a 200 with an unexpected JSON shape can
-    # still blow up a caller). The route doesn't trust it absolutely — any
-    # escape here must still degrade to a JSON error, never a 500 HTML page.
-    try:
-        if image:
-            fields = scan.extract_from_image(image, genres, usage_out=spent)
-            spotify_image = None
-        else:
-            resolved = scan.extract_from_spotify(spotify_url)
-            spotify_image = resolved.get("image_url")
-            fields = {
-                "artist": resolved["artist"],
-                "album_name": resolved["album_name"],
-                "genre": scan.classify_genre(
-                    resolved["artist"], resolved["album_name"], genres,
-                    usage_out=spent),
-                "label": None,
-                "catalog_number": None,
-            }
+    def run():
+        """The whole pipeline, yielding one frame per stage.
 
-        artist = fields.get("artist") or ""
-        album = fields.get("album_name") or ""
-
-        # Caught here rather than by the handlers below, which would answer 502
-        # and throw away a sleeve the vision call already read and billed for.
-        # An unreachable MusicBrainz costs the year, the country and the
-        # alternates — not the identification.
+        A generator rather than straight-line code so the streaming and JSON
+        paths are the same pipeline: there is no second copy to drift.
+        """
+        # The whole pipeline runs inside one try/except: lookup_musicbrainz,
+        # fetch_cover and find_duplicate are documented never to raise, but
+        # that contract isn't airtight (e.g. a 200 with an unexpected JSON
+        # shape can still blow up a caller). The route doesn't trust it
+        # absolutely — any escape here must still degrade to a JSON error,
+        # never a 500 HTML page.
         try:
-            candidates = scan.lookup_musicbrainz(artist, album)
-            lookup_failed = False
-        except scan.MusicBrainzUnavailable:
-            app.logger.warning("MusicBrainz unavailable for %r / %r", artist, album)
-            candidates = []
-            lookup_failed = True
+            if image:
+                yield _sse("step", {"id": "vision", "state": "run"})
+                fields = scan.extract_from_image(image, genres, usage_out=spent)
+                spotify_image = None
+                yield _sse("step", {"id": "vision", "state": "done",
+                                    "detail": f"{fields.get('artist') or '?'} — "
+                                              f"{fields.get('album_name') or '?'}"})
+            else:
+                yield _sse("step", {"id": "spotify", "state": "run"})
+                resolved = scan.extract_from_spotify(spotify_url)
+                spotify_image = resolved.get("image_url")
+                yield _sse("step", {"id": "spotify", "state": "done",
+                                    "detail": f"{resolved['artist']} — {resolved['album_name']}"})
+                yield _sse("step", {"id": "genre", "state": "run"})
+                genre = scan.classify_genre(resolved["artist"], resolved["album_name"],
+                                            genres, usage_out=spent)
+                yield _sse("step", {"id": "genre", "state": "done", "detail": genre or "—"})
+                fields = {"artist": resolved["artist"],
+                          "album_name": resolved["album_name"],
+                          "genre": genre, "label": None, "catalog_number": None}
 
-        for candidate in candidates:
-            candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
+            artist = fields.get("artist") or ""
+            album = fields.get("album_name") or ""
 
-        # Not sorted vinyl-first the way the search grid is: candidates[0] is
-        # the best match, it fills the form and supplies the year, and a badge
-        # must not get to decide which pressing the user is holding.
-        #
-        # Spotify has everything, including albums that were never records, and
-        # MusicBrainz having no release group for one leaves nothing to badge —
-        # so the album itself gets a verdict too, and the form can say so even
-        # when the candidate grid is empty.
-        album_row = [{"mbid": None, "artist": artist, "album_name": album}]
-        scan.flag_vinyl(candidates or album_row, usage_out=spent)
-        vinyl = (candidates or album_row)[0]["vinyl"]
+            # Caught here rather than by the handlers below, which would
+            # answer 502 and throw away a sleeve the vision call already read
+            # and billed for. An unreachable MusicBrainz costs the year, the
+            # country and the alternates — not the identification. It is a
+            # normal, expected outcome that degrades to lookup_failed, never
+            # an "error" event.
+            #
+            # Collected by the callback and drained after the call:
+            # lookup_musicbrainz is not a generator, so it cannot yield.
+            ticks = []
+            yield _sse("step", {"id": "mb", "state": "run"})
+            try:
+                candidates = scan.lookup_musicbrainz(
+                    artist, album, on_progress=lambda done, total: ticks.append((done, total)))
+                lookup_failed = False
+                for done, total in ticks:
+                    yield _sse("step", {"id": "mb", "state": "run", "n": done, "of": total})
+                yield _sse("step", {"id": "mb", "state": "done",
+                                    "detail": f"{len(candidates)} pressing(s) found"
+                                              if candidates else "no match on MusicBrainz"})
+            except scan.MusicBrainzUnavailable:
+                app.logger.warning("MusicBrainz unavailable for %r / %r", artist, album)
+                candidates = []
+                lookup_failed = True
+                yield _sse("step", {"id": "mb", "state": "skip",
+                                    "detail": "MusicBrainz unavailable — no year or alternates"})
 
-        existing = [{"id": r.id, "artist": r.artist or "",
-                     "album_name": r.album_name or ""} for r in rows]
-        duplicate = scan.find_duplicate(artist, album, existing)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except RuntimeError as e:
-        message = str(e)
-        status = 503 if "not set" in message else 502
-        return jsonify({"error": message}), status
-    except Exception as e:
-        return jsonify({"error": str(e)}), 502
-    finally:
-        _record_scan_spend(source, spent)
+            yield _sse("step", {"id": "cover", "state": "run"})
+            for i, candidate in enumerate(candidates):
+                yield _sse("step", {"id": "cover", "state": "run",
+                                    "n": i + 1, "of": len(candidates)})
+                candidate["cover_data"] = scan.fetch_cover(candidate, spotify_image)
+            found = sum(1 for c in candidates if c.get("cover_data"))
+            if candidates:
+                yield _sse("step", {"id": "cover", "state": "done",
+                                    "detail": f"{found} of {len(candidates)} had artwork"})
+            else:
+                yield _sse("step", {"id": "cover", "state": "skip",
+                                    "detail": "nothing to fetch artwork for"})
 
-    year = candidates[0]["year"] if candidates else ""
+            # Not sorted vinyl-first the way the search grid is: candidates[0]
+            # is the best match, it fills the form and supplies the year, and
+            # a badge must not get to decide which pressing the user is
+            # holding.
+            #
+            # Spotify has everything, including albums that were never
+            # records, and MusicBrainz having no release group for one leaves
+            # nothing to badge — so the album itself gets a verdict too, and
+            # the form can say so even when the candidate grid is empty.
+            album_row = [{"mbid": None, "artist": artist, "album_name": album}]
+            yield _sse("step", {"id": "vinyl", "state": "run"})
+            scan.flag_vinyl(candidates or album_row, usage_out=spent)
+            vinyl = (candidates or album_row)[0]["vinyl"]
+            yield _sse("step", {"id": "vinyl", "state": "done", "detail": vinyl})
 
-    return jsonify({
-        "source": source,
-        "artist": artist,
-        "album_name": album,
-        "genre": fields.get("genre") or "",
-        # The album's own verdict, which survives an empty candidate list —
-        # see flag_vinyl above.
-        "vinyl": vinyl,
-        "candidates": candidates,
-        # An empty candidate list has two very different meanings and the form
-        # has to word them differently: MusicBrainz has no such release, or
-        # MusicBrainz could not be reached and retrying is worth the user's time.
-        "lookup_failed": lookup_failed,
-        "duplicate_of": {"id": duplicate["id"], "artist": duplicate["artist"],
-                         "album_name": duplicate["album_name"]} if duplicate else None,
-        "search_string": " ".join(p for p in [artist, album, year, "vinyl cover"] if p),
-    })
+            yield _sse("step", {"id": "shelf", "state": "run"})
+            existing = [{"id": r.id, "artist": r.artist or "",
+                         "album_name": r.album_name or ""} for r in rows]
+            duplicate = scan.find_duplicate(artist, album, existing)
+            yield _sse("step", {"id": "shelf", "state": "done",
+                                "detail": "already on your shelf" if duplicate
+                                          else "not a duplicate"})
+
+            year = candidates[0]["year"] if candidates else ""
+            yield _sse("done", {
+                "source": source,
+                "artist": artist,
+                "album_name": album,
+                "genre": fields.get("genre") or "",
+                # The album's own verdict, which survives an empty candidate
+                # list — see flag_vinyl above.
+                "vinyl": vinyl,
+                "candidates": candidates,
+                # An empty candidate list has two very different meanings and
+                # the form has to word them differently: MusicBrainz has no
+                # such release, or MusicBrainz could not be reached and
+                # retrying is worth the user's time.
+                "lookup_failed": lookup_failed,
+                "duplicate_of": {"id": duplicate["id"], "artist": duplicate["artist"],
+                                 "album_name": duplicate["album_name"]} if duplicate else None,
+                "search_string": " ".join(p for p in [artist, album, year, "vinyl cover"] if p),
+            })
+        except ValueError as e:
+            yield _sse("error", {"error": str(e), "status": 400})
+        except RuntimeError as e:
+            message = str(e)
+            yield _sse("error", {"error": message,
+                                 "status": 503 if "not set" in message else 502})
+        except Exception as e:
+            yield _sse("error", {"error": str(e), "status": 502})
+        finally:
+            # Inside the generator, not the route: Flask closes the generator
+            # when the client disconnects, and a cancelled scan was still
+            # billed the moment the API answered.
+            _record_scan_spend(source, spent)
+
+    if "text/event-stream" in (request.headers.get("Accept") or ""):
+        return app.response_class(stream_with_context(run()),
+                                  mimetype="text/event-stream",
+                                  headers={"Cache-Control": "no-cache",
+                                           "X-Accel-Buffering": "no"})
+
+    # The JSON path runs the same generator and keeps only its last frame, so
+    # the two can never answer differently.
+    last = None
+    for frame in run():
+        last = frame
+    event, _, data = last.partition("\ndata: ")
+    payload = json.loads(data.strip())
+    if event == "event: error":
+        return jsonify({"error": payload["error"]}), payload["status"]
+    return jsonify(payload)
 
 # ── scan spend ────────────────────────────────────────────────────────────────
 
