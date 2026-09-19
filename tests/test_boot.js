@@ -3286,6 +3286,29 @@ test('a focused history entry reaches the phone sheet without hiding the rest', 
     'the focused open cost the phone sheet its tracklist');
 });
 
+// Liking a song rewrites the whole drawer, and the phone sheet is its own
+// scroller (#dmLayout). It used to come back at the cover every time.
+test('liking a song on the phone sheet keeps your place in it', async () => {
+  const { win, doc, read } = await boot();
+  const rec = fullRecord(read);
+  win.openDetail(rec.id);
+  $(doc, '#dmLayout').scrollTop = 420;
+  win.toggleLike(rec.id, 0);
+  assert.ok(count(doc, '#dmSec-tracks .tl-row.liked'), 'the like did not land');
+  assert.strictEqual($(doc, '#dmLayout').scrollTop, 420,
+    'liking a song threw the phone sheet back to the top');
+});
+
+test('opening a different record on the phone sheet starts at its top', async () => {
+  const { win, doc, read } = await boot();
+  const rec = fullRecord(read);
+  win.openDetail(rec.id);
+  $(doc, '#dmLayout').scrollTop = 420;
+  win.openDetail(RECORDS.find(r => r.have_it && r.id !== rec.id).id);
+  assert.strictEqual($(doc, '#dmLayout').scrollTop, 0,
+    'a different record inherited the last one\'s scroll position');
+});
+
 /* The row is three words in the same weight and colour, and on a phone it is
  * the only thing saying the sheet has more below it. An icon per block gives
  * each tab a shape to be recognised by before the word is read. */

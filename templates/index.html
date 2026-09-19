@@ -960,6 +960,12 @@ select option{background:var(--surface);color:var(--text)}
   .dm-foot{display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;
     margin:16px 16px 0;padding:14px 0 32px;border-top:1px solid var(--border)}
   .dm-foot:empty{display:none}
+
+  /* A thumb, not a cursor, is aiming for this — 14px of icon with 2px of
+     padding is a mis-tap magnet at phone size. 44px matches the row's own
+     hit box to the platform's touch-target guidance. */
+  .tl-heart{min-width:44px;min-height:44px;padding:0;
+    display:flex;align-items:center;justify-content:center;font-size:16px}
 }
 
 /* form */
@@ -4809,6 +4815,11 @@ function renderDetailContent(r) {
   // different one should start at its top.
   const prevDd = document.getElementById('ddInfo');
   const keepScroll = prevDd && prevDd.dataset.rid === String(r.id) ? prevDd.scrollTop : 0;
+  // Same problem, phone layout: liking a song scrolled deep in the tracklist
+  // rebuilds the whole drawer and used to always land back at the cover, so
+  // every like cost a re-drag down the page to find your place again.
+  const prevDm = document.getElementById('dmLayout');
+  const keepScrollMobile = prevDm && prevDm.dataset.rid === String(r.id) ? prevDm.scrollTop : 0;
 
   document.getElementById('detailBody').innerHTML=`
     <div class="detail-layout">
@@ -4819,7 +4830,7 @@ function renderDetailContent(r) {
         ${ddInfoHTML(r)}
       </div>
     </div>
-    <div class="detail-mobile-layout" id="dmLayout">
+    <div class="detail-mobile-layout" id="dmLayout" data-rid="${r.id}">
       <div class="dm-top" id="dmTop">
         <button class="dm-close" onclick="closeDetail()" title="close"><i class="ti ti-x"></i></button>
         <span class="dm-count" id="dmCount"></span>
@@ -4837,6 +4848,8 @@ function renderDetailContent(r) {
   dmMeasureChrome();
   const dd = document.getElementById('ddInfo');
   if (dd && keepScroll) dd.scrollTop = keepScroll;
+  const dm = document.getElementById('dmLayout');
+  if (dm && keepScrollMobile) dm.scrollTop = keepScrollMobile;
   ddBindSections();
   renderDetailFoot(r.id);
 }
