@@ -1441,6 +1441,16 @@ select option{background:var(--surface);color:var(--text)}
 /* toast */
 .toast{position:fixed;bottom:20px;right:20px;background:var(--surface);color:var(--text);border:1px solid var(--border);padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;font-family:var(--font);z-index:300;opacity:0;transform:translateY(6px);transition:all .18s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
+/* The toast itself stays click-through while hidden (pointer-events:none
+ * above, so a fading banner never eats a tap meant for what is under it),
+ * but that is inherited — an Undo button living inside it would be inert in
+ * a real browser without this to claim its own events back. */
+#toast .toast-undo{margin-left:14px;background:none;border:none;color:var(--accent);
+  font-family:var(--font);font-size:13px;font-weight:700;padding:2px 4px;cursor:pointer;
+  pointer-events:auto}
+@media(max-width:760px){
+  #toast{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+}
 
 /* auth */
 .auth-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-sm)}
@@ -6683,6 +6693,13 @@ function bumpPlayCount(delta) {
   el.value = Math.max(0, (Number(el.value) || 0) + delta);
 }
 
+/* Absolute, where bumpPlayCount nudges. Restoring a snapshot needs to set the
+ * count to what it was, not to guess how many nudges to undo. */
+function setPlayCount(n){
+  const el = document.getElementById('fPlays');
+  el.value = Math.max(0, Number(n) || 0);
+}
+
 function addPlayDate() {
   formPlayDates.push(nowStamp()); // with the time, same as the card's + button
   bumpPlayCount(1); // keep the count in step, mirroring the card's +/- buttons
@@ -7619,27 +7636,54 @@ async function commitPendingNotes(){
   return formNotes.length > before;
 }
 
+/* The network half of a save, without the closing.
+ *
+ * Split out because the quick actions on the phone's edit screen (task 8:
+ * log a play, log a clean) save a change and stay put — and because two save
+ * paths that both PUT a record is exactly the pair that drifts. Returns true
+ * on success; on failure it reports and returns false, and restoring
+ * whatever the caller changed is the caller's job, since only the caller
+ * knows what that was.
+ *
+ * Sets editingId = rec.id after a POST so a quick action fired immediately
+ * afterwards updates the record it just created instead of creating a
+ * second one. A queued multi-add is not at risk from that: every queued
+ * record is opened through openAdd() (see startQueuedRecord below), which
+ * unconditionally sets editingId back to null before the next save.
+ *
+ * Deliberately does not call commitPendingNotes() — that reaches into the
+ * note row on the full form, which is submitForm's screen, not every
+ * caller's. */
+async function saveQuiet(){
+  const body = formValues();
+  const url = editingId ? `/api/records/${editingId}` : '/api/records';
+  const method = editingId ? 'PUT' : 'POST';
+  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify(body)});
+  if (!res.ok){
+    // The body here is {error:...}, not a record. Splicing that into `records`
+    // draws a blank card where the album was.
+    let message = 'save failed';
+    try { const err = await res.json(); message = err.error || message; } catch (e) {}
+    toast(res.status === 401 ? 'session expired — unlock and save again' : message);
+    return false;
+  }
+  const rec = await res.json();
+  if (editingId) records = records.map(x => x.id === editingId ? rec : x);
+  else { records.push(rec); editingId = rec.id; }
+  render();
+  return true;
+}
+
 async function submitForm(){
   if (!(await commitPendingNotes())) return;
-  const body = formValues();
-  const url=editingId?`/api/records/${editingId}`:'/api/records';
-  const method=editingId?'PUT':'POST';
-  const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!res.ok){
-    // The body here is {error:...}, not a record. Splicing that into `records`
-    // draws a blank card where the album was, and closeForm below would throw
-    // away the edits the user just made — while the toast claimed it saved.
-    let message='save failed';
-    try{ const err=await res.json(); message=err.error||message; }catch(e){}
-    toast(res.status===401 ? 'session expired — unlock and save again' : message);
-    return;
-  }
-  const rec=await res.json();
-  if(editingId){records=records.map(x=>x.id===editingId?rec:x);toast('changes saved');}
-  else{records.push(rec);toast(rec.have_it ? 'record added' : 'added to the wishlist');}
-  render();
+  const wasEditing = editingId;
+  if (!await saveQuiet()) return;
+  toast(wasEditing ? 'changes saved'
+                   : (records[records.length-1].have_it ? 'record added'
+                                                        : 'added to the wishlist'));
   // A queue with more in it re-opens the form instead of closing it.
-  if(addQueue && !VinylQueue.isLast(addQueue)){ advanceQueue(); return; }
+  if (addQueue && !VinylQueue.isLast(addQueue)){ advanceQueue(); return; }
   addQueue = null;
   closeForm(true);
 }
@@ -9715,11 +9759,29 @@ function initDice() {
 }
 
 let toastTimer;
+function hideToast(){
+  document.getElementById('toast').classList.remove('show');
+}
+
 function toast(msg){
-  const el=document.getElementById('toast');
-  el.textContent=msg;el.classList.add('show');
+  const el = document.getElementById('toast');
+  el.innerHTML = '';                     // a previous undo toast left a button
+  el.textContent = msg;
+  el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
+  toastTimer = setTimeout(hideToast, 2500);
+}
+
+/* 2500ms is right for "changes saved" and far too short to notice, read and
+ * act on an undo. 6s is the shortest window that survives looking away. */
+function toastUndo(msg, onUndo){
+  const el = document.getElementById('toast');
+  el.innerHTML = '<span></span><button type="button" class="toast-undo">Undo</button>';
+  el.querySelector('span').textContent = msg;
+  el.querySelector('.toast-undo').onclick = () => { hideToast(); onUndo(); };
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 6000);
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 

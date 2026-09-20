@@ -123,6 +123,16 @@ async function boot(opts) {
       return json({ month: '2026-08', month_usd: 0, month_scans: 0, total_usd: 0,
                     total_scans: 0, estimate: { photo: 0.006, spotify: 0.0004 } });
     }
+    /* A save answers with the saved record, and saveQuiet splices what comes
+     * back into `records`. Handing it {ok:true} draws a blank card where the
+     * album was — the same failure the real submitForm guards against. */
+    if (opts2 && (opts2.method === 'PUT' || opts2.method === 'POST')
+              && u.includes('/api/records')) {
+      const id = Number((u.match(/\/api\/records\/(\d+)/) || [])[1]) || 99;
+      const sent = opts2.body ? JSON.parse(opts2.body) : {};
+      const base = RECORDS.find(r => r.id === id) || RECORDS[0];
+      return json(Object.assign({}, base, sent, { id }));
+    }
     return json({ ok: true });
   };
 
@@ -659,6 +669,139 @@ test('size and discs are full width on a phone', async () => {
     // the pickers come out of the 2-up grid; each sits in its own full-width row
     const grid = doc.querySelector('#fSizePick').closest('.form-grid');
     assert.ok(grid.classList.contains('stack-phone'));
+  } finally {
+    win.close();
+  }
+});
+
+// ── task 7: saveQuiet / toastUndo ───────────────────────────────────────────
+// No new UI here — saveQuiet is the network half of submitForm, split out so
+// task 8's phone quick actions (log a play, log a clean) can save without
+// closing the form, and toastUndo is what makes a silent one-tap write safe.
+
+test('saveQuiet returns true and leaves the form open', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const ok = await win.saveQuiet();
+    assert.strictEqual(ok, true);
+    assert.strictEqual(doc.getElementById('formOverlay').classList.contains('hidden'), false);
+  } finally {
+    win.close();
+  }
+});
+
+test('saveQuiet returns false on a failed save and touches no form state', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const before = doc.getElementById('fArtist').value;
+    win.fetch = async () => ({ ok: false, status: 500, json: async () => ({ error: 'nope' }) });
+    assert.strictEqual(await win.saveQuiet(), false);
+    assert.strictEqual(doc.getElementById('fArtist').value, before);
+  } finally {
+    win.close();
+  }
+});
+
+test('saveQuiet puts the saved record into the collection', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    doc.getElementById('fArtist').value = 'Renamed';
+    await win.saveQuiet();
+    assert.strictEqual(read('records').find(r => r.id === 1).artist, 'Renamed');
+  } finally {
+    win.close();
+  }
+});
+
+test('submitForm still closes the form', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    await win.submitForm();
+    assert.strictEqual(doc.getElementById('formOverlay').classList.contains('hidden'), true);
+  } finally {
+    win.close();
+  }
+});
+
+test('an undo toast offers a button and runs it', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    let undone = false;
+    win.toastUndo('Play logged', () => { undone = true; });
+    const btn = doc.querySelector('#toast .toast-undo');
+    assert.ok(btn, 'the undo toast should carry a button');
+    btn.click();
+    assert.strictEqual(undone, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('a plain toast after an undo toast does not inherit the button', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.toastUndo('Play logged', () => {});
+    win.toast('changes saved');
+    assert.strictEqual(doc.querySelector('#toast .toast-undo'), null);
+    assert.strictEqual(doc.getElementById('toast').textContent, 'changes saved');
+  } finally {
+    win.close();
+  }
+});
+
+test('setPlayCount sets rather than nudges', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    win.setPlayCount(7);
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), 7);
+  } finally {
+    win.close();
+  }
+});
+
+/* The ruling this task called out by name: saveQuiet sets editingId = rec.id
+ * after a POST so a quick action fired right after creating a record updates
+ * it instead of creating a second one. That write has to be gone by the time
+ * the NEXT queued record is saved, or "add 2 records" silently overwrites
+ * the first instead of adding a second. It works out — startQueuedRecord
+ * always runs through openAdd(), which unconditionally sets editingId=null —
+ * but that is exactly the kind of thing worth proving rather than assuming. */
+test('advancing the add queue after a save does not turn the next record into an edit', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.__peek("addQueue = VinylQueue.create(["
+      + "{artist:'Jorge Ben', album_name:'Forca Bruta', year:'1970'},"
+      + "{artist:'Jorge Ben', album_name:'Negro e lindo', year:'1971'}])");
+    win.startQueuedRecord();
+
+    // /api/scan/usage is fired alongside each save (startQueuedRecord calls
+    // refreshScanUsage); only the /api/records calls matter to this test.
+    const calls = [];
+    const saves = () => calls.filter(c => c.url.includes('/api/records'));
+    win.fetch = async (url, opts) => {
+      calls.push({ url: String(url), method: opts && opts.method });
+      return { ok: true, json: async () => ({ id: 501, artist: 'Jorge Ben', album_name: 'Forca Bruta' }) };
+    };
+    await win.submitForm();   // saves record 1, then advances the queue
+
+    assert.strictEqual(saves()[0].method, 'POST', 'the first queued record must be created');
+    assert.strictEqual(read('editingId'), null,
+      'starting the next queued record must not carry the previous save\'s id forward');
+    assert.strictEqual(doc.getElementById('fAlbum').value, 'Negro e lindo');
+
+    win.fetch = async (url, opts) => {
+      calls.push({ url: String(url), method: opts && opts.method });
+      return { ok: true, json: async () => ({ id: 502, artist: 'Jorge Ben', album_name: 'Negro e lindo' }) };
+    };
+    await win.submitForm();   // saves record 2 — the last one, so the form closes
+
+    assert.strictEqual(saves()[1].method, 'POST',
+      'the second queued record must be created too, not overwrite the first');
   } finally {
     win.close();
   }
