@@ -208,10 +208,16 @@ issued before it finishes is measured against the old viewport and snaps back.
  * mobile rules already use; reading it through matchMedia means an iPad
  * rotating into range gets the phone layout without a reload. */
 const phoneMQ = window.matchMedia('(max-width:760px)');
-function isPhone(){ return phoneMQ.matches; }
-phoneMQ.addEventListener('change', () => {
+function isPhone(){ return !!(phoneMQ && phoneMQ.matches); }
+/* addEventListener on a MediaQueryList is Safari 14+; addListener is the
+ * deprecated spelling every older engine has. Feature-detected rather than
+ * assumed, because the jsdom harness provides only the old one. */
+if (phoneMQ.addEventListener) phoneMQ.addEventListener('change', onBreakpointChange);
+else if (phoneMQ.addListener) phoneMQ.addListener(onBreakpointChange);
+
+function onBreakpointChange(){
   if (!document.getElementById('formOverlay').classList.contains('hidden')) rebuildFormChrome();
-});
+}
 ```
 
 `rebuildFormChrome()` re-renders the nav bar, the rail and the footer for the
@@ -617,10 +623,36 @@ that break are telling us something and get read, not amended.
 
 ## 7. Testing
 
-### 7.1 New JS tests — `tests/test_phone_form.js`
+### 7.1 New JS tests
 
-The suite runs against jsdom with the viewport forced narrow, matching how
-`tests/test_carousel.js` and `tests/test_grouping.js` already drive the DOM.
+The suite splits along the line the repo already draws. `test_carousel.js` and
+`test_grouping.js` are **pure-function** tests over a `static/*.js` module with
+no DOM at all; only `test_boot.js` uses jsdom, and jsdom is not a dependency —
+`test_boot.py` installs it into a scratch directory and skips when it cannot.
+
+So the decidable logic is extracted rather than tested through the DOM:
+
+- **`static/phoneform.js`** — a `VinylPhoneForm` module holding the rules: rail
+  segment states, which log sections start collapsed, place-chip ranking, the
+  four edit-root preview strings, and the drag-dismiss threshold. Dual-exported
+  the way `static/draft.js` is. Tested by `tests/test_phoneform.js` under
+  `node --test`, run from `tests/test_phoneform.py` so `pytest` stays the one
+  command.
+- **`tests/test_boot.js`** — gains a phone-mode boot that proves the wiring:
+  the chrome renders, the rows call the right functions, the quick actions
+  issue the right `PUT`.
+
+The boot harness needs two fixes to host this, both of them harness gaps rather
+than application bugs:
+
+| Gap | Today | Needed |
+|---|---|---|
+| `matchMedia` | stubbed as `{matches:false, addListener, removeListener}` | must answer `addEventListener` too, and let a test set `matches: true` — `isPhone()` is built on it |
+| `fetch` PUT | returns `{ok:true}` | `saveQuiet` splices the response into `records`, so a PUT must return a record for the quick-action tests to mean anything |
+
+`visualViewport` stays unstubbed — jsdom does not implement it, and
+`syncViewportHeight` already returns early without it, which is the desktop
+path and is worth having covered.
 
 | Test | Asserts |
 |---|---|
