@@ -2400,7 +2400,9 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   /* Direct child only: the add button is a grid item, the photo buttons are
      flex children of .note-photo-row and would just stretch. */
   #formOverlay .notes-add-row > .btn{grid-column:1 / -1;width:100%;justify-content:center}
-  #formOverlay .rating-row .segs button{height:20px}
+  /* 14px on desktop, then 20px here; 22px is what it takes to stop a 6 and a
+     7 from being the same tap. */
+  #formOverlay .rating-row .segs button{height:22px}
   #formOverlay .playdate-add{height:38px}
   #formOverlay .playdate-row{padding:6px 8px 6px 13px}
   #formOverlay .playdate-row input[type=date]{width:132px}
@@ -2525,6 +2527,48 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .form-grid{grid-template-columns:1fr}
   #formOverlay .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   #formOverlay .field input,#formOverlay .field select{height:50px}
+
+  /* ── steps 2-4: bought-at chips, collapsed log sections, full-width
+     pickers ───────────────────────────────────────────────────────────────
+     Bought at swaps its <datalist> for ranked place chips (a datalist draws
+     as a thin strip under the keyboard on iOS — unusable one-handed); plays,
+     cleanings and notes collapse to one row each, since step 3's own lead
+     text says the step is almost always empty; size and discs go full width
+     instead of a 2-up grid; paint gets one row per colour instead of both
+     colours sharing one. */
+  /* collapsed: the header is the whole row */
+  #formOverlay .form-section[data-collapsed="true"] .sec-body{display:none}
+  #formOverlay .form-section[data-collapsed="true"] > header{min-height:56px}
+  #formOverlay .form-section > header{min-height:48px;font-size:11.5px}
+  #formOverlay .log-plus{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);
+    background:var(--bg);color:var(--accent);display:flex;align-items:center;justify-content:center;
+    margin-left:10px;flex-shrink:0}
+  /* renderLogCollapse toggles this button's hidden flag while its section
+     stays open on a phone (an already-open section is exactly when the plus
+     has nothing left to do), so the UA [hidden] rule has to outrank this
+     element's own unconditional author display:flex above — the same trap
+     already fixed once for .analysing.wide, .kpi-rot-item and step 1's four
+     phone-only elements. Author-origin always beats user-agent regardless of
+     specificity, so without this the plus would stay visible over a section
+     that has nothing left to expand. */
+  #formOverlay .log-plus[hidden]{display:none}
+  #formOverlay .place-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+  #formOverlay .chip{font-size:12.5px;color:var(--label);border:1px solid var(--border);
+    border-radius:999px;padding:8px 13px;background:var(--card);font-family:var(--font)}
+  #formOverlay .chip.on{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);
+    border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}
+  /* full-width segmented pickers instead of a 2-up grid. .form-grid is
+     already forced to one column above; .stack-phone is the marker the size
+     and disc pickers carry so this rule (and the test that checks for it)
+     name the intent even though the effect is already covered. */
+  #formOverlay .form-grid.stack-phone{grid-template-columns:1fr}
+  #formOverlay .seg-pick button{height:46px;font-size:14px}
+  /* paint: one row per colour, the hex beside its own well */
+  #formOverlay .paint-row{flex-wrap:wrap}
+  #formOverlay .paint-fields{flex-direction:column;gap:8px;width:100%}
+  #formOverlay .paint-field{width:100%}
+  #formOverlay .paint-field .paint-hex{margin-left:auto}
+  #formOverlay #fPaintPreview{--d:44px}
 }
 
 /* ── multi-artist editor in form ───────────────────────────────────────────── */
@@ -3426,6 +3470,11 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
                 <label><i class="ti ti-map-pin"></i> Bought at</label>
                 <div class="field"><i class="ti ti-map-pin"></i><input id="fWhere" list="whereList" placeholder="store / city" autocomplete="off"></div>
                 <datalist id="whereList"></datalist>
+                <!-- Safari draws a <datalist> as a thin strip under the
+                     keyboard, which is unusable one-handed. The chips are the
+                     same places, ranked by use instead of alphabetically. The
+                     input still takes anything typed. -->
+                <div class="place-chips" id="wherePhoneChips" hidden></div>
               </div>
               <div class="form-group">
                 <label><i class="ti ti-certificate"></i> Condition</label>
@@ -3468,8 +3517,8 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
         </div>
       </div>
 
-      <div class="form-section" style="margin-bottom:0">
-        <header><i class="ti ti-note"></i> Notes <span class="count">markdown</span></header>
+      <div class="form-section" id="notesSection" style="margin-bottom:0">
+        <header><i class="ti ti-note"></i> Notes <span class="count" id="notesCount">markdown</span></header>
         <div class="sec-body">
           <div class="notes-section">
             <div class="notes-add-row">
@@ -3505,7 +3554,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 
       <div class="form-step" data-step="4" hidden>
         <div class="form-step-lead">What is on it? Sides come from the disc count.</div>
-        <div class="form-grid" style="margin-top:16px">
+        <div class="form-grid stack-phone" style="margin-top:16px">
           <div class="form-group">
             <label><i class="ti ti-ruler-measure"></i> Size</label>
             <div class="seg-pick" id="fSizePick"></div>
@@ -6182,6 +6231,30 @@ function populateWhereList(){
   const places = [...new Set(records.map(r=>r.bought_where).filter(Boolean))].sort();
   document.getElementById('whereList').innerHTML =
     places.map(p=>`<option value="${esc(p)}">`).join('');
+  renderPlaceChips();
+}
+
+/* Safari renders a <datalist> as a thin strip under the keyboard, which is
+ * effectively unusable one-handed. On a phone the same places show as
+ * tappable chips instead, ranked by how often they were actually used —
+ * VinylPhoneForm.rankPlaces pins whatever is already on the record first.
+ * The datalist above stays in the DOM and keeps working for desktop; either
+ * way the input still takes anything typed, chip or no chip. */
+function renderPlaceChips(){
+  const box = document.getElementById('wherePhoneChips');
+  box.hidden = !isPhone();
+  if (box.hidden) { box.innerHTML = ''; return; }
+  const current = document.getElementById('fWhere').value;
+  box.innerHTML = VinylPhoneForm.rankPlaces(records, current)
+    .map(p => `<button type="button" class="chip${p === current.trim() ? ' on' : ''}"
+                       onclick="pickPlace(this.dataset.place)"
+                       data-place="${esc(p)}">${esc(p)}</button>`).join('');
+}
+
+function pickPlace(name){
+  document.getElementById('fWhere').value = name;
+  renderPlaceChips();            // move the pick to the front, mark it on
+  formChanged();
 }
 
 function populateGenreSelect(current='') {
@@ -6511,6 +6584,7 @@ function renderNotesForm() {
   // Anything typed into an open edit row is about to be thrown away by the
   // innerHTML below, so it goes back into the draft first.
   syncNoteEditFromDOM();
+  renderLogCollapse();   // a note added or removed may (un)collapse the section
   if (!formNotes.length) { list.innerHTML = ''; return; }
   // oldest first by date AND time, matching the detail view
   // Walk the ORIGINAL indices in date order instead of matching a sorted copy
@@ -6542,6 +6616,40 @@ function renderNotesForm() {
   formChanged();   // a note added or removed
 }
 
+/* Plays, cleanings and notes are three open cards with headers, date rows and
+ * add buttons — on a step whose own lead says it is almost always empty. On a
+ * phone they collapse to one row each, and a section that already has entries
+ * opens expanded, so the collapse only ever hides nothing. */
+const LOG_SECTIONS = [
+  { id: 'playDatesSection',    countId: 'playDatesCount',    entries: () => formPlayDates },
+  { id: 'cleanedDatesSection', countId: 'cleanedDatesCount', entries: () => formCleanedDates },
+  { id: 'notesSection',        countId: 'notesCount',        entries: () => formNotes },
+];
+
+function renderLogCollapse(){
+  const phone = isPhone();
+  for (const s of LOG_SECTIONS){
+    const el = document.getElementById(s.id);
+    if (!el) continue;
+    const entries = s.entries() || [];
+    // Desktop is never collapsed; on a phone, only what is empty.
+    const collapsed = phone && !VinylPhoneForm.logSectionOpen(entries);
+    el.dataset.collapsed = String(collapsed);
+    const count = document.getElementById(s.countId);
+    if (count) count.textContent = phone ? VinylPhoneForm.logCount(entries) : count.textContent;
+    let plus = el.querySelector('.log-plus');
+    if (phone && !plus){
+      plus = document.createElement('button');
+      plus.type = 'button';
+      plus.className = 'log-plus';
+      plus.innerHTML = '<i class="ti ti-plus"></i>';
+      plus.onclick = () => { el.dataset.collapsed = 'false'; };
+      el.querySelector('header').appendChild(plus);
+    }
+    if (plus) plus.hidden = !phone || !collapsed;
+  }
+}
+
 // ── play dates in the form ──────────────────────────────────────────────────
 // The time input is left blank for an entry logged before times were recorded
 // rather than filled with 00:00 — the collection genuinely does not know when
@@ -6551,6 +6659,7 @@ function renderPlayDatesForm() {
   const list = document.getElementById('fPlayDatesList');
   document.getElementById('playDatesCount').textContent =
     formPlayDates.length ? `${formPlayDates.length} logged` : '';
+  renderLogCollapse();   // an entry added or removed may (un)collapse the section
   if (!formPlayDates.length) {
     list.innerHTML = '<div class="playdates-empty">no play dates logged yet</div>';
     return;
@@ -6603,6 +6712,7 @@ function renderCleanedDatesForm() {
   const list = document.getElementById('fCleanedDatesList');
   document.getElementById('cleanedDatesCount').textContent =
     formCleanedDates.length ? `${formCleanedDates.length} logged` : '';
+  renderLogCollapse();   // an entry added or removed may (un)collapse the section
   if (!formCleanedDates.length) {
     list.innerHTML = '<div class="playdates-empty">no cleaning dates logged yet</div>';
     return;
@@ -7345,6 +7455,11 @@ function rebuildFormChrome(){
   // A breakpoint change is itself a reason step 1 might need to switch
   // between the lookup and the identity strip — desktop never shows either.
   renderStep1Phone();
+  // Same reason for steps 2 and 3: the chips only exist on a phone, and a
+  // log section left collapsed there needs to be expanded again on the way
+  // back to desktop, where every section always renders open.
+  renderPlaceChips();
+  renderLogCollapse();
 }
 
 /* How long a draft is still what you meant. Long enough to survive a crash,

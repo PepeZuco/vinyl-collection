@@ -1,5 +1,5 @@
-"""Step 1's phone lookup/identity toggle relies on an author-origin
-[hidden] guard that beats a UA-origin one.
+"""Elements whose phone-only `hidden` toggle needs an author-origin [hidden]
+guard to beat a UA-origin one.
 
 renderStep1Phone (templates/index.html) switches its three phone-only states
 by setting the `hidden` IDL property on four elements: #phoneLookup,
@@ -12,6 +12,12 @@ an author-origin [hidden] rule is added to win the fight back. This bit the
 project once already for .analysing.wide and .kpi-rot-item, both fixed the
 same way.
 
+Task 6's renderLogCollapse hits the identical trap for a fifth element:
+.log-plus also carries an unconditional author `display:flex` (in the same
+phone media query), and its `plus.hidden = !phone || !collapsed` goes true
+exactly when a log section is already open on a phone — squarely inside that
+rule's own active width, not only across the breakpoint.
+
 jsdom — what tests/test_phone_dom.js runs against — never evaluates CSS at
 all, so a test reading the `.hidden` IDL property there would stay green
 whether or not the guard exists; that is exactly what happened here, which is
@@ -19,7 +25,7 @@ why this check exists as a separate, static one. It cannot evaluate the
 cascade either (no real browser, no computed styles), but it CAN confirm the
 guard rules — the exact selectors specificity requires — are present in the
 CSS the app actually serves, so a future edit that quietly drops one of them
-fails a test instead of silently reintroducing a state four elements can no
+fails a test instead of silently reintroducing a state these elements can no
 longer distinguish between on a phone.
 """
 
@@ -44,6 +50,8 @@ GUARDS = [
     "#formOverlay .phone-identity[hidden]{display:none}",
     "#formOverlay .form-layout[hidden]{display:none}",
     "#censorRow[hidden]{display:none}",
+    # Task 6's renderLogCollapse: see the module docstring.
+    "#formOverlay .log-plus[hidden]{display:none}",
 ]
 
 
@@ -68,9 +76,10 @@ def test_hidden_guards_live_inside_the_phone_media_query(page):
     assert style, "could not find the page's <style> block"
     css = style.group(1)
     mq_start = css.index("@media(max-width:760px){")
-    # The four guards live in the same phone block as the rest of step 1's
-    # lookup/identity CSS; find that block's own close brace rather than the
-    # first @media's, since several @media(max-width:760px) blocks exist.
+    # All of GUARDS live in the same phone block as the rest of step 1's
+    # lookup/identity CSS and step 3's log sections; find that block's own
+    # close brace rather than the first @media's, since several
+    # @media(max-width:760px) blocks exist.
     mq_end = css.index("/* ── multi-artist editor in form", mq_start)
     block = css[mq_start:mq_end]
     for guard in GUARDS:
