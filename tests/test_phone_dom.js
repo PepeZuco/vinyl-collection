@@ -320,7 +320,7 @@ test('desktop keeps the head save slot empty and save in the foot', async () => 
   const { win, doc } = await boot({ phone: false });
   try {
     win.openAdd();
-    const head = doc.querySelector('.modal-head');
+    const head = doc.querySelector('#formOverlay .modal-head');
     assert.deepStrictEqual([...head.children].map(el => el.id),
       ['formHeadCancel', 'formTitle', 'formHeadSaveSlot']);
     assert.strictEqual(doc.getElementById('formHeadSaveSlot').children.length, 0,
