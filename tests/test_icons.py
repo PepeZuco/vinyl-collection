@@ -84,3 +84,20 @@ def test_viewport_opts_into_the_safe_area():
     html = app_module.app.test_client().get("/").get_data(as_text=True)
     viewport = next(l for l in html.splitlines() if 'name="viewport"' in l)
     assert "viewport-fit=cover" in viewport
+
+
+def test_the_form_pays_back_the_safe_area_insets():
+    """viewport-fit=cover lets the page paint edge to edge, which makes the
+    overlay responsible for keeping its own chrome clear of the notch and the
+    home indicator."""
+    html = app_module.app.test_client().get("/").get_data(as_text=True)
+    assert "env(safe-area-inset-top" in html
+    assert "env(safe-area-inset-bottom" in html
+
+
+def test_the_overlay_is_sized_from_the_visual_viewport():
+    """iOS does not resize the layout viewport for the keyboard, so a
+    bottom-pinned action bar ends up behind it."""
+    html = app_module.app.test_client().get("/").get_data(as_text=True)
+    assert "visualViewport" in html
+    assert "--vvh" in html

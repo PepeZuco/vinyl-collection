@@ -2132,10 +2132,10 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .place-err{font-size:12px;color:var(--danger);min-height:16px}
 .place-form-foot{display:flex;justify-content:flex-end;gap:8px}
 /* Browser defaults are dark blue / purple: unreadable on the dark ground. */
-.note-link:link,.note-link:visited{text-decoration:underline;text-underline-offset:2px}
-[data-theme="dark"] .note-link:link{color:#7ec8f5}
-[data-theme="dark"] .note-link:visited{color:#c9a8f0}
-[data-theme="dark"] .note-link:hover{color:#a9dcff}
+.note-link:link,.note-link:visited,.dm-mcell a:link,.dm-mcell a:visited{text-decoration:underline;text-underline-offset:2px}
+[data-theme="dark"] .note-link:link,[data-theme="dark"] .dm-mcell a:link{color:#7ec8f5}
+[data-theme="dark"] .note-link:visited,[data-theme="dark"] .dm-mcell a:visited{color:#c9a8f0}
+[data-theme="dark"] .note-link:hover,[data-theme="dark"] .dm-mcell a:hover{color:#a9dcff}
 .detail-notes-body p{margin-bottom:6px}
 .detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
 .detail-notes-body ul,.detail-notes-body ol{padding-left:16px;margin-bottom:6px}
@@ -2342,12 +2342,24 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 @media(max-width:760px){
   #formOverlay{padding:0;align-items:stretch}
   #formOverlay .modal.modal-wide{
-    max-width:none;width:100%;height:100%;max-height:100%;
+    max-width:none;width:100%;max-height:100%;
     border-radius:0;border:none;display:flex;flex-direction:column;overflow:hidden;
+  }
+  /* The keyboard does not shrink the layout viewport on iOS, so a footer
+     pinned to the bottom of a 100%-tall box ends up behind it — Back, Next
+     and Save simply gone until the field is dismissed. --vvh is the visual
+     viewport's height, written by syncViewportHeight(); the fallback keeps
+     the box full-height everywhere the property is never set. */
+  #formOverlay .modal.modal-wide{
+    height:var(--vvh,100%);
+    padding-top:env(safe-area-inset-top,0px);
   }
   #formOverlay .modal-head{flex-shrink:0}
   #formOverlay .modal-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px}
   #formOverlay .modal-foot{flex-shrink:0;padding:11px 14px;gap:8px}
+  /* viewport-fit=cover paints under the home indicator, so the footer buys
+     its own clearance back. */
+  #formOverlay .modal-foot{padding-bottom:calc(11px + env(safe-area-inset-bottom,0px))}
   #formOverlay .modal-foot .btn{flex:1;height:46px;font-size:14px;font-weight:700;justify-content:center}
   #formOverlay .modal-foot .btn-primary{background:var(--accent);border-color:var(--accent);color:#111}
   #formOverlay .form-group input,#formOverlay .form-group select,
@@ -2369,6 +2381,32 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .playdate-row input[type=date]{width:132px}
   #formOverlay .playdate-row input[type=time]{width:78px}
   #formOverlay .playdate-delete{padding:5px}
+  /* nav bar: cancel · title · save. The × became a word because on a phone
+     the head is the only place the two verbs can both sit, and an icon next
+     to a text button reads as a lesser action than it is. */
+  #formOverlay .modal-head{display:flex;align-items:center;gap:10px;padding:10px 14px 11px}
+  #formOverlay .modal-title{flex:1;text-align:center;font-family:var(--font-mono);
+    font-size:12.5px;letter-spacing:.08em;text-transform:uppercase}
+  #formOverlay .head-cancel{order:-1}
+  #formOverlay #formSaveBtn{height:auto;padding:4px 2px;background:none;border:none;
+    color:var(--accent);font-weight:700;font-size:15px}
+  /* the rail — a progress readout, not a control: four segments at 3px are
+     not a touch target, so navigation stays with Back and the label */
+  #formOverlay .form-rail{display:flex;gap:5px;padding:0 14px 10px}
+  #formOverlay .form-rail .rail-seg{flex:1;height:3px;border-radius:2px;
+    background:var(--border);display:block}
+  #formOverlay .form-rail .rail-seg.done{background:var(--ev-played)}
+  #formOverlay .form-rail .rail-seg.now{background:var(--accent)}
+  #formOverlay .form-rail-label{display:flex;align-items:baseline;justify-content:space-between;
+    padding:0 14px 12px}
+  #formOverlay .form-rail-label b{font-size:18px;font-weight:700;letter-spacing:-.02em}
+  #formOverlay .form-rail-label span{font-family:var(--font-mono);font-size:11px;
+    color:var(--muted);letter-spacing:.06em}
+  /* back shrinks to its icon so next keeps the width its role deserves */
+  #formOverlay .modal-foot #formBackBtn{flex:0 0 62px}
+  #formOverlay .modal-foot .btn.hidden-phone{display:none}
+  /* the draft flag moves off the footer, onto the rail line */
+  #formOverlay .draft-flag{position:absolute;right:14px;margin:0}
 }
 
 /* ── multi-artist editor in form ───────────────────────────────────────────── */
@@ -3012,8 +3050,19 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <div class="overlay hidden" id="formOverlay">
   <div class="modal modal-wide">
     <div class="modal-head">
+      <button class="btn btn-ghost btn-sm head-cancel" id="formHeadCancel"
+              onclick="closeForm()"><i class="ti ti-x"></i></button>
       <span class="modal-title" id="formTitle">add record</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
+      <!-- Moved here by rebuildFormChrome on a phone, and back to the foot on
+           desktop. One element, never two: syncSaveLabel and the wishlist
+           relabel both address it by id. -->
+      <span class="head-save-slot" id="formHeadSaveSlot"></span>
+    </div>
+    <!-- the phone's rail; empty and hidden on desktop -->
+    <div class="form-rail" id="formRail" hidden></div>
+    <div class="form-rail-label" id="formRailLabelRow" hidden>
+      <b id="formRailLabel"></b>
+      <span id="formRailCount"></span>
     </div>
     <div class="queue-strip" id="queueStrip" hidden>
       <span class="queue-label">from your search</span>
@@ -3334,10 +3383,12 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 
     <div class="modal-foot">
       <span class="draft-flag" id="draftFlag" hidden><span class="d"></span>draft kept</span>
-      <button class="btn" onclick="closeForm()">cancel</button>
+      <button class="btn hidden-phone" onclick="closeForm()">cancel</button>
       <button class="btn" id="formBackBtn" onclick="setFormStep(formStep - 1)"><i class="ti ti-arrow-left"></i> back</button>
-      <button class="btn" id="formNextBtn" onclick="setFormStep(formStep + 1)">next <i class="ti ti-arrow-right"></i></button>
-      <button class="btn btn-primary" id="formSaveBtn">save</button>
+      <button class="btn" id="formNextBtn">next <i class="ti ti-arrow-right"></i></button>
+      <span class="foot-save-slot" id="formFootSaveSlot">
+        <button class="btn btn-primary" id="formSaveBtn">save</button>
+      </span>
     </div>
   </div>
 </div>
@@ -4073,6 +4124,7 @@ const SORT_OPTIONS = [
 
 function toggleSearchField(field) {
   searchFields[field] = !searchFields[field];
+  searchFieldsFromView = false;
   applyQueryChange();
 }
 
@@ -4948,12 +5000,16 @@ function dmFormatNoteDate(dateStr) {
 function dmLikeGroups(list, discCount) {
   const discs = Math.max(1, Number(discCount) || 1);
   const groups = new Map();
+  // `pos` is the number printed on the sleeve: the song's place among its
+  // side's songs, counted over every track and not just the liked ones.
+  const seen = {};
   (list || []).forEach((t, i) => {
+    const pos = seen[t.side] = (seen[t.side] || 0) + 1;
     if (!t.liked_at) return;
     const day = momentOf(t.liked_at).day || String(t.liked_at).slice(0, 10);
     const key = day + '|' + t.side;
     if (!groups.has(key)) groups.set(key, { day, discs, side: t.side, songs: [] });
-    groups.get(key).songs.push({ i, title: t.title, liked_at: t.liked_at });
+    groups.get(key).songs.push({ i, pos, title: t.title, liked_at: t.liked_at });
   });
   return [...groups.values()].map(g => {
     const first = g.songs.reduce((a, b) =>
@@ -5123,7 +5179,7 @@ function dmHistoryEntryHTML(ev) {
     ? `<div class="ht"><i class="ti ${DM_HIST_ICON.liked} dm-hist-icon" title="${DM_HIST_LABEL.liked}"></i>` +
       `${dmLikeSideHTML(ev)}${dmLikeClockHTML(ev)}` +
       `<div class="dm-hist-songs">${(ev.songs || []).map(s =>
-         `<span class="dm-hist-song">${esc(s.title || '')}</span>`).join('')}</div></div>`
+         `<span class="dm-hist-song">${s.pos ? s.pos + '. ' : ''}${esc(s.title || '')}</span>`).join('')}</div></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
   const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
   return `<div class="dm-hist-entry ${ev.type}${ev.private ? ' private' : ''}${lit}" data-ev="${esc(ev.key)}"${ev.keys ? ` data-evs="${esc(ev.keys.join(' '))}"` : ''} data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
@@ -6983,20 +7039,59 @@ function setFormStep(n) {
   document.querySelectorAll('#formOverlay .form-step').forEach(el => {
     el.hidden = Number(el.dataset.step) !== formStep;
   });
-  document.getElementById('formBackBtn').disabled = formStep === 1;
-  document.getElementById('formNextBtn').disabled = formStep === FORM_STEPS.length;
   // The song pickers ARE the record's artist list, and the artists are typed on
   // an earlier step. Rebuilding on arrival is what makes every route here — the
   // spine, the next button, the detail drawer's "add the songs" — offer the
   // artists the record actually has by now.
   if (formStep === TRACKLIST_STEP) renderTracksForm();
-  document.getElementById('formSpine').innerHTML = FORM_STEPS.map(st => `
-    <button type="button" class="fstep${st.n === formStep ? ' on' : ''}${st.n < formStep ? ' done' : ''}"
-            onclick="setFormStep(${st.n})">
-      <span class="fstep-n">${st.n < formStep ? '<i class="ti ti-check"></i>' : st.n}</span>
-      <span class="fstep-t"><b>${st.label}</b><small>${st.sub}</small></span>
-    </button>`).join('');
+  rebuildFormChrome();
   resetFormScroll();
+}
+
+/* One renderer for both modes, called by setFormStep and by a breakpoint
+ * change. Two layouts kept in step by a branch rather than by discipline:
+ * the desktop half renders exactly what setFormStep rendered before. */
+function rebuildFormChrome(){
+  const phone  = isPhone();
+  const spine  = document.getElementById('formSpine');
+  const rail   = document.getElementById('formRail');
+  const railRow= document.getElementById('formRailLabelRow');
+  const save   = document.getElementById('formSaveBtn');
+
+  spine.hidden = phone;
+  rail.hidden = railRow.hidden = !phone;
+
+  if (phone){
+    spine.innerHTML = '';
+    rail.innerHTML = VinylPhoneForm.railStates(formStep)
+      .map(state => `<i class="rail-seg ${state}"></i>`).join('');
+    document.getElementById('formRailLabel').textContent =
+      VinylPhoneForm.STEPS[formStep - 1].phone;
+    document.getElementById('formRailCount').textContent = `${formStep} / ${FORM_STEPS.length}`;
+    document.getElementById('formHeadSaveSlot').appendChild(save);
+  } else {
+    rail.innerHTML = '';
+    spine.innerHTML = FORM_STEPS.map(st => `
+      <button type="button" class="fstep${st.n === formStep ? ' on' : ''}${st.n < formStep ? ' done' : ''}"
+              onclick="setFormStep(${st.n})">
+        <span class="fstep-n">${st.n < formStep ? '<i class="ti ti-check"></i>' : st.n}</span>
+        <span class="fstep-t"><b>${st.label}</b><small>${st.sub}</small></span>
+      </button>`).join('');
+    document.getElementById('formFootSaveSlot').appendChild(save);
+  }
+
+  /* On the last step there is nowhere to advance to. Today the next button
+   * simply greys out, which leaves a dead control in the footer's main slot;
+   * it becomes the wizard's terminal action instead. The nav bar's save is
+   * still the one that is live from step one. */
+  const next = document.getElementById('formNextBtn');
+  const last = formStep === FORM_STEPS.length;
+  next.disabled = false;
+  next.innerHTML = last
+    ? '<i class="ti ti-check"></i> save record'
+    : 'next <i class="ti ti-arrow-right"></i>';
+  next.onclick = last ? submitForm : () => setFormStep(formStep + 1);
+  document.getElementById('formBackBtn').disabled = formStep === 1;
 }
 
 /* How long a draft is still what you meant. Long enough to survive a crash,
@@ -7135,7 +7230,27 @@ function formValues(){
   };
 }
 
+/* Saving is a yes to the note being written, too. Someone who typed a note or
+ * picked a photo and went straight to save meant it to be kept; formValues
+ * only reads formNotes, so without this the words and the photo were dropped
+ * with the form. Covers both places a note lives: the add row and an entry
+ * open for editing. Returns false when the add row could not be filed (it has
+ * no valid day), so the save stops with the field marked instead of losing it. */
+async function commitPendingNotes(){
+  // A photo picked a moment ago has to land before anything is composed.
+  if (notePhotoUploads.length) {
+    await Promise.all(notePhotoUploads.map(p => p.catch(()=>{})));
+  }
+  if (editingDraft) await saveNoteEdit();
+  const pending = document.getElementById('fNoteText').value.trim() || formNoteImages.length;
+  if (!pending) return true;
+  const before = formNotes.length;
+  await addNote();
+  return formNotes.length > before;
+}
+
 async function submitForm(){
+  if (!(await commitPendingNotes())) return;
   const body = formValues();
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
@@ -9436,14 +9551,41 @@ const SAVED_VIEWS = [
     query: { ownership: 'owned', facets: { played: ['recent'] } } },
   { id: 'wishlist', label: 'The wishlist', hint: 'wanted, not bought',
     query: { ownership: 'wishlist', facets: {} } },
+  /* Text views: the phrase goes in the search box, where it can be read and
+   * edited, and `fields` says where it is looked for. Case never matters — the
+   * model lower-cases both sides. */
+  { id: 'som-ambiente', label: 'Som Ambiente', hint: 'the words, anywhere',
+    query: { ownership: 'owned', facets: {}, text: 'Som Ambiente',
+             fields: { artist: true, album: true, genre: true, notes: true } } },
+  { id: 'abril-cultural', label: 'Abril Cultural', hint: 'artist, album or note',
+    query: { ownership: 'owned', facets: {}, text: 'Abril Cultural',
+             fields: { artist: true, album: true, notes: true } } },
 ];
+
+/* Set which fields the search box reads, keeping the checkboxes in step. */
+function setSearchFields(fields) {
+  Object.keys(searchFields).forEach(k => {
+    searchFields[k] = !!fields[k];
+    const box = document.getElementById('searchField_' + k);
+    if (box) box.checked = searchFields[k];
+  });
+}
+let searchFieldsFromView = false;
 
 function applySavedView(id) {
   const view = SAVED_VIEWS.find(v => v.id === id);
   if (!view) return;
   filterState.ownership = view.query.ownership;
   filterState.facets = JSON.parse(JSON.stringify(view.query.facets));
-  document.getElementById('searchInput').value = '';
+  document.getElementById('searchInput').value = view.query.text || '';
+  // A view's fields are borrowed: the next view puts the person's own back.
+  if (view.query.fields) {
+    setSearchFields(view.query.fields);
+    searchFieldsFromView = true;
+  } else if (searchFieldsFromView) {
+    setSearchFields(VinylFilters.DEFAULT_FIELDS);
+    searchFieldsFromView = false;
+  }
   if (currentTab !== 'collection') switchTab('collection');
   else applyQueryChange();
   closeFacetPop();
@@ -11807,6 +11949,50 @@ function initIdleSpotlight() {
   idleOverlayEl().addEventListener('click', closeIdleSpotlight);
   scheduleIdleTimer();
 }
+
+/* ── the phone breakpoint, in one place ────────────────────────────────────
+ * 760px is the media query the form's mobile rules already use. Reading it
+ * through matchMedia rather than off innerWidth means an iPad rotating into
+ * range gets the phone layout without a reload. */
+const phoneMQ = window.matchMedia('(max-width:760px)');
+function isPhone(){ return !!(phoneMQ && phoneMQ.matches); }
+
+/* Safari added addEventListener to MediaQueryList in 14; addListener is the
+ * older spelling still carried by anything before that. Feature-detecting
+ * both, in this order, is what lets the form's chrome swap live when an iPad
+ * rotates across 760px instead of only taking effect on the next reload. */
+if (phoneMQ.addEventListener) phoneMQ.addEventListener('change', onBreakpointChange);
+else if (phoneMQ.addListener) phoneMQ.addListener(onBreakpointChange);
+
+function onBreakpointChange(){
+  if (!document.getElementById('formOverlay').classList.contains('hidden')) rebuildFormChrome();
+}
+
+/* iOS leaves the layout viewport at full height when the keyboard opens, so
+ * a bottom-pinned bar ends up behind it. visualViewport reports what is
+ * actually on screen; writing it to a custom property keeps the CSS
+ * declarative. `scroll` matters as much as `resize`: iOS scrolls the visual
+ * viewport to lift a focused field clear of the keyboard, and the overlay has
+ * to follow it. */
+function syncViewportHeight(){
+  const vv = window.visualViewport;
+  if (!vv) return;                       // desktop, and jsdom
+  document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+}
+if (window.visualViewport){
+  ['resize','scroll'].forEach(e => window.visualViewport.addEventListener(e, syncViewportHeight));
+  syncViewportHeight();
+}
+
+/* A field focused behind the keyboard has to be scrolled clear, and the
+ * scroll has to wait for the keyboard's animation: issued during it, the
+ * scroll is measured against the pre-keyboard viewport and undoes itself. */
+document.addEventListener('focusin', e => {
+  if (!isPhone() || !e.target.closest) return;
+  const f = e.target.closest('#formOverlay input,#formOverlay textarea,#formOverlay select');
+  if (!f) return;
+  setTimeout(() => f.scrollIntoView({block:'center', behavior:'smooth'}), 300);
+});
 
 init();
 initIdleSpotlight();
