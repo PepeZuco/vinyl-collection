@@ -581,6 +581,11 @@ select option{background:var(--surface);color:var(--text)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surface);z-index:2}
 .spotify-mark{width:24px;height:24px;flex-shrink:0;display:block}
+.dm-sp{margin-top:12px}
+.sp-open,.sp-none{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 12px;border-radius:999px}
+.sp-open{color:#1DB954;border:1px solid rgba(30,215,96,.45);background:rgba(30,215,96,.10);text-decoration:none}
+.sp-open:hover{background:rgba(30,215,96,.18)}
+.sp-none{color:var(--muted,#888);border:1px dashed var(--border)}
 
 /* detail — split layout: cover left, info right */
 #detailOverlay .modal-body{flex:1;overflow:hidden;min-height:0}
@@ -3340,9 +3345,13 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
                   <div class="field">
                     <i class="ti ti-brand-spotify"></i>
                     <input id="fSpotifyUrl" placeholder="https://open.spotify.com/album/…"
-                           autocomplete="off" oninput="updateSpotifyLinkBtn()">
+                           autocomplete="off" oninput="updateSpotifyLinkBtn()" onchange="this.value=VinylSpotify.cleanLink(this.value);updateSpotifyLinkBtn()">
                     <a id="fSpotifyLinkBtn" class="field-link-btn disabled" target="_blank"
                        rel="noopener noreferrer" title="open in Spotify" tabindex="-1"><i class="ti ti-external-link"></i></a>
+                  </div>
+                  <div class="check-row" style="margin-top:8px">
+                    <input type="checkbox" id="fSpotifyMissing" onchange="toggleSpotifyMissing()">
+                    <label for="fSpotifyMissing">not on Spotify</label>
                   </div>
                 </div>
                 <div class="form-group" style="grid-column:1/-1;margin-bottom:0">
@@ -3825,6 +3834,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <script src="/static/cover.js"></script>
 <script src="/static/notes.js"></script>
 <script src="/static/places.js"></script>
+<script src="/static/spotify.js"></script>
 <script src="/static/tracks.js"></script>
 <script src="/static/spend.js"></script>
 <script src="/static/scanstream.js"></script>
@@ -5546,6 +5556,7 @@ function dmInfoTabHTML(r) {
       <div class="dm-mcell"><label><i class="ti ti-world"></i>Country</label><span>${countryStr}</span></div>
       <div class="dm-mcell"><label><i class="ti ti-droplet"></i>Last cleaned</label><span>${lastCleanedLabel(r)}</span></div>
     </div>
+    <div class="dm-sp">${VinylSpotify.rowHTML(r)}</div>
     ${canLog ? `<div class="dm-quick">
       <button class="dm-qbtn play" onclick="logPlayed(${r.id})">
         <i class="ti ti-headphones"></i>Played today
@@ -7441,7 +7452,8 @@ function formValues(){
     disc_count:formDiscCount,
     size:formSize,
     censored:document.getElementById('fCensored').checked,
-    spotify_url:document.getElementById('fSpotifyUrl').value.trim(),
+    spotify_url:VinylSpotify.cleanLink(document.getElementById('fSpotifyUrl').value),
+    spotify_missing:document.getElementById('fSpotifyMissing').checked,
     vinyl_color:formVinylColor,
     label_color:formLabelColor,
   };
@@ -7507,12 +7519,24 @@ function closeSpotifyOverlay(){ document.getElementById('spotifyOverlay').classL
 function updateSpotifyLinkBtn(){
   const value = document.getElementById('fSpotifyUrl').value.trim();
   const btn = document.getElementById('fSpotifyLinkBtn');
+  // No link means not on Spotify by default; typing one un-marks it.
+  const missing = document.getElementById('fSpotifyMissing');
+  missing.checked = !value;
+  missing.disabled = !!value;
   if(/^https?:\/\//i.test(value)){
     btn.href = value;
     btn.classList.remove('disabled');
   } else {
     btn.removeAttribute('href');
     btn.classList.add('disabled');
+  }
+}
+
+// Ticking "not on Spotify" clears the link, since the two contradict.
+function toggleSpotifyMissing(){
+  if(document.getElementById('fSpotifyMissing').checked){
+    document.getElementById('fSpotifyUrl').value = '';
+    updateSpotifyLinkBtn();
   }
 }
 

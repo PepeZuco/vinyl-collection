@@ -77,3 +77,59 @@ def test_update_without_the_field_leaves_the_link_alone(authed):
 
     assert r.status_code == 200
     assert r.get_json()["spotify_url"] == "https://open.spotify.com/album/xyz"
+
+
+# ── cleaned-up links ────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("raw, stored", [
+    ("https://open.spotify.com/album/xyz?si=abc123",
+     "https://open.spotify.com/album/xyz"),
+    ("  https://open.spotify.com/album/xyz?si=abc&utm_source=copy-link  ",
+     "https://open.spotify.com/album/xyz"),
+    ("https://open.spotify.com/intl-pt/album/xyz?si=abc",
+     "https://open.spotify.com/album/xyz"),
+    ("spotify:album:xyz", "https://open.spotify.com/album/xyz"),
+    ("https://example.com/whatever?si=1", "https://example.com/whatever?si=1"),
+])
+def test_links_are_cleaned_on_save(authed, raw, stored):
+    r = authed.post("/api/records", json={"artist": "a", "album_name": "b",
+                                          "spotify_url": raw})
+    assert r.get_json()["spotify_url"] == stored
+
+
+def test_update_cleans_the_link_too(authed):
+    rid = authed.post("/api/records", json={"artist": "a", "album_name": "b"}).get_json()["id"]
+    r = authed.put(f"/api/records/{rid}",
+                   json={"spotify_url": "spotify:album:xyz"})
+    assert r.get_json()["spotify_url"] == "https://open.spotify.com/album/xyz"
+
+
+# ── not on Spotify ──────────────────────────────────────────────────────────
+
+def test_spotify_missing_defaults_to_false(authed):
+    r = authed.post("/api/records", json={"artist": "a", "album_name": "b"})
+    assert r.get_json()["spotify_missing"] is False
+
+
+def test_create_and_update_the_missing_flag(authed):
+    rid = authed.post("/api/records", json={
+        "artist": "a", "album_name": "b", "spotify_missing": True,
+    }).get_json()["id"]
+    r = authed.put(f"/api/records/{rid}", json={"spotify_missing": False})
+    assert r.get_json()["spotify_missing"] is False
+
+
+def test_update_without_the_flag_leaves_it_alone(authed):
+    rid = authed.post("/api/records", json={
+        "artist": "a", "album_name": "b", "spotify_missing": True,
+    }).get_json()["id"]
+    r = authed.put(f"/api/records/{rid}", json={"artist": "a2"})
+    assert r.get_json()["spotify_missing"] is True
+
+
+def test_a_link_wins_over_the_flag(authed):
+    r = authed.post("/api/records", json={
+        "artist": "a", "album_name": "b", "spotify_missing": True,
+        "spotify_url": "https://open.spotify.com/album/xyz",
+    })
+    assert r.get_json()["spotify_missing"] is False

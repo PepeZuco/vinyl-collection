@@ -208,6 +208,24 @@ def _size(value):
     return v if v in _SIZES else ""
 
 
+_SPOTIFY_URI   = re.compile(r"^spotify:([a-z]+):([A-Za-z0-9]+)$")
+_SPOTIFY_WEB   = re.compile(r"^https?://open\.spotify\.com/(?:intl-[a-z]+/)?([a-z]+/[A-Za-z0-9]+)(?:[/?#].*)?$")
+
+
+def _spotify_url(value):
+    """Tidy a pasted Spotify link without ever rejecting one: a spotify: URI
+    becomes its open.spotify.com URL, and the share sheet's ?si= tracking tail
+    and locale segment are dropped. Anything else is stored as typed, since a
+    scan can hand back any link and a refused save would lose it. Mirrors
+    cleanLink in static/spotify.js."""
+    v = str(value or "").strip()
+    m = _SPOTIFY_URI.match(v)
+    if m:
+        return f"https://open.spotify.com/{m.group(1)}/{m.group(2)}"
+    m = _SPOTIFY_WEB.match(v)
+    return f"https://open.spotify.com/{m.group(1)}" if m else v
+
+
 _HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -382,6 +400,7 @@ class Record(db.Model):
     size        = db.Column(db.String(5))   # '' | '7' | '10' | '12', in inches
     censored    = db.Column(db.Boolean, default=False)  # cover has explicit art; blurred client-side until revealed
     spotify_url = db.Column(db.String(500))  # free text: whatever link the scan or the user handed in
+    spotify_missing = db.Column(db.Boolean, default=False)  # marked as not on Spotify; a link overrides it
     vinyl_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as black
     label_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as white
 
@@ -419,6 +438,7 @@ class Record(db.Model):
             "size": self.size or "",
             "censored": bool(self.censored),
             "spotify_url": self.spotify_url or "",
+            "spotify_missing": bool(self.spotify_missing) and not self.spotify_url,
             "vinyl_color": self.vinyl_color or "",
             "label_color": self.label_color or "",
         }
@@ -494,6 +514,7 @@ with app.app_context():
         "size": "VARCHAR(5)",
         "censored": "BOOLEAN",
         "spotify_url": "VARCHAR(500)",
+        "spotify_missing": "BOOLEAN",
         "vinyl_color": "VARCHAR(7)",
         "label_color": "VARCHAR(7)",
     }
@@ -753,7 +774,8 @@ def create_record():
         disc_count  = disc_count,
         size        = _size(d.get("size")),
         censored    = bool(d.get("censored", False)),
-        spotify_url = d.get("spotify_url",""),
+        spotify_url = _spotify_url(d.get("spotify_url")),
+        spotify_missing = bool(d.get("spotify_missing", False)),
         vinyl_color = _hex_color(d.get("vinyl_color")),
         label_color = _hex_color(d.get("label_color")),
     )
@@ -790,7 +812,8 @@ def update_record(rid):
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
     if "censored"    in d: r.censored     = bool(d["censored"])
-    if "spotify_url" in d: r.spotify_url  = d["spotify_url"]
+    if "spotify_url" in d: r.spotify_url  = _spotify_url(d["spotify_url"])
+    if "spotify_missing" in d: r.spotify_missing = bool(d["spotify_missing"])
     if "vinyl_color" in d: r.vinyl_color  = _hex_color(d["vinyl_color"])
     if "label_color" in d: r.label_color  = _hex_color(d["label_color"])
     # disc_count first: the tracks it is about to validate are checked against
