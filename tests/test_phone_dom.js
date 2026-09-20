@@ -511,3 +511,155 @@ test('desktop never renders the lookup rows', async () => {
     win.close();
   }
 });
+
+// ── step 2: bought-at chips ──────────────────────────────────────────────────
+// Safari draws a <datalist> as a thin strip under the keyboard — unusable
+// one-handed. renderPlaceChips offers the same places as chips instead,
+// ranked by VinylPhoneForm.rankPlaces. The fixture (tests/test_phone_dom.py)
+// carries 11 records at "Benedito Calixto" and one at "Amazon" so the
+// ranking has something real to prove.
+
+test('bought at offers the places you actually use, most-used first', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(2);
+    const chips = [...doc.querySelectorAll('#wherePhoneChips .chip')].map(c => c.textContent);
+    assert.strictEqual(chips[0], 'Benedito Calixto');
+    assert.ok(chips.includes('Amazon'));
+    assert.ok(chips.length <= 4);
+  } finally {
+    win.close();
+  }
+});
+
+test('tapping a place chip writes the field', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(2);
+    press(win, doc.querySelector('#wherePhoneChips .chip'));
+    assert.strictEqual(doc.getElementById('fWhere').value, 'Benedito Calixto');
+  } finally {
+    win.close();
+  }
+});
+
+test('the datalist is still there for desktop, and the chip box stays hidden', async () => {
+  const { win, doc } = await boot({ phone: false });
+  try {
+    win.openAdd();
+    assert.ok(doc.querySelectorAll('#whereList option').length > 0);
+    assert.strictEqual(doc.getElementById('wherePhoneChips').hidden, true);
+  } finally {
+    win.close();
+  }
+});
+
+// ── step 3: collapsed log sections ───────────────────────────────────────────
+// Plays, cleanings and notes were three open cards on a step whose own lead
+// text says it is almost always empty. On a phone they collapse to one row
+// each; a section that already has entries opens expanded, so the collapse
+// only ever hides what really is empty.
+
+test('empty log sections start collapsed on a phone', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    assert.strictEqual(doc.getElementById('playDatesSection').dataset.collapsed, 'true');
+    assert.match(doc.getElementById('playDatesCount').textContent, /none/);
+  } finally {
+    win.close();
+  }
+});
+
+test('cleanings and notes also start collapsed when empty on a phone', async () => {
+  // LOG_SECTIONS drives all three sections from the same loop; this is the
+  // check that a bug specific to the other two would not hide behind
+  // playDatesSection alone passing.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    assert.strictEqual(doc.getElementById('cleanedDatesSection').dataset.collapsed, 'true');
+    assert.strictEqual(doc.getElementById('notesSection').dataset.collapsed, 'true');
+  } finally {
+    win.close();
+  }
+});
+
+test('a section with entries starts open, so the collapse never hides anything', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);                       // fixture record 1 has a play date
+    win.setFormStep(3);
+    assert.strictEqual(doc.getElementById('playDatesSection').dataset.collapsed, 'false');
+  } finally {
+    win.close();
+  }
+});
+
+test('the plus on a collapsed section opens it rather than navigating', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    press(win, doc.querySelector('#playDatesSection .log-plus'));
+    assert.strictEqual(doc.getElementById('playDatesSection').dataset.collapsed, 'false');
+  } finally {
+    win.close();
+  }
+});
+
+test('adding the first play date expands the section it just went into', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    assert.strictEqual(doc.getElementById('playDatesSection').dataset.collapsed, 'true');
+    win.addPlayDate();
+    assert.strictEqual(doc.getElementById('playDatesSection').dataset.collapsed, 'false');
+  } finally {
+    win.close();
+  }
+});
+
+test('desktop leaves every log section expanded', async () => {
+  const { win, doc } = await boot({ phone: false });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    assert.strictEqual(doc.getElementById('playDatesSection').dataset.collapsed, 'false');
+  } finally {
+    win.close();
+  }
+});
+
+test('notes keep their static "markdown" label on desktop', async () => {
+  // renderLogCollapse only overwrites a count's textContent on a phone;
+  // desktop's notesCount has no other writer, so it should still read
+  // exactly what the markup shipped it with.
+  const { win, doc } = await boot({ phone: false });
+  try {
+    win.openAdd();
+    assert.strictEqual(doc.getElementById('notesCount').textContent, 'markdown');
+  } finally {
+    win.close();
+  }
+});
+
+// ── step 4: full-width pickers ───────────────────────────────────────────────
+
+test('size and discs are full width on a phone', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(4);
+    // the pickers come out of the 2-up grid; each sits in its own full-width row
+    const grid = doc.querySelector('#fSizePick').closest('.form-grid');
+    assert.ok(grid.classList.contains('stack-phone'));
+  } finally {
+    win.close();
+  }
+});

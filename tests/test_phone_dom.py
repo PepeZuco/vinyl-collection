@@ -75,7 +75,13 @@ def test_phone_dom_js(tmp_path):
         base.update(over)
         return base
 
-    rows = [rec(1), rec(2, genre="Jazz")]
+    # 11 records at "Benedito Calixto" (1-11) and one at "Amazon" (12), for
+    # task 6's place-chip ranking test — the same shape tests/test_boot.py's
+    # own fixture uses for that assertion, in the file this module's
+    # docstring explains is never run. rec(1) keeps its default play date,
+    # which the log-collapse "a section with entries starts open" test below
+    # also relies on.
+    rows = [rec(n) for n in range(1, 12)] + [rec(12, bought_where="Amazon")]
     records = tmp_path / "records.json"
     records.write_text(json.dumps(rows), encoding="utf-8")
 
