@@ -448,14 +448,15 @@ test('a typed straight quote reaches a curly one in the data', () => {
 });
 
 test('loose matching leaves unrelated records out', () => {
-  assert.strictEqual(keep(accented, { text: 'milanesa' }).length, 0);
-  assert.strictEqual(keep(accented, { text: 'cafes' }).length, 0);
+  // typos off: these are one edit from a match, which typo tolerance forgives
+  assert.strictEqual(keep(accented, { text: 'milanesa', typos: false }).length, 0);
+  assert.strictEqual(keep(accented, { text: 'cafes', typos: false }).length, 0);
 });
 
 test('turning loose matching off demands the exact letters', () => {
-  assert.strictEqual(keep(accented, { text: 'milanes', loose: false }).length, 0);
-  assert.strictEqual(keep(accented, { text: 'Milanés', loose: false }).length, 1);
-  assert.strictEqual(keep(accented, { text: "withers' greatest", loose: false }).length, 0);
+  assert.strictEqual(keep(accented, { text: 'milanes', loose: false, typos: false }).length, 0);
+  assert.strictEqual(keep(accented, { text: 'Milanés', loose: false, typos: false }).length, 1);
+  assert.strictEqual(keep(accented, { text: "withers' greatest", loose: false, typos: false }).length, 0);
 });
 
 test('loose matching reads the opt-in fields too', () => {
@@ -477,4 +478,87 @@ test('a query of nothing but apostrophes constrains nothing', () => {
   // haystack — so without a guard one stray key would "match" all 292 records
   // while looking like a typo that found something.
   assert.strictEqual(keep(accented, { text: "'''" }).length, accented.length);
+});
+
+
+// ── typo tolerance ───────────────────────────────────────────────────────────
+// "Picture Vook" for "Picture Book" found nothing, because the search is a
+// substring test. A word the substring test misses may still be a near miss of
+// a word in the record: one edit for a mid-length word, two for a long one,
+// none for a short one (where one edit turns any word into any other).
+
+const typoShelf = [
+  rec({ artist: 'Simply Red', album_name: 'Picture Book' }),
+  rec({ artist: 'Jorge Ben Jor', album_name: 'Samba Esquema Novo' }),
+  rec({ artist: 'Tim Maia', album_name: 'Racional' }),
+];
+
+test('typo tolerance is on by default', () => {
+  assert.strictEqual(defaultQuery().typos, true);
+});
+
+test('a substituted letter still finds the record', () => {
+  const found = keep(typoShelf, { text: 'Picture Vook' });
+  assert.deepStrictEqual(found.map(r => r.album_name), ['Picture Book']);
+});
+
+test('a swapped pair, a dropped letter and an added letter each count as one edit', () => {
+  assert.strictEqual(keep(typoShelf, { text: 'pictrue book' }).length, 1);
+  assert.strictEqual(keep(typoShelf, { text: 'pictue book' }).length, 1);
+  assert.strictEqual(keep(typoShelf, { text: 'pictture book' }).length, 1);
+});
+
+test('a long word forgives two edits, a mid-length word only one', () => {
+  assert.strictEqual(keep(typoShelf, { text: 'racionel' }).length, 1);    // 8 letters, 1 edit
+  assert.strictEqual(keep(typoShelf, { text: 'esqeuma' }).length, 1);      // swap = 1 edit
+  assert.strictEqual(keep(typoShelf, { text: 'rcioanal' }).length, 1);     // 8 letters, 2 edits
+  assert.strictEqual(keep(typoShelf, { text: 'pictxxe' }).length, 0);      // 7 letters, 2 edits
+});
+
+test('a short word must be exact', () => {
+  assert.strictEqual(keep(typoShelf, { text: 'red' }).length, 1);
+  assert.strictEqual(keep(typoShelf, { text: 'rex' }).length, 0);
+  assert.strictEqual(keep(typoShelf, { text: 'tom maia' }).length, 0);
+});
+
+test('a word still being typed is forgiven against the start of a word', () => {
+  // 'esqxe' is 2 edits from the whole word 'esquema' but 1 from its start
+  assert.strictEqual(keep(typoShelf, { text: 'esqxe' }).length, 1);
+  assert.strictEqual(keep(typoShelf, { text: 'pictuer boo' }).length, 1);
+  assert.strictEqual(keep(typoShelf, { text: 'picture vo' }).length, 0);  // 2 letters: exact only
+});
+
+test('every word of the query must find a word', () => {
+  assert.strictEqual(keep(typoShelf, { text: 'picture vook zzzzzz' }).length, 0);
+});
+
+test('typo tolerance leaves unrelated records out', () => {
+  assert.strictEqual(keep(typoShelf, { text: 'beatles' }).length, 0);
+});
+
+test('turning typo tolerance off demands the substring again', () => {
+  assert.strictEqual(keep(typoShelf, { text: 'Picture Vook', typos: false }).length, 0);
+  assert.strictEqual(keep(typoShelf, { text: 'Picture Book', typos: false }).length, 1);
+});
+
+test('a query with no typos finds what it always found', () => {
+  ['Picture Book', 'ben jor', 'esquema', 'maia'].forEach(text => {
+    assert.strictEqual(keep(typoShelf, { text, typos: true }).length,
+                       keep(typoShelf, { text, typos: false }).length);
+  });
+});
+
+test('typo tolerance reads only the fields that are ticked', () => {
+  const records = [rec({ artist: 'Simply Red', album_name: 'Picture Book', genre: 'Pop' })];
+  assert.strictEqual(keep(records, { text: 'pooop', fields: { genre: false, artist: true, album: true } }).length, 0);
+  assert.strictEqual(keep(records, { text: 'poop', fields: { genre: true } }).length, 1);
+});
+
+test('typo tolerance composes with accent folding', () => {
+  assert.strictEqual(keep(accented, { text: 'milaness' }).length, 1);
+  assert.strictEqual(keep(accented, { text: 'milaness', typos: false }).length, 0);
+});
+
+test('a query of only punctuation is not forgiven into a match', () => {
+  assert.strictEqual(keep(typoShelf, { text: '&&' }).length, 0);
 });

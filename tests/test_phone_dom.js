@@ -380,3 +380,115 @@ test('the two step lists agree on how many steps there are', async () => {
     win.close();
   }
 });
+
+// ── step 1: the lookup rows and the identity strip ──────────────────────────
+// Every add actually starts with a lookup — camera, search, or a pasted
+// Spotify link — and never with typing, so step 1 opens on those three as
+// full-height rows rather than on an empty artist field. Once anything
+// identifies the record (an artist, an album, or a cover) the lookup gives
+// way to an 84px identity strip sitting above the fields.
+
+test('step 1 opens on the three lookups, not on the fields', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    const rows = [...doc.querySelectorAll('#phoneLookup .frow')];
+    assert.strictEqual(rows.length, 3);
+    assert.deepStrictEqual(rows.map(r => r.dataset.lookup), ['camera', 'search', 'spotify']);
+  } finally {
+    win.close();
+  }
+});
+
+test('each lookup row calls the function that already does that job', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    const called = [];
+    for (const fn of ['openCamera', 'openSearchOverlay', 'openSpotifyOverlay']) {
+      win[fn] = () => called.push(fn);
+    }
+    for (const r of doc.querySelectorAll('#phoneLookup .frow')) r.click();
+    assert.deepStrictEqual(called, ['openCamera', 'openSearchOverlay', 'openSpotifyOverlay']);
+  } finally {
+    win.close();
+  }
+});
+
+test('filling artist and album replaces the lookups with the identity strip', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    doc.getElementById('fArtist').value = 'Tim Maia';
+    doc.getElementById('fAlbum').value = 'Racional Vol. 1';
+    win.renderStep1Phone();
+    assert.strictEqual(doc.getElementById('phoneLookup').hidden, true);
+    assert.strictEqual(doc.getElementById('phoneIdentity').hidden, false);
+    assert.match(doc.getElementById('phoneIdentity').textContent, /Tim Maia/);
+  } finally {
+    win.close();
+  }
+});
+
+test('fill it in myself reveals the fields with no match', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    doc.getElementById('phoneLookupSkip').click();
+    assert.strictEqual(doc.getElementById('phoneLookup').hidden, true);
+    assert.strictEqual(doc.getElementById('fArtist').closest('.form-section').hidden, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('the identity strip follows the fields as they are typed', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    doc.getElementById('fArtist').value = 'Tim Maia';
+    doc.getElementById('fAlbum').value = 'Racional';
+    win.renderStep1Phone();
+    doc.getElementById('fYear').value = '1975';
+    win.renderStep1Phone();
+    assert.match(doc.getElementById('phoneIdentity').textContent, /1975/);
+  } finally {
+    win.close();
+  }
+});
+
+test('the sensitive-cover checkbox only appears once there is a cover', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    const row = doc.getElementById('fCensored').closest('.check-row');
+    assert.strictEqual(row.hidden, true);
+    win.showCover('data:image/png;base64,iVBORw0KGgo=');
+    win.renderStep1Phone();
+    assert.strictEqual(row.hidden, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('opening a fresh record forgets that the last one skipped the lookup', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    doc.getElementById('phoneLookupSkip').click();
+    win.openAdd();
+    assert.strictEqual(doc.getElementById('phoneLookup').hidden, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('desktop never renders the lookup rows', async () => {
+  const { win, doc } = await boot({ phone: false });
+  try {
+    win.openAdd();
+    assert.strictEqual(doc.getElementById('phoneLookup').hidden, true);
+  } finally {
+    win.close();
+  }
+});

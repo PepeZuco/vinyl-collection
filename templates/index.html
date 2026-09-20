@@ -115,7 +115,7 @@ body.setup-mode .bar{display:none}
 .search-field-check:hover span{color:var(--accent)}
 /* The matching mode sits under a rule because it is not another field: the
    list above answers "where do I look", this answers "how hard do I look". */
-.search-mode{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.search-mode{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
 /* the only label long enough to need two lines in a narrow bar */
 .search-mode .search-field-check span{white-space:normal}
 select{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;height:34px;font-size:13px;outline:none;font-family:var(--font);cursor:pointer;transition:background .2s,color .2s,border .2s}
@@ -1298,6 +1298,12 @@ select option{background:var(--surface);color:var(--text)}
 .form-layout.scan-wide > .form-section{display:none}
 .form-layout > .analysing.wide{grid-column:1/-1}
 }
+/* .two wraps Year and Genre so a phone can put them side by side while
+   everything else in .form-grid stays full width (see the phone media query
+   below). display:contents removes the wrapper from the box tree entirely on
+   desktop, so its two children fall straight back into .form-grid's own
+   two-column layout exactly as if the wrapper were never there. */
+@media(min-width:761px){ .two{display:contents} }
 .form-cover-col{display:flex;flex-direction:column}
 .form-cover-col .cover-drop{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:190px}
 /* Empty, the drop is a fixed-height target to aim a file at. With a cover in
@@ -2427,6 +2433,67 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .modal-foot .btn.hidden-phone{display:none}
   /* the draft flag moves off the footer, onto the rail line */
   #formOverlay .draft-flag{position:absolute;right:14px;margin:0}
+
+  /* ── step 1: the lookup rows and the identity strip ─────────────────────
+     Every add actually starts with a lookup — camera, search by name, or a
+     pasted Spotify link — and never with typing, so step 1 opens on those
+     three as full-height rows instead of the 180px cover well and the
+     fields. Once anything identifies the record, the well collapses into an
+     84px thumbnail inside the identity strip, which is the room that puts
+     Country back above the fold. */
+  #formOverlay .phone-lookup{display:flex;flex-direction:column;gap:10px}
+  #formOverlay .lead{font-size:16.5px;font-weight:600;letter-spacing:-.015em;margin:2px 0 4px}
+  #formOverlay .lead small{display:block;font-size:13px;font-weight:400;color:var(--muted);
+    margin-top:4px;letter-spacing:0}
+  #formOverlay .frow{display:flex;align-items:center;gap:13px;min-height:66px;padding:12px 14px;
+    border:1px solid var(--border);border-radius:13px;background:var(--card);
+    color:var(--text);font-family:var(--font);text-align:left;width:100%}
+  #formOverlay .frow.hero{border-color:var(--accent);
+    background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+  #formOverlay .frow .fic{width:40px;height:40px;border-radius:11px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:21px;
+    background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+  #formOverlay .frow.sp .fic{background:color-mix(in srgb,#1DB954 14%,transparent);color:#1DB954}
+  #formOverlay .frow.se .fic{background:color-mix(in srgb,var(--ev-note) 16%,transparent);
+    color:var(--ev-note)}
+  #formOverlay .frow .ftx{flex:1;min-width:0}
+  #formOverlay .frow .ftx b{display:block;font-size:15.5px;font-weight:700;letter-spacing:-.01em}
+  #formOverlay .frow .ftx span{display:block;font-size:12.5px;color:var(--muted);margin-top:1px}
+  #formOverlay .frow .chev{color:var(--muted);font-size:17px;flex-shrink:0}
+  #formOverlay .orline{display:flex;align-items:center;gap:12px;color:var(--muted);
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase}
+  #formOverlay .orline::before,#formOverlay .orline::after{content:"";flex:1;height:1px;
+    background:var(--border)}
+  #formOverlay .ghostrow{display:flex;align-items:center;justify-content:center;gap:8px;
+    height:46px;border:1px dashed var(--border);border-radius:11px;background:transparent;
+    color:var(--label);font-size:14px;font-family:var(--font);width:100%}
+
+  /* the cover well, once it has done its job */
+  #formOverlay .phone-identity{display:flex;gap:13px;align-items:flex-start;padding:12px;
+    border:1px solid var(--border);border-radius:13px;background:var(--card);margin-bottom:14px}
+  #formOverlay .pi-cover{width:84px;height:84px;border-radius:8px;flex-shrink:0;overflow:hidden;
+    background:var(--bg);display:flex;align-items:center;justify-content:center;
+    color:var(--muted);font-size:24px}
+  #formOverlay .pi-cover img{width:100%;height:100%;object-fit:cover;display:block}
+  #formOverlay .pi-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  #formOverlay .pi-meta b{font-size:16px;font-weight:700;letter-spacing:-.015em}
+  #formOverlay .pi-meta i{font-style:normal;font-size:14px;color:var(--label)}
+  #formOverlay .pi-meta em{font-style:normal;font-family:var(--font-mono);font-size:11px;
+    color:var(--muted);letter-spacing:.05em;margin-top:2px}
+  #formOverlay .repick{align-self:flex-start;margin-top:6px;font-size:12px;color:var(--accent);
+    border:1px solid var(--border);border-radius:7px;padding:7px 10px;background:transparent;
+    font-family:var(--font)}
+
+  /* the cover well and the scan triplet are what the two above replace */
+  #formOverlay .cover-drop,#formOverlay .cover-picker-row,
+  #formOverlay .scan-actions,#formOverlay #scanRepickBtn{display:none}
+  #formOverlay .form-layout{display:block}
+  /* full-width fields at a thumb's size; only year and genre share a row,
+     through the .two wrapper (see the desktop display:contents override
+     next to .form-layout.scan-wide above) */
+  #formOverlay .form-grid{grid-template-columns:1fr}
+  #formOverlay .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #formOverlay .field input,#formOverlay .field select{height:50px}
 }
 
 /* ── multi-artist editor in form ───────────────────────────────────────────── */
@@ -2757,6 +2824,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
           </div>
           <div class="search-mode">
             <label class="search-field-check"><input type="checkbox" id="searchLooseCheck" onchange="toggleSearchLoose()" checked><span>Ignore accents &amp; apostrophes</span></label>
+            <label class="search-field-check"><input type="checkbox" id="searchTyposCheck" onchange="toggleSearchTypos()" checked><span>Forgive typos</span></label>
           </div>
         </div>
       </div>
@@ -3112,6 +3180,38 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
       <div class="form-spine" id="formSpine"></div>
 
       <div class="form-step" data-step="1">
+        <!-- Every add starts with a lookup — camera, search, or a Spotify
+             link — and never with typing. Opening on an empty artist field
+             with the three lookups wedged into a 42px row led with the thing
+             that is never used first. Phone only; hidden on desktop. -->
+        <div class="phone-lookup" id="phoneLookup" hidden>
+          <p class="lead">How do you want to find it?
+            <small>Whatever you pick fills the fields below. Nothing costs a
+                   credit until you tap Analyse.</small></p>
+          <button type="button" class="frow hero" data-lookup="camera" onclick="openCamera()">
+            <span class="fic"><i class="ti ti-camera"></i></span>
+            <span class="ftx"><b>Shoot the sleeve</b><span>Camera, then Analyse</span></span>
+            <i class="ti ti-chevron-right chev"></i>
+          </button>
+          <button type="button" class="frow se" data-lookup="search" onclick="openSearchOverlay()">
+            <span class="fic"><i class="ti ti-list-search"></i></span>
+            <span class="ftx"><b>Search by name</b><span>Artist or album title</span></span>
+            <i class="ti ti-chevron-right chev"></i>
+          </button>
+          <button type="button" class="frow sp" data-lookup="spotify" onclick="openSpotifyOverlay()">
+            <span class="fic"><i class="ti ti-brand-spotify"></i></span>
+            <span class="ftx"><b>Paste a Spotify link</b><span>From the share sheet</span></span>
+            <i class="ti ti-chevron-right chev"></i>
+          </button>
+          <div class="orline">or</div>
+          <button type="button" class="ghostrow" id="phoneLookupSkip" onclick="skipLookup()">
+            <i class="ti ti-pencil"></i> Fill it in myself
+          </button>
+        </div>
+
+        <!-- what the cover well collapses into once there is something to show -->
+        <div class="phone-identity" id="phoneIdentity" hidden></div>
+
         <div class="form-layout">
         <div class="form-cover-col">
           <div class="cover-drop" id="coverDrop">
@@ -3136,7 +3236,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
             </button>
           </div>
 
-          <div class="check-row" style="margin-top:10px">
+          <div class="check-row" id="censorRow" style="margin-top:10px">
             <input type="checkbox" id="fCensored">
             <label for="fCensored"><i class="ti ti-eye-off"></i> Mark cover as sensitive (blurred until tapped)</label>
           </div>
@@ -3209,6 +3309,12 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
                   <div class="artists-list" id="fArtistsList"></div>
                   <button type="button" class="btn btn-sm" id="fAddArtist" style="margin-top:6px" onclick="addArtistRow()"><i class="ti ti-plus"></i> add artist</button>
                 </div>
+                <!-- display:contents on desktop (see the .two rule) removes this
+                     wrapper from the box tree entirely, so Year and Genre stay
+                     the two ordinary .form-grid items they always were there;
+                     it only becomes a real grid on a phone, where the rest of
+                     the fields go full width and these two alone share a row. -->
+                <div class="two">
                 <div class="form-group">
                   <label><i class="ti ti-calendar"></i> Year</label>
                   <div class="field"><i class="ti ti-calendar"></i><input id="fYear" type="number" placeholder="1975"></div>
@@ -3218,6 +3324,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
                   <div class="field"><i class="ti ti-tag"></i>
                     <select id="fGenre"><option value="">select genre</option></select>
                   </div>
+                </div>
                 </div>
                 <div class="form-group">
                   <label><i class="ti ti-world"></i> Country</label>
@@ -3732,6 +3839,7 @@ let searchFields = { artist: true, album: true, genre: false, notes: false, boug
 // On, because the shelf is largely Brazilian and Spanish and the accents are
 // the part nobody wants to type. The checkbox in the panel turns it off.
 let searchLoose = true;
+let searchTypos = true;
 let myRating = 0, wifeRating = 0;
 let coverDataUri = '';
 // True only once the user picks, captures or scans a cover in this session.
@@ -4153,6 +4261,11 @@ function toggleSearchLoose() {
   applyQueryChange();
 }
 
+function toggleSearchTypos() {
+  searchTypos = !searchTypos;
+  applyQueryChange();
+}
+
 function toggleSearchFields() {
   const panel = document.getElementById('searchFieldsPanel');
   panel.classList.toggle('hidden');
@@ -4169,6 +4282,7 @@ function currentQuery() {
     text: document.getElementById('searchInput').value,
     fields: searchFields,
     loose: searchLoose,
+    typos: searchTypos,
     ownership: filterState.ownership,
     facets: filterState.facets,
   };
@@ -6885,9 +6999,79 @@ function applyDraft(d){
   formBaseline = formValues();
 }
 
+/* Set by "Fill it in myself": there is no match and there is not going to be
+ * one, so the lookups step aside for the fields. Reset per record by openAdd. */
+let lookupDismissed = false;
+
+function hasIdentity(){
+  return !!(document.getElementById('fArtist').value.trim()
+         || document.getElementById('fAlbum').value.trim()
+         || coverDataUri || editingCoverUrl);
+}
+
+function skipLookup(){
+  lookupDismissed = true;
+  renderStep1Phone();
+  document.getElementById('fArtist').focus();
+}
+
+/* Step 1 has three states on a phone: choose a lookup, or — once anything
+ * identifies the record — the identity strip above the fields. The strip
+ * holds no state of its own; it re-reads the fields every time, so the scan,
+ * the draft restore and plain typing all reach it without knowing it exists. */
+function renderStep1Phone(){
+  const phone = isPhone();
+  const identified = hasIdentity();
+  const lookup = document.getElementById('phoneLookup');
+  const strip  = document.getElementById('phoneIdentity');
+  const layout = document.querySelector('#formOverlay .form-layout');
+  const censor = document.getElementById('censorRow');
+  const hasCover = !!(coverDataUri || editingCoverUrl);
+
+  if (!phone){
+    lookup.hidden = true;
+    strip.hidden = true;
+    if (layout) layout.hidden = false;
+    censor.hidden = false;
+    return;
+  }
+
+  const showLookup = !identified && !lookupDismissed;
+  lookup.hidden = !showLookup;
+  if (layout) layout.hidden = showLookup;
+  strip.hidden = showLookup || !identified;
+  // Meaningless without a cover, and a full row in exactly the state where
+  // there is least room for one.
+  censor.hidden = !hasCover;
+
+  if (strip.hidden) return;
+
+  const cover = VinylCover.coverPreviewSrc({cover_url: editingCoverUrl}, coverDataUri);
+  const line = [document.getElementById('fYear').value,
+                document.getElementById('fCountry').value,
+                document.getElementById('fGenre').value].filter(Boolean).join(' · ');
+  // Re-pick reopens the last scan's results without paying for a new call;
+  // with a cover but no scan behind it, Analyse is what belongs here instead.
+  const action = scanCandidates.length
+    ? `<button type="button" class="repick" onclick="reopenScanOverlay()">Pick a different match</button>`
+    : hasCover
+      ? `<button type="button" class="repick" onclick="runPendingScan()">Analyse</button>`
+      : '';
+  strip.innerHTML = `
+    <div class="pi-cover">${cover ? `<img src="${esc(cover)}" alt="">` : '<i class="ti ti-photo"></i>'}</div>
+    <div class="pi-meta">
+      <b>${esc(document.getElementById('fArtist').value) || 'Unknown artist'}</b>
+      <i>${esc(document.getElementById('fAlbum').value)}</i>
+      ${line ? `<em>${esc(line)}</em>` : ''}
+      ${action}
+    </div>`;
+}
+
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';coverDirty=false;editingCoverUrl='';
   document.getElementById('formTitle').textContent='add record';
+  lookupDismissed = false;
+  renderStep1Phone();
   scanCandidates = [];
   scanLookupFailed = false;
   scanWrote = {};
@@ -6955,6 +7139,10 @@ function openEdit(id){
   editingId=id;myRating=Number(r.my_rating)||0;wifeRating=Number(r.wife_rating)||0;
   coverDataUri='';coverDirty=false;editingCoverUrl=r.cover_url||'';
   document.getElementById('formTitle').textContent='edit record';
+  // An existing record is already identified, and a wishlist entry with no
+  // artist yet should still show its fields rather than a lookup it has no
+  // use for.
+  lookupDismissed = true;
   scanCandidates = [];
   scanLookupFailed = false;
   scanWrote = {};
@@ -7112,6 +7300,9 @@ function rebuildFormChrome(){
     : 'next <i class="ti ti-arrow-right"></i>';
   next.onclick = last ? submitForm : () => setFormStep(formStep + 1);
   document.getElementById('formBackBtn').disabled = formStep === 1;
+  // A breakpoint change is itself a reason step 1 might need to switch
+  // between the lookup and the identity strip — desktop never shows either.
+  renderStep1Phone();
 }
 
 /* How long a draft is still what you meant. Long enough to survive a crash,
@@ -7201,6 +7392,7 @@ function rememberDraft(){
  * the select. */
 function formChanged() {
   if (formBaseline) rememberDraft();
+  renderStep1Phone();
 }
 
 ['input', 'change'].forEach(type => document.addEventListener(type, e => {

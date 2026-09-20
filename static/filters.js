@@ -122,6 +122,64 @@ const VinylFilters = (function (grouping) {
     return text.normalize('NFD').replace(MARKS, '').replace(APOSTROPHES, '');
   }
 
+  /* Typo tolerance: a query word the substring test missed may still be a near
+   * miss of a word in the record ("Picture Vook" for "Picture Book").
+   *
+   * Only words the substring test already failed on come here, so a correctly
+   * typed query finds exactly what it always did — this can add records, never
+   * remove one. The allowance grows with the word: a short word must be exact,
+   * because one edit turns almost any 3-letter word into another, and a long
+   * one may be two edits off. */
+  const WORD = /[\p{L}\p{N}]+/gu;
+
+  function editsAllowed(len) {
+    return len < 4 ? 0 : len < 8 ? 1 : 2;
+  }
+
+  /* Edit distance where swapping two neighbours costs one edit — the most
+   * common slip at a keyboard ("Pcitrue"). Bails out early once every cell in a
+   * row is past `max`, since this runs against every word of every record. */
+  function editDistance(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let prev2 = null;
+    let prev = [];
+    for (let j = 0; j <= b.length; j++) prev.push(j);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      let best = i;
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        let d = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+        if (prev2 && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+          d = Math.min(d, prev2[j - 2] + 1);
+        }
+        cur.push(d);
+        if (d < best) best = d;
+      }
+      if (best > max) return max + 1;
+      prev2 = prev;
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+
+  /* Whether every word of `text` finds a word in `hay` within its allowance.
+   * A word may match the start of a longer word, so the search keeps working
+   * while the last word is still being typed. */
+  function fuzzyMatch(text, hay) {
+    const wanted = text.match(WORD) || [];
+    if (!wanted.length) return false;
+    const have = hay.match(WORD) || [];
+    return wanted.every(w => {
+      const max = editsAllowed(w.length);
+      if (hay.indexOf(w) !== -1) return true;
+      if (!max) return false;
+      return have.some(h =>
+        editDistance(w, h, max) <= max ||
+        (h.length > w.length && editDistance(w, h.slice(0, w.length), max) <= max));
+    });
+  }
+
   function defaultQuery() {
     return {
       text: '',
@@ -129,6 +187,7 @@ const VinylFilters = (function (grouping) {
       ownership: 'owned',  // 'owned' | 'wishlist'
       facets: {},          // id -> array of allowed values; absent = no constraint
       loose: true,         // fold accents and apostrophes away before comparing
+      typos: true,         // forgive a slip or two in each word
     };
   }
 
@@ -189,7 +248,11 @@ const VinylFilters = (function (grouping) {
     if (text) {
       const fields = q.fields || DEFAULT_FIELDS;
       const hay = haystack(record, fields, deps);
-      if ((loose ? relax(hay) : hay).indexOf(text) === -1) return false;
+      const seen = loose ? relax(hay) : hay;
+      if (seen.indexOf(text) === -1) {
+        const typos = q.typos !== false;   // absent reads as on, like the default
+        if (!typos || !fuzzyMatch(text, seen)) return false;
+      }
     }
     return true;
   }
