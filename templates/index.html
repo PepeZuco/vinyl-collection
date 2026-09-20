@@ -2,9 +2,26 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Zucoloto's Vinyl Collection</title>
 <link rel="icon" type="image/png" href="/static/vinyl-icon.png">
+<!-- Without an apple-touch-icon iOS invents a tile from the page, which in
+     practice is the first letter of the title — the Z of "Zucoloto's". The
+     PNG is flat with square corners on the app's own ground: iOS applies the
+     squircle mask itself and composites any alpha onto black.
+     Anyone who already added the app keeps the old tile until they remove and
+     re-add the shortcut; iOS caches it at install time. -->
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- black-translucent puts the status bar over the page, which is why the
+     viewport opts into the safe area above and .modal-foot pays the bottom
+     inset back below. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- The tile caption truncates near 12 characters; "Zucoloto's Vin…" is worse
+     than a short true name. -->
+<meta name="apple-mobile-web-app-title" content="Vinyl">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
@@ -3620,6 +3637,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <script src="/static/history.js"></script>
 <script src="/static/activity.js"></script>
 <script src="/static/draft.js"></script>
+<script src="/static/phoneform.js"></script>
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/notes.js"></script>
