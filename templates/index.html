@@ -4124,6 +4124,7 @@ const SORT_OPTIONS = [
 
 function toggleSearchField(field) {
   searchFields[field] = !searchFields[field];
+  searchFieldsFromView = false;
   applyQueryChange();
 }
 
@@ -4999,12 +5000,16 @@ function dmFormatNoteDate(dateStr) {
 function dmLikeGroups(list, discCount) {
   const discs = Math.max(1, Number(discCount) || 1);
   const groups = new Map();
+  // `pos` is the number printed on the sleeve: the song's place among its
+  // side's songs, counted over every track and not just the liked ones.
+  const seen = {};
   (list || []).forEach((t, i) => {
+    const pos = seen[t.side] = (seen[t.side] || 0) + 1;
     if (!t.liked_at) return;
     const day = momentOf(t.liked_at).day || String(t.liked_at).slice(0, 10);
     const key = day + '|' + t.side;
     if (!groups.has(key)) groups.set(key, { day, discs, side: t.side, songs: [] });
-    groups.get(key).songs.push({ i, title: t.title, liked_at: t.liked_at });
+    groups.get(key).songs.push({ i, pos, title: t.title, liked_at: t.liked_at });
   });
   return [...groups.values()].map(g => {
     const first = g.songs.reduce((a, b) =>
@@ -5174,7 +5179,7 @@ function dmHistoryEntryHTML(ev) {
     ? `<div class="ht"><i class="ti ${DM_HIST_ICON.liked} dm-hist-icon" title="${DM_HIST_LABEL.liked}"></i>` +
       `${dmLikeSideHTML(ev)}${dmLikeClockHTML(ev)}` +
       `<div class="dm-hist-songs">${(ev.songs || []).map(s =>
-         `<span class="dm-hist-song">${esc(s.title || '')}</span>`).join('')}</div></div>`
+         `<span class="dm-hist-song">${s.pos ? s.pos + '. ' : ''}${esc(s.title || '')}</span>`).join('')}</div></div>`
     : `<div class="ht"><i class="ti ${DM_HIST_ICON[ev.type]} dm-hist-icon" title="${DM_HIST_LABEL[ev.type]}"></i>${clock}</div>`;
   const lit = focusMatches(detailFocus, ev) ? ' hit' : '';
   return `<div class="dm-hist-entry ${ev.type}${ev.private ? ' private' : ''}${lit}" data-ev="${esc(ev.key)}"${ev.keys ? ` data-evs="${esc(ev.keys.join(' '))}"` : ''} data-day="${esc(ev.day)}"><span class="dot"></span>${body}</div>`;
@@ -7225,7 +7230,27 @@ function formValues(){
   };
 }
 
+/* Saving is a yes to the note being written, too. Someone who typed a note or
+ * picked a photo and went straight to save meant it to be kept; formValues
+ * only reads formNotes, so without this the words and the photo were dropped
+ * with the form. Covers both places a note lives: the add row and an entry
+ * open for editing. Returns false when the add row could not be filed (it has
+ * no valid day), so the save stops with the field marked instead of losing it. */
+async function commitPendingNotes(){
+  // A photo picked a moment ago has to land before anything is composed.
+  if (notePhotoUploads.length) {
+    await Promise.all(notePhotoUploads.map(p => p.catch(()=>{})));
+  }
+  if (editingDraft) await saveNoteEdit();
+  const pending = document.getElementById('fNoteText').value.trim() || formNoteImages.length;
+  if (!pending) return true;
+  const before = formNotes.length;
+  await addNote();
+  return formNotes.length > before;
+}
+
 async function submitForm(){
+  if (!(await commitPendingNotes())) return;
   const body = formValues();
   const url=editingId?`/api/records/${editingId}`:'/api/records';
   const method=editingId?'PUT':'POST';
@@ -9526,14 +9551,41 @@ const SAVED_VIEWS = [
     query: { ownership: 'owned', facets: { played: ['recent'] } } },
   { id: 'wishlist', label: 'The wishlist', hint: 'wanted, not bought',
     query: { ownership: 'wishlist', facets: {} } },
+  /* Text views: the phrase goes in the search box, where it can be read and
+   * edited, and `fields` says where it is looked for. Case never matters — the
+   * model lower-cases both sides. */
+  { id: 'som-ambiente', label: 'Som Ambiente', hint: 'the words, anywhere',
+    query: { ownership: 'owned', facets: {}, text: 'Som Ambiente',
+             fields: { artist: true, album: true, genre: true, notes: true } } },
+  { id: 'abril-cultural', label: 'Abril Cultural', hint: 'artist, album or note',
+    query: { ownership: 'owned', facets: {}, text: 'Abril Cultural',
+             fields: { artist: true, album: true, notes: true } } },
 ];
+
+/* Set which fields the search box reads, keeping the checkboxes in step. */
+function setSearchFields(fields) {
+  Object.keys(searchFields).forEach(k => {
+    searchFields[k] = !!fields[k];
+    const box = document.getElementById('searchField_' + k);
+    if (box) box.checked = searchFields[k];
+  });
+}
+let searchFieldsFromView = false;
 
 function applySavedView(id) {
   const view = SAVED_VIEWS.find(v => v.id === id);
   if (!view) return;
   filterState.ownership = view.query.ownership;
   filterState.facets = JSON.parse(JSON.stringify(view.query.facets));
-  document.getElementById('searchInput').value = '';
+  document.getElementById('searchInput').value = view.query.text || '';
+  // A view's fields are borrowed: the next view puts the person's own back.
+  if (view.query.fields) {
+    setSearchFields(view.query.fields);
+    searchFieldsFromView = true;
+  } else if (searchFieldsFromView) {
+    setSearchFields(VinylFilters.DEFAULT_FIELDS);
+    searchFieldsFromView = false;
+  }
   if (currentTab !== 'collection') switchTab('collection');
   else applyQueryChange();
   closeFacetPop();
