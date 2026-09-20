@@ -7026,7 +7026,12 @@ function renderStep1Phone(){
   const strip  = document.getElementById('phoneIdentity');
   const layout = document.querySelector('#formOverlay .form-layout');
   const censor = document.getElementById('censorRow');
-  const hasCover = !!(coverDataUri || editingCoverUrl);
+  // The cover well's own has-cover class, not coverDataUri/editingCoverUrl
+  // directly: showCover() and clearCover() are what actually turn that class
+  // on and off, and both openEdit and applyCover call one of the two. Reading
+  // the class they already maintain is one source of truth instead of a
+  // second copy of "is a cover on screen" that has to be kept in step with it.
+  const hasCover = document.getElementById('coverDrop').classList.contains('has-cover');
 
   if (!phone){
     lookup.hidden = true;

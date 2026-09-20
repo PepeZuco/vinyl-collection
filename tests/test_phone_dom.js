@@ -144,6 +144,25 @@ async function boot(opts) {
 
 const $ = (doc, sel) => doc.querySelector(sel);
 
+/* Press something the way a person would.
+ *
+ * jsdom does not compile inline handler attributes under
+ * runScripts:'outside-only', and this app wires a great deal of its chrome
+ * with onclick="...". So an element carrying one gets its attribute compiled
+ * in the page's own scope and called; anything else gets a real click event.
+ * Compiled on demand rather than up front, because most of this DOM is
+ * replaced by innerHTML on every render. Ported from tests/test_boot.js's
+ * own press() — that file is off limits to run or edit, but this helper is
+ * plain data, not one of its leaking-window tests. */
+function press(win, el) {
+  const code = el.getAttribute && el.getAttribute('onclick');
+  if (code) {
+    win.__peek('(function(event){' + code + '})').call(el, new win.MouseEvent('click'));
+    return;
+  }
+  el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+}
+
 // ── the breakpoint ───────────────────────────────────────────────────────────
 
 // Every test below wraps its assertions in try/finally so win.close() always
@@ -408,7 +427,7 @@ test('each lookup row calls the function that already does that job', async () =
     for (const fn of ['openCamera', 'openSearchOverlay', 'openSpotifyOverlay']) {
       win[fn] = () => called.push(fn);
     }
-    for (const r of doc.querySelectorAll('#phoneLookup .frow')) r.click();
+    for (const r of doc.querySelectorAll('#phoneLookup .frow')) press(win, r);
     assert.deepStrictEqual(called, ['openCamera', 'openSearchOverlay', 'openSpotifyOverlay']);
   } finally {
     win.close();
@@ -434,7 +453,7 @@ test('fill it in myself reveals the fields with no match', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
     win.openAdd();
-    doc.getElementById('phoneLookupSkip').click();
+    press(win, doc.getElementById('phoneLookupSkip'));
     assert.strictEqual(doc.getElementById('phoneLookup').hidden, true);
     assert.strictEqual(doc.getElementById('fArtist').closest('.form-section').hidden, false);
   } finally {
@@ -475,7 +494,7 @@ test('opening a fresh record forgets that the last one skipped the lookup', asyn
   const { win, doc } = await boot({ phone: true });
   try {
     win.openAdd();
-    doc.getElementById('phoneLookupSkip').click();
+    press(win, doc.getElementById('phoneLookupSkip'));
     win.openAdd();
     assert.strictEqual(doc.getElementById('phoneLookup').hidden, false);
   } finally {
