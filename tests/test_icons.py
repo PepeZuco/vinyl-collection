@@ -26,6 +26,18 @@ def _png_size(data: bytes):
     return struct.unpack(">II", data[16:24])
 
 
+def _png_color_type(data: bytes) -> int:
+    """The IHDR colour-type byte, without pulling in Pillow.
+
+    iOS masks the tile into a squircle itself and composites any alpha onto
+    black, so a re-render that saved these with a transparent background
+    would still pass every other check here and only show up on the phone as
+    a black box behind the mark. 2 is truecolour with no alpha channel; 6
+    would be truecolour+alpha, the regression this guards against.
+    """
+    return data[25]
+
+
 @pytest.mark.parametrize("name,expected", [
     ("icon-180.png", 180),
     ("icon-192.png", 192),
@@ -35,7 +47,9 @@ def test_icon_serves_at_its_declared_size(client, name, expected):
     res = client.get(f"/static/{name}")
     assert res.status_code == 200
     assert res.mimetype == "image/png"
-    assert _png_size(res.get_data()) == (expected, expected)
+    data = res.get_data()
+    assert _png_size(data) == (expected, expected)
+    assert _png_color_type(data) == 2, "icon must be flat — no alpha channel"
 
 
 def test_manifest_parses_and_its_icons_resolve(client):
