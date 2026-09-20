@@ -6846,7 +6846,7 @@ function renderLogCollapse(){
     const collapsed = phone && !VinylPhoneForm.logSectionOpen(entries) && !stickyOpenLogSections.has(s.id);
     el.dataset.collapsed = String(collapsed);
     const count = document.getElementById(s.countId);
-    if (count) count.textContent = phone ? VinylPhoneForm.logCount(entries) : (s.desktopText ?? count.textContent);
+    if (count) count.textContent = phone ? VinylPhoneForm.logCount(entries) : count.textContent;
     let plus = el.querySelector('.log-plus');
     if (phone && !plus){
       plus = document.createElement('button');
