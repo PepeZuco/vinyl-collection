@@ -2337,12 +2337,24 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 @media(max-width:760px){
   #formOverlay{padding:0;align-items:stretch}
   #formOverlay .modal.modal-wide{
-    max-width:none;width:100%;height:100%;max-height:100%;
+    max-width:none;width:100%;max-height:100%;
     border-radius:0;border:none;display:flex;flex-direction:column;overflow:hidden;
+  }
+  /* The keyboard does not shrink the layout viewport on iOS, so a footer
+     pinned to the bottom of a 100%-tall box ends up behind it — Back, Next
+     and Save simply gone until the field is dismissed. --vvh is the visual
+     viewport's height, written by syncViewportHeight(); the fallback keeps
+     the box full-height everywhere the property is never set. */
+  #formOverlay .modal.modal-wide{
+    height:var(--vvh,100%);
+    padding-top:env(safe-area-inset-top,0px);
   }
   #formOverlay .modal-head{flex-shrink:0}
   #formOverlay .modal-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px}
   #formOverlay .modal-foot{flex-shrink:0;padding:11px 14px;gap:8px}
+  /* viewport-fit=cover paints under the home indicator, so the footer buys
+     its own clearance back. */
+  #formOverlay .modal-foot{padding-bottom:calc(11px + env(safe-area-inset-bottom,0px))}
   #formOverlay .modal-foot .btn{flex:1;height:46px;font-size:14px;font-weight:700;justify-content:center}
   #formOverlay .modal-foot .btn-primary{background:var(--accent);border-color:var(--accent);color:#111}
   #formOverlay .form-group input,#formOverlay .form-group select,
@@ -11793,6 +11805,39 @@ function initIdleSpotlight() {
   idleOverlayEl().addEventListener('click', closeIdleSpotlight);
   scheduleIdleTimer();
 }
+
+/* ── the phone breakpoint, in one place ────────────────────────────────────
+ * 760px is the media query the form's mobile rules already use. Reading it
+ * through matchMedia rather than off innerWidth means an iPad rotating into
+ * range gets the phone layout without a reload. */
+const phoneMQ = window.matchMedia('(max-width:760px)');
+function isPhone(){ return !!(phoneMQ && phoneMQ.matches); }
+
+/* iOS leaves the layout viewport at full height when the keyboard opens, so
+ * a bottom-pinned bar ends up behind it. visualViewport reports what is
+ * actually on screen; writing it to a custom property keeps the CSS
+ * declarative. `scroll` matters as much as `resize`: iOS scrolls the visual
+ * viewport to lift a focused field clear of the keyboard, and the overlay has
+ * to follow it. */
+function syncViewportHeight(){
+  const vv = window.visualViewport;
+  if (!vv) return;                       // desktop, and jsdom
+  document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+}
+if (window.visualViewport){
+  ['resize','scroll'].forEach(e => window.visualViewport.addEventListener(e, syncViewportHeight));
+  syncViewportHeight();
+}
+
+/* A field focused behind the keyboard has to be scrolled clear, and the
+ * scroll has to wait for the keyboard's animation: issued during it, the
+ * scroll is measured against the pre-keyboard viewport and undoes itself. */
+document.addEventListener('focusin', e => {
+  if (!isPhone() || !e.target.closest) return;
+  const f = e.target.closest('#formOverlay input,#formOverlay textarea,#formOverlay select');
+  if (!f) return;
+  setTimeout(() => f.scrollIntoView({block:'center', behavior:'smooth'}), 300);
+});
 
 init();
 initIdleSpotlight();
