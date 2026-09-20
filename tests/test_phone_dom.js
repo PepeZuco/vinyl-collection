@@ -154,6 +154,25 @@ async function boot(opts) {
 
 const $ = (doc, sel) => doc.querySelector(sel);
 
+/* jsdom has no Touch constructor, and the app only ever reads
+ * e.touches[0].clientY / e.changedTouches[0].clientY — so a plain object
+ * with that shape is enough. Ported from the shape task 9's brief gave for
+ * tests/test_boot.js, which is off limits to edit; these two live here
+ * instead, same as every other DOM test in this plan. */
+function touch(win, el, type, y){
+  const e = new win.Event(type, {bubbles: true, cancelable: true});
+  e.touches = type === 'touchend' ? [] : [{clientY: y}];
+  e.changedTouches = [{clientY: y}];
+  el.dispatchEvent(e);
+}
+
+function dragHead(win, from, to){
+  const head = win.document.querySelector('#formOverlay .modal-head');
+  touch(win, head, 'touchstart', from);
+  touch(win, head, 'touchmove', to);
+  touch(win, head, 'touchend', to);
+}
+
 /* Press something the way a person would.
  *
  * jsdom does not compile inline handler attributes under
@@ -1011,6 +1030,179 @@ test('a breakpoint change back to desktop while the root is open restores the st
     assert.strictEqual(doc.getElementById('editRoot').hidden, true);
     assert.strictEqual(doc.querySelector('#formOverlay .form-step[data-step="1"]').hidden, false,
       'step 1 should be visible again on desktop, not left hidden from the root');
+  } finally {
+    win.close();
+  }
+});
+
+// ── task 9: drag to dismiss ──────────────────────────────────────────────────
+// initSheetDrag binds touch listeners to the grabber and the head only, never
+// to .modal-body — a listener on the scrolling area would have to tell a
+// dismissal apart from a scroll at the top of the list, and gets it wrong the
+// moment the list is short enough not to scroll at all. The thresholds
+// themselves (80px, or 0.5px/ms) are VinylPhoneForm.dragDismisses, already
+// unit-tested in task 3; these only check the DOM wiring around it.
+
+test('the phone form carries a grabber', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    assert.ok(doc.querySelector('#formOverlay .sheet-grab'));
+  } finally {
+    win.close();
+  }
+});
+
+test('a long downward drag on the head closes the form', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, 140);
+    assert.strictEqual(closed, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('a short drag springs back instead of closing, and clears its own transform', async () => {
+  // dragDismisses has two ways to qualify: 80px, or 0.5px/ms. 20px clears
+  // neither on its own, but the touchstart/touchmove/touchend sequence below
+  // fires synchronously with no awaits between them, and onStart/onEnd read
+  // Date.now() around it — leaving the velocity arm's outcome pinned to
+  // whatever the real clock's sub-millisecond jitter happens to be between
+  // those two calls, which is flaky by construction: this failed outright in
+  // a handful of runs while developing this test, well under the 40ms a 20px
+  // drag needs to read as a flick. Stubbing win.Date.now pins dt to something
+  // no flick could produce, so the assertion is about the distance branch,
+  // not about how fast this process happened to run.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let calls = 0;
+    win.Date.now = () => (calls++ === 0 ? 0 : 100000);
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, 20);
+    assert.strictEqual(closed, false);
+    // onEnd resets both inline styles unconditionally, short drag or long —
+    // a spring-back that left the transform sitting at translateY(20px)
+    // would strand the sheet exactly where the thumb let go of it.
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    assert.strictEqual(sheet.style.transform, '');
+  } finally {
+    win.close();
+  }
+});
+
+test('an upward drag never closes', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, -200);
+    assert.strictEqual(closed, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('the body is not a drag surface, so scrolling is never a dismissal', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    const body = doc.querySelector('#formOverlay .modal-body');
+    touch(win, body, 'touchstart', 0);
+    touch(win, body, 'touchmove', 300);
+    touch(win, body, 'touchend', 300);
+    assert.strictEqual(closed, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('a drag started on a button presses the button, not the sheet', async () => {
+  // Task 4 moved #formSaveBtn into .modal-head, one of the drag handles. A
+  // drag begun on Save (or Cancel, ‹ edit's own button) must not be read as
+  // the start of a sheet-move — e.target.closest('button') is what excludes
+  // it in onStart.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    const saveBtn = doc.getElementById('formSaveBtn');
+    assert.ok(saveBtn, 'save should live in the head on a phone');
+    touch(win, saveBtn, 'touchstart', 0);
+    touch(win, saveBtn, 'touchmove', 300);
+    touch(win, saveBtn, 'touchend', 300);
+    assert.strictEqual(closed, false);
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    assert.strictEqual(sheet.style.transform, '', 'a button drag must never move the sheet');
+  } finally {
+    win.close();
+  }
+});
+
+test('a downward drag closes even on an edit section, where the head reads "‹ edit"', async () => {
+  // Task 8's edit root gives the head's left button a second meaning
+  // ("‹ edit", back to the root) on a section screen. The drag GESTURE still
+  // only ever means dismiss the whole sheet, one meaning for one gesture —
+  // closeForm still gets the chance to prompt on a dirty form, the same as
+  // every other way out of the sheet.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    win.openEditSection(2);
+    assert.match(doc.getElementById('formHeadCancel').textContent, /edit/i);
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, 140);
+    assert.strictEqual(closed, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('touchcancel still clears the transform it started', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    const head = doc.querySelector('#formOverlay .modal-head');
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    touch(win, head, 'touchstart', 0);
+    touch(win, head, 'touchmove', 50);
+    assert.notStrictEqual(sheet.style.transform, '', 'the move should have set a transform');
+    touch(win, head, 'touchcancel', 50);
+    assert.strictEqual(sheet.style.transform, '', 'touchcancel must clean up the same as touchend');
+  } finally {
+    win.close();
+  }
+});
+
+test('reduced motion turns the whole gesture off, not just the CSS transition', async () => {
+  // The shared matchMedia stub only steers the (max-width:760px) query —
+  // every other query, including this one, always answers matches:false
+  // regardless of boot({phone:true}) — so it cannot express reduced motion
+  // on its own. initSheetDrag calls window.matchMedia fresh on every
+  // touchstart rather than caching it at boot, so overriding it here, after
+  // boot, before the drag, exercises the real branch: isPhone() still reads
+  // the cached phoneMQ this override never touches, so phone detection stays
+  // real while only the reduced-motion answer is forced.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.matchMedia = q => ({ matches: /prefers-reduced-motion/.test(q) });
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    dragHead(win, 0, 140);
+    assert.strictEqual(closed, false, 'a dismiss-sized drag must not dismiss under reduced motion');
+    assert.strictEqual(sheet.style.transform, '', 'the sheet must never even start moving');
   } finally {
     win.close();
   }

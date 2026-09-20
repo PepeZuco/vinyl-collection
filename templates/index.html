@@ -2370,6 +2370,11 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 #formOverlay .head-save-slot{display:none}
 #formOverlay .head-cancel{order:1}
 
+/* Task 9's grabber, hidden here the same way .head-save-slot is above: a
+   phone-only affordance, off on desktop by default and switched back on
+   inside the 760px query below. */
+.sheet-grab{display:none}
+
 /* ── form on a phone ───────────────────────────────────────────────────────
    The form had no mobile rules at all: it rendered as the desktop's floating
    92vh box, so `save` sat below the fold behind the whole scroll. Full screen,
@@ -2389,6 +2394,17 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
     height:var(--vvh,100%);
     padding-top:env(safe-area-inset-top,0px);
   }
+  /* Task 9's drag-to-dismiss animates this same sheet with translateY, so it
+     needs a transition to spring back on a short drag -- added as its own
+     rule rather than folded into the block above, which is Task 2's and
+     stays exactly as it was. */
+  #formOverlay .modal.modal-wide{transition:transform .22s ease}
+  /* The grabber a thumb reaches for first on a sheet shaped like this.
+     Purely a visual affordance -- aria-hidden in the markup -- the actual
+     drag handles are it and the head, wired in the script at the bottom of
+     the page. */
+  #formOverlay .sheet-grab{width:36px;height:5px;border-radius:3px;
+    background:var(--border);margin:8px auto 0;flex-shrink:0;display:block}
   #formOverlay .modal-head{flex-shrink:0}
   #formOverlay .modal-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px}
   #formOverlay .modal-foot{flex-shrink:0;padding:11px 14px;gap:8px}
@@ -2645,6 +2661,11 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .paint-field .paint-hex{margin-left:auto}
   #formOverlay #fPaintPreview{--d:44px}
 }
+/* Task 9's script itself bails out of the whole gesture under reduced
+   motion (see initSheetDrag's onStart), so this transition is never actually
+   triggered by a drag there -- it is the same belt-and-suspenders as the
+   detailOverlay rule above, in case anything else ever sets this transform. */
+@media(prefers-reduced-motion:reduce){ #formOverlay .modal.modal-wide{transition:none} }
 
 /* ── multi-artist editor in form ───────────────────────────────────────────── */
 .artists-list{display:flex;flex-direction:column;gap:6px}
@@ -3287,6 +3308,10 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <!-- Edit/Add modal -->
 <div class="overlay hidden" id="formOverlay">
   <div class="modal modal-wide">
+    <!-- Task 9: what a thumb tries first on a sheet shaped like this. Purely
+         visual -- aria-hidden -- the actual drag handles are this and the
+         head, both wired to initSheetDrag at the bottom of the page. -->
+    <div class="sheet-grab" aria-hidden="true"></div>
     <div class="modal-head">
       <button class="btn btn-ghost btn-sm head-cancel" id="formHeadCancel"
               onclick="closeForm()"><i class="ti ti-x"></i></button>
@@ -12763,6 +12788,63 @@ document.addEventListener('focusin', e => {
   if (!f) return;
   setTimeout(() => f.scrollIntoView({block:'center', behavior:'smooth'}), 300);
 });
+
+/* Drag the sheet down to dismiss — what a thumb tries first.
+ *
+ * Bound to the head and the grabber only, never to .modal-body: a listener on
+ * the scrolling area would have to tell a dismissal from a scroll at the top
+ * of the list, and gets it wrong the moment the list is short enough not to
+ * scroll. Routed through closeForm, so a dirty form still asks -- and this
+ * holds even on the edit root's section screens, where the head's own left
+ * button reads "‹ edit" rather than "×": that button is the way BACK to the
+ * root, but the drag gesture still only ever means dismiss the whole sheet,
+ * one meaning for one gesture, the way an iOS sheet behaves regardless of
+ * what its own in-page back button says.
+ *
+ * Skipped under prefers-reduced-motion: the gesture is a moving sheet, and
+ * cancel is right there for anyone who would rather not have one. */
+(function initSheetDrag(){
+  const overlay = document.getElementById('formOverlay');
+  const sheet = overlay.querySelector('.modal.modal-wide');
+  const handles = [overlay.querySelector('.sheet-grab'), overlay.querySelector('.modal-head')];
+  let startY = null, startT = 0;
+
+  const reduced = () => window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  function onStart(e){
+    // A drag begun on a button (Save lives in the head on a phone, per Task
+    // 4) must not steal the tap and turn it into a sheet-move instead.
+    if (e.target.closest('button')) return;
+    if (!isPhone() || reduced() || !e.touches || !e.touches.length) return;
+    startY = e.touches[0].clientY;
+    startT = Date.now();
+  }
+  function onMove(e){
+    if (startY === null || !e.touches || !e.touches.length) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) return;
+    e.preventDefault();                       // the page must not scroll with it
+    sheet.style.transform = `translateY(${dy}px)`;
+    sheet.style.transition = 'none';
+  }
+  function onEnd(e){
+    if (startY === null) return;
+    const y = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : startY;
+    const dy = y - startY, dt = Date.now() - startT;
+    startY = null;
+    sheet.style.transition = '';
+    sheet.style.transform = '';
+    if (VinylPhoneForm.dragDismisses(dy, dt)) closeForm();
+  }
+
+  for (const h of handles){
+    if (!h) continue;
+    h.addEventListener('touchstart', onStart, {passive: true});
+    h.addEventListener('touchmove', onMove, {passive: false});
+    h.addEventListener('touchend', onEnd);
+    h.addEventListener('touchcancel', onEnd);
+  }
+})();
 
 init();
 initIdleSpotlight();
