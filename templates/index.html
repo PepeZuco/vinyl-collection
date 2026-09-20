@@ -2447,6 +2447,15 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
      84px thumbnail inside the identity strip, which is the room that puts
      Country back above the fold. */
   #formOverlay .phone-lookup{display:flex;flex-direction:column;gap:10px}
+  /* [hidden]'s UA rule is user-agent origin, so it loses outright to this
+     author-origin display:flex regardless of specificity — renderStep1Phone
+     setting .hidden would do nothing without this, same trap already fixed
+     once for .analysing.wide[hidden] and .kpi-rot-item[hidden]. Scoped here
+     rather than left unscoped because .phone-lookup carries no display
+     declaration at all outside this media query, so outside a phone width
+     [hidden] already works unaided — and renderStep1Phone only ever sets
+     this element's hidden flag while isPhone() is true besides. */
+  #formOverlay .phone-lookup[hidden]{display:none}
   #formOverlay .lead{font-size:16.5px;font-weight:600;letter-spacing:-.015em;margin:2px 0 4px}
   #formOverlay .lead small{display:block;font-size:13px;font-weight:400;color:var(--muted);
     margin-top:4px;letter-spacing:0}
@@ -2476,6 +2485,8 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   /* the cover well, once it has done its job */
   #formOverlay .phone-identity{display:flex;gap:13px;align-items:flex-start;padding:12px;
     border:1px solid var(--border);border-radius:13px;background:var(--card);margin-bottom:14px}
+  /* same UA-vs-author trap as .phone-lookup[hidden] above */
+  #formOverlay .phone-identity[hidden]{display:none}
   #formOverlay .pi-cover{width:84px;height:84px;border-radius:8px;flex-shrink:0;overflow:hidden;
     background:var(--bg);display:flex;align-items:center;justify-content:center;
     color:var(--muted);font-size:24px}
@@ -2493,6 +2504,21 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .cover-drop,#formOverlay .cover-picker-row,
   #formOverlay .scan-actions,#formOverlay #scanRepickBtn{display:none}
   #formOverlay .form-layout{display:block}
+  /* .form-layout also carries an unscoped display:grid (for the desktop
+     330px/1fr split, above) that this same trap applies to; #formOverlay
+     .form-layout[hidden] outranks both by specificity. Safe to scope inside
+     this media query alone — renderStep1Phone's desktop branch always sets
+     this element's hidden flag back to false on the way out, so a resize
+     across the breakpoint can never leave it stuck hidden with no guard in
+     scope to un-hide it. */
+  #formOverlay .form-layout[hidden]{display:none}
+  /* Same trap again: .check-row (base rule, unscoped) sets display:flex, so
+     renderStep1Phone toggling #censorRow.hidden needs its own guard. The id
+     alone already outranks .check-row's single class, so this needs no
+     #formOverlay prefix — and, as above, renderStep1Phone's desktop branch
+     always clears this element's hidden flag, so it can never end up stuck
+     hidden outside a phone width either. */
+  #censorRow[hidden]{display:none}
   /* full-width fields at a thumb's size; only year and genre share a row,
      through the .two wrapper (see the desktop display:contents override
      next to .form-layout.scan-wide above) */
