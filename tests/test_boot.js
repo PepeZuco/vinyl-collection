@@ -2552,6 +2552,16 @@ test('a link in a note opens in a new tab', async () => {
   assert.match(link.getAttribute('rel') || '', /noopener/);
 });
 
+test('a link to another record in a note stays in this tab', async () => {
+  const { win, doc, read } = await boot();
+  const r = read('records').find(x => x.have_it);
+  r.notes = JSON.stringify([{ date: '2026-08-10', text: '[that one](' + win.location.pathname + '#record=2)' }]);
+  win.openDetail(r.id);
+  const link = $(doc, '#ddInfo .dm-hist-entry.note a');
+  assert.ok(link, 'the note rendered no link at all');
+  assert.strictEqual(link.getAttribute('target'), null);
+});
+
 // ── linking a record into a note from the markdown modal ───────────────────
 // Copying a record's own deep link off the address bar and pasting it back
 // into a note it was found on is the whole reason this picker exists —
