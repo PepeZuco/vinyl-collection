@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from functools import wraps
 
+import backup
 import pricing
 import scan
 
@@ -45,6 +46,8 @@ def _upload_ceiling_bytes():
 app.config["MAX_CONTENT_LENGTH"] = _upload_ceiling_bytes()
 
 EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD", "vinyl123")
+
+BACKUP_DIR = os.path.join(os.environ.get("DATA_DIR", "."), "backups")
 
 db = SQLAlchemy(app)
 
@@ -1711,6 +1714,52 @@ def import_csv():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+# ── daily backups ─────────────────────────────────────────────────────────────
+
+@app.route("/api/backups")
+@require_auth
+def list_backups():
+    # Behind auth for the same reason /api/export is: a snapshot is the whole
+    # database, private notes and all.
+    return jsonify({"backups": backup.list_backups(BACKUP_DIR), "keep_days": backup.KEEP_DAYS})
+
+
+@app.route("/api/backups/<name>")
+@require_auth
+def download_backup(name):
+    # Only ever serve a name this module itself produced. Nothing else in the
+    # folder — least of all the live vinyl.db one level up — is downloadable,
+    # and the pattern leaves no room for a path to walk out of BACKUP_DIR.
+    if not backup.NAME_RE.match(name):
+        raise NotFound()
+    path = os.path.join(BACKUP_DIR, name)
+    if not os.path.isfile(path):
+        raise NotFound()
+    return send_file(path, as_attachment=True, download_name=name,
+                     mimetype="application/vnd.sqlite3")
+
+
+def start_backups(stop=None):
+    """Start the daily snapshot thread, unless there is nothing to snapshot.
+
+    Returns the thread, or None when backups are switched off or the database
+    is not a local SQLite file. Railway injects DATABASE_URL into every service
+    that has a database plugin attached, so the Postgres case is a real one and
+    not hypothetical: there is no file to copy there, and a loop dutifully
+    writing empty snapshots would be worse than no backups, because the folder
+    would still look healthy.
+    """
+    if os.environ.get("BACKUP_ENABLED", "1") == "0":
+        return None
+    uri = app.config["SQLALCHEMY_DATABASE_URI"]
+    if not uri.startswith("sqlite:///"):
+        return None
+    return backup.start_scheduler(uri[len("sqlite:///"):], BACKUP_DIR, stop=stop)
+
+
+start_backups()
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

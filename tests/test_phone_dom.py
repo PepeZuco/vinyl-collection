@@ -81,7 +81,19 @@ def test_phone_dom_js(tmp_path):
     # docstring explains is never run. rec(1) keeps its default play date,
     # which the log-collapse "a section with entries starts open" test below
     # also relies on.
-    rows = [rec(n) for n in range(1, 12)] + [rec(12, bought_where="Amazon")]
+    #
+    # Task 8's edit root needs two more distinct shapes: record 4 with no
+    # play dates yet (so a logged play is a visible change, not one entry
+    # among several), and record 9 as a wishlist entry (have_it:False), so
+    # the purchase row can be checked against a record that never had one.
+    # Neither is referenced by any test above this comment.
+    overrides = {
+        4: dict(play_count=0, play_dates="[]"),
+        9: dict(have_it=False, bought_date="", bought_where="", condition="",
+                play_count=0, play_dates="[]", cleaned_dates="[]"),
+    }
+    rows = ([rec(n, **overrides.get(n, {})) for n in range(1, 12)]
+            + [rec(12, bought_where="Amazon")])
     records = tmp_path / "records.json"
     records.write_text(json.dumps(rows), encoding="utf-8")
 

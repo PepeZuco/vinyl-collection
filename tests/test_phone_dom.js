@@ -123,6 +123,16 @@ async function boot(opts) {
       return json({ month: '2026-08', month_usd: 0, month_scans: 0, total_usd: 0,
                     total_scans: 0, estimate: { photo: 0.006, spotify: 0.0004 } });
     }
+    /* A save answers with the saved record, and saveQuiet splices what comes
+     * back into `records`. Handing it {ok:true} draws a blank card where the
+     * album was — the same failure the real submitForm guards against. */
+    if (opts2 && (opts2.method === 'PUT' || opts2.method === 'POST')
+              && u.includes('/api/records')) {
+      const id = Number((u.match(/\/api\/records\/(\d+)/) || [])[1]) || 99;
+      const sent = opts2.body ? JSON.parse(opts2.body) : {};
+      const base = RECORDS.find(r => r.id === id) || RECORDS[0];
+      return json(Object.assign({}, base, sent, { id }));
+    }
     return json({ ok: true });
   };
 
@@ -143,6 +153,25 @@ async function boot(opts) {
 }
 
 const $ = (doc, sel) => doc.querySelector(sel);
+
+/* jsdom has no Touch constructor, and the app only ever reads
+ * e.touches[0].clientY / e.changedTouches[0].clientY — so a plain object
+ * with that shape is enough. Ported from the shape task 9's brief gave for
+ * tests/test_boot.js, which is off limits to edit; these two live here
+ * instead, same as every other DOM test in this plan. */
+function touch(win, el, type, y){
+  const e = new win.Event(type, {bubbles: true, cancelable: true});
+  e.touches = type === 'touchend' ? [] : [{clientY: y}];
+  e.changedTouches = [{clientY: y}];
+  el.dispatchEvent(e);
+}
+
+function dragHead(win, from, to){
+  const head = win.document.querySelector('#formOverlay .modal-head');
+  touch(win, head, 'touchstart', from);
+  touch(win, head, 'touchmove', to);
+  touch(win, head, 'touchend', to);
+}
 
 /* Press something the way a person would.
  *
@@ -659,6 +688,521 @@ test('size and discs are full width on a phone', async () => {
     // the pickers come out of the 2-up grid; each sits in its own full-width row
     const grid = doc.querySelector('#fSizePick').closest('.form-grid');
     assert.ok(grid.classList.contains('stack-phone'));
+  } finally {
+    win.close();
+  }
+});
+
+// ── task 7: saveQuiet / toastUndo ───────────────────────────────────────────
+// No new UI here — saveQuiet is the network half of submitForm, split out so
+// task 8's phone quick actions (log a play, log a clean) can save without
+// closing the form, and toastUndo is what makes a silent one-tap write safe.
+
+test('saveQuiet returns true and leaves the form open', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const ok = await win.saveQuiet();
+    assert.strictEqual(ok, true);
+    assert.strictEqual(doc.getElementById('formOverlay').classList.contains('hidden'), false);
+  } finally {
+    win.close();
+  }
+});
+
+test('saveQuiet returns false on a failed save and touches no form state', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const before = doc.getElementById('fArtist').value;
+    win.fetch = async () => ({ ok: false, status: 500, json: async () => ({ error: 'nope' }) });
+    assert.strictEqual(await win.saveQuiet(), false);
+    assert.strictEqual(doc.getElementById('fArtist').value, before);
+  } finally {
+    win.close();
+  }
+});
+
+test('saveQuiet puts the saved record into the collection', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    doc.getElementById('fArtist').value = 'Renamed';
+    await win.saveQuiet();
+    assert.strictEqual(read('records').find(r => r.id === 1).artist, 'Renamed');
+  } finally {
+    win.close();
+  }
+});
+
+test('submitForm still closes the form', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    await win.submitForm();
+    assert.strictEqual(doc.getElementById('formOverlay').classList.contains('hidden'), true);
+  } finally {
+    win.close();
+  }
+});
+
+test('an undo toast offers a button and runs it', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    let undone = false;
+    win.toastUndo('Play logged', () => { undone = true; });
+    const btn = doc.querySelector('#toast .toast-undo');
+    assert.ok(btn, 'the undo toast should carry a button');
+    btn.click();
+    assert.strictEqual(undone, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('a plain toast after an undo toast does not inherit the button', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.toastUndo('Play logged', () => {});
+    win.toast('changes saved');
+    assert.strictEqual(doc.querySelector('#toast .toast-undo'), null);
+    assert.strictEqual(doc.getElementById('toast').textContent, 'changes saved');
+  } finally {
+    win.close();
+  }
+});
+
+test('setPlayCount sets rather than nudges', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    win.setPlayCount(7);
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), 7);
+  } finally {
+    win.close();
+  }
+});
+
+/* The ruling this task called out by name: saveQuiet sets editingId = rec.id
+ * after a POST so a quick action fired right after creating a record updates
+ * it instead of creating a second one. That write has to be gone by the time
+ * the NEXT queued record is saved, or "add 2 records" silently overwrites
+ * the first instead of adding a second. It works out — startQueuedRecord
+ * always runs through openAdd(), which unconditionally sets editingId=null —
+ * but that is exactly the kind of thing worth proving rather than assuming. */
+test('advancing the add queue after a save does not turn the next record into an edit', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.__peek("addQueue = VinylQueue.create(["
+      + "{artist:'Jorge Ben', album_name:'Forca Bruta', year:'1970'},"
+      + "{artist:'Jorge Ben', album_name:'Negro e lindo', year:'1971'}])");
+    win.startQueuedRecord();
+
+    // /api/scan/usage is fired alongside each save (startQueuedRecord calls
+    // refreshScanUsage); only the /api/records calls matter to this test.
+    const calls = [];
+    const saves = () => calls.filter(c => c.url.includes('/api/records'));
+    win.fetch = async (url, opts) => {
+      calls.push({ url: String(url), method: opts && opts.method });
+      return { ok: true, json: async () => ({ id: 501, artist: 'Jorge Ben', album_name: 'Forca Bruta' }) };
+    };
+    await win.submitForm();   // saves record 1, then advances the queue
+
+    assert.strictEqual(saves()[0].method, 'POST', 'the first queued record must be created');
+    assert.strictEqual(read('editingId'), null,
+      'starting the next queued record must not carry the previous save\'s id forward');
+    assert.strictEqual(doc.getElementById('fAlbum').value, 'Negro e lindo');
+
+    win.fetch = async (url, opts) => {
+      calls.push({ url: String(url), method: opts && opts.method });
+      return { ok: true, json: async () => ({ id: 502, artist: 'Jorge Ben', album_name: 'Negro e lindo' }) };
+    };
+    await win.submitForm();   // saves record 2 — the last one, so the form closes
+
+    assert.strictEqual(saves()[1].method, 'POST',
+      'the second queued record must be created too, not overwrite the first');
+  } finally {
+    win.close();
+  }
+});
+
+// ── task 8: the edit root screen and its quick actions ─────────────────────
+// Editing an existing record on a phone opens a section list instead of the
+// wizard: four rows previewing what each step already holds, plus the three
+// things actually done most (log a play, log a cleaning, add a note) as
+// one-tap actions with an Undo toast. Desktop is untouched — openEdit still
+// lands on step 1 with no root screen ever in the DOM's hidden state.
+
+test('editing on a phone opens a section list, not the wizard', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, false);
+    assert.strictEqual(doc.querySelectorAll('#editRoot .srow').length, 4);
+    assert.strictEqual(doc.getElementById('formRail').hidden, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('editing on desktop still goes straight to step 1', async () => {
+  const { win, doc, read } = await boot({ phone: false });
+  try {
+    win.openEdit(1);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true);
+    assert.strictEqual(read('formStep'), 1);
+  } finally {
+    win.close();
+  }
+});
+
+test('each section row previews what it already holds', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const rows = [...doc.querySelectorAll('#editRoot .srow .stx span')];
+    assert.match(rows[0].textContent, /Artist 1/);
+    assert.match(rows[1].textContent, /Benedito Calixto/);
+    assert.match(rows[2].textContent, /Pepe 3/);
+  } finally {
+    win.close();
+  }
+});
+
+test('a wishlist record says so instead of showing a purchase it never had', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(9);                        // fixture record 9 is have_it:false
+    const rows = [...doc.querySelectorAll('#editRoot .srow .stx span')];
+    assert.strictEqual(rows[1].textContent, 'Wishlist');
+  } finally {
+    win.close();
+  }
+});
+
+test('tapping a section goes to that step and offers a way back', async () => {
+  // .srow is built through innerHTML with an onclick attribute, which jsdom
+  // never compiles under runScripts:'outside-only' — press() evals it in the
+  // page's own scope instead of relying on a plain .click().
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    press(win, doc.querySelectorAll('#editRoot .srow')[1]);
+    assert.strictEqual(read('formStep'), 2);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true);
+    assert.match(doc.getElementById('formHeadCancel').textContent, /edit/i);
+  } finally {
+    win.close();
+  }
+});
+
+test('back from a section returns to the root', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    win.openEditSection(3);
+    win.backToEditRoot();
+    assert.strictEqual(doc.getElementById('editRoot').hidden, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('delete takes two taps and closes the form, not the drawer', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const btn = doc.getElementById('editRootDelete');
+    press(win, btn);                        // onclick="armEditDelete()" — needs press()
+    assert.match(btn.textContent, /tap again/i);
+    assert.ok(read('records').some(r => r.id === 1), 'one tap must not delete');
+    press(win, btn);
+    assert.strictEqual(doc.getElementById('formOverlay').classList.contains('hidden'), true);
+  } finally {
+    win.close();
+  }
+});
+
+test('logging a play appends today and saves once', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const before = read('formPlayDates').length;
+    let puts = 0;
+    const real = win.fetch;
+    win.fetch = async (u, o) => { if (o && o.method === 'PUT') puts++; return real(u, o); };
+    await win.quickLog('play');
+    assert.strictEqual(read('formPlayDates').length, before + 1);
+    assert.strictEqual(puts, 1);
+  } finally {
+    win.close();
+  }
+});
+
+test('logging a play bumps the count, like the card button does', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const before = Number(doc.getElementById('fPlays').value);
+    await win.quickLog('play');
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), before + 1);
+  } finally {
+    win.close();
+  }
+});
+
+test('undo restores both the dates and the count, and saves again', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const dates = read('formPlayDates').length;
+    const plays = Number(doc.getElementById('fPlays').value);
+    let puts = 0;
+    const real = win.fetch;
+    win.fetch = async (u, o) => { if (o && o.method === 'PUT') puts++; return real(u, o); };
+    await win.quickLog('play');
+    // toastUndo's wrapper returns onUndo()'s promise (task 8 fix — see the
+    // comment beside it), which is what makes this await mean anything: the
+    // undo itself re-saves, and puts===2 below only holds if that second
+    // save has actually finished by the time we get there.
+    await doc.querySelector('#toast .toast-undo').onclick();
+    assert.strictEqual(read('formPlayDates').length, dates);
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), plays);
+    assert.strictEqual(puts, 2);
+  } finally {
+    win.close();
+  }
+});
+
+test('a failed quick save leaves the record as it was', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const dates = read('formPlayDates').length;
+    const plays = Number(doc.getElementById('fPlays').value);
+    win.fetch = async () => ({ ok: false, status: 500, json: async () => ({ error: 'nope' }) });
+    await win.quickLog('play');
+    assert.strictEqual(read('formPlayDates').length, dates);
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), plays);
+  } finally {
+    win.close();
+  }
+});
+
+test('a quick action updates the row it changed, without a reopen', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(4);                       // fixture record 4 has no play dates
+    const row = () => doc.querySelectorAll('#editRoot .srow .stx span')[2].textContent;
+    const before = row();
+    await win.quickLog('play');
+    assert.notStrictEqual(row(), before);
+    assert.match(row(), /1 play/);
+  } finally {
+    win.close();
+  }
+});
+
+test('logging a cleaning does not touch the play count', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const plays = Number(doc.getElementById('fPlays').value);
+    await win.quickLog('clean');
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), plays);
+  } finally {
+    win.close();
+  }
+});
+
+// rebuildFormChrome's .form-step loop is also reached OUTSIDE setFormStep —
+// backToEditRoot and a live breakpoint change both call it directly — so a
+// version that only ever sets .hidden=true while the root is showing, and
+// never restores it once the root goes away again, would leave every step
+// body hidden after exactly this resize: nothing else in that path would
+// ever turn one back on.
+test('a breakpoint change back to desktop while the root is open restores the step content', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, false);
+    win.__setPhone(false);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true);
+    assert.strictEqual(doc.querySelector('#formOverlay .form-step[data-step="1"]').hidden, false,
+      'step 1 should be visible again on desktop, not left hidden from the root');
+  } finally {
+    win.close();
+  }
+});
+
+// ── task 9: drag to dismiss ──────────────────────────────────────────────────
+// initSheetDrag binds touch listeners to the grabber and the head only, never
+// to .modal-body — a listener on the scrolling area would have to tell a
+// dismissal apart from a scroll at the top of the list, and gets it wrong the
+// moment the list is short enough not to scroll at all. The thresholds
+// themselves (80px, or 0.5px/ms) are VinylPhoneForm.dragDismisses, already
+// unit-tested in task 3; these only check the DOM wiring around it.
+
+test('the phone form carries a grabber', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    assert.ok(doc.querySelector('#formOverlay .sheet-grab'));
+  } finally {
+    win.close();
+  }
+});
+
+test('a long downward drag on the head closes the form', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, 140);
+    assert.strictEqual(closed, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('a short drag springs back instead of closing, and clears its own transform', async () => {
+  // dragDismisses has two ways to qualify: 80px, or 0.5px/ms. 20px clears
+  // neither on its own, but the touchstart/touchmove/touchend sequence below
+  // fires synchronously with no awaits between them, and onStart/onEnd read
+  // Date.now() around it — leaving the velocity arm's outcome pinned to
+  // whatever the real clock's sub-millisecond jitter happens to be between
+  // those two calls, which is flaky by construction: this failed outright in
+  // a handful of runs while developing this test, well under the 40ms a 20px
+  // drag needs to read as a flick. Stubbing win.Date.now pins dt to something
+  // no flick could produce, so the assertion is about the distance branch,
+  // not about how fast this process happened to run.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let calls = 0;
+    win.Date.now = () => (calls++ === 0 ? 0 : 100000);
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, 20);
+    assert.strictEqual(closed, false);
+    // onEnd resets both inline styles unconditionally, short drag or long —
+    // a spring-back that left the transform sitting at translateY(20px)
+    // would strand the sheet exactly where the thumb let go of it.
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    assert.strictEqual(sheet.style.transform, '');
+  } finally {
+    win.close();
+  }
+});
+
+test('an upward drag never closes', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, -200);
+    assert.strictEqual(closed, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('the body is not a drag surface, so scrolling is never a dismissal', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    const body = doc.querySelector('#formOverlay .modal-body');
+    touch(win, body, 'touchstart', 0);
+    touch(win, body, 'touchmove', 300);
+    touch(win, body, 'touchend', 300);
+    assert.strictEqual(closed, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('a drag started on a button presses the button, not the sheet', async () => {
+  // Task 4 moved #formSaveBtn into .modal-head, one of the drag handles. A
+  // drag begun on Save (or Cancel, ‹ edit's own button) must not be read as
+  // the start of a sheet-move — e.target.closest('button') is what excludes
+  // it in onStart.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    const saveBtn = doc.getElementById('formSaveBtn');
+    assert.ok(saveBtn, 'save should live in the head on a phone');
+    touch(win, saveBtn, 'touchstart', 0);
+    touch(win, saveBtn, 'touchmove', 300);
+    touch(win, saveBtn, 'touchend', 300);
+    assert.strictEqual(closed, false);
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    assert.strictEqual(sheet.style.transform, '', 'a button drag must never move the sheet');
+  } finally {
+    win.close();
+  }
+});
+
+test('a downward drag closes even on an edit section, where the head reads "‹ edit"', async () => {
+  // Task 8's edit root gives the head's left button a second meaning
+  // ("‹ edit", back to the root) on a section screen. The drag GESTURE still
+  // only ever means dismiss the whole sheet, one meaning for one gesture —
+  // closeForm still gets the chance to prompt on a dirty form, the same as
+  // every other way out of the sheet.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    win.openEditSection(2);
+    assert.match(doc.getElementById('formHeadCancel').textContent, /edit/i);
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    dragHead(win, 0, 140);
+    assert.strictEqual(closed, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('touchcancel still clears the transform it started', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    const head = doc.querySelector('#formOverlay .modal-head');
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    touch(win, head, 'touchstart', 0);
+    touch(win, head, 'touchmove', 50);
+    assert.notStrictEqual(sheet.style.transform, '', 'the move should have set a transform');
+    touch(win, head, 'touchcancel', 50);
+    assert.strictEqual(sheet.style.transform, '', 'touchcancel must clean up the same as touchend');
+  } finally {
+    win.close();
+  }
+});
+
+test('reduced motion turns the whole gesture off, not just the CSS transition', async () => {
+  // The shared matchMedia stub only steers the (max-width:760px) query —
+  // every other query, including this one, always answers matches:false
+  // regardless of boot({phone:true}) — so it cannot express reduced motion
+  // on its own. initSheetDrag calls window.matchMedia fresh on every
+  // touchstart rather than caching it at boot, so overriding it here, after
+  // boot, before the drag, exercises the real branch: isPhone() still reads
+  // the cached phoneMQ this override never touches, so phone detection stays
+  // real while only the reduced-motion answer is forced.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.matchMedia = q => ({ matches: /prefers-reduced-motion/.test(q) });
+    let closed = false;
+    win.closeForm = () => { closed = true; };
+    const sheet = doc.querySelector('#formOverlay .modal.modal-wide');
+    dragHead(win, 0, 140);
+    assert.strictEqual(closed, false, 'a dismiss-sized drag must not dismiss under reduced motion');
+    assert.strictEqual(sheet.style.transform, '', 'the sheet must never even start moving');
   } finally {
     win.close();
   }
