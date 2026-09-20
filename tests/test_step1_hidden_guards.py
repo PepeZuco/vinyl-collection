@@ -52,6 +52,12 @@ GUARDS = [
     "#censorRow[hidden]{display:none}",
     # Task 6's renderLogCollapse: see the module docstring.
     "#formOverlay .log-plus[hidden]{display:none}",
+    # Task 8's edit root: #editRoot toggles hidden through .edit-root's own
+    # unconditional author display:flex, and .modal-foot toggles hidden
+    # through its own base (unscoped, outside this media query) display:flex.
+    # Same trap, same fix.
+    "#formOverlay .edit-root[hidden]{display:none}",
+    "#formOverlay .modal-foot[hidden]{display:none}",
 ]
 
 

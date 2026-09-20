@@ -806,3 +806,212 @@ test('advancing the add queue after a save does not turn the next record into an
     win.close();
   }
 });
+
+// ── task 8: the edit root screen and its quick actions ─────────────────────
+// Editing an existing record on a phone opens a section list instead of the
+// wizard: four rows previewing what each step already holds, plus the three
+// things actually done most (log a play, log a cleaning, add a note) as
+// one-tap actions with an Undo toast. Desktop is untouched — openEdit still
+// lands on step 1 with no root screen ever in the DOM's hidden state.
+
+test('editing on a phone opens a section list, not the wizard', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, false);
+    assert.strictEqual(doc.querySelectorAll('#editRoot .srow').length, 4);
+    assert.strictEqual(doc.getElementById('formRail').hidden, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('editing on desktop still goes straight to step 1', async () => {
+  const { win, doc, read } = await boot({ phone: false });
+  try {
+    win.openEdit(1);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true);
+    assert.strictEqual(read('formStep'), 1);
+  } finally {
+    win.close();
+  }
+});
+
+test('each section row previews what it already holds', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const rows = [...doc.querySelectorAll('#editRoot .srow .stx span')];
+    assert.match(rows[0].textContent, /Artist 1/);
+    assert.match(rows[1].textContent, /Benedito Calixto/);
+    assert.match(rows[2].textContent, /Pepe 3/);
+  } finally {
+    win.close();
+  }
+});
+
+test('a wishlist record says so instead of showing a purchase it never had', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(9);                        // fixture record 9 is have_it:false
+    const rows = [...doc.querySelectorAll('#editRoot .srow .stx span')];
+    assert.strictEqual(rows[1].textContent, 'Wishlist');
+  } finally {
+    win.close();
+  }
+});
+
+test('tapping a section goes to that step and offers a way back', async () => {
+  // .srow is built through innerHTML with an onclick attribute, which jsdom
+  // never compiles under runScripts:'outside-only' — press() evals it in the
+  // page's own scope instead of relying on a plain .click().
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    press(win, doc.querySelectorAll('#editRoot .srow')[1]);
+    assert.strictEqual(read('formStep'), 2);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true);
+    assert.match(doc.getElementById('formHeadCancel').textContent, /edit/i);
+  } finally {
+    win.close();
+  }
+});
+
+test('back from a section returns to the root', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    win.openEditSection(3);
+    win.backToEditRoot();
+    assert.strictEqual(doc.getElementById('editRoot').hidden, false);
+  } finally {
+    win.close();
+  }
+});
+
+test('delete takes two taps and closes the form, not the drawer', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const btn = doc.getElementById('editRootDelete');
+    press(win, btn);                        // onclick="armEditDelete()" — needs press()
+    assert.match(btn.textContent, /tap again/i);
+    assert.ok(read('records').some(r => r.id === 1), 'one tap must not delete');
+    press(win, btn);
+    assert.strictEqual(doc.getElementById('formOverlay').classList.contains('hidden'), true);
+  } finally {
+    win.close();
+  }
+});
+
+test('logging a play appends today and saves once', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const before = read('formPlayDates').length;
+    let puts = 0;
+    const real = win.fetch;
+    win.fetch = async (u, o) => { if (o && o.method === 'PUT') puts++; return real(u, o); };
+    await win.quickLog('play');
+    assert.strictEqual(read('formPlayDates').length, before + 1);
+    assert.strictEqual(puts, 1);
+  } finally {
+    win.close();
+  }
+});
+
+test('logging a play bumps the count, like the card button does', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const before = Number(doc.getElementById('fPlays').value);
+    await win.quickLog('play');
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), before + 1);
+  } finally {
+    win.close();
+  }
+});
+
+test('undo restores both the dates and the count, and saves again', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const dates = read('formPlayDates').length;
+    const plays = Number(doc.getElementById('fPlays').value);
+    let puts = 0;
+    const real = win.fetch;
+    win.fetch = async (u, o) => { if (o && o.method === 'PUT') puts++; return real(u, o); };
+    await win.quickLog('play');
+    // toastUndo's wrapper returns onUndo()'s promise (task 8 fix — see the
+    // comment beside it), which is what makes this await mean anything: the
+    // undo itself re-saves, and puts===2 below only holds if that second
+    // save has actually finished by the time we get there.
+    await doc.querySelector('#toast .toast-undo').onclick();
+    assert.strictEqual(read('formPlayDates').length, dates);
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), plays);
+    assert.strictEqual(puts, 2);
+  } finally {
+    win.close();
+  }
+});
+
+test('a failed quick save leaves the record as it was', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const dates = read('formPlayDates').length;
+    const plays = Number(doc.getElementById('fPlays').value);
+    win.fetch = async () => ({ ok: false, status: 500, json: async () => ({ error: 'nope' }) });
+    await win.quickLog('play');
+    assert.strictEqual(read('formPlayDates').length, dates);
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), plays);
+  } finally {
+    win.close();
+  }
+});
+
+test('a quick action updates the row it changed, without a reopen', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(4);                       // fixture record 4 has no play dates
+    const row = () => doc.querySelectorAll('#editRoot .srow .stx span')[2].textContent;
+    const before = row();
+    await win.quickLog('play');
+    assert.notStrictEqual(row(), before);
+    assert.match(row(), /1 play/);
+  } finally {
+    win.close();
+  }
+});
+
+test('logging a cleaning does not touch the play count', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    const plays = Number(doc.getElementById('fPlays').value);
+    await win.quickLog('clean');
+    assert.strictEqual(Number(doc.getElementById('fPlays').value), plays);
+  } finally {
+    win.close();
+  }
+});
+
+// rebuildFormChrome's .form-step loop is also reached OUTSIDE setFormStep —
+// backToEditRoot and a live breakpoint change both call it directly — so a
+// version that only ever sets .hidden=true while the root is showing, and
+// never restores it once the root goes away again, would leave every step
+// body hidden after exactly this resize: nothing else in that path would
+// ever turn one back on.
+test('a breakpoint change back to desktop while the root is open restores the step content', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openEdit(1);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, false);
+    win.__setPhone(false);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true);
+    assert.strictEqual(doc.querySelector('#formOverlay .form-step[data-step="1"]').hidden, false,
+      'step 1 should be visible again on desktop, not left hidden from the root');
+  } finally {
+    win.close();
+  }
+});

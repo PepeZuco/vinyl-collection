@@ -2451,6 +2451,58 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   /* the draft flag moves off the footer, onto the rail line */
   #formOverlay .draft-flag{position:absolute;right:14px;margin:0}
 
+  /* ── task 8: the edit root screen ────────────────────────────────────────
+     Editing opens a section list instead of the wizard: four rows previewing
+     what each step already holds, plus the three things actually done most —
+     log a play, log a clean, add a note — as one-tap actions. Reuses .pi-cover
+     / .pi-meta from the identity strip above rather than a second cover-row
+     component. */
+  #formOverlay .edit-root{display:flex;flex-direction:column;gap:16px;padding:6px 14px 20px;
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* same UA-vs-author trap as .phone-lookup[hidden] and .phone-identity[hidden]
+     above: renderEditRoot/rebuildFormChrome toggle this element's hidden IDL
+     property, and the class's own unconditional display:flex outranks the UA
+     [hidden] rule without this. */
+  #formOverlay .edit-root[hidden]{display:none}
+  #formOverlay .er-head{display:flex;gap:13px;align-items:center}
+  #formOverlay .er-head .pi-cover{width:66px;height:66px}
+  #formOverlay .slist{display:flex;flex-direction:column;border:1px solid var(--border);
+    border-radius:12px;background:var(--card);overflow:hidden}
+  #formOverlay .srow{display:flex;align-items:center;gap:12px;min-height:64px;padding:10px 13px;
+    border:none;border-bottom:1px solid var(--border);background:transparent;color:var(--text);
+    font-family:var(--font);text-align:left;width:100%}
+  #formOverlay .srow:last-child{border-bottom:none}
+  #formOverlay .sic{width:34px;height:34px;border-radius:9px;background:var(--bg);
+    border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+    font-size:17px;color:var(--accent);flex-shrink:0}
+  #formOverlay .stx{flex:1;min-width:0}
+  #formOverlay .stx b{display:block;font-size:15px;font-weight:600;letter-spacing:-.01em}
+  #formOverlay .stx span{display:block;font-size:12.5px;color:var(--muted);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+  #formOverlay .qa-t{font-family:var(--font-mono);font-size:10px;font-weight:700;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+    display:flex;align-items:center;gap:10px}
+  #formOverlay .qa-t::after{content:"";flex:1;height:1px;background:var(--border)}
+  #formOverlay .qa{display:flex;gap:8px}
+  #formOverlay .qbtn{flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:6px;height:66px;border:1px solid var(--border);border-radius:12px;
+    background:var(--card);font-size:11.5px;font-weight:600;color:var(--label);
+    font-family:var(--font);text-align:center;padding:0 4px}
+  #formOverlay .qbtn i{font-size:21px}
+  #formOverlay .qbtn.play i{color:var(--ev-played)}
+  #formOverlay .qbtn.clean i{color:var(--ev-cleaned)}
+  #formOverlay .qbtn.note i{color:var(--ev-note)}
+  /* findable, not inviting */
+  #formOverlay .er-del{display:flex;align-items:center;justify-content:center;gap:8px;height:48px;
+    border:1px solid color-mix(in srgb,var(--danger) 40%,transparent);border-radius:11px;
+    background:transparent;color:var(--danger);font-size:14.5px;font-weight:600;
+    font-family:var(--font);margin-top:4px}
+  /* .modal-foot's base rule (unscoped, outside this media query) carries its
+     own unconditional display:flex; rebuildFormChrome sets this element's
+     hidden IDL property while the edit root is showing, which needs the same
+     UA-vs-author guard as every other toggle in this file. */
+  #formOverlay .modal-foot[hidden]{display:none}
+
   /* ── step 1: the lookup rows and the identity strip ─────────────────────
      Every add actually starts with a lookup — camera, search by name, or a
      pasted Spotify link — and never with typing, so step 1 opens on those
@@ -3263,6 +3315,32 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
            from step one; nothing after it is required. Field ids are unchanged,
            so every reader and writer of this form is untouched. -->
       <div class="form-spine" id="formSpine"></div>
+
+      <!-- You open an existing record to change one thing, not to walk four
+           steps. Phone only: the wizard's four steps become four doors, each
+           one saying what it already holds, plus the three things you actually
+           come here to do. Lives beside the .form-step siblings below, inside
+           modal-body's own scroll region, rather than beside formRail above it
+           — modal-body is the only element in this modal with overflow-y:auto
+           on a phone, and putting editRoot outside it would leave it with no
+           scroll container of its own for a screen that can run long on a
+           record with plenty logged. -->
+      <div class="edit-root" id="editRoot" hidden>
+        <div class="er-head" id="editRootHead"></div>
+        <div class="slist" id="editRootSections"></div>
+        <div class="qa-t">One tap</div>
+        <div class="qa">
+          <button type="button" class="qbtn play" onclick="quickLog('play')">
+            <i class="ti ti-player-play"></i>Log a play</button>
+          <button type="button" class="qbtn clean" onclick="quickLog('clean')">
+            <i class="ti ti-sparkles"></i>Log a clean</button>
+          <button type="button" class="qbtn note" onclick="openEditSection(3)">
+            <i class="ti ti-note"></i>Add a note</button>
+        </div>
+        <button type="button" class="er-del" id="editRootDelete"
+                onclick="armEditDelete()">
+          <i class="ti ti-trash"></i> Delete record</button>
+      </div>
 
       <div class="form-step" data-step="1">
         <!-- Every add starts with a lookup — camera, search, or a Spotify
@@ -7238,6 +7316,7 @@ function renderStep1Phone(){
 
 function openAdd(){
   editingId=null;myRating=0;wifeRating=0;coverDataUri='';coverDirty=false;editingCoverUrl='';
+  formEditRoot = false;   // the edit root only ever applies to an existing record
   document.getElementById('formTitle').textContent='add record';
   lookupDismissed = false;
   renderStep1Phone();
@@ -7386,8 +7465,14 @@ function openEdit(id){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   formBaseline = formValues();
+  // On a phone an existing record opens on its section list, not step 1 — you
+  // came here to change one thing, not to walk the wizard. Desktop is
+  // untouched: formEditRoot is false there, so rebuildFormChrome's root
+  // branch never engages and setFormStep(1) below renders exactly as before.
+  formEditRoot = isPhone();
   setFormStep(1);
   document.getElementById('formOverlay').classList.remove('hidden');
+  renderEditRoot();
   refreshScanUsage();
   resetFormScroll();
 }
@@ -7405,6 +7490,11 @@ const FORM_STEPS = [
 ];
 const TRACKLIST_STEP = 4;
 let formStep = 1;
+
+/* True while the phone's edit screen is showing its section list rather than
+ * a step. The one thing rebuildFormChrome needs to know to render the root
+ * chrome instead of the rail. */
+let formEditRoot = false;
 
 function setFormStep(n) {
   // Opening always starts with nothing kept; rememberDraft lights it again on
@@ -7477,6 +7567,201 @@ function rebuildFormChrome(){
   // back to desktop, where every section always renders open.
   renderPlaceChips();
   renderLogCollapse();
+
+  // the phone's edit root: no rail, no footer, no step body. Runs last so it
+  // overrides every hidden flag the branches above just set — the rail/spine
+  // build above still runs harmlessly even when root is about to hide its
+  // container again, which keeps this one function the single renderer for
+  // both the phone and desktop chrome, plus this third phone-only state.
+  const root = formEditRoot && phone;
+  document.getElementById('editRoot').hidden = !root;
+  rail.hidden = railRow.hidden = !phone || root;
+  document.querySelector('#formOverlay .modal-foot').hidden = root;
+  // Recomputed from formStep rather than only ever set true: rebuildFormChrome
+  // is also called directly (backToEditRoot, and a breakpoint change while the
+  // overlay is open), not only through setFormStep's own identical loop. A
+  // resize from phone back to desktop while the root was showing would
+  // otherwise leave every step body hidden=true forever — root just went
+  // false, so nothing here would ever turn one back on, and the wizard would
+  // render as a blank body until the next explicit setFormStep call.
+  document.querySelectorAll('#formOverlay .form-step').forEach(el => {
+    el.hidden = root || Number(el.dataset.step) !== formStep;
+  });
+  const cancel = document.getElementById('formHeadCancel');
+  if (phone && !root && editingId){
+    cancel.innerHTML = '<i class="ti ti-chevron-left"></i> edit';
+    cancel.onclick = backToEditRoot;
+  } else {
+    cancel.innerHTML = '<i class="ti ti-x"></i>';
+    cancel.onclick = () => closeForm();
+  }
+  if (root) renderEditRoot();
+}
+
+// ── task 8: the edit root screen and its quick actions ─────────────────────
+// You open an existing record to change one thing, not to walk 1-2-3-4. The
+// phone's edit screen lists the four sections instead, each previewing what
+// it already holds, plus the three things actually done most — log a play,
+// log a cleaning, add a note — as one-tap actions with an Undo toast.
+
+function backToEditRoot(){
+  formEditRoot = true;
+  rebuildFormChrome();
+  renderEditRoot();
+}
+
+/* Read once from the form's own fields, so a row can never describe a record
+ * the form has already moved on from. */
+function editRootValues(){
+  const v = id => document.getElementById(id).value;
+  return {
+    artist: v('fArtist'), year: v('fYear'), country: v('fCountry'),
+    haveIt: document.getElementById('fHaveIt').checked,
+    where: v('fWhere'), date: v('fDate'), condition: v('fCondition'),
+    myRating, wifeRating,
+    plays: (formPlayDates || []).length,
+    notes: (formNotes || []).length,
+    // Size and discs are .seg-pick widgets with no input behind them; the
+    // values live in module-level vars, which is what formValues() reads too.
+    size: formSize,
+    discs: formDiscCount,
+    tracks: (formTracks || []).length,
+    painted: !!(formVinylColor || formLabelColor),
+  };
+}
+
+const EDIT_SECTIONS = [
+  { n:1, icon:'ti-disc',          title:'The record',   preview:'recordPreview'   },
+  { n:2, icon:'ti-shopping-bag',  title:'The purchase', preview:'purchasePreview' },
+  { n:3, icon:'ti-star',          title:'The log',      preview:'logPreview'      },
+  { n:4, icon:'ti-list',          title:'The object',   preview:'objectPreview'   },
+];
+
+function renderEditRoot(){
+  const root = document.getElementById('editRoot');
+  root.hidden = !(isPhone() && formEditRoot);
+  if (root.hidden) return;
+
+  disarmEditDelete();   // reopening a record must never arrive armed
+
+  const cover = VinylCover.coverPreviewSrc({cover_url: editingCoverUrl}, coverDataUri);
+  const v = editRootValues();
+  document.getElementById('editRootHead').innerHTML = `
+    <div class="pi-cover">${cover ? `<img src="${esc(cover)}" alt="">` : '<i class="ti ti-photo"></i>'}</div>
+    <div class="pi-meta">
+      <b>${esc(v.artist) || 'Unknown artist'}</b>
+      <i>${esc(document.getElementById('fAlbum').value)}</i>
+      <em>${esc([v.year, v.size].filter(Boolean).join(' · '))}</em>
+    </div>`;
+  refreshEditRootPreviews();
+}
+
+/* Rebuilds the four preview lines from the current field values. Called on
+ * formChanged and after every quick action, so a row can never describe a
+ * record that has already moved on. */
+function refreshEditRootPreviews(){
+  const box = document.getElementById('editRootSections');
+  if (!box || document.getElementById('editRoot').hidden) return;
+  const v = editRootValues();
+  box.innerHTML = EDIT_SECTIONS.map(s => `
+    <button type="button" class="srow" onclick="openEditSection(${s.n})">
+      <span class="sic"><i class="ti ${s.icon}"></i></span>
+      <span class="stx"><b>${s.title}</b><span>${esc(VinylPhoneForm[s.preview](v))}</span></span>
+      <i class="ti ti-chevron-right chev"></i>
+    </button>`).join('');
+}
+
+/* Add a note routes to step 3 rather than composing inline: the note composer
+ * is already there, and duplicating it on the root screen would be a second
+ * set of #fNoteText ids. Step 3 opens with the notes section expanded because
+ * renderLogCollapse expands what has entries — for an empty notes list, the
+ * quick action expands it explicitly. */
+function openEditSection(n){
+  formEditRoot = false;
+  setFormStep(n);
+  if (n === 3){
+    const s = document.getElementById('notesSection');
+    if (s) s.dataset.collapsed = 'false';
+    document.getElementById('fNoteText').focus();
+  }
+}
+
+/* The common case by a wide margin, and today it costs six taps: edit, step 3,
+ * scroll, add play date, pick today, save.
+ *
+ * Routed through addPlayDate/addCleanedDate rather than pushing onto the
+ * arrays: addPlayDate also bumps the play count and re-renders, and a quick
+ * action that skipped the bump would silently disagree with the card's own
+ * + button.
+ *
+ * Saves through saveQuiet(), which PUTs the whole form, rather than the
+ * patchRecord(id, changes) partial-update helper the cards use. The edit
+ * root's rows are read straight off the form's own fields (editRootValues,
+ * above) — not off the `records` array patchRecord updates — so a quick
+ * action has to leave the form's own state consistent with what was sent,
+ * and saveQuiet is what already keeps those two in step (see its own
+ * comment). It does mean an unsaved edit sitting in another section — a
+ * typed year, a moved rating — rides along with the quick action instead of
+ * being left behind; that is the form's ordinary behaviour everywhere else
+ * (Save always saves everything on screen, not just what changed), so a
+ * quick action saving quietly rather than saving less is the one that keeps
+ * its promise. */
+async function quickLog(kind){
+  const before = [...(kind === 'play' ? formPlayDates : formCleanedDates)];
+  const playsBefore = Number(document.getElementById('fPlays').value) || 0;
+  (kind === 'play' ? addPlayDate : addCleanedDate)();
+  if (!await saveQuiet()){ restoreDates(kind, before, playsBefore); return; }
+  refreshEditRootPreviews();
+  toastUndo(kind === 'play' ? 'Play logged' : 'Cleaning logged', async () => {
+    restoreDates(kind, before, playsBefore);
+    if (await saveQuiet()){ refreshEditRootPreviews(); toast('Undone'); }
+  });
+}
+
+/* Whole-array restore, not a splice by index: addPlayDate appends a nowStamp()
+ * and moves a separate count field, so putting both back from the snapshot is
+ * the only version that cannot drift. */
+function restoreDates(kind, before, playsBefore){
+  if (kind === 'play'){
+    formPlayDates = before;
+    setPlayCount(playsBefore);
+    renderPlayDatesForm();
+  } else {
+    formCleanedDates = before;
+    renderCleanedDatesForm();
+  }
+  refreshEditRootPreviews();
+}
+
+/* The existing delete lives in the detail drawer and ends in closeDetail().
+ * Called from the form it would leave the sheet open on a record that is
+ * gone, so the form has its own closing — the request itself is doDelete's. */
+let editDeleteArmed = false;
+
+function armEditDelete(){
+  const btn = document.getElementById('editRootDelete');
+  if (!editDeleteArmed){
+    editDeleteArmed = true;
+    btn.classList.add('armed');
+    btn.innerHTML = '<i class="ti ti-trash"></i> Tap again to delete';
+    // Arming is not a commitment. Anywhere else disarms it, which is what
+    // keeps a mis-tap at the bottom of a scroll from becoming a delete.
+    setTimeout(() => { if (editDeleteArmed) disarmEditDelete(); }, 4000);
+    return;
+  }
+  disarmEditDelete();
+  const id = editingId;
+  closeForm(true);                 // no discard prompt: the record is going
+  doDelete(id);
+}
+
+function disarmEditDelete(){
+  editDeleteArmed = false;
+  const btn = document.getElementById('editRootDelete');
+  if (btn){
+    btn.classList.remove('armed');
+    btn.innerHTML = '<i class="ti ti-trash"></i> Delete record';
+  }
 }
 
 /* How long a draft is still what you meant. Long enough to survive a crash,
@@ -7567,6 +7852,7 @@ function rememberDraft(){
 function formChanged() {
   if (formBaseline) rememberDraft();
   renderStep1Phone();
+  refreshEditRootPreviews();   // a no-op while the root itself is not showing
 }
 
 ['input', 'change'].forEach(type => document.addEventListener(type, e => {
@@ -9778,7 +10064,12 @@ function toastUndo(msg, onUndo){
   const el = document.getElementById('toast');
   el.innerHTML = '<span></span><button type="button" class="toast-undo">Undo</button>';
   el.querySelector('span').textContent = msg;
-  el.querySelector('.toast-undo').onclick = () => { hideToast(); onUndo(); };
+  // Returned, not just called: task 8's undo (log a play, log a clean) saves
+  // again on the way back, and a caller awaiting the click needs that promise
+  // to settle before checking anything the save touches. A synchronous
+  // onUndo (the only kind that existed before task 8) returns undefined
+  // either way, so this changes nothing for it.
+  el.querySelector('.toast-undo').onclick = () => { hideToast(); return onUndo(); };
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, 6000);
