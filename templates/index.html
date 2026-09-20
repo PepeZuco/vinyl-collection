@@ -2445,6 +2445,19 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .form-rail-label b{font-size:18px;font-weight:700;letter-spacing:-.02em}
   #formOverlay .form-rail-label span{font-family:var(--font-mono);font-size:11px;
     color:var(--muted);letter-spacing:.06em}
+  /* Task 4's rail.hidden=!phone never needed this: on desktop these two
+   * rules are out of scope (this whole block is inside
+   * @media(max-width:760px)), so the UA [hidden] rule wins unopposed. Task
+   * 8's rail.hidden = !phone || root (further down, in rebuildFormChrome)
+   * made the phone+edit-root combination reachable for the first time — and
+   * there this same author display:flex is now in scope while hidden is
+   * true, the identical UA-vs-author trap already fixed for .phone-lookup,
+   * .phone-identity, .form-layout, .log-plus, .edit-root and .modal-foot
+   * above. Without this the four-segment rail and its "N / 4" label would
+   * sit above the section list on a screen with no steps to progress
+   * through. */
+  #formOverlay .form-rail[hidden]{display:none}
+  #formOverlay .form-rail-label[hidden]{display:none}
   /* back shrinks to its icon so next keeps the width its role deserves */
   #formOverlay .modal-foot #formBackBtn{flex:0 0 62px}
   #formOverlay .modal-foot .btn.hidden-phone{display:none}

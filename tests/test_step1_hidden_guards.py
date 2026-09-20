@@ -58,6 +58,14 @@ GUARDS = [
     # Same trap, same fix.
     "#formOverlay .edit-root[hidden]{display:none}",
     "#formOverlay .modal-foot[hidden]{display:none}",
+    # Task 8's rail.hidden = !phone || root made the phone+edit-root
+    # combination reachable for the first time; Task 4's rail.hidden = !phone
+    # alone never needed a guard because the display:flex rule that matters
+    # here is itself scoped inside @media(max-width:760px) and desktop was
+    # always out of that rule's scope. See the comment beside these two rules
+    # in templates/index.html.
+    "#formOverlay .form-rail[hidden]{display:none}",
+    "#formOverlay .form-rail-label[hidden]{display:none}",
 ]
 
 
