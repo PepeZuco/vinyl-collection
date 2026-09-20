@@ -2131,6 +2131,11 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .place-form input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
 .place-err{font-size:12px;color:var(--danger);min-height:16px}
 .place-form-foot{display:flex;justify-content:flex-end;gap:8px}
+/* Browser defaults are dark blue / purple: unreadable on the dark ground. */
+.note-link:link,.note-link:visited{text-decoration:underline;text-underline-offset:2px}
+[data-theme="dark"] .note-link:link{color:#7ec8f5}
+[data-theme="dark"] .note-link:visited{color:#c9a8f0}
+[data-theme="dark"] .note-link:hover{color:#a9dcff}
 .detail-notes-body p{margin-bottom:6px}
 .detail-notes-body h1,.detail-notes-body h2,.detail-notes-body h3{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--accent)}
 .detail-notes-body ul,.detail-notes-body ol{padding-left:16px;margin-bottom:6px}
@@ -3890,7 +3895,16 @@ if (typeof marked !== 'undefined' && marked.use && marked.Renderer) {
     // Delegate to the stock renderer so escaping, titles and mailto: keep
     // whatever marked does with them, and only add the attributes.
     const html = marked.Renderer.prototype.link.call(this, href, title, text);
-    return html.replace(/^<a /, '<a target="_blank" rel="noopener noreferrer" ');
+    // A link to another record (or anywhere in this app) is a move inside the
+    // page: the hashchange handler opens it, so no new tab.
+    let inApp = false;
+    try {
+      const u = new URL(href, location.href);
+      inApp = u.origin === location.origin && u.pathname === location.pathname && !!u.hash;
+    } catch (e) {}
+    return html.replace(/^<a /, inApp
+      ? '<a class="note-link" '
+      : '<a class="note-link" target="_blank" rel="noopener noreferrer" ');
   } } });
 }
 
