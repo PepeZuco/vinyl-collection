@@ -121,6 +121,9 @@ def test_the_query_asks_for_albums_by_mbid_and_excludes_comps():
     assert "primarytype:Album" in query
     assert "-secondarytype:Compilation" in query
     assert "-secondarytype:Live" in query
+    assert "-secondarytype:Mixtape\\/Street" in query
+    assert "-secondarytype:DJ-mix" in query
+    assert "-secondarytype:Remix" in query
     assert get.call_args_list[0].kwargs["params"]["limit"] == scan.MB_SEARCH_LIMIT
 
 

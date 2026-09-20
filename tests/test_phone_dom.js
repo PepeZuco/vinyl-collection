@@ -309,6 +309,29 @@ test('the phone moves save into the nav bar', async () => {
   }
 });
 
+// jsdom does not lay pages out, so this cannot check that the × actually
+// renders on the right and the title actually renders centred — that was the
+// review's Critical finding on task 4 (a third, empty flex child pushed both
+// off their intended spot under space-between). What jsdom CAN check is the
+// DOM structure the CSS fix depends on: the head's three children keep this
+// fixed order, and the desktop save button really is in the foot, not just
+// styled to look that way while still sitting in the head.
+test('desktop keeps the head save slot empty and save in the foot', async () => {
+  const { win, doc } = await boot({ phone: false });
+  try {
+    win.openAdd();
+    const head = doc.querySelector('.modal-head');
+    assert.deepStrictEqual([...head.children].map(el => el.id),
+      ['formHeadCancel', 'formTitle', 'formHeadSaveSlot']);
+    assert.strictEqual(doc.getElementById('formHeadSaveSlot').children.length, 0,
+      'the head save slot should carry no content on desktop');
+    assert.ok(doc.querySelector('#formFootSaveSlot #formSaveBtn'),
+      'save should live in the foot slot on desktop');
+  } finally {
+    win.close();
+  }
+});
+
 test('the wishlist relabel still finds the button after the move', async () => {
   const { win, doc } = await boot({ phone: true });
   try {

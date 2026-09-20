@@ -1385,6 +1385,7 @@ select option{background:var(--surface);color:var(--text)}
 .scan-count-row .scan-count{margin-bottom:0}
 .scan-vinyl-toggle{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
   color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap;margin-left:auto}
+.scan-vinyl-toggle + .scan-vinyl-toggle{margin-left:0}
 .scan-vinyl-toggle input{accent-color:var(--accent);cursor:pointer}
 .scan-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   padding:48px 28px;text-align:center}
@@ -2335,6 +2336,19 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .queue-counter{font-family:var(--font-mono);font-size:11px;color:var(--accent);
   border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:4px;padding:4px 9px}
 
+/* The phone's nav bar adds a third child to .modal-head — #formHeadSaveSlot,
+   empty on desktop, where save stays in the foot. Left alone, the base
+   .modal-head rule's justify-content:space-between spreads THREE items
+   (cancel, title, a zero-width slot) instead of two, so the slot's mere
+   presence pushes the × left and leaves the title off-centre even though it
+   renders nothing. Hiding it removes it from the flex line entirely, and
+   order puts × back on the right of two remaining items, exactly as the
+   original two-child head (title, then ×) rendered. Scoped to #formOverlay
+   so no other modal's head is touched; the 760px query below overrides both
+   for the phone's own order (cancel, title, slot). */
+#formOverlay .head-save-slot{display:none}
+#formOverlay .head-cancel{order:1}
+
 /* ── form on a phone ───────────────────────────────────────────────────────
    The form had no mobile rules at all: it rendered as the desktop's floating
    92vh box, so `save` sat below the fold behind the whole scroll. Full screen,
@@ -2383,10 +2397,16 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .playdate-delete{padding:5px}
   /* nav bar: cancel · title · save. The × became a word because on a phone
      the head is the only place the two verbs can both sit, and an icon next
-     to a text button reads as a lesser action than it is. */
+     to a text button reads as a lesser action than it is. Both order and
+     display are overrides of the desktop-scoped rules above, not
+     restatements of the default: the slot goes back on the flex line (it now
+     holds the moved save button) and the cancel button's order is put back
+     to first explicitly, rather than relying on it already being first in
+     DOM order — the two are meant to be read as a pair. */
   #formOverlay .modal-head{display:flex;align-items:center;gap:10px;padding:10px 14px 11px}
   #formOverlay .modal-title{flex:1;text-align:center;font-family:var(--font-mono);
     font-size:12.5px;letter-spacing:.08em;text-transform:uppercase}
+  #formOverlay .head-save-slot{display:block}
   #formOverlay .head-cancel{order:-1}
   #formOverlay #formSaveBtn{height:auto;padding:4px 2px;background:none;border:none;
     color:var(--accent);font-weight:700;font-size:15px}
@@ -8196,6 +8216,16 @@ function toggleSearchVinylOnly(on){
   renderSearchResults();
 }
 
+// On by default, unlike vinyl-only: a card that says "no artwork found" is a
+// grey disc you cannot recognise a record by, and rows past the server's
+// cover-fetch cap never had a chance to get one. Unticking brings them back.
+let searchArtOnly = true;
+
+function toggleSearchArtOnly(on){
+  searchArtOnly = !!on;
+  renderSearchResults();
+}
+
 
 function openSearchResults(data){
   document.getElementById('scanResultsTitle').textContent = 'search results';
@@ -8246,7 +8276,8 @@ function renderSearchResults(){
   // server, not this function, does the vinyl-first sort.
   const shown = searchResults
     .map((c, i) => [c, i])
-    .filter(([c]) => !searchVinylOnly || c.vinyl !== 'none');
+    .filter(([c]) => !searchVinylOnly || c.vinyl !== 'none')
+    .filter(([c]) => !searchArtOnly || c.cover_data);
 
   const cards = shown.map(([c, i]) => scanCardHtml(c, {
     selectable: true,
@@ -8264,17 +8295,28 @@ function renderSearchResults(){
 
   const grid = shown.length
     ? `<div class="scan-grid wide">${cards}</div>`
-    : `<div class="scan-empty">
+    : (searchArtOnly
+      ? `<div class="scan-empty">
+         <i class="ti ti-photo-off"></i>
+         <div class="scan-empty-title">no artwork found</div>
+         <div class="scan-empty-text">none of the releases for this search came
+           back with a cover. Untick "artwork only" to see them anyway.</div>
+       </div>`
+      : `<div class="scan-empty">
          <i class="ti ti-disc-off"></i>
          <div class="scan-empty-title">nothing here was pressed</div>
          <div class="scan-empty-text">every release found for this search looks
            like it only ever existed digitally. Untick "vinyl only" to see them
            anyway — MusicBrainz misses plenty of real pressings.</div>
-       </div>`;
+       </div>`);
 
   body.innerHTML =
     `<div class="scan-count-row">
        <div class="scan-count">${esc(count)}</div>
+       <label class="scan-vinyl-toggle">
+         <input type="checkbox" ${searchArtOnly ? 'checked' : ''}
+                onchange="toggleSearchArtOnly(this.checked)"> artwork only
+       </label>
        <label class="scan-vinyl-toggle">
          <input type="checkbox" ${searchVinylOnly ? 'checked' : ''}
                 onchange="toggleSearchVinylOnly(this.checked)"> vinyl only

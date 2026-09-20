@@ -501,8 +501,15 @@ def lookup_discography(mbid: str, album: str | None = None) -> list[dict]:
     if not mbid:
         return []
 
+    # Mixtapes, DJ mixes and remixes are excluded too: MusicBrainz returns
+    # every score-100 group in arbitrary order, so for an artist with more than
+    # MB_SEARCH_LIMIT of them the limit cuts at random. Measured live, The
+    # Weeknd has 56 matches without these exclusions (40 came back, all
+    # mixtapes, none of Starboy / After Hours / Dawn FM) and 12 with them.
     query = (f"arid:{mbid} AND primarytype:Album"
-             " AND -secondarytype:Compilation AND -secondarytype:Live")
+             " AND -secondarytype:Compilation AND -secondarytype:Live"
+             " AND -secondarytype:Mixtape\\/Street"
+             " AND -secondarytype:DJ-mix AND -secondarytype:Remix")
     if album:
         query += f" AND releasegroup:({_lucene_escape(album)})"
 
