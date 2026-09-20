@@ -188,3 +188,113 @@ test('the same focus does nothing on desktop', async () => {
   assert.strictEqual(called, false, 'the desktop layout does not need this scroll');
   win.close();
 });
+
+// ── the nav bar, the rail and the footer ─────────────────────────────────────
+// Task 4's rebuildFormChrome renders the desktop spine and the phone's rail
+// from one function, branching on isPhone(). These check that the branch
+// actually keeps the two modes apart, that the save button is moved rather
+// than duplicated, and that a live breakpoint change re-renders the chrome.
+
+test('desktop keeps the four-step spine', async () => {
+  const { win, doc } = await boot({ phone: false });
+  win.openAdd();
+  const steps = doc.querySelectorAll('#formSpine .fstep');
+  assert.strictEqual(steps.length, 4);
+  assert.match(steps[0].textContent, /Identify/);
+  assert.strictEqual(doc.querySelectorAll('#formRail .rail-seg').length, 0);
+  win.close();
+});
+
+test('the phone gets a rail instead of the spine', async () => {
+  const { win, doc } = await boot({ phone: true });
+  win.openAdd();
+  assert.strictEqual(doc.querySelectorAll('#formSpine .fstep').length, 0);
+  assert.strictEqual(doc.querySelectorAll('#formRail .rail-seg').length, 4);
+  win.close();
+});
+
+test('the rail marks the steps behind the current one done', async () => {
+  const { win, doc } = await boot({ phone: true });
+  win.openAdd();
+  win.setFormStep(3);
+  const cls = [...doc.querySelectorAll('#formRail .rail-seg')]
+    .map(s => s.className.replace('rail-seg', '').trim());
+  assert.deepStrictEqual(cls, ['done', 'done', 'now', 'ahead']);
+  win.close();
+});
+
+test('the rail names the step the phone is on', async () => {
+  const { win, doc } = await boot({ phone: true });
+  win.openAdd();
+  win.setFormStep(2);
+  assert.match(doc.getElementById('formRailLabel').textContent, /The purchase/);
+  assert.match(doc.getElementById('formRailCount').textContent, /2\s*\/\s*4/);
+  win.close();
+});
+
+test('rail segments are not reachable by a thumb or a tab', async () => {
+  // A 3px strip is not a touch target; Back and the rail label carry navigation.
+  const { win, doc } = await boot({ phone: true });
+  win.openAdd();
+  for (const seg of doc.querySelectorAll('#formRail .rail-seg')) {
+    assert.strictEqual(seg.tagName, 'I');
+    assert.strictEqual(seg.getAttribute('onclick'), null);
+    assert.strictEqual(seg.getAttribute('tabindex'), null);
+  }
+  win.close();
+});
+
+test('the save button exists exactly once in both modes', async () => {
+  for (const phone of [false, true]) {
+    const { win, doc } = await boot({ phone });
+    win.openAdd();
+    assert.strictEqual(doc.querySelectorAll('#formSaveBtn').length, 1,
+      `#formSaveBtn duplicated on ${phone ? 'phone' : 'desktop'}`);
+    win.close();
+  }
+});
+
+test('the phone moves save into the nav bar', async () => {
+  const { win, doc } = await boot({ phone: true });
+  win.openAdd();
+  assert.ok(doc.querySelector('.modal-head #formSaveBtn'),
+            'save should live in the nav bar on a phone');
+  win.close();
+});
+
+test('the wishlist relabel still finds the button after the move', async () => {
+  const { win, doc } = await boot({ phone: true });
+  win.openAdd();
+  win.setHaveIt(false);
+  assert.match(doc.getElementById('formSaveBtn').textContent, /wishlist/i);
+  win.close();
+});
+
+test('a breakpoint change while the form is open swaps the chrome', async () => {
+  const { win, doc } = await boot({ phone: false });
+  win.openAdd();
+  assert.strictEqual(doc.querySelectorAll('#formSpine .fstep').length, 4);
+  win.__setPhone(true);
+  assert.strictEqual(doc.querySelectorAll('#formRail .rail-seg').length, 4);
+  assert.strictEqual(doc.querySelectorAll('#formSpine .fstep').length, 0);
+  win.close();
+});
+
+test('the last step turns the next button into the save action', async () => {
+  const { win, doc } = await boot({ phone: true });
+  win.openAdd();
+  win.setFormStep(4);
+  const next = doc.getElementById('formNextBtn');
+  assert.strictEqual(next.disabled, false);
+  assert.match(next.textContent, /save/i);
+  win.close();
+});
+
+test('the two step lists agree on how many steps there are', async () => {
+  // rebuildFormChrome indexes VinylPhoneForm.STEPS by a step number that
+  // setFormStep clamps to FORM_STEPS.length. A fifth step added to one list
+  // and not the other reads undefined.phone and throws.
+  const { win } = await boot({ phone: false });
+  assert.strictEqual(win.FORM_STEPS.length, win.VinylPhoneForm.STEPS.length);
+  win.close();
+});

@@ -2381,6 +2381,32 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay .playdate-row input[type=date]{width:132px}
   #formOverlay .playdate-row input[type=time]{width:78px}
   #formOverlay .playdate-delete{padding:5px}
+  /* nav bar: cancel · title · save. The × became a word because on a phone
+     the head is the only place the two verbs can both sit, and an icon next
+     to a text button reads as a lesser action than it is. */
+  #formOverlay .modal-head{display:flex;align-items:center;gap:10px;padding:10px 14px 11px}
+  #formOverlay .modal-title{flex:1;text-align:center;font-family:var(--font-mono);
+    font-size:12.5px;letter-spacing:.08em;text-transform:uppercase}
+  #formOverlay .head-cancel{order:-1}
+  #formOverlay #formSaveBtn{height:auto;padding:4px 2px;background:none;border:none;
+    color:var(--accent);font-weight:700;font-size:15px}
+  /* the rail — a progress readout, not a control: four segments at 3px are
+     not a touch target, so navigation stays with Back and the label */
+  #formOverlay .form-rail{display:flex;gap:5px;padding:0 14px 10px}
+  #formOverlay .form-rail .rail-seg{flex:1;height:3px;border-radius:2px;
+    background:var(--border);display:block}
+  #formOverlay .form-rail .rail-seg.done{background:var(--ev-played)}
+  #formOverlay .form-rail .rail-seg.now{background:var(--accent)}
+  #formOverlay .form-rail-label{display:flex;align-items:baseline;justify-content:space-between;
+    padding:0 14px 12px}
+  #formOverlay .form-rail-label b{font-size:18px;font-weight:700;letter-spacing:-.02em}
+  #formOverlay .form-rail-label span{font-family:var(--font-mono);font-size:11px;
+    color:var(--muted);letter-spacing:.06em}
+  /* back shrinks to its icon so next keeps the width its role deserves */
+  #formOverlay .modal-foot #formBackBtn{flex:0 0 62px}
+  #formOverlay .modal-foot .btn.hidden-phone{display:none}
+  /* the draft flag moves off the footer, onto the rail line */
+  #formOverlay .draft-flag{position:absolute;right:14px;margin:0}
 }
 
 /* ── multi-artist editor in form ───────────────────────────────────────────── */
@@ -3024,8 +3050,19 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <div class="overlay hidden" id="formOverlay">
   <div class="modal modal-wide">
     <div class="modal-head">
+      <button class="btn btn-ghost btn-sm head-cancel" id="formHeadCancel"
+              onclick="closeForm()"><i class="ti ti-x"></i></button>
       <span class="modal-title" id="formTitle">add record</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeForm()"><i class="ti ti-x"></i></button>
+      <!-- Moved here by rebuildFormChrome on a phone, and back to the foot on
+           desktop. One element, never two: syncSaveLabel and the wishlist
+           relabel both address it by id. -->
+      <span class="head-save-slot" id="formHeadSaveSlot"></span>
+    </div>
+    <!-- the phone's rail; empty and hidden on desktop -->
+    <div class="form-rail" id="formRail" hidden></div>
+    <div class="form-rail-label" id="formRailLabelRow" hidden>
+      <b id="formRailLabel"></b>
+      <span id="formRailCount"></span>
     </div>
     <div class="queue-strip" id="queueStrip" hidden>
       <span class="queue-label">from your search</span>
@@ -3346,10 +3383,12 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 
     <div class="modal-foot">
       <span class="draft-flag" id="draftFlag" hidden><span class="d"></span>draft kept</span>
-      <button class="btn" onclick="closeForm()">cancel</button>
+      <button class="btn hidden-phone" onclick="closeForm()">cancel</button>
       <button class="btn" id="formBackBtn" onclick="setFormStep(formStep - 1)"><i class="ti ti-arrow-left"></i> back</button>
-      <button class="btn" id="formNextBtn" onclick="setFormStep(formStep + 1)">next <i class="ti ti-arrow-right"></i></button>
-      <button class="btn btn-primary" id="formSaveBtn">save</button>
+      <button class="btn" id="formNextBtn">next <i class="ti ti-arrow-right"></i></button>
+      <span class="foot-save-slot" id="formFootSaveSlot">
+        <button class="btn btn-primary" id="formSaveBtn">save</button>
+      </span>
     </div>
   </div>
 </div>
@@ -6995,20 +7034,59 @@ function setFormStep(n) {
   document.querySelectorAll('#formOverlay .form-step').forEach(el => {
     el.hidden = Number(el.dataset.step) !== formStep;
   });
-  document.getElementById('formBackBtn').disabled = formStep === 1;
-  document.getElementById('formNextBtn').disabled = formStep === FORM_STEPS.length;
   // The song pickers ARE the record's artist list, and the artists are typed on
   // an earlier step. Rebuilding on arrival is what makes every route here — the
   // spine, the next button, the detail drawer's "add the songs" — offer the
   // artists the record actually has by now.
   if (formStep === TRACKLIST_STEP) renderTracksForm();
-  document.getElementById('formSpine').innerHTML = FORM_STEPS.map(st => `
-    <button type="button" class="fstep${st.n === formStep ? ' on' : ''}${st.n < formStep ? ' done' : ''}"
-            onclick="setFormStep(${st.n})">
-      <span class="fstep-n">${st.n < formStep ? '<i class="ti ti-check"></i>' : st.n}</span>
-      <span class="fstep-t"><b>${st.label}</b><small>${st.sub}</small></span>
-    </button>`).join('');
+  rebuildFormChrome();
   resetFormScroll();
+}
+
+/* One renderer for both modes, called by setFormStep and by a breakpoint
+ * change. Two layouts kept in step by a branch rather than by discipline:
+ * the desktop half renders exactly what setFormStep rendered before. */
+function rebuildFormChrome(){
+  const phone  = isPhone();
+  const spine  = document.getElementById('formSpine');
+  const rail   = document.getElementById('formRail');
+  const railRow= document.getElementById('formRailLabelRow');
+  const save   = document.getElementById('formSaveBtn');
+
+  spine.hidden = phone;
+  rail.hidden = railRow.hidden = !phone;
+
+  if (phone){
+    spine.innerHTML = '';
+    rail.innerHTML = VinylPhoneForm.railStates(formStep)
+      .map(state => `<i class="rail-seg ${state}"></i>`).join('');
+    document.getElementById('formRailLabel').textContent =
+      VinylPhoneForm.STEPS[formStep - 1].phone;
+    document.getElementById('formRailCount').textContent = `${formStep} / ${FORM_STEPS.length}`;
+    document.getElementById('formHeadSaveSlot').appendChild(save);
+  } else {
+    rail.innerHTML = '';
+    spine.innerHTML = FORM_STEPS.map(st => `
+      <button type="button" class="fstep${st.n === formStep ? ' on' : ''}${st.n < formStep ? ' done' : ''}"
+              onclick="setFormStep(${st.n})">
+        <span class="fstep-n">${st.n < formStep ? '<i class="ti ti-check"></i>' : st.n}</span>
+        <span class="fstep-t"><b>${st.label}</b><small>${st.sub}</small></span>
+      </button>`).join('');
+    document.getElementById('formFootSaveSlot').appendChild(save);
+  }
+
+  /* On the last step there is nowhere to advance to. Today the next button
+   * simply greys out, which leaves a dead control in the footer's main slot;
+   * it becomes the wizard's terminal action instead. The nav bar's save is
+   * still the one that is live from step one. */
+  const next = document.getElementById('formNextBtn');
+  const last = formStep === FORM_STEPS.length;
+  next.disabled = false;
+  next.innerHTML = last
+    ? '<i class="ti ti-check"></i> save record'
+    : 'next <i class="ti ti-arrow-right"></i>';
+  next.onclick = last ? submitForm : () => setFormStep(formStep + 1);
+  document.getElementById('formBackBtn').disabled = formStep === 1;
 }
 
 /* How long a draft is still what you meant. Long enough to survive a crash,
@@ -11826,6 +11904,17 @@ function initIdleSpotlight() {
  * range gets the phone layout without a reload. */
 const phoneMQ = window.matchMedia('(max-width:760px)');
 function isPhone(){ return !!(phoneMQ && phoneMQ.matches); }
+
+/* Safari added addEventListener to MediaQueryList in 14; addListener is the
+ * older spelling still carried by anything before that. Feature-detecting
+ * both, in this order, is what lets the form's chrome swap live when an iPad
+ * rotates across 760px instead of only taking effect on the next reload. */
+if (phoneMQ.addEventListener) phoneMQ.addEventListener('change', onBreakpointChange);
+else if (phoneMQ.addListener) phoneMQ.addListener(onBreakpointChange);
+
+function onBreakpointChange(){
+  if (!document.getElementById('formOverlay').classList.contains('hidden')) rebuildFormChrome();
+}
 
 /* iOS leaves the layout viewport at full height when the keyboard opens, so
  * a bottom-pinned bar ends up behind it. visualViewport reports what is
