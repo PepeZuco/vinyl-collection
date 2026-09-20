@@ -16,6 +16,10 @@ import pytest
 _TEST_DATA_DIR = tempfile.mkdtemp(prefix="vinyl-tests-")
 os.environ["DATA_DIR"] = _TEST_DATA_DIR
 os.environ.pop("DATABASE_URL", None)
+# No snapshot thread under the suite: importing app would otherwise start one
+# per reload, each ticking against whatever tmp database that module built.
+# The tests that cover the scheduler opt back in explicitly.
+os.environ["BACKUP_ENABLED"] = "0"
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
