@@ -641,6 +641,41 @@ test('the plus on a collapsed section opens it rather than navigating', async ()
   }
 });
 
+test('the plus itself hides once it opens its own section', async () => {
+  // The plus's onclick used to set dataset.collapsed directly, which left
+  // the plus visible over a section that had nothing left to expand.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    press(win, doc.querySelector('#playDatesSection .log-plus'));
+    assert.strictEqual(doc.querySelector('#playDatesSection .log-plus').hidden, true);
+  } finally {
+    win.close();
+  }
+});
+
+test('opening an empty section by hand survives an unrelated re-render', async () => {
+  // renderLogCollapse recomputes every section's collapsed state from
+  // scratch on every call, driven by LOG_SECTIONS, not just the section
+  // whose own entries changed. Opening notesSection by hand while it is
+  // still empty used to get silently re-collapsed the next time ANY
+  // section re-rendered (logging a play, here) — the plus's onclick set
+  // dataset.collapsed = 'false' directly instead of going through a sticky
+  // flag renderLogCollapse itself checks.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    press(win, doc.querySelector('#notesSection .log-plus'));
+    assert.strictEqual(doc.getElementById('notesSection').dataset.collapsed, 'false');
+    win.addPlayDate();   // a different section's re-render, notesSection is still empty
+    assert.strictEqual(doc.getElementById('notesSection').dataset.collapsed, 'false');
+  } finally {
+    win.close();
+  }
+});
+
 test('adding the first play date expands the section it just went into', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
@@ -672,6 +707,26 @@ test('notes keep their static "markdown" label on desktop', async () => {
   const { win, doc } = await boot({ phone: false });
   try {
     win.openAdd();
+    assert.strictEqual(doc.getElementById('notesCount').textContent, 'markdown');
+  } finally {
+    win.close();
+  }
+});
+
+test('crossing back to desktop restores notesCount after a phone count overwrote it', async () => {
+  // The scenario the test above does NOT cover: playDatesCount and
+  // cleanedDatesCount self-heal on the way back to desktop because their
+  // own renderers (renderPlayDatesForm/renderCleanedDatesForm) always set
+  // their count text before calling renderLogCollapse; notesCount has no
+  // such writer, so renderLogCollapse itself has to know to restore its
+  // static desktop label rather than passing through whatever a phone
+  // render last wrote there.
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openAdd();
+    win.setFormStep(3);
+    assert.notStrictEqual(doc.getElementById('notesCount').textContent, 'markdown');
+    win.__setPhone(false);
     assert.strictEqual(doc.getElementById('notesCount').textContent, 'markdown');
   } finally {
     win.close();
