@@ -77,6 +77,20 @@ def test_a_snapshot_that_fails_leaves_no_file_behind(tmp_path):
     assert list(backups.glob("vinyl-*.db")) == []
 
 
+def test_no_snapshot_when_there_is_no_database_yet(tmp_path):
+    """sqlite3.connect() creates whatever path it is given, so an unguarded
+    snapshot of a missing database writes a valid, empty one — and it would
+    hold today's slot, so the real data arriving an hour later gets no backup
+    until tomorrow."""
+    source = tmp_path / "vinyl.db"
+    backups = tmp_path / "backups"
+
+    assert backup.run_backup(str(source), str(backups), today=datetime.date(2026, 9, 20)) is None
+
+    assert not source.exists(), "the backup created the database it was meant to copy"
+    assert not list(backups.glob("vinyl-*.db"))
+
+
 def test_prune_keeps_the_five_newest_days(tmp_path):
     backups = tmp_path / "backups"
     backups.mkdir()
@@ -105,6 +119,24 @@ def test_prune_only_touches_its_own_snapshots(tmp_path):
     assert (backups / "vinyl.db").exists()
     assert (backups / "notes.txt").exists()
 
+
+
+def test_prune_clears_partials_left_by_a_killed_process(tmp_path):
+    """A redeploy SIGKILLs the app; a snapshot caught mid-write leaves its temp
+    file behind. Nothing else ever deletes those, so without this the volume
+    grows by a whole database every time that happens."""
+    backups = tmp_path / "backups"
+    backups.mkdir()
+    abandoned = backups / "vinyl-2026-09-20.db.4242.part"
+    abandoned.write_text("half a database")
+    os.utime(abandoned, (time.time() - 7200, time.time() - 7200))
+    in_flight = backups / "vinyl-2026-09-20.db.4243.part"
+    in_flight.write_text("another worker, still writing")
+
+    backup.prune(str(backups), keep=5)
+
+    assert not abandoned.exists()
+    assert in_flight.exists(), "deleted a snapshot another worker was still writing"
 
 def test_list_backups_reports_newest_first_with_sizes(tmp_path):
     backups = tmp_path / "backups"

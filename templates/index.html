@@ -2139,6 +2139,13 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .place-edit:hover{color:var(--accent)}
 .place-delete:hover{color:var(--danger)}
 .place-empty{font-size:12px;color:var(--muted);padding:10px 2px 14px;line-height:1.5}
+.backup-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border);
+  color:inherit;text-decoration:none}
+.backup-row:hover{color:var(--accent)}
+.backup-date{font-family:var(--font-mono);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.backup-size{font-family:var(--font-mono);font-size:11px;color:var(--label);margin-left:auto;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.backup-note{font-size:12px;color:var(--muted);padding:10px 2px 0;line-height:1.5}
 .place-new{display:flex;align-items:center;gap:7px;width:100%;margin-top:12px;padding:10px 2px;
   background:none;border:none;color:var(--accent);font-family:var(--font);font-size:12px;
   font-weight:700;cursor:pointer;text-align:left}
@@ -2949,6 +2956,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
           <button class="menu-item" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
           <button class="menu-item" id="placesBtn" style="display:none" onclick="openPlaces()"><i class="ti ti-map-pin"></i><span>places</span></button>
           <button class="menu-item" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
+          <button class="menu-item" id="backupsBtn" style="display:none" onclick="openBackups()"><i class="ti ti-history"></i><span>backups</span></button>
           <button class="menu-item" id="idleTriggerBtn"><i class="ti ti-disc"></i><span>preview screensaver</span></button>
           <label class="menu-item" id="importLabel" style="display:none">
             <i class="ti ti-upload"></i><span>import</span>
@@ -3933,6 +3941,19 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   </div>
 </div>
 
+<!-- The daily snapshots of the database, newest first. Download only: there
+     is deliberately no restore button here, because the one thing a backup
+     panel must never do is overwrite the live collection by mistake. -->
+<div class="overlay hidden" id="backupsOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head">
+      <span class="modal-title">backups</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeBackups()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" id="backupsBody"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="loginOverlay">
   <div class="modal" style="max-width:340px">
     <div class="modal-head">
@@ -4195,6 +4216,9 @@ function setAuthed(val) {
   // auth, and the button navigates rather than fetches — a visitor pressing it
   // would land on a bare {"error":"Unauthorized"} page with the app gone.
   document.getElementById('exportBtn').style.display = val ? '' : 'none';
+  // Same door as export: a snapshot is the whole database, private notes and
+  // photos included, and the rows download by navigation like export does.
+  document.getElementById('backupsBtn').style.display = val ? '' : 'none';
   document.getElementById('mtabFab').style.display = val ? '' : 'none';
   // Re-render cards to show/hide play count editors
   render();
@@ -9807,6 +9831,64 @@ document.getElementById('importInput').addEventListener('change',async e=>{
   }
 });
 document.getElementById('exportBtn').addEventListener('click',()=>{window.location.href='/api/export';});
+
+// ── backups ────────────────────────────────────────────────────────────────
+// The server snapshots the database once a day and keeps the last few. This
+// panel is the way to get one back: it lists what is on the volume and hands
+// the file over. Restoring is a deliberate, manual act on the server — see
+// the README — so nothing in here writes.
+function openBackups(){
+  document.getElementById('backupsOverlay').classList.remove('hidden');
+  document.getElementById('morePanel').classList.add('hidden');
+  renderBackups(null);
+  loadBackups();
+}
+
+function closeBackups(){
+  document.getElementById('backupsOverlay').classList.add('hidden');
+}
+
+async function loadBackups(){
+  try{
+    const r=await fetch('/api/backups');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    renderBackups(d.backups||[], d.keep_days);
+  }catch(err){
+    renderBackups('error');
+  }
+}
+
+function backupSize(bytes){
+  return (bytes/(1024*1024)).toFixed(1)+' MB';
+}
+
+// Three states, deliberately distinct: null is still loading, 'error' is a
+// request that did not answer, and an empty array is a real, answered empty.
+// A fresh volume honestly has no snapshots yet; a server that refused to
+// answer must never be dressed up as one, or a broken backup job would read
+// as a brand new install.
+function renderBackups(list, keepDays){
+  const body=document.getElementById('backupsBody');
+  if(list===null){body.innerHTML='<div class="backup-note">loading…</div>';return;}
+  if(list==='error'){
+    body.innerHTML='<div class="backup-note">could not read the backups — the server '
+      +'did not answer. try again, or check the logs.</div>';
+    return;
+  }
+  if(!list.length){
+    body.innerHTML='<div class="backup-note">no snapshots yet — the first one is taken '
+      +'within an hour of the server starting.</div>';
+    return;
+  }
+  const rows=list.map(b=>`<a class="backup-row" href="/api/backups/${esc(b.name)}">
+    <i class="ti ti-database"></i>
+    <span class="backup-date">${esc(b.date)}</span>
+    <span class="backup-size">${backupSize(b.bytes)}</span>
+  </a>`).join('');
+  body.innerHTML=rows+`<div class="backup-note">the last ${keepDays||5} days are kept; `
+    +`older snapshots are deleted automatically.</div>`;
+}
 // Lets you see the idle screensaver on demand rather than waiting out the
 // real 2-minute timeout — fireIdleSpotlight() is the same function the idle
 // timer calls, so this is exactly what would happen anyway, just on request.
