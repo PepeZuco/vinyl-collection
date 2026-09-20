@@ -580,6 +580,14 @@ select option{background:var(--surface);color:var(--text)}
 .modal-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .modal-body{padding:18px}
 .modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surface);z-index:2}
+/* rebuildFormChrome sets #formOverlay's .modal-foot hidden IDL property
+ * while the phone's edit root is showing, and this class's own display:flex
+ * is unconditional and global (used on every modal, not just the phone
+ * form) — same UA-vs-author trap as .form-spine[hidden] above, and hoisted
+ * out of the 760px query for the same reason: scoping it there would only
+ * cover the state by accident (root implies phone today), not because the
+ * base rule is itself phone-scoped. */
+#formOverlay .modal-foot[hidden]{display:none}
 .spotify-mark{width:24px;height:24px;flex-shrink:0;display:block}
 .dm-sp{margin-top:12px}
 .sp-open,.sp-none{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 12px;border-radius:999px}
@@ -1019,6 +1027,16 @@ select option{background:var(--surface);color:var(--text)}
 /* the step spine — a real sequence, so it is numbered */
 .form-spine{display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;
   background:var(--card);margin-bottom:16px}
+/* rebuildFormChrome sets spine.hidden = phone on EVERY render, desktop and
+ * phone alike, and this class's own display:flex is unconditional and
+ * global — not scoped to the phone media query the way .form-rail[hidden]
+ * below is, so unlike that guard this one cannot live inside
+ * @media(max-width:760px) either; it has to beat the base rule at every
+ * width. Same UA-vs-author trap as .phone-lookup[hidden] and friends
+ * (author-origin display: always outranks the UA [hidden] rule regardless
+ * of specificity). Without this, a phone add/edit renders an empty
+ * bordered, rounded strip above the progress rail. */
+.form-spine[hidden]{display:none}
 .fstep{flex:1;display:flex;align-items:center;gap:10px;padding:11px 13px;background:transparent;
   border:none;border-right:1px solid var(--border);text-align:left;cursor:pointer;
   font-family:var(--font);transition:background .12s}
@@ -1041,6 +1059,13 @@ select option{background:var(--surface);color:var(--text)}
 .draft-flag{display:inline-flex;align-items:center;gap:7px;margin-right:auto;
   font-family:var(--font-mono);font-size:10.5px;color:#5FBF7A;letter-spacing:.04em}
 .draft-flag .d{width:6px;height:6px;border-radius:50%;background:#5FBF7A}
+/* Same trap as .form-spine above, on an element that predates this plan:
+ * rememberDraft()/setFormStep()/closeForm() all toggle draftFlag's hidden
+ * IDL property, on desktop and phone alike, and this class's own
+ * display:inline-flex is unconditional and global. Without this, "● draft
+ * kept" renders regardless of the hidden attribute — every form open would
+ * show it, not only once a draft actually exists. */
+.draft-flag[hidden]{display:none}
 
 .form-section{border:1px solid var(--border);border-radius:9px;background:var(--bg);overflow:hidden;margin-bottom:12px}
 .form-section > header{display:flex;align-items:center;gap:7px;padding:9px 13px;background:var(--card);border-bottom:1px solid var(--border);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--label)}
@@ -1448,6 +1473,16 @@ select option{background:var(--surface);color:var(--text)}
 #toast .toast-undo{margin-left:14px;background:none;border:none;color:var(--accent);
   font-family:var(--font);font-size:13px;font-weight:700;padding:2px 4px;cursor:pointer;
   pointer-events:auto}
+/* ...but claiming it back unconditionally means it stays tappable after
+ * hideToast() removes .show too — .toast only ever animates opacity/
+ * transform, never display or visibility, so the button is still sitting in
+ * the DOM, still opted back into pointer-events, for as long as nothing
+ * replaces it. A stray tap in that dead window silently runs onUndo() again
+ * (restoreDates()+saveQuiet(), reverting a logged play) on an invisible
+ * ~40x20px hit target. This re-closes that window the moment the fade-out
+ * starts, not only once the next toast's innerHTML wipe happens to remove
+ * the button. */
+#toast:not(.show) .toast-undo{pointer-events:none}
 @media(max-width:760px){
   #toast{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 }
@@ -2404,8 +2439,13 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   /* Task 9's drag-to-dismiss animates this same sheet with translateY, so it
      needs a transition to spring back on a short drag -- added as its own
      rule rather than folded into the block above, which is Task 2's and
-     stays exactly as it was. */
-  #formOverlay .modal.modal-wide{transition:transform .22s ease}
+     stays exactly as it was. Lists background explicitly alongside
+     transform, rather than transition:transform alone, because this
+     selector (.modal.modal-wide, two classes) outranks the base .modal
+     rule's transition:background .2s (one class) -- without it here too,
+     the phone sheet would silently lose the theme-toggle fade the base rule
+     gives every other modal. */
+  #formOverlay .modal.modal-wide{transition:background .2s,transform .22s ease}
   /* The grabber a thumb reaches for first on a sheet shaped like this.
      Purely a visual affordance -- aria-hidden in the markup -- the actual
      drag handles are it and the head, wired in the script at the bottom of
@@ -2533,11 +2573,9 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
     border:1px solid color-mix(in srgb,var(--danger) 40%,transparent);border-radius:11px;
     background:transparent;color:var(--danger);font-size:14.5px;font-weight:600;
     font-family:var(--font);margin-top:4px}
-  /* .modal-foot's base rule (unscoped, outside this media query) carries its
-     own unconditional display:flex; rebuildFormChrome sets this element's
-     hidden IDL property while the edit root is showing, which needs the same
-     UA-vs-author guard as every other toggle in this file. */
-  #formOverlay .modal-foot[hidden]{display:none}
+  /* the guard for .modal-foot[hidden] lives with its base rule, above the
+     760px query, since .modal-foot's own display:flex is unconditional and
+     global rather than scoped to this query — see the comment there. */
 
   /* ── step 1: the lookup rows and the identity strip ─────────────────────
      Every add actually starts with a lookup — camera, search by name, or a
@@ -2669,10 +2707,16 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   #formOverlay #fPaintPreview{--d:44px}
 }
 /* Task 9's script itself bails out of the whole gesture under reduced
-   motion (see initSheetDrag's onStart), so this transition is never actually
-   triggered by a drag there -- it is the same belt-and-suspenders as the
-   detailOverlay rule above, in case anything else ever sets this transform. */
-@media(prefers-reduced-motion:reduce){ #formOverlay .modal.modal-wide{transition:none} }
+   motion (see initSheetDrag's onStart), so dropping the transform transition
+   here is never actually what stops a drag from animating -- it is the same
+   belt-and-suspenders as the detailOverlay rule above, in case anything else
+   ever sets this transform. transition:none used to sit here instead,
+   which -- this rule is NOT scoped to the 760px query, so it reaches every
+   .modal.modal-wide, desktop included -- also cancelled the base .modal
+   rule's transition:background .2s for anyone with reduced motion on,
+   killing the theme-toggle fade globally. Keeping background here, only
+   dropping transform, is the fix for both. */
+@media(prefers-reduced-motion:reduce){ #formOverlay .modal.modal-wide{transition:background .2s} }
 
 /* ── multi-artist editor in form ───────────────────────────────────────────── */
 .artists-list{display:flex;flex-direction:column;gap:6px}
@@ -6773,8 +6817,20 @@ function renderNotesForm() {
 const LOG_SECTIONS = [
   { id: 'playDatesSection',    countId: 'playDatesCount',    entries: () => formPlayDates },
   { id: 'cleanedDatesSection', countId: 'cleanedDatesCount', entries: () => formCleanedDates },
-  { id: 'notesSection',        countId: 'notesCount',        entries: () => formNotes },
+  // notes' desktop label is static text ("markdown") that no renderer ever
+  // writes back — unlike the two date sections above, which set their own
+  // count immediately before every renderLogCollapse() call and so simply
+  // pass through unchanged here on desktop. Without desktopText, crossing
+  // back from phone (where this loop overwrote it with a count) left the
+  // header reading "none"/"N notes" forever, since nothing else ever
+  // restores it.
+  { id: 'notesSection', countId: 'notesCount', entries: () => formNotes, desktopText: 'markdown' },
 ];
+
+// Sections opened by hand via their own + button, kept open across whatever
+// re-render happens next. Cleared per form open (openAdd/openEdit) so state
+// never leaks from one record into the next.
+let stickyOpenLogSections = new Set();
 
 function renderLogCollapse(){
   const phone = isPhone();
@@ -6782,18 +6838,28 @@ function renderLogCollapse(){
     const el = document.getElementById(s.id);
     if (!el) continue;
     const entries = s.entries() || [];
-    // Desktop is never collapsed; on a phone, only what is empty.
-    const collapsed = phone && !VinylPhoneForm.logSectionOpen(entries);
+    // Desktop is never collapsed; on a phone, only what is empty AND has not
+    // been opened by hand. Without the sticky check, an empty section opened
+    // via its + would snap back shut the next time ANY section's entries
+    // changed, since this loop recomputes every section's collapsed state
+    // from scratch on every call.
+    const collapsed = phone && !VinylPhoneForm.logSectionOpen(entries) && !stickyOpenLogSections.has(s.id);
     el.dataset.collapsed = String(collapsed);
     const count = document.getElementById(s.countId);
-    if (count) count.textContent = phone ? VinylPhoneForm.logCount(entries) : count.textContent;
+    if (count) count.textContent = phone ? VinylPhoneForm.logCount(entries) : (s.desktopText ?? count.textContent);
     let plus = el.querySelector('.log-plus');
     if (phone && !plus){
       plus = document.createElement('button');
       plus.type = 'button';
       plus.className = 'log-plus';
       plus.innerHTML = '<i class="ti ti-plus"></i>';
-      plus.onclick = () => { el.dataset.collapsed = 'false'; };
+      // Goes through renderLogCollapse rather than setting dataset.collapsed
+      // directly, so the plus itself also hides (plus.hidden depends on
+      // `collapsed`, computed there) — and records the open in the sticky
+      // set first, so that recompute lands on `false` instead of
+      // immediately recomputing straight back to `true` for a still-empty
+      // section.
+      plus.onclick = () => { stickyOpenLogSections.add(s.id); renderLogCollapse(); };
       el.querySelector('header').appendChild(plus);
     }
     if (plus) plus.hidden = !phone || !collapsed;
@@ -7307,6 +7373,13 @@ function applyDraft(d){
  * one, so the lookups step aside for the fields. Reset per record by openAdd. */
 let lookupDismissed = false;
 
+// Deliberately asymmetric with renderStep1Phone's own local `hasCover`
+// below, which reads the cover well's has-cover class instead of these same
+// two variables: this function decides whether to switch away from the
+// lookup at all (identity from text alone is enough), while hasCover asks
+// specifically whether the cover well has something to show. Do not
+// "unify" the two onto one source of truth — they are answering different
+// questions.
 function hasIdentity(){
   return !!(document.getElementById('fArtist').value.trim()
          || document.getElementById('fAlbum').value.trim()
@@ -7410,6 +7483,7 @@ function openAdd(){
   document.getElementById('fCondition').value='';
   renderCondSwitch();
   resetNoteEdit();
+  stickyOpenLogSections.clear();   // a section opened by hand in a previous record must not leak into this one
   formNotes=[];
   formPlayDates=[];
   renderPlayDatesForm();
@@ -7498,6 +7572,7 @@ function openEdit(id){
   document.getElementById('fCondition').value=r.condition||'';
   renderCondSwitch();
   resetNoteEdit();
+  stickyOpenLogSections.clear();   // a section opened by hand in a previous record must not leak into this one
   formNotes=parseNotes(r.notes, r.bought_date||today());
   abandonScan();   // strand any note-photo upload still in the air
   formNoteImages=[];
@@ -7565,9 +7640,9 @@ function setFormStep(n) {
   const flag = document.getElementById('draftFlag');
   if (flag && n === 1) flag.hidden = !VinylDraft.load(draftStore(), Date.now(), DRAFT_MAX_AGE_MS);
   formStep = Math.min(FORM_STEPS.length, Math.max(1, n));
-  document.querySelectorAll('#formOverlay .form-step').forEach(el => {
-    el.hidden = Number(el.dataset.step) !== formStep;
-  });
+  // rebuildFormChrome() below re-runs this same loop itself (it has to —
+  // it also handles the edit-root override), so setting each .form-step's
+  // hidden flag here first would only be overwritten a few lines down.
   // The song pickers ARE the record's artist list, and the artists are typed on
   // an earlier step. Rebuilding on arrival is what makes every route here — the
   // spine, the next button, the detail drawer's "add the songs" — offer the
@@ -7588,7 +7663,6 @@ function rebuildFormChrome(){
   const save   = document.getElementById('formSaveBtn');
 
   spine.hidden = phone;
-  rail.hidden = railRow.hidden = !phone;
 
   if (phone){
     spine.innerHTML = '';
@@ -7641,7 +7715,8 @@ function rebuildFormChrome(){
   document.querySelector('#formOverlay .modal-foot').hidden = root;
   // Recomputed from formStep rather than only ever set true: rebuildFormChrome
   // is also called directly (backToEditRoot, and a breakpoint change while the
-  // overlay is open), not only through setFormStep's own identical loop. A
+  // overlay is open), not only from setFormStep — so it cannot assume
+  // anything upstream already set each step's hidden flag correctly. A
   // resize from phone back to desktop while the root was showing would
   // otherwise leave every step body hidden=true forever — root just went
   // false, so nothing here would ever turn one back on, and the wizard would
