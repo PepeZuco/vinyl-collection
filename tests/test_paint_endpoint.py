@@ -28,6 +28,7 @@ def client(tmp_path):
         yield c
     with app_module.app.app_context():
         app_module.db.drop_all()
+        app_module.db.create_all()
 
 
 def test_a_new_record_is_unpainted_by_default(client):
