@@ -4,8 +4,8 @@
 `viewport-fit=cover` hand the status bar's strip and the home indicator's strip
 to the page. That is what makes the app look installed rather than letterboxed
 — and it means every piece of fixed or sticky chrome is now responsible for its
-own clearance. Three did not have it, and all three were only visible on a real
-device:
+own clearance. Several did not have it, and every one was invisible until the
+app was opened on a real phone:
 
   * `header` — the collection title rendered underneath the clock.
   * `.dm-top` — the record sheet's close button sat behind the clock, so a
@@ -15,6 +15,16 @@ device:
     is global in this template, so the inset was spent OUT of the 58px instead
     of added to it. On a notched iPhone that left roughly 24px of usable bar
     and visibly squashed the tab icons and their labels.
+  * `#scanOverlay` — found a round later, and the same shape as `.dm-top`: the
+    results screen's "back to the form" button rendered under the clock, and it
+    is the only way out, so a search became a dead end.
+
+Three overlays drop the centring padding and go edge-to-edge on a phone
+(`#formOverlay`, `#detailOverlay`, `#scanOverlay`); those pay their own insets
+on their own chrome. Everything else keeps `.overlay`'s padding, which now
+carries the insets too so a tall centred dialog cannot slide under a system bar
+— a floor, so the next overlay someone adds is covered by default rather than
+by remembering.
 
 Like tests/test_step1_hidden_guards.py, this is a static check on the CSS the
 app actually serves. It cannot evaluate the cascade, it cannot lay anything
@@ -79,4 +89,34 @@ def test_the_tab_bar_grows_by_the_inset_rather_than_spending_it(page):
     assert tabbar, "could not find the .mobile-tabbar rule at all"
     assert "height:58px;" not in tabbar.group(0), (
         "a fixed 58px height is still present in the .mobile-tabbar rule"
+    )
+
+
+def test_the_scan_results_back_button_clears_the_status_bar(page):
+    """#scanOverlay goes edge-to-edge on a phone, so its own head is the only
+    thing standing between the back button and the clock. That button is the
+    single exit from a search result, which is what made this one costly."""
+    assert "border:none;\n    padding-top:env(safe-area-inset-top,0px)" in page, (
+        "#scanOverlay's modal lost its top inset — the 'back to the form' "
+        "button renders under the clock and a search becomes inescapable"
+    )
+
+
+def test_the_scan_results_footer_clears_the_home_indicator(page):
+    assert "padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px))" in page, (
+        "the scan results footer lost its bottom inset — 'add N records' sits "
+        "on the home indicator"
+    )
+
+
+def test_centred_overlays_have_an_inset_floor(page):
+    """The eleven overlays that stay centred keep `.overlay`'s padding. 16px is
+    not enough to clear a notch, so the insets belong in that shared rule — it
+    means a new overlay is covered by default instead of by remembering."""
+    assert (
+        "padding:calc(16px + env(safe-area-inset-top,0px)) 16px "
+        "calc(16px + env(safe-area-inset-bottom,0px))"
+    ) in page, (
+        ".overlay lost its safe-area floor — a tall centred dialog can render "
+        "its own header under the status bar"
     )
