@@ -72,7 +72,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 .app{max-width:1200px;margin:0 auto;padding:0 24px 64px}
 
 /* header */
-header{display:flex;align-items:center;justify-content:space-between;padding:28px 0 20px;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:24px}
+/* The top padding buys back whatever the status bar overlays. Not scoped to
+   the phone query on purpose: the inset resolves to 0 everywhere it does not
+   apply, so one rule covers a home-screen iPhone, a standalone iPad wider than
+   760px, and a desktop browser alike — and a device-width breakpoint was never
+   the right test for "is something drawn over this page" anyway. */
+header{display:flex;align-items:center;justify-content:space-between;padding:calc(28px + env(safe-area-inset-top,0px)) 0 20px;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:24px}
 .logo-row{display:flex;align-items:center;gap:12px}
 .app-name{font-size:18px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-family:var(--font-mono)}
 .record-count{font-size:13px;color:var(--muted)}
@@ -926,7 +931,13 @@ select option{background:var(--surface);color:var(--text)}
      record stacked below, a tracklist scrolls through it. */
   .dm-top{
     display:flex;align-items:center;justify-content:space-between;
-    padding:12px 14px 8px;position:sticky;top:0;z-index:6;
+    /* apple-mobile-web-app-status-bar-style=black-translucent hands the status
+       bar's strip to the page, so without this inset the close button sits
+       underneath the clock and a record cannot be dismissed at all in a
+       home-screen install. Sticky at top:0 keeps it pinned while the sheet
+       scrolls; the inset is what keeps it reachable. */
+    padding:calc(12px + env(safe-area-inset-top,0px)) 14px 8px;
+    position:sticky;top:0;z-index:6;
     background:var(--bg);flex-shrink:0;
   }
   .dm-close{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);
@@ -1964,9 +1975,17 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 @media(max-width:760px){
   .mobile-tabbar{
     display:flex;align-items:center;justify-content:space-around;
-    position:fixed;left:0;right:0;bottom:0;height:58px;z-index:80;
+    position:fixed;left:0;right:0;bottom:0;z-index:80;
     background:var(--surface);border-top:1px solid var(--border);
-    padding-bottom:env(safe-area-inset-bottom,0);
+    /* The bar is 58px of chrome PLUS whatever the home indicator claims, not
+       58px shared between them. box-sizing:border-box is global here, so the
+       old `height:58px` with a padding-bottom of env(safe-area-inset-bottom)
+       spent the inset out of the 58px — on a notched iPhone that left about
+       24px of usable bar and visibly squashed the icons and their labels.
+       Growing the height instead makes the inset clearance, which is what it
+       is for. */
+    height:calc(58px + env(safe-area-inset-bottom,0px));
+    padding-bottom:env(safe-area-inset-bottom,0px);
   }
   .mtab-item{
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
