@@ -63,21 +63,47 @@ the server.
 
 The viewport opts into `viewport-fit=cover` and the status bar style is
 `black-translucent`, which paints the page under the status bar and the home
-indicator. The header pays that back with `env(safe-area-inset-top)` and the
-form's footer with `env(safe-area-inset-bottom)`.
+indicator. Every piece of fixed or sticky chrome is therefore responsible for
+buying its own clearance back with `env(safe-area-inset-*)`.
 
-Launch the app from the home screen (not in a Safari tab) on a notched
-device, then open the add/edit form:
+**This scenario has already caught three real bugs, all of which shipped.**
+The metas went in with only the add/edit form's insets; the header, the record
+sheet's top bar and the bottom tab bar had none. The tab bar was the worst:
+it carried `height:58px` *and* `padding-bottom:env(safe-area-inset-bottom)`,
+and because `box-sizing:border-box` is global in this template the inset was
+spent **out of** the 58px rather than added to it — leaving roughly 24px of
+usable bar. No automated test in this project can see any of it.
 
-1. The header content clears the status bar / the notch — no text or icon
-   sits under it, and there is no **white strip** at the very top where the
-   page would otherwise paint behind the status bar with nothing accounting
-   for it.
-2. Open the add/edit form and scroll to the footer (Back / Next / Save, or
-   the log-a-play row on the edit root). The buttons sit clear of the home
-   indicator — nothing is obscured or requires a fingertip right at the very
+Launch the app from the home screen (not in a Safari tab) on a notched device:
+
+1. **The header clears the clock.** "ZUCOLOTO'S VINYL COLLECTION" and the
+   record count sit fully below the status bar — the time, signal and battery
+   do not overlap the title or the vinyl logo. There is no white strip at the
+   very top either.
+2. **The bottom tab bar is full height.** COLLECTION / TIMELINE / STATS / MORE
+   each show their icon *and* their label, comfortably, with the row sitting
+   above the home indicator rather than crushed against it. Compare against a
+   desktop browser narrowed below 760px, where there is no inset: the bar
+   should look the same height in terms of *content*, just with extra
+   clearance underneath on the phone.
+3. **You can close a record.** Tap any record to open its sheet. The round
+   **×** at the top-left is fully visible and tappable — not behind the clock.
+   Tap it; the sheet closes. This is the one that made the app unusable: with
+   the close button under the status bar there was no way to dismiss a record
+   at all.
+4. Open the add/edit form and scroll to the footer (Back / Next / Save, or the
+   log-a-play row on the edit root). The buttons sit clear of the home
+   indicator — nothing is obscured or needs a fingertip right at the very
    bottom edge of the glass.
-3. Repeat with the record detail drawer's own footer, for the same reason.
+5. Repeat step 4 with the record detail drawer's own footer, for the same
+   reason.
+6. Rotate to landscape and re-check 1-3. The left/right insets change on a
+   notched device even though the top one shrinks.
+
+`tests/test_safe_areas.py` statically checks that the three rules behind
+steps 1-3 still exist in the served CSS. It cannot evaluate the cascade or lay
+anything out — it only fails when a future edit drops one of them, rather than
+letting the regression reach a phone silently.
 
 ---
 
