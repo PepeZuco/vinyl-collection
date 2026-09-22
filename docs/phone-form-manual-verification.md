@@ -362,6 +362,163 @@ desktop browser, add a record and then edit it, end to end:
 
 ---
 
+## 15. Step 2's *Bought at* — tappable chips, not the datalist strip
+
+Safari renders a `<datalist>` as a thin suggestion strip pinned under the
+keyboard — technically usable, but only with two hands. `renderPlaceChips()`
+(`templates/index.html`) swaps it on a phone for a row of tappable chips
+above the field, ranked by `VinylPhoneForm.rankPlaces()` with whatever is
+already on the record pinned first. The datalist itself never leaves the
+DOM — desktop still gets it (scenario 14.5) — so this is purely a question of
+which one a phone actually *shows*, something jsdom cannot judge for itself.
+
+1. On a phone, open **Add** or **Edit** and get to step 2 (*Acquire*).
+   Expected: **Bought at** shows a row of tappable chips above the input —
+   not the thin native suggestion strip a `<datalist>` produces underneath
+   the keyboard.
+2. Tap a chip. Expected: the field fills with that chip's text immediately,
+   no keyboard needed, and the chip gets the "on" (accent) styling.
+3. Leave the field and look at the chip row again. Expected: the place you
+   just picked has moved to the **front** — `pickPlace()` re-ranks on every
+   pick, so the most recently used place stays reachable without scrolling.
+4. Type a place that has never been used before, directly into the field
+   instead of tapping a chip. Expected: no chip lights up for it, and saving
+   the record still works normally — a chip is a shortcut, not the only way
+   a place gets in.
+
+---
+
+## 16. Step 3's collapsed log sections and the `+`
+
+Plays, cleanings and notes are three cards that are almost always empty —
+step 3's own lead text says so — so on a phone each one collapses to a
+single row, expanding only if it already has entries or a person taps its
+own `+` (`renderLogCollapse()`, `templates/index.html`). This is bug #3 of
+the six the redraw originally shipped into a green suite: `.log-plus`
+carries its own unconditional `display:flex`, so the `+` needing to hide
+once its section is open needed the same author-vs-UA `[hidden]` guard as
+step 1's lookup/identity switch (scenario 5) — `tests/test_step1_hidden_guards.py`
+confirms that guard rule survives in the served CSS as text, which used to
+be the only coverage this had.
+
+A second, later bug lived in the same code: the `+` used to set its
+section's collapsed state directly instead of going through
+`renderLogCollapse()`, so opening an empty section by hand did not stick —
+the next unrelated re-render (adding an entry to a *different* section, or
+deleting a note) recomputed every section's collapsed state from emptiness
+again and snapped the one you had just opened by hand back shut.
+
+1. On a phone, open **Add** and get to step 3 (*Log*). Expected: **Played
+   on**, **Cleaned on** and **Notes** each show as a single collapsed row —
+   a header with a count and a `+`, no date list or note list underneath any
+   of them.
+2. Tap the `+` on **Played on**. Expected: the section expands to its full
+   card (date list, add-date control) and its own `+` disappears — nothing
+   left for it to do once the section is already open.
+3. With **Played on** still open and still empty, log a **cleaning**
+   instead (a different section entirely). Expected: **Played on** stays
+   open — it must not snap back shut just because some other section's
+   re-render happened to run.
+4. Now add a play date, then delete it again, leaving **Played on** empty
+   once more. Expected: the section **stays open** through both — adding
+   and removing an entry must not be what closes a section you opened by
+   hand; only leaving step 3 and coming back (or reopening the form) should
+   reset it.
+5. Repeat with **Notes**, since it drives the desktop label check in
+   scenario 19 below — open it by hand while empty, add a note, delete it,
+   confirm it never snaps shut on its own.
+
+---
+
+## 17. No zoom on focus, anywhere in the form
+
+iOS Safari zooms the whole page in when a focused input's font-size is under
+16px. The form's phone rules size every field input at 16px specifically to
+avoid this (see the comment beside `#formOverlay .field input,#formOverlay
+.field select{height:50px}` in `templates/index.html`), but nothing has ever
+walked every field on a phone and actually confirmed it holds everywhere.
+
+1. On a phone, open **Add**. Working through **every** step (1 through 4),
+   tap into every text field, textarea, and the color hex inputs on the
+   paint step. Expected: the page never zooms in on focus, on any of them —
+   the keyboard opens and the field scrolls into view (scenario 3), but the
+   page's own zoom level never changes.
+2. Pay particular attention to the multi-artist rows (step 1, with
+   **multiple artists** on), the paint step's color hex fields, and any
+   field this redraw added or resized specifically — a field quietly
+   inheriting a smaller font from somewhere unexpected is the likely failure
+   mode, not the fields that were already 16px before this plan.
+
+---
+
+## 18. No stray strip above the progress rail
+
+`.form-spine` — the desktop step spine (Identify / Acquire / Log /
+Tracklist) — carries its own unconditional `display:flex` at the top level
+of the stylesheet, not scoped to any width. `rebuildFormChrome()` sets
+`spine.hidden = phone` on every render, desktop and phone alike, which
+without an author-origin `[hidden]` guard does nothing at all: the same
+UA-vs-author trap as scenario 5, except global rather than phone-scoped, so
+a guard living only inside the phone media query would not have been enough
+to fix it either — this is the seventh cascade bug the redraw shipped.
+
+1. On a phone, open **Add**. Expected: nothing shows above the progress
+   rail — no bordered, rounded strip, no stray margin above it, just the
+   rail itself at the top of the form.
+2. Open **Edit** on an existing record and step into the wizard (not the
+   edit root). Expected: same — no strip above the rail.
+3. On the phone's **edit root** screen itself (existing record, section
+   list, scenario 9). Expected: no strip there either — the edit root
+   replaces the rail entirely on that screen, so nothing from the spine
+   should be visible above it.
+4. On a **desktop** browser, open **Add** or **Edit**. Expected: the spine
+   is exactly where it always was, at the top of the form — this guard must
+   not have hidden it there too.
+
+---
+
+## 19. The notes header reading "markdown" again after a resize
+
+`playDatesCount` and `cleanedDatesCount` "self-heal" crossing back to
+desktop because their own renderers set their count text immediately before
+every call to `renderLogCollapse()`; `notesCount` has no such renderer, so
+`renderLogCollapse()` itself has to know to restore its static desktop label
+rather than passing through whatever a phone-width render last wrote there.
+Scenario 11 already covers the wizard body surviving this same resize; this
+is the one part of step 3 specifically worth a second look.
+
+1. On a desktop browser **below** 760px wide (or a phone), open **Add** and
+   get to step 3. Expected: the **Notes** header shows a count like "none"
+   or some number of notes, not the word "markdown".
+2. Widen the window back **above** 760px (or, on a phone, rotate/resize past
+   the breakpoint if your setup allows it). Expected: the **Notes** header
+   goes back to reading **"markdown"** — not stuck on whatever count the
+   narrower width last showed.
+
+---
+
+## 20. The Undo toast goes properly inert once it fades
+
+Scenario 8 already checks that the Undo button **responds** while the toast
+is up. This is the other half: `.toast` only ever animates opacity and
+transform, never `display` or `visibility`, so once `hideToast()` removes
+the `.show` class the button is still sitting in the DOM, in the same
+bottom-right spot, for as long as nothing replaces it — a stray tap there
+used to still fire `onUndo()`.
+
+1. Trigger an Undo toast (**Log a play** from the edit root, same as
+   scenario 8). Let it fade out completely — either wait the ~6 seconds or
+   watch it finish animating — and do **not** tap Undo while it is visible.
+2. Once it has fully faded, tap exactly where the Undo button was. Expected:
+   **nothing happens** — no play reverts, no toast reappears, no console
+   error. Check the record's play count and play list are unchanged from
+   after step 1 of scenario 8's own sequence.
+3. Repeat immediately after a **plain** toast (a save confirmation, not an
+   Undo one) fades in the same spot, to confirm nothing is tappable there
+   even when no Undo button was ever shown.
+
+---
+
 ## What this document does not cover
 
 Server-side rules (place ranking math, log counts, the pure functions in
