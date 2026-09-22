@@ -101,3 +101,27 @@ def test_the_overlay_is_sized_from_the_visual_viewport():
     html = app_module.app.test_client().get("/").get_data(as_text=True)
     assert "visualViewport" in html
     assert "--vvh" in html
+
+
+def test_the_overlay_also_follows_where_the_visual_viewport_scrolled_to():
+    """Height alone is not enough, and getting that wrong was worse than not
+    fixing the keyboard at all.
+
+    A position:fixed element is pinned to the LAYOUT viewport, which does not
+    move. Focusing a field makes the browser scroll the VISUAL viewport down to
+    reveal it, so the two diverge by `offsetTop`. A sheet sized to vv.height but
+    still anchored at layout top then shows only the overlap — in practice a
+    band holding one input and the Back/Next row, with the collection visible
+    underneath. The form has to follow both numbers.
+    """
+    html = app_module.app.test_client().get("/").get_data(as_text=True)
+    assert "vv.offsetTop" in html, (
+        "syncViewportHeight stopped reading visualViewport.offsetTop — the form "
+        "will detach from the visible window as soon as a field is focused"
+    )
+    assert "--vvt" in html
+    assert "#formOverlay{top:var(--vvt,0px);bottom:auto;height:var(--vvh,100%)}" in html, (
+        "the fixed overlay is no longer the element being moved and sized; "
+        "sizing only the modal inside it is what left the sheet stranded at "
+        "layout top"
+    )

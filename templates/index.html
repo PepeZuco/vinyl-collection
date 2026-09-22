@@ -2466,8 +2466,16 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
      and Save simply gone until the field is dismissed. --vvh is the visual
      viewport's height, written by syncViewportHeight(); the fallback keeps
      the box full-height everywhere the property is never set. */
+  /* The tracking belongs on the fixed element, not on its child. #formOverlay
+     is the position:fixed box, so moving and sizing IT keeps the whole sheet
+     over the visible window; the modal can then simply fill its parent. Sizing
+     only the modal left the overlay anchored at layout top while the visual
+     viewport had scrolled away from it. bottom:auto is required because
+     .overlay's `inset:0` already set bottom:0 — leaving it would fight the
+     height and stretch the box back down behind the keyboard. */
+  #formOverlay{top:var(--vvt,0px);bottom:auto;height:var(--vvh,100%)}
   #formOverlay .modal.modal-wide{
-    height:var(--vvh,100%);
+    height:100%;
     padding-top:env(safe-area-inset-top,0px);
   }
   /* Task 9's drag-to-dismiss animates this same sheet with translateY, so it
@@ -12963,7 +12971,19 @@ function onBreakpointChange(){
 function syncViewportHeight(){
   const vv = window.visualViewport;
   if (!vv) return;                       // desktop, and jsdom
-  document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+  /* Height alone is not enough, and getting that wrong made the sheet unusable
+   * rather than merely awkward. A position:fixed element is pinned to the
+   * LAYOUT viewport, which does not move. When a field is focused the browser
+   * scrolls the VISUAL viewport down to reveal it, so the two diverge by
+   * offsetTop — and a sheet sized to vv.height but still anchored at layout
+   * top shows only the overlap, vv.height minus offsetTop. The harder the
+   * browser scrolled to reveal the field, the thinner the sheet became: in
+   * practice a band holding one input and the Back/Next row, with the page
+   * showing through underneath. Tracking both puts it back over what is
+   * actually on screen. */
+  const root = document.documentElement;
+  root.style.setProperty('--vvh', vv.height + 'px');
+  root.style.setProperty('--vvt', vv.offsetTop + 'px');
 }
 if (window.visualViewport){
   ['resize','scroll'].forEach(e => window.visualViewport.addEventListener(e, syncViewportHeight));
