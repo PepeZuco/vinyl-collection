@@ -57,6 +57,37 @@ python seed_db.py
 
 Com o volume montado em `/data` e `DATA_DIR=/data`, o banco (`/data/vinyl.db`) persiste entre deploys e restarts — não é mais necessário exportar/importar CSV como backup manual antes de cada deploy. Os endpoints `/api/export` e `/api/import` continuam disponíveis para backups manuais opcionais.
 
+## Playlists no Spotify
+
+Em modo de edição, menu **⋯ → spotify playlists** mantém duas playlists na sua
+conta, ambas montadas só com os discos que você tem (não a wishlist) e que têm
+link do Spotify, na ordem de compra:
+
+- **Zucoloto Vinyl Collection** — todas as faixas de cada álbum.
+- **Zucoloto Vinyl Collection — Liked** — só as músicas curtidas na tracklist
+  de cada disco, casadas pelo título com as faixas do álbum no Spotify. As que
+  não casam aparecem como "skipped" no painel.
+
+Cada **sync** cria a playlist se ela não existir (privada) e, se existir,
+adiciona o que falta no fim e remove o que não pertence mais (música
+descurtida, link removido, disco vendido). A playlist espelha a coleção: uma
+faixa adicionada à mão nela também é removida no próximo sync.
+
+Configuração, uma vez só:
+
+1. No app em developer.spotify.com (o mesmo do `SPOTIFY_CLIENT_ID`), em
+   **Redirect URIs**, adicione `https://<seu-domínio>/api/spotify/callback`. O
+   painel mostra a URI exata antes de conectar. Localmente, o Spotify só aceita
+   http em `http://127.0.0.1:5000/api/spotify/callback` (não `localhost`).
+2. Se o app estiver em development mode, a sua conta do Spotify precisa estar
+   em **User Management** do app.
+3. Opcional: `SPOTIFY_REDIRECT_URI` força a URI, se a detectada estiver errada.
+4. No painel, **connect spotify** e autorize. O login fica salvo no banco.
+
+O primeiro sync lê um álbum por request (o Spotify não tem mais endpoint em
+lote), então pode levar alguns minutos; o painel mostra o progresso. Os
+tracklists ficam em cache, e os syncs seguintes só leem os discos novos.
+
 ## Backup diário
 
 O servidor tira um snapshot do banco uma vez por dia e guarda **os últimos 5**.
