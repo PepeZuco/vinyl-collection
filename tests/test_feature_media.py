@@ -156,3 +156,65 @@ def test_a_malformed_stored_payload_is_an_absent_clip(client, vinyl_app):
             slot=slot, data="not a data uri", hash="x", created="2026-01-01T00:00:00"))
         vinyl_app.db.session.commit()
     assert client.get(f"/api/feature-media/{slot}").status_code == 404
+
+
+# ── YouTube links: a slot can point at an (unlisted) YouTube video instead of
+# holding the bytes, for clips too big to sit in the database. ──────────────
+
+YT_ID = "dQw4w9WgXcQ"
+EMBED = f"https://www.youtube-nocookie.com/embed/{YT_ID}"
+
+
+@pytest.mark.parametrize("url", [
+    f"https://www.youtube.com/watch?v={YT_ID}",
+    f"https://youtube.com/watch?feature=share&v={YT_ID}",
+    f"https://youtu.be/{YT_ID}?si=abc123",
+    f"https://www.youtube.com/shorts/{YT_ID}",
+    f"https://www.youtube.com/embed/{YT_ID}",
+    f"https://m.youtube.com/watch?v={YT_ID}",
+    YT_ID,
+])
+def test_youtube_link_forms_all_resolve_to_the_embed(client, vinyl_app, url):
+    slot = a_slot(vinyl_app)
+    res = client.put(f"/api/feature-media/{slot}/youtube", json={"url": url})
+    assert res.status_code == 201
+    assert client.get("/api/feature-media").get_json() == {slot: EMBED}
+
+
+def test_youtube_link_requires_auth(vinyl_app):
+    anon = vinyl_app.app.test_client()
+    slot = a_slot(vinyl_app)
+    assert anon.put(f"/api/feature-media/{slot}/youtube", json={"url": YT_ID}).status_code == 401
+
+
+def test_youtube_link_rejects_an_unknown_slot(client):
+    assert client.put("/api/feature-media/nope/youtube", json={"url": YT_ID}).status_code == 404
+
+
+@pytest.mark.parametrize("url", ["", "https://vimeo.com/123", "https://evil.com/watch?v=" + YT_ID, "not a link"])
+def test_youtube_link_rejects_what_is_not_youtube(client, vinyl_app, url):
+    slot = a_slot(vinyl_app)
+    assert client.put(f"/api/feature-media/{slot}/youtube", json={"url": url}).status_code == 400
+
+
+def test_youtube_link_replaces_an_uploaded_clip(client, vinyl_app):
+    slot = a_slot(vinyl_app)
+    client.put(f"/api/feature-media/{slot}", json={"data": TINY_MP4})
+    client.put(f"/api/feature-media/{slot}/youtube", json={"url": YT_ID})
+    assert client.get("/api/feature-media").get_json() == {slot: EMBED}
+    # the old bytes are gone, not just shadowed
+    assert client.get(f"/api/feature-media/{slot}").status_code == 404
+
+
+def test_uploading_a_clip_replaces_a_youtube_link(client, vinyl_app):
+    slot = a_slot(vinyl_app)
+    client.put(f"/api/feature-media/{slot}/youtube", json={"url": YT_ID})
+    client.put(f"/api/feature-media/{slot}", json={"data": TINY_MP4})
+    assert client.get("/api/feature-media").get_json()[slot].startswith(f"/api/feature-media/{slot}?v=")
+
+
+def test_delete_clears_a_youtube_link(client, vinyl_app):
+    slot = a_slot(vinyl_app)
+    client.put(f"/api/feature-media/{slot}/youtube", json={"url": YT_ID})
+    client.delete(f"/api/feature-media/{slot}")
+    assert client.get("/api/feature-media").get_json() == {}

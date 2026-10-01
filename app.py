@@ -1,10 +1,10 @@
-import os, io, base64, csv, json, re, uuid, hashlib
+import os, io, base64, csv, json, re, time, uuid, hashlib
 # 64MB per field, not 10: note_images packs every photo on one record into a
 # single field, where the old ceiling (sized for one cover) would reject a
 # photo-heavy row on import — an export that cannot be restored. The whole-upload
 # bound is MAX_CONTENT_LENGTH, not this.
 csv.field_size_limit(64 * 1024 * 1024)
-from flask import Flask, request, jsonify, send_file, session, render_template, stream_with_context
+from flask import Flask, request, jsonify, send_file, session, render_template, stream_with_context, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.exceptions import NotFound
 from sqlalchemy import func
@@ -13,9 +13,12 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from functools import wraps
 
+import requests
+
 import backup
 import pricing
 import scan
+import spotify_sync
 
 
 app = Flask(__name__)
@@ -465,11 +468,46 @@ class NoteImage(db.Model):
 FEATURE_MEDIA_SLOTS = frozenset({"ai_scan", "spotify_match", "musicbrainz", "timeline_stats"})
 _FEATURE_MEDIA_MAX_BYTES = 40 * 1024 * 1024
 
+# A slot holds either uploaded bytes (data) or a YouTube video id (youtube_id),
+# never both: the database can't sensibly hold a clip past the cap, so longer
+# ones go up to YouTube as unlisted and the card embeds them instead.
 class FeatureVideo(db.Model):
-    slot    = db.Column(db.String(30), primary_key=True)
-    data    = db.Column(db.Text)      # base64 data URI
-    hash    = db.Column(db.String(64))
-    created = db.Column(db.String(50))
+    slot       = db.Column(db.String(30), primary_key=True)
+    data       = db.Column(db.Text)      # base64 data URI
+    hash       = db.Column(db.String(64))
+    created    = db.Column(db.String(50))
+    youtube_id = db.Column(db.String(11))
+
+_YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
+_YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com",
+                  "youtu.be", "www.youtube-nocookie.com", "youtube-nocookie.com"}
+
+
+def _youtube_id(url):
+    """The 11-char video id out of any link form YouTube's share buttons hand
+    out (watch?v=, youtu.be/, /shorts/, /embed/, /live/) or a bare id; None
+    for anything else. The host is checked so a lookalike domain can't ride in."""
+    from urllib.parse import urlparse, parse_qs
+    url = (url or "").strip()
+    if _YOUTUBE_ID.fullmatch(url):
+        return url
+    if "://" not in url:
+        url = "https://" + url
+    u = urlparse(url)
+    if (u.hostname or "").lower() not in _YOUTUBE_HOSTS:
+        return None
+    if u.hostname.lower() == "youtu.be":
+        candidate = u.path.strip("/").split("/")[0]
+    elif u.path == "/watch":
+        candidate = (parse_qs(u.query).get("v") or [""])[0]
+    else:
+        parts = u.path.strip("/").split("/")
+        candidate = parts[1] if len(parts) >= 2 and parts[0] in ("shorts", "embed", "live") else ""
+    return candidate if _YOUTUBE_ID.fullmatch(candidate) else None
+
+
+def _youtube_embed(vid):
+    return f"https://www.youtube-nocookie.com/embed/{vid}"
 
 # A place a record was bought at. The NAME is the key, and record.bought_where
 # holds it verbatim — so sort, group, filter, search, the scan autofill and the
@@ -498,6 +536,23 @@ class ScanSpend(db.Model):
     cost_usd      = db.Column(db.Float, default=0.0)
 
 
+# The owner's Spotify login, for the playlist sync. One row at most (id=1).
+# Kept in the database rather than the session: Flask's session is a signed but
+# readable cookie, and a refresh token is a standing key to the account.
+class SpotifyAccount(db.Model):
+    id            = db.Column(db.Integer, primary_key=True)
+    refresh_token = db.Column(db.Text)
+    display_name  = db.Column(db.String(200))
+    connected_at  = db.Column(db.String(50))
+
+# A record's Spotify link -> its album's tracklist, as JSON [{uri, name, disc}].
+# Spotify dropped its batch album endpoint, so reading ~300 albums is ~300
+# requests; a tracklist never changes, so each is read once and a re-sync only
+# pays for the records added since.
+class SpotifyAlbumCache(db.Model):
+    link   = db.Column(db.String(500), primary_key=True)
+    tracks = db.Column(db.Text)
+
 with app.app_context():
     db.create_all()
     # lightweight auto-migration: db.create_all() only creates missing tables,
@@ -521,6 +576,11 @@ with app.app_context():
         "vinyl_color": "VARCHAR(7)",
         "label_color": "VARCHAR(7)",
     }
+    if "youtube_id" not in [c["name"] for c in inspector.get_columns("feature_video")]:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE feature_video ADD COLUMN youtube_id VARCHAR(11)"))
+            conn.commit()
+
     added_cleaned_dates = "cleaned_dates" not in existing_cols
     added_cover_hash = "cover_hash" not in existing_cols
     for col, ddl_type in missing_cols.items():
@@ -951,9 +1011,18 @@ def list_feature_media():
     Public — the whole point of the tab is that visitors see it without
     logging in. Only filled slots are listed; the page treats an absent key as
     an empty placeholder.
+
+    A YouTube slot's URL is the embed URL itself; the page tells the two apart
+    by that prefix.
     """
-    rows = db.session.query(FeatureVideo.slot, FeatureVideo.hash).all()
-    return jsonify({slot: f"/api/feature-media/{slot}?v={h}" for slot, h in rows if h})
+    rows = db.session.query(FeatureVideo.slot, FeatureVideo.hash, FeatureVideo.youtube_id).all()
+    manifest = {}
+    for slot, h, vid in rows:
+        if vid:
+            manifest[slot] = _youtube_embed(vid)
+        elif h:
+            manifest[slot] = f"/api/feature-media/{slot}?v={h}"
+    return jsonify(manifest)
 
 
 @app.route("/api/feature-media/<slot>")
@@ -996,8 +1065,33 @@ def upload_feature_media(slot):
     else:
         row.data = data
         row.hash = h
+        row.youtube_id = None
     db.session.commit()
     return jsonify({"slot": slot, "url": f"/api/feature-media/{slot}?v={h}"}), 201
+
+
+@app.route("/api/feature-media/<slot>/youtube", methods=["PUT"])
+@require_auth
+def set_feature_youtube(slot):
+    """Point a slot at a YouTube video (upload it as Unlisted — Private ones
+    refuse to play for anyone but invited accounts). Drops any uploaded bytes."""
+    if slot not in FEATURE_MEDIA_SLOTS:
+        return jsonify({"error": "Unknown slot"}), 404
+    d = request.get_json(silent=True) or {}
+    vid = _youtube_id(d.get("url") if isinstance(d.get("url"), str) else "")
+    if vid is None:
+        return jsonify({"error": "Not a YouTube link"}), 400
+    row = db.session.get(FeatureVideo, slot)
+    if row is None:
+        db.session.add(FeatureVideo(
+            slot=slot, youtube_id=vid,
+            created=datetime.now().strftime("%Y-%m-%dT%H:%M:%S")))
+    else:
+        row.youtube_id = vid
+        row.data = None
+        row.hash = None
+    db.session.commit()
+    return jsonify({"slot": slot, "url": _youtube_embed(vid)}), 201
 
 
 @app.route("/api/feature-media/<slot>", methods=["DELETE"])
@@ -1714,6 +1808,159 @@ def import_csv():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+# ── Spotify playlists ─────────────────────────────────────────────────────────
+# Two playlists on the owner's account mirror the collection: every album with
+# a link, and only the liked songs. See spotify_sync.py for what each holds.
+
+# How long one sync request may spend reading albums. Under gunicorn's 120s
+# timeout with room for the playlist writes; the client calls again if it runs
+# out, and the cache makes each call start where the last one stopped.
+_SPOTIFY_READ_BUDGET = 60
+
+
+def _spotify_redirect_uri():
+    """Where Spotify sends the owner back. Must be registered on the app verbatim.
+
+    Spotify accepts plain http only for a loopback IP; Railway terminates TLS at
+    its proxy, so the request itself looks like http and would build the wrong
+    URI. SPOTIFY_REDIRECT_URI overrides the guess outright.
+    """
+    explicit = os.environ.get("SPOTIFY_REDIRECT_URI")
+    if explicit:
+        return explicit
+    uri = url_for("spotify_callback", _external=True)
+    host = request.host.split(":")[0]
+    if uri.startswith("http://") and host not in ("127.0.0.1", "[::1]"):
+        uri = "https://" + uri[len("http://"):]
+    return uri
+
+
+def _spotify_account():
+    return db.session.get(SpotifyAccount, 1)
+
+
+@app.route("/api/spotify/account")
+@require_auth
+def spotify_account():
+    acct = _spotify_account()
+    return jsonify({
+        "configured": spotify_sync.configured(),
+        "connected": bool(acct and acct.refresh_token),
+        "display_name": (acct.display_name if acct else "") or "",
+        "playlists": {k: v["name"] for k, v in spotify_sync.PLAYLISTS.items()},
+        "redirect_uri": _spotify_redirect_uri(),
+    })
+
+
+@app.route("/api/spotify/connect")
+@require_auth
+def spotify_connect():
+    if not spotify_sync.configured():
+        return redirect("/?spotify=unconfigured")
+    state = uuid.uuid4().hex
+    session["spotify_state"] = state
+    return redirect(spotify_sync.authorize_url(_spotify_redirect_uri(), state))
+
+
+@app.route("/api/spotify/callback")
+def spotify_callback():
+    # A browser navigation, not a fetch: every outcome is a redirect back into
+    # the app, which reads ?spotify= and reopens the playlists panel.
+    if not is_authed():
+        return redirect("/?spotify=unauthorized")
+    expected = session.pop("spotify_state", None)
+    if not expected or request.args.get("state") != expected:
+        return redirect("/?spotify=failed")
+    code = request.args.get("code")
+    if not code:
+        return redirect("/?spotify=denied")
+    try:
+        token = spotify_sync.exchange_code(code, _spotify_redirect_uri())
+        client = spotify_sync.Client(token["refresh_token"])
+        client._access = token["access_token"]
+        me = client.call("GET", "/me")
+    except (spotify_sync.SpotifyError, KeyError, requests.RequestException):
+        app.logger.warning("Spotify connect failed", exc_info=True)
+        return redirect("/?spotify=failed")
+    acct = _spotify_account() or SpotifyAccount(id=1)
+    acct.refresh_token = token["refresh_token"]
+    acct.display_name = me.get("display_name") or me.get("id") or ""
+    acct.connected_at = datetime.now().isoformat(timespec="seconds")
+    db.session.add(acct)
+    db.session.commit()
+    return redirect("/?spotify=connected")
+
+
+@app.route("/api/spotify/disconnect", methods=["POST"])
+@require_auth
+def spotify_disconnect():
+    acct = _spotify_account()
+    if acct:
+        db.session.delete(acct)
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+class _AlbumCache:
+    """spotify_sync's cache interface over SpotifyAlbumCache, committing each
+    album as it lands so a sync cut short keeps what it read."""
+
+    def get(self, link):
+        row = db.session.get(SpotifyAlbumCache, link)
+        return json.loads(row.tracks) if row else None
+
+    def put(self, link, tracks):
+        db.session.merge(SpotifyAlbumCache(link=link, tracks=json.dumps(tracks)))
+        db.session.commit()
+
+
+def _playlist_records():
+    """Owned records with a Spotify link, oldest purchase first — so the
+    playlist reads as the collection's own history and a new record's
+    tracks land at the end, where a sync appends them anyway."""
+    rows = (db.session.query(Record.artist, Record.album_name, Record.spotify_url, Record.tracks)
+            .filter(Record.have_it.is_(True),
+                    Record.spotify_url.isnot(None), Record.spotify_url != "")
+            .order_by(Record.bought_date, Record.id).all())
+    out = []
+    for artist, album, link, tracks in rows:
+        try:
+            parsed = json.loads(tracks) if tracks else []
+        except ValueError:
+            parsed = []
+        out.append({"artist": artist, "album_name": album, "spotify_url": link,
+                    "tracks": parsed if isinstance(parsed, list) else []})
+    return out
+
+
+@app.route("/api/spotify/playlists/<kind>", methods=["POST"])
+@require_auth
+def spotify_sync_playlist(kind):
+    if kind not in spotify_sync.PLAYLISTS:
+        raise NotFound()
+    acct = _spotify_account()
+    if not acct or not acct.refresh_token:
+        return jsonify({"error": "Spotify is not connected", "connect": True}), 409
+
+    def rotated(token):
+        acct.refresh_token = token
+        db.session.commit()
+
+    client = spotify_sync.Client(acct.refresh_token, on_new_refresh_token=rotated)
+    deadline = time.monotonic() + _SPOTIFY_READ_BUDGET
+    try:
+        result = spotify_sync.sync(client, _playlist_records(), kind, _AlbumCache(), deadline)
+    except spotify_sync.Incomplete as e:
+        return jsonify({"incomplete": True, "done": e.done, "total": e.total}), 202
+    except spotify_sync.NotConnected:
+        db.session.delete(acct)
+        db.session.commit()
+        return jsonify({"error": "Spotify login expired — connect again", "connect": True}), 409
+    except (spotify_sync.SpotifyError, requests.RequestException) as e:
+        app.logger.warning("Spotify playlist sync failed", exc_info=True)
+        return jsonify({"error": str(e)}), 502
+    return jsonify(result)
 
 # ── daily backups ─────────────────────────────────────────────────────────────
 

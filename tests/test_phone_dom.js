@@ -436,13 +436,13 @@ test('the two step lists agree on how many steps there are', async () => {
 // identifies the record (an artist, an album, or a cover) the lookup gives
 // way to an 84px identity strip sitting above the fields.
 
-test('step 1 opens on the three lookups, not on the fields', async () => {
+test('step 1 opens on the four lookups, not on the fields', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
     win.openAdd();
     const rows = [...doc.querySelectorAll('#phoneLookup .frow')];
-    assert.strictEqual(rows.length, 3);
-    assert.deepStrictEqual(rows.map(r => r.dataset.lookup), ['camera', 'search', 'spotify']);
+    assert.strictEqual(rows.length, 4);
+    assert.deepStrictEqual(rows.map(r => r.dataset.lookup), ['camera', 'photo', 'search', 'spotify']);
   } finally {
     win.close();
   }
@@ -453,11 +453,11 @@ test('each lookup row calls the function that already does that job', async () =
   try {
     win.openAdd();
     const called = [];
-    for (const fn of ['openCamera', 'openSearchOverlay', 'openSpotifyOverlay']) {
+    for (const fn of ['openCamera', 'pickCoverFile', 'openSearchOverlay', 'openSpotifyOverlay']) {
       win[fn] = () => called.push(fn);
     }
     for (const r of doc.querySelectorAll('#phoneLookup .frow')) press(win, r);
-    assert.deepStrictEqual(called, ['openCamera', 'openSearchOverlay', 'openSpotifyOverlay']);
+    assert.deepStrictEqual(called, ['openCamera', 'pickCoverFile', 'openSearchOverlay', 'openSpotifyOverlay']);
   } finally {
     win.close();
   }
@@ -882,16 +882,20 @@ test('advancing the add queue after a save does not turn the next record into an
 });
 
 // ── task 8: the edit root screen and its quick actions ─────────────────────
-// Editing an existing record on a phone opens a section list instead of the
-// wizard: four rows previewing what each step already holds, plus the three
+// Editing an existing record on a phone opens on The record (step 1); the
+// header's "edit" button leads back to a section list: four rows previewing what each step already holds, plus the three
 // things actually done most (log a play, log a cleaning, add a note) as
 // one-tap actions with an Undo toast. Desktop is untouched — openEdit still
 // lands on step 1 with no root screen ever in the DOM's hidden state.
 
-test('editing on a phone opens a section list, not the wizard', async () => {
-  const { win, doc } = await boot({ phone: true });
+test('editing on a phone opens on The record, with the section list one tap back', async () => {
+  const { win, doc, read } = await boot({ phone: true });
   try {
     win.openEdit(1);
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true);
+    assert.strictEqual(read('formStep'), 1);
+    assert.match(doc.getElementById('formHeadCancel').textContent, /edit/i);
+    win.backToEditRoot();
     assert.strictEqual(doc.getElementById('editRoot').hidden, false);
     assert.strictEqual(doc.querySelectorAll('#editRoot .srow').length, 4);
     assert.strictEqual(doc.getElementById('formRail').hidden, true);
@@ -915,6 +919,7 @@ test('each section row previews what it already holds', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
     win.openEdit(1);
+    win.backToEditRoot();
     const rows = [...doc.querySelectorAll('#editRoot .srow .stx span')];
     assert.match(rows[0].textContent, /Artist 1/);
     assert.match(rows[1].textContent, /Benedito Calixto/);
@@ -928,6 +933,7 @@ test('a wishlist record says so instead of showing a purchase it never had', asy
   const { win, doc } = await boot({ phone: true });
   try {
     win.openEdit(9);                        // fixture record 9 is have_it:false
+    win.backToEditRoot();
     const rows = [...doc.querySelectorAll('#editRoot .srow .stx span')];
     assert.strictEqual(rows[1].textContent, 'Wishlist');
   } finally {
@@ -942,6 +948,7 @@ test('tapping a section goes to that step and offers a way back', async () => {
   const { win, doc, read } = await boot({ phone: true });
   try {
     win.openEdit(1);
+    win.backToEditRoot();
     press(win, doc.querySelectorAll('#editRoot .srow')[1]);
     assert.strictEqual(read('formStep'), 2);
     assert.strictEqual(doc.getElementById('editRoot').hidden, true);
@@ -967,6 +974,7 @@ test('delete takes two taps and closes the form, not the drawer', async () => {
   const { win, doc, read } = await boot({ phone: true });
   try {
     win.openEdit(1);
+    win.backToEditRoot();
     const btn = doc.getElementById('editRootDelete');
     press(win, btn);                        // onclick="armEditDelete()" — needs press()
     assert.match(btn.textContent, /tap again/i);
@@ -1048,6 +1056,7 @@ test('a quick action updates the row it changed, without a reopen', async () => 
   const { win, doc } = await boot({ phone: true });
   try {
     win.openEdit(4);                       // fixture record 4 has no play dates
+    win.backToEditRoot();
     const row = () => doc.querySelectorAll('#editRoot .srow .stx span')[2].textContent;
     const before = row();
     await win.quickLog('play');
@@ -1080,6 +1089,7 @@ test('a breakpoint change back to desktop while the root is open restores the st
   const { win, doc } = await boot({ phone: true });
   try {
     win.openEdit(1);
+    win.backToEditRoot();
     assert.strictEqual(doc.getElementById('editRoot').hidden, false);
     win.__setPhone(false);
     assert.strictEqual(doc.getElementById('editRoot').hidden, true);

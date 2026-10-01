@@ -1560,6 +1560,7 @@ select option{background:var(--surface);color:var(--text)}
 .feature-media{position:relative;border-radius:var(--radius-sm);overflow:hidden;
   background:var(--bg);border:1px solid var(--border);aspect-ratio:16/9}
 .feature-media video{width:100%;height:100%;object-fit:cover;display:block}
+.feature-media iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
 .feature-media-empty{position:absolute;inset:0;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:11.5px;
   text-align:center;padding:10px}
@@ -1575,6 +1576,10 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .feature-upload input[type=file]{display:none}
 .feature-upload button{font-size:11.5px;color:var(--danger);background:none;border:none;
   cursor:pointer;padding:6px 2px}
+.feature-upload button.fu-youtube{display:inline-flex;align-items:center;gap:6px;
+  padding:6px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  color:var(--label);transition:all .15s}
+.feature-upload button.fu-youtube:hover{color:var(--text);border-color:var(--accent)}
 .feature-upload .fu-status{font-size:11px;color:var(--muted)}
 @media(max-width:760px){
   .features-hero{flex-direction:column;align-items:flex-start}
@@ -2208,6 +2213,16 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .place-edit:hover{color:var(--accent)}
 .place-delete:hover{color:var(--danger)}
 .place-empty{font-size:12px;color:var(--muted);padding:10px 2px 14px;line-height:1.5}
+.playlist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px 2px;border-bottom:1px solid var(--border)}
+.playlist-name{font-size:13px;font-weight:600;min-width:0;flex:1 1 auto}
+.playlist-sub{font-size:11px;color:var(--muted);flex:1 0 100%;line-height:1.5}
+.playlist-status{font-size:12px;color:var(--muted);flex:1 0 100%;line-height:1.5}
+.playlist-status a{color:var(--accent)}
+.playlist-status.err{color:var(--danger)}
+.playlist-status details{margin-top:4px}
+.playlist-status li{font-size:11px}
+.playlist-account{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:2px 2px 6px}
+.playlist-account .btn{margin-left:auto}
 .backup-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border);
   color:inherit;text-decoration:none}
 .backup-row:hover{color:var(--accent)}
@@ -2563,8 +2578,12 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
    * through. */
   #formOverlay .form-rail[hidden]{display:none}
   #formOverlay .form-rail-label[hidden]{display:none}
-  /* back shrinks to its icon so next keeps the width its role deserves */
-  #formOverlay .modal-foot #formBackBtn{flex:0 0 62px}
+  /* back and next are a pair: same width, rounder, and with a firmer outline
+     than the desktop .btn so they read as buttons at thumb size */
+  #formOverlay .modal-foot #formBackBtn,
+  #formOverlay .modal-foot #formNextBtn{flex:1 1 0;border-radius:16px;
+    border:1.5px solid color-mix(in srgb,var(--text) 28%,var(--border));color:var(--text)}
+  #formOverlay .modal-foot #formBackBtn:disabled{opacity:.4}
   #formOverlay .modal-foot .btn.hidden-phone{display:none}
   /* the draft flag moves off the footer, onto the rail line */
   #formOverlay .draft-flag{position:absolute;right:14px;margin:0}
@@ -3043,6 +3062,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
           <button class="menu-item" id="placesBtn" style="display:none" onclick="openPlaces()"><i class="ti ti-map-pin"></i><span>places</span></button>
           <button class="menu-item" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
           <button class="menu-item" id="backupsBtn" style="display:none" onclick="openBackups()"><i class="ti ti-history"></i><span>backups</span></button>
+          <button class="menu-item" id="playlistsBtn" style="display:none" onclick="openPlaylists()"><i class="ti ti-brand-spotify"></i><span>spotify playlists</span></button>
           <button class="menu-item" id="idleTriggerBtn"><i class="ti ti-disc"></i><span>preview screensaver</span></button>
           <label class="menu-item" id="importLabel" style="display:none">
             <i class="ti ti-upload"></i><span>import</span>
@@ -3330,7 +3350,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   <!-- features page — public, no auth required. The AI/API work (Claude
        vision scans, Spotify resolution, MusicBrainz search) only ever runs
        for the admin, so without this tab a visitor would never see it. Each
-       card gets one uploaded clip (see /api/feature-media); the upload
+       card gets one uploaded clip or YouTube embed (see /api/feature-media); the upload
        controls stay hidden behind body.is-authed exactly like the record
        grid's edit pencil. -->
   <div class="features-page" id="featuresPage">
@@ -3486,6 +3506,13 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
           <button type="button" class="frow hero" data-lookup="camera" onclick="openCamera()">
             <span class="fic"><i class="ti ti-camera"></i></span>
             <span class="ftx"><b>Shoot the sleeve</b><span>Camera, then Analyse</span></span>
+            <i class="ti ti-chevron-right chev"></i>
+          </button>
+          <!-- The cover well's own Choose file button is hidden at this width,
+               so without this row a photo already on the phone had no way in. -->
+          <button type="button" class="frow" data-lookup="photo" id="phoneLookupPhoto" onclick="pickCoverFile()">
+            <span class="fic"><i class="ti ti-photo"></i></span>
+            <span class="ftx"><b>Pick from photos</b><span>Library or files, then Analyse</span></span>
             <i class="ti ti-chevron-right chev"></i>
           </button>
           <button type="button" class="frow se" data-lookup="search" onclick="openSearchOverlay()">
@@ -4040,6 +4067,20 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   </div>
 </div>
 
+<!-- Two Spotify playlists on the owner's account that mirror the collection:
+     every album with a link, and only the liked songs. Each sync creates the
+     playlist when it is missing and otherwise adds and removes until it
+     matches. -->
+<div class="overlay hidden" id="playlistsOverlay">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <span class="modal-title">spotify playlists</span>
+      <button class="btn btn-ghost btn-sm" onclick="closePlaylists()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" id="playlistsBody"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="loginOverlay">
   <div class="modal" style="max-width:340px">
     <div class="modal-head">
@@ -4272,6 +4313,7 @@ async function init() {
   // Last, so it lands on a page that is already built: the hash decides the
   // tab, the filter, the arrangement and which record is open.
   applyUrl(location.hash);
+  playlistsReturn();
 }
 
 async function checkAuth() {
@@ -4305,6 +4347,8 @@ function setAuthed(val) {
   // Same door as export: a snapshot is the whole database, private notes and
   // photos included, and the rows download by navigation like export does.
   document.getElementById('backupsBtn').style.display = val ? '' : 'none';
+  // Every action in there writes to the owner's Spotify account.
+  document.getElementById('playlistsBtn').style.display = val ? '' : 'none';
   document.getElementById('mtabFab').style.display = val ? '' : 'none';
   // Re-render cards to show/hide play count editors
   render();
@@ -7644,11 +7688,9 @@ function openEdit(id){
   updateRatingUI();
   document.getElementById('formSaveBtn').onclick=submitForm;
   formBaseline = formValues();
-  // On a phone an existing record opens on its section list, not step 1 — you
-  // came here to change one thing, not to walk the wizard. Desktop is
-  // untouched: formEditRoot is false there, so rebuildFormChrome's root
-  // branch never engages and setFormStep(1) below renders exactly as before.
-  formEditRoot = isPhone();
+  // Opens on The record (step 1) everywhere. On a phone the section list is
+  // still one tap away: the header's "‹ edit" button is backToEditRoot.
+  formEditRoot = false;
   setFormStep(1);
   document.getElementById('formOverlay').classList.remove('hidden');
   renderEditRoot();
@@ -8851,7 +8893,8 @@ function setScanBusy(busy){
     stopPanelTick(panel);
   }
   ['spotifyUrlInput','spotifySubmitBtn','coverInput','coverCaptureInput',
-   'coverPickerFile','coverPickerCamera','notePickerFile','notePickerCamera'].forEach(id=>{
+   'coverPickerFile','coverPickerCamera','phoneLookupPhoto',
+   'notePickerFile','notePickerCamera'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.disabled = busy;
   });
@@ -10006,6 +10049,156 @@ function renderBackups(list, keepDays){
   body.innerHTML=rows+`<div class="backup-note">the last ${keepDays||5} days are kept; `
     +`older snapshots are deleted automatically.</div>`;
 }
+// ── spotify playlists ──────────────────────────────────────────────────────
+// The server does the work (spotify_sync.py); this panel connects the account
+// and runs a sync. A first sync reads every album once and may need several
+// requests to do it — the server answers 202 with its progress each time it
+// runs out of budget, and the loop below simply asks again.
+const PLAYLIST_KINDS = [
+  { kind: 'all', sub: 'every track of every owned record with a Spotify link' },
+  { kind: 'liked', sub: 'only the songs you liked in each record’s tracklist' },
+];
+let playlistAccount = null;
+const playlistStatus = {};
+let playlistBusy = false;
+
+function openPlaylists(){
+  document.getElementById('playlistsOverlay').classList.remove('hidden');
+  document.getElementById('morePanel').classList.add('hidden');
+  loadPlaylists();
+}
+
+function closePlaylists(){
+  document.getElementById('playlistsOverlay').classList.add('hidden');
+}
+
+async function loadPlaylists(){
+  renderPlaylists(null);
+  try{
+    const r=await fetch('/api/spotify/account');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    playlistAccount=await r.json();
+    renderPlaylists(playlistAccount);
+  }catch(err){
+    renderPlaylists('error');
+  }
+}
+
+function renderPlaylists(acct){
+  const body=document.getElementById('playlistsBody');
+  if(acct===null){body.innerHTML='<div class="backup-note">loading…</div>';return;}
+  if(acct==='error'){
+    body.innerHTML='<div class="backup-note">could not reach the server — try again.</div>';
+    return;
+  }
+  if(!acct.configured){
+    body.innerHTML='<div class="backup-note">Spotify is not configured on the server: set '
+      +'SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.</div>';
+    return;
+  }
+  if(!acct.connected){
+    body.innerHTML=`<div class="backup-note">connect your Spotify account so the app can
+      create and edit the playlists. The Spotify app must list this redirect URI:<br>
+      <code>${esc(acct.redirect_uri)}</code></div>
+      <div style="padding-top:12px"><button class="btn btn-primary btn-sm" id="spotifyConnectBtn"
+        onclick="window.location.href='/api/spotify/connect'"><i class="ti ti-brand-spotify"></i>
+        <span>connect spotify</span></button></div>`;
+    return;
+  }
+  const rows=PLAYLIST_KINDS.map(p=>{
+    const st=playlistStatus[p.kind]||{};
+    return `<div class="playlist-row" data-kind="${p.kind}">
+      <span class="playlist-name">${esc(acct.playlists[p.kind])}</span>
+      <button class="btn btn-primary btn-sm" ${playlistBusy?'disabled':''}
+        onclick="syncPlaylist('${p.kind}')"><i class="ti ti-refresh"></i><span>sync</span></button>
+      <span class="playlist-sub">${esc(p.sub)}</span>
+      ${st.html?`<div class="playlist-status${st.err?' err':''}">${st.html}</div>`:''}
+    </div>`;
+  }).join('');
+  body.innerHTML=`<div class="playlist-account"><i class="ti ti-brand-spotify"></i>
+      <span>connected as <b>${esc(acct.display_name||'Spotify')}</b></span>
+      <button class="btn btn-ghost btn-sm" onclick="disconnectSpotify()">disconnect</button></div>`
+    +rows
+    +`<div class="backup-note">a sync creates the playlist if it is missing, adds what is new and
+      removes what no longer belongs — the playlist always mirrors the collection.</div>`;
+}
+
+function playlistResultHtml(d){
+  const verb=d.created?'created':'synced';
+  const delta=d.created?'':` · +${d.added} / −${d.removed}`;
+  let html=`${verb} · ${d.total} tracks from ${d.records} records${delta} · `
+    +`<a href="${esc(d.url)}" target="_blank" rel="noopener">open in Spotify</a>`;
+  const skipped=(d.unmatched||[]).map(x=>'not found: '+x).concat((d.bad_links||[]).map(x=>'bad link: '+x));
+  if(skipped.length){
+    html+=`<details><summary>${skipped.length} skipped</summary><ul>`
+      +skipped.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul></details>';
+  }
+  return html;
+}
+
+async function syncPlaylist(kind){
+  if(playlistBusy)return;
+  playlistBusy=true;
+  playlistStatus[kind]={html:'reading albums…'};
+  renderPlaylists(playlistAccount);
+  try{
+    // Bounded so a server that never finishes cannot spin forever.
+    for(let round=0;round<30;round++){
+      const r=await fetch('/api/spotify/playlists/'+kind,{method:'POST'});
+      const d=await r.json().catch(()=>({}));
+      if(r.status===202&&d.incomplete){
+        playlistStatus[kind]={html:`reading albums… ${d.done} / ${d.total}`};
+        renderPlaylists(playlistAccount);
+        continue;
+      }
+      if(r.status===409&&d.connect){
+        playlistAccount.connected=false;
+        toast(d.error||'connect Spotify again');
+        return;
+      }
+      if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+      playlistStatus[kind]={html:playlistResultHtml(d)};
+      return;
+    }
+    throw new Error('the sync did not finish — try again');
+  }catch(err){
+    playlistStatus[kind]={html:esc('sync failed — '+err.message),err:true};
+  }finally{
+    playlistBusy=false;
+    renderPlaylists(playlistAccount);
+  }
+}
+
+async function disconnectSpotify(){
+  if(!confirm('Disconnect Spotify? The playlists stay on your account.'))return;
+  try{
+    await fetch('/api/spotify/disconnect',{method:'POST'});
+  }finally{
+    loadPlaylists();
+  }
+}
+
+// Back from Spotify's consent screen: /api/spotify/callback lands on
+// /?spotify=<outcome>. Say how it went, reopen the panel, and take the
+// parameter off the address bar so a refresh does not repeat it.
+function playlistsReturn(){
+  const params=new URLSearchParams(location.search);
+  const outcome=params.get('spotify');
+  if(!outcome)return;
+  params.delete('spotify');
+  const qs=params.toString();
+  history.replaceState(null,'',location.pathname+(qs?'?'+qs:'')+location.hash);
+  const messages={
+    connected:'Spotify connected',
+    denied:'Spotify connection cancelled',
+    failed:'could not connect Spotify — try again',
+    unconfigured:'Spotify is not configured on the server',
+    unauthorized:'enter edit mode before connecting Spotify',
+  };
+  toast(messages[outcome]||'Spotify: '+outcome);
+  if(authed)openPlaylists();
+}
+
 // Lets you see the idle screensaver on demand rather than waiting out the
 // real 2-minute timeout — fireIdleSpotlight() is the same function the idle
 // timer calls, so this is exactly what would happen anyway, just on request.
@@ -10975,8 +11168,14 @@ const FEATURE_CARDS = [
 
 let featureMediaManifest = {};
 
+// The manifest hands out either our own clip URL or a YouTube embed URL.
+const YOUTUBE_EMBED_PREFIX = 'https://www.youtube-nocookie.com/embed/';
+
 function featureMediaHtml(slot) {
   const url = featureMediaManifest[slot];
+  if (url && url.startsWith(YOUTUBE_EMBED_PREFIX))
+    return `<iframe src="${esc(url)}?rel=0" title="video" loading="lazy"
+      allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
   return url
     ? `<video src="${esc(url)}" controls preload="metadata"></video>`
     : `<div class="feature-media-empty"><i class="ti ti-video"></i>
@@ -10989,6 +11188,8 @@ function featureUploadHtml(slot) {
     <label><i class="ti ti-upload"></i><span>${has ? 'replace' : 'upload'} video</span>
       <input type="file" accept="video/*" onchange="uploadFeatureMedia('${slot}', this)">
     </label>
+    <button class="fu-youtube" onclick="setFeatureYoutube('${slot}')">
+      <i class="ti ti-brand-youtube"></i><span>YouTube link</span></button>
     ${has ? `<button onclick="removeFeatureMedia('${slot}')">remove</button>` : ''}
     <span class="fu-status" id="fuStatus-${slot}"></span>
   </div>`;
@@ -11050,6 +11251,25 @@ async function uploadFeatureMedia(slot, input) {
   } finally {
     input.value = '';
   }
+}
+
+// For clips too big to upload: put them on YouTube as Unlisted (Private
+// ones won't play for visitors) and paste the share link here.
+async function setFeatureYoutube(slot) {
+  const url = prompt('Paste the YouTube link (upload it as Unlisted, not Private):');
+  if (!url || !url.trim()) return;
+  const res = await fetch(`/api/feature-media/${slot}/youtube`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: url.trim() }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    toast(body.error || 'could not save link');
+    return;
+  }
+  toast('video linked');
+  await renderFeatures();
 }
 
 async function removeFeatureMedia(slot) {
