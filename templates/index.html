@@ -2221,6 +2221,13 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .playlist-status.err{color:var(--danger)}
 .playlist-status details{margin-top:4px}
 .playlist-status li{font-size:11px}
+.playlist-status .skipped-group ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.skipped-hint{opacity:.75}
+.skipped-item{display:flex;align-items:center;gap:8px}
+.skipped-cover{width:32px;height:32px;flex:0 0 32px;border-radius:4px;object-fit:cover;
+  display:inline-flex;align-items:center;justify-content:center;background:var(--border);color:var(--muted)}
+.skipped-text{display:flex;flex-direction:column;min-width:0}
+.skipped-songs{opacity:.8}
 .playlist-account{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:2px 2px 6px}
 .playlist-account .btn{margin-left:auto}
 .backup-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border);
@@ -4185,6 +4192,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 <script src="/static/places.js"></script>
 <script src="/static/spotify.js"></script>
 <script src="/static/tracks.js"></script>
+<script src="/static/playlist_filters.js"></script>
 <script src="/static/spend.js"></script>
 <script src="/static/scanstream.js"></script>
 <script src="/static/queue.js"></script>
@@ -10128,12 +10136,26 @@ function playlistResultHtml(d){
   const delta=d.created?'':` · +${d.added} / −${d.removed}`;
   let html=`${verb} · ${d.total} tracks from ${d.records} records${delta} · `
     +`<a href="${esc(d.url)}" target="_blank" rel="noopener">open in Spotify</a>`;
-  const skipped=(d.unmatched||[]).map(x=>'not found: '+x).concat((d.bad_links||[]).map(x=>'bad link: '+x));
-  if(skipped.length){
-    html+=`<details><summary>${skipped.length} skipped</summary><ul>`
-      +skipped.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul></details>';
-  }
+  html+=skippedGroupHtml('not found', 'liked songs Spotify has no match for', d.unmatched);
+  html+=skippedGroupHtml('bad link', 'records whose Spotify link is not an album', d.bad_links);
   return html;
+}
+
+// One collapsible group of skipped records, each with its cover so it is
+// recognisable at a glance; a not-found entry also lists its missing songs.
+function skippedGroupHtml(title, hint, items){
+  if(!items||!items.length)return '';
+  const rows=items.map(x=>{
+    const cover=x.cover_url
+      ?`<img class="skipped-cover" src="${esc(x.cover_url)}" alt="" loading="lazy">`
+      :'<span class="skipped-cover"><i class="ti ti-vinyl"></i></span>';
+    const songs=(x.songs||[]).length
+      ?`<span class="skipped-songs">${x.songs.map(esc).join(' · ')}</span>`:'';
+    return `<li class="skipped-item">${cover}<span class="skipped-text">
+      <span>${esc(x.label)}</span>${songs}</span></li>`;
+  }).join('');
+  return `<details class="skipped-group"><summary>${items.length} ${title}`
+    +` <span class="skipped-hint">— ${hint}</span></summary><ul>${rows}</ul></details>`;
 }
 
 async function syncPlaylist(kind){

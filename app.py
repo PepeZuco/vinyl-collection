@@ -8,6 +8,7 @@ from flask import Flask, request, jsonify, send_file, session, render_template, 
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.exceptions import NotFound
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import defer
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ import requests
 import backup
 import pricing
 import scan
+import playlist_filters
 import spotify_sync
 
 
@@ -553,12 +555,65 @@ class SpotifyAlbumCache(db.Model):
     link   = db.Column(db.String(500), primary_key=True)
     tracks = db.Column(db.Text)
 
+
+# A playlist this app made on the owner's Spotify, and the filters that define
+# it (see playlist_filters.py). filter_key is unique: asking for the same
+# filters again finds this row and resyncs it instead of making a second
+# playlist. spotify_id stays null until the first sync creates it there.
+# legacy marks the two fixed playlists from before this table: they were made
+# without storing an id, so their first sync looks them up by name, once.
+class SpotifyPlaylist(db.Model):
+    id             = db.Column(db.Integer, primary_key=True)
+    spotify_id     = db.Column(db.String(64))
+    name           = db.Column(db.String(100), nullable=False)
+    filters        = db.Column(db.Text, nullable=False)
+    filter_key     = db.Column(db.Text, nullable=False, unique=True)
+    legacy         = db.Column(db.Boolean, default=False, nullable=False)
+    created_at     = db.Column(db.String(50))
+    last_synced_at = db.Column(db.String(50))
+    last_total     = db.Column(db.Integer)
+    last_records   = db.Column(db.Integer)
+
+    def to_dict(self):
+        f = json.loads(self.filters)
+        return {
+            "id": self.id,
+            "name": self.name,
+            "filters": f,
+            "summary": playlist_filters.describe(f),
+            "url": spotify_sync.playlist_url(self.spotify_id) if self.spotify_id else "",
+            "last_synced_at": self.last_synced_at,
+            "last_total": self.last_total,
+            "last_records": self.last_records,
+        }
+
+
+_LEGACY_PLAYLISTS = (
+    ("Zucoloto Vinyl Collection", {"liked": False}),
+    ("Zucoloto Vinyl Collection — Liked", {"liked": True}),
+)
+
+
+def _seed_legacy_playlists():
+    """The two playlists the app synced before filters existed, as saved rows."""
+    for name, raw in _LEGACY_PLAYLISTS:
+        f = playlist_filters.normalize_filters(raw)
+        key = playlist_filters.filter_key(f)
+        if SpotifyPlaylist.query.filter_by(filter_key=key).first() is None:
+            db.session.add(SpotifyPlaylist(
+                name=name, filters=json.dumps(f), filter_key=key, legacy=True,
+                created_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%S")))
+    db.session.commit()
+
 with app.app_context():
+    from sqlalchemy import inspect, text
+    # Seeded only when the table is new, so deleting both legacy playlists
+    # does not bring them back on the next deploy.
+    new_playlist_table = not inspect(db.engine).has_table("spotify_playlist")
     db.create_all()
     # lightweight auto-migration: db.create_all() only creates missing tables,
     # it won't add new columns to a table that already exists (e.g. on Railway's
     # persisted Postgres/SQLite). Add any columns that are missing.
-    from sqlalchemy import inspect, text
     inspector = inspect(db.engine)
     existing_cols = [c["name"] for c in inspector.get_columns("record")]
     missing_cols = {
@@ -639,6 +694,9 @@ with app.app_context():
     # Photos uploaded into a form that was then abandoned have nothing pointing
     # at them and nothing that will ever call the save-time reap. This is the
     # only thing that collects them.
+    if new_playlist_table:
+        _seed_legacy_playlists()
+
     _sweep_note_images()
 
 # ── auth helpers ──────────────────────────────────────────────────────────────
@@ -1848,7 +1906,6 @@ def spotify_account():
         "configured": spotify_sync.configured(),
         "connected": bool(acct and acct.refresh_token),
         "display_name": (acct.display_name if acct else "") or "",
-        "playlists": {k: v["name"] for k, v in spotify_sync.PLAYLISTS.items()},
         "redirect_uri": _spotify_redirect_uri(),
     })
 
@@ -1919,48 +1976,152 @@ def _playlist_records():
     """Owned records with a Spotify link, oldest purchase first — so the
     playlist reads as the collection's own history and a new record's
     tracks land at the end, where a sync appends them anyway."""
-    rows = (db.session.query(Record.artist, Record.album_name, Record.spotify_url, Record.tracks)
+    rows = (db.session.query(Record.id, Record.cover_hash, Record.artist, Record.album_name,
+                             Record.spotify_url, Record.tracks, Record.year, Record.genre,
+                             Record.my_rating, Record.wife_rating, Record.bought_where,
+                             Record.bought_date)
             .filter(Record.have_it.is_(True),
                     Record.spotify_url.isnot(None), Record.spotify_url != "")
             .order_by(Record.bought_date, Record.id).all())
     out = []
-    for artist, album, link, tracks in rows:
+    for (rid, cover_hash, artist, album, link, tracks, year, genre,
+         my_rating, wife_rating, bought_where, bought_date) in rows:
         try:
             parsed = json.loads(tracks) if tracks else []
         except ValueError:
             parsed = []
         out.append({"artist": artist, "album_name": album, "spotify_url": link,
-                    "tracks": parsed if isinstance(parsed, list) else []})
+                    # Same URL Record.to_dict hands out, so the skipped list can show it.
+                    "cover_url": f"/api/records/{rid}/cover?v={cover_hash}" if cover_hash else "",
+                    "tracks": parsed if isinstance(parsed, list) else [],
+                    "year": year, "genre": genre, "my_rating": my_rating,
+                    "wife_rating": wife_rating, "bought_where": bought_where,
+                    "bought_date": bought_date})
     return out
 
 
-@app.route("/api/spotify/playlists/<kind>", methods=["POST"])
-@require_auth
-def spotify_sync_playlist(kind):
-    if kind not in spotify_sync.PLAYLISTS:
-        raise NotFound()
-    acct = _spotify_account()
-    if not acct or not acct.refresh_token:
-        return jsonify({"error": "Spotify is not connected", "connect": True}), 409
-
+def _spotify_client(acct):
     def rotated(token):
         acct.refresh_token = token
         db.session.commit()
+    return spotify_sync.Client(acct.refresh_token, on_new_refresh_token=rotated)
 
-    client = spotify_sync.Client(acct.refresh_token, on_new_refresh_token=rotated)
+
+def _login_expired(acct):
+    db.session.delete(acct)
+    db.session.commit()
+    return jsonify({"error": "Spotify login expired — connect again", "connect": True}), 409
+
+
+def _not_connected():
+    return jsonify({"error": "Spotify is not connected", "connect": True}), 409
+
+
+def _playlist_or_404(pid):
+    row = db.session.get(SpotifyPlaylist, pid)
+    if row is None:
+        raise NotFound()
+    return row
+
+
+def _playlist_by_key(key):
+    return SpotifyPlaylist.query.filter_by(filter_key=key).first()
+
+
+def _distinct_names(column):
+    """Non-empty values of a Record column among owned records, one per spelling-insensitive name."""
+    seen = {}
+    for (v,) in db.session.query(column).filter(Record.have_it.is_(True)).distinct().all():
+        t = " ".join((v or "").split())
+        if t and t.lower() not in seen:
+            seen[t.lower()] = t
+    return sorted(seen.values(), key=str.lower)
+
+
+@app.route("/api/spotify/playlists")
+@require_auth
+def spotify_playlists():
+    rows = SpotifyPlaylist.query.order_by(SpotifyPlaylist.id).all()
+    return jsonify({"playlists": [r.to_dict() for r in rows],
+                    "genres": _distinct_names(Record.genre),
+                    "places": _distinct_names(Record.bought_where)})
+
+
+@app.route("/api/spotify/playlists", methods=["POST"])
+@require_auth
+def spotify_create_playlist():
+    d = request.get_json(silent=True) or {}
+    try:
+        f = playlist_filters.normalize_filters(d.get("filters"))
+    except playlist_filters.FilterError as e:
+        return jsonify({"error": str(e), "field": e.field}), 400
+    key = playlist_filters.filter_key(f)
+    row = _playlist_by_key(key)
+    if row:
+        return jsonify({"playlist": row.to_dict(), "existed": True})
+    name = " ".join(str(d.get("name") or "").split())[:playlist_filters.MAX_NAME]
+    row = SpotifyPlaylist(name=name or playlist_filters.suggest_name(f),
+                          filters=json.dumps(f), filter_key=key,
+                          created_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+    db.session.add(row)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # A second click raced the first: its row won the unique key.
+        db.session.rollback()
+        return jsonify({"playlist": SpotifyPlaylist.query.filter_by(filter_key=key).first().to_dict(),
+                        "existed": True})
+    return jsonify({"playlist": row.to_dict(), "existed": False}), 201
+
+
+@app.route("/api/spotify/playlists/<int:pid>/sync", methods=["POST"])
+@require_auth
+def spotify_sync_playlist(pid):
+    row = _playlist_or_404(pid)
+    acct = _spotify_account()
+    if not acct or not acct.refresh_token:
+        return _not_connected()
+    f = json.loads(row.filters)
+    records = playlist_filters.select(_playlist_records(), f)
     deadline = time.monotonic() + _SPOTIFY_READ_BUDGET
     try:
-        result = spotify_sync.sync(client, _playlist_records(), kind, _AlbumCache(), deadline)
+        result = spotify_sync.sync(_spotify_client(acct), records, f.get("liked", True),
+                                   _AlbumCache(), name=row.name, spotify_id=row.spotify_id,
+                                   adopt_by_name=bool(row.legacy), deadline=deadline)
     except spotify_sync.Incomplete as e:
         return jsonify({"incomplete": True, "done": e.done, "total": e.total}), 202
     except spotify_sync.NotConnected:
-        db.session.delete(acct)
-        db.session.commit()
-        return jsonify({"error": "Spotify login expired — connect again", "connect": True}), 409
+        return _login_expired(acct)
     except (spotify_sync.SpotifyError, requests.RequestException) as e:
         app.logger.warning("Spotify playlist sync failed", exc_info=True)
         return jsonify({"error": str(e)}), 502
-    return jsonify(result)
+    row.spotify_id = result["spotify_id"]
+    row.legacy = False
+    row.last_synced_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    row.last_total = result["total"]
+    row.last_records = result["records"]
+    db.session.commit()
+    return jsonify({**result, "playlist": row.to_dict()})
+
+
+@app.route("/api/spotify/playlists/<int:pid>", methods=["DELETE"])
+@require_auth
+def spotify_delete_playlist(pid):
+    row = _playlist_or_404(pid)
+    if row.spotify_id:
+        acct = _spotify_account()
+        if not acct or not acct.refresh_token:
+            return _not_connected()
+        try:
+            spotify_sync.delete_playlist(_spotify_client(acct), row.spotify_id)
+        except spotify_sync.NotConnected:
+            return _login_expired(acct)
+        except (spotify_sync.SpotifyError, requests.RequestException) as e:
+            app.logger.warning("Spotify playlist delete failed", exc_info=True)
+            return jsonify({"error": str(e)}), 502
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 # ── daily backups ─────────────────────────────────────────────────────────────
 

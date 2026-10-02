@@ -5,14 +5,11 @@ read the catalogue and nothing else. A playlist belongs to a person, so this
 module runs the authorization-code flow instead and keeps the refresh token the
 owner grants once.
 
-Two playlists, each a pure function of the collection:
-
-  all    every track of every owned record that carries a Spotify link
-  liked  only the songs hearted in each of those records' tracklists
-
-A sync makes the playlist match that list exactly: missing tracks are appended
-(so new records land at the end), and tracks that no longer qualify — an
-unliked song, a removed link, a sold record — are taken out.
+Each playlist is a pure function of the collection: the caller picks the
+records (playlist_filters.select) and says whether only hearted songs count.
+A sync makes the playlist match that list exactly: missing tracks are
+appended (so new records land at the end), and tracks that no longer qualify
+— an unliked song, a removed link, a sold record — are taken out.
 
 Endpoints follow Spotify's February 2026 API: POST /me/playlists to create,
 /playlists/{id}/items (not /tracks) to read and edit, and the per-entry track
@@ -37,16 +34,7 @@ ACCOUNTS = "https://accounts.spotify.com"
 TIMEOUT = 10.0
 SCOPES = "playlist-read-private playlist-modify-private playlist-modify-public"
 
-PLAYLISTS = {
-    "all": {
-        "name": "Zucoloto Vinyl Collection",
-        "description": "Every record in the Zucoloto vinyl collection that is on Spotify.",
-    },
-    "liked": {
-        "name": "Zucoloto Vinyl Collection — Liked",
-        "description": "The songs hearted across the Zucoloto vinyl collection.",
-    },
-}
+DESCRIPTION = "Made from the Zucoloto vinyl collection."
 
 # Spotify caps both adds and removes at 100 URIs per request.
 _BATCH = 100
@@ -258,15 +246,20 @@ def _label(record):
     return f"{record.get('artist') or '?'} — {record.get('album_name') or '?'}"
 
 
-def desired_tracks(client, records, kind, cache, deadline=None):
+def _skipped(record):
+    """A report entry: enough for the panel to show which record it is."""
+    return {"label": _label(record), "cover_url": record.get("cover_url") or ""}
+
+
+def desired_tracks(client, records, liked, cache, deadline=None):
     """The ordered, de-duplicated track URIs a playlist should hold.
 
-    `records` are dicts with artist, album_name, spotify_url and tracks (the
-    parsed tracklist). `cache` maps a link to its album_tracks() result —
+    `records` are dicts with artist, album_name, spotify_url, cover_url and
+    tracks (the parsed tracklist). `cache` maps a link to its album_tracks() result —
     anything with get/put. Returns (uris, report); raises Incomplete when
     `deadline` (a time.monotonic() value) passes before every album is read.
     """
-    if kind == "liked":
+    if liked:
         records = [r for r in records if any(t.get("liked_at") for t in r.get("tracks") or [])]
 
     uris, seen = [], set()
@@ -280,20 +273,20 @@ def desired_tracks(client, records, kind, cache, deadline=None):
             try:
                 tracks = album_tracks(client, link)
             except ValueError:
-                report["bad_links"].append(_label(record))
+                report["bad_links"].append(_skipped(record))
                 continue
             except SpotifyError as e:
                 # A pulled or mistyped album is one record's problem, not the sync's.
                 if e.status not in (400, 404):
                     raise
-                report["bad_links"].append(_label(record))
+                report["bad_links"].append(_skipped(record))
                 continue
             cache.put(link, tracks)
 
-        if kind == "all":
+        if not liked:
             picked = tracks
         else:
-            picked = []
+            picked, missing = [], []
             for song in record.get("tracks") or []:
                 if not song.get("liked_at"):
                     continue
@@ -301,7 +294,9 @@ def desired_tracks(client, records, kind, cache, deadline=None):
                 if hit:
                     picked.append(hit)
                 else:
-                    report["unmatched"].append(f"{_label(record)}: {song.get('title')}")
+                    missing.append(song.get("title") or "?")
+            if missing:
+                report["unmatched"].append({**_skipped(record), "songs": missing})
 
         if picked:
             report["records"] += 1
@@ -314,16 +309,31 @@ def desired_tracks(client, records, kind, cache, deadline=None):
 
 # ── the playlist itself ───────────────────────────────────────────────────────
 
-def find_or_create_playlist(client, kind):
-    """(playlist, created) — the owner's playlist with this kind's name."""
-    spec = PLAYLISTS[kind]
+def playlist_url(spotify_id):
+    return f"https://open.spotify.com/playlist/{spotify_id}"
+
+
+def _owned_by_name(client, name):
+    """The owner's playlist called `name`, or None. Only legacy rows ask this."""
     me = client.call("GET", "/me")
     for p in client.pages("/me/playlists?limit=50"):
-        if p and p.get("name") == spec["name"] and (p.get("owner") or {}).get("id") == me.get("id"):
-            return p, False
-    created = client.call("POST", "/me/playlists", json={
-        "name": spec["name"], "description": spec["description"], "public": False})
-    return created, True
+        if p and p.get("name") == name and (p.get("owner") or {}).get("id") == me.get("id"):
+            return p["id"]
+    return None
+
+
+def _create(client, name):
+    return client.call("POST", "/me/playlists", json={
+        "name": name, "description": DESCRIPTION, "public": False})["id"]
+
+
+def delete_playlist(client, spotify_id):
+    """Delete the owner's playlist — on Spotify that is unfollowing it. Gone already is fine."""
+    try:
+        client.call("DELETE", f"/playlists/{spotify_id}/followers")
+    except SpotifyError as e:
+        if e.status != 404:
+            raise
 
 
 def playlist_uris(client, playlist_id):
@@ -361,16 +371,34 @@ def mirror(client, playlist_id, desired):
     return added, removed
 
 
-def sync(client, records, kind, cache, deadline=None):
-    """Read the albums, then bring the playlist in line. Raises Incomplete first if out of time."""
-    desired, report = desired_tracks(client, records, kind, cache, deadline)
-    playlist, created = find_or_create_playlist(client, kind)
-    added, removed = mirror(client, playlist["id"], desired)
+def sync(client, records, liked, cache, *, name, spotify_id=None, adopt_by_name=False,
+         deadline=None):
+    """Read the albums, then bring the playlist in line. Raises Incomplete first if out of time.
+
+    `spotify_id` is the playlist this app made last time; a playlist deleted on
+    Spotify since answers 404 and is made again. `adopt_by_name` is for the two
+    playlists made before ids were stored: they are found by name, once.
+    """
+    desired, report = desired_tracks(client, records, liked, cache, deadline)
+    if not spotify_id and adopt_by_name:
+        spotify_id = _owned_by_name(client, name)
+    created = False
+    counts = None
+    if spotify_id:
+        try:
+            counts = mirror(client, spotify_id, desired)
+        except SpotifyError as e:
+            if e.status != 404:
+                raise
+    if counts is None:
+        spotify_id = _create(client, name)
+        created = True
+        counts = mirror(client, spotify_id, desired)
+    added, removed = counts
     return {
-        "kind": kind,
-        "name": PLAYLISTS[kind]["name"],
-        "url": (playlist.get("external_urls") or {}).get("spotify")
-               or f"https://open.spotify.com/playlist/{playlist['id']}",
+        "spotify_id": spotify_id,
+        "name": name,
+        "url": playlist_url(spotify_id),
         "created": created,
         "total": len(desired),
         "added": added,

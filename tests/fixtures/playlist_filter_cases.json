@@ -1,0 +1,36 @@
+{
+  "match": [
+    {"why": "year is the first four digits", "filters": {"year_from": 1970, "year_to": 1979}, "record": {"year": "1973 (reissue)"}, "match": true},
+    {"why": "year with a prefix", "filters": {"year_from": 1970, "year_to": 1979}, "record": {"year": "c.1973"}, "match": true},
+    {"why": "outside the range", "filters": {"year_from": 1970, "year_to": 1979}, "record": {"year": "1980"}, "match": false},
+    {"why": "unreadable year is out once a bound is set", "filters": {"year_from": 1970}, "record": {"year": "?"}, "match": false},
+    {"why": "no year filter keeps a yearless record", "filters": {}, "record": {"year": ""}, "match": true},
+    {"why": "reversed range is swapped", "filters": {"year_from": 1979, "year_to": 1970}, "record": {"year": "1975"}, "match": true},
+    {"why": "genre ignores case and spacing", "filters": {"genres": ["Rock"]}, "record": {"genre": "  rock "}, "match": true},
+    {"why": "genre matches any of several", "filters": {"genres": ["Jazz", "Rock"]}, "record": {"genre": "Jazz"}, "match": true},
+    {"why": "another genre is out", "filters": {"genres": ["Jazz"]}, "record": {"genre": "Rock"}, "match": false},
+    {"why": "and needs both minimums", "filters": {"pepe_min": 4, "jenni_min": 4, "rating_mode": "and"}, "record": {"my_rating": 5, "wife_rating": 3}, "match": false},
+    {"why": "or needs either minimum", "filters": {"pepe_min": 4, "jenni_min": 4, "rating_mode": "or"}, "record": {"my_rating": 5, "wife_rating": 3}, "match": true},
+    {"why": "mode defaults to and", "filters": {"pepe_min": 4, "jenni_min": 4}, "record": {"my_rating": 5, "wife_rating": 3}, "match": false},
+    {"why": "a single minimum ignores the mode", "filters": {"pepe_min": 4, "rating_mode": "or"}, "record": {"my_rating": 3, "wife_rating": 5}, "match": false},
+    {"why": "half stars count", "filters": {"jenni_min": 3.5}, "record": {"wife_rating": 3.5}, "match": true},
+    {"why": "unrated never passes a minimum", "filters": {"pepe_min": 0.5}, "record": {"my_rating": 0}, "match": false},
+    {"why": "a null rating is unrated", "filters": {"jenni_min": 1}, "record": {"wife_rating": null}, "match": false},
+    {"why": "place ignores case", "filters": {"places": ["Tracks"]}, "record": {"bought_where": "tracks"}, "match": true},
+    {"why": "bought range compares the calendar day", "filters": {"bought_from": "2024-01-01", "bought_to": "2024-01-31"}, "record": {"bought_date": "2024-01-31T18:20:00"}, "match": true},
+    {"why": "same day both ends is an exact date", "filters": {"bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "record": {"bought_date": "2024-01-31"}, "match": true},
+    {"why": "the day after is out", "filters": {"bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "record": {"bought_date": "2024-02-01"}, "match": false},
+    {"why": "no purchase date is out once a bound is set", "filters": {"bought_from": "2024-01-01"}, "record": {"bought_date": ""}, "match": false},
+    {"why": "filters combine with and", "filters": {"genres": ["Rock"], "year_from": 1980}, "record": {"genre": "Rock", "year": "1975"}, "match": false}
+  ],
+  "names": [
+    {"filters": {"liked": true}, "name": "Zucoloto Vinyl — Liked"},
+    {"filters": {"liked": false}, "name": "Zucoloto Vinyl"},
+    {"filters": {"liked": true, "genres": ["rock", "Jazz"], "year_from": 1970, "year_to": 1979}, "name": "Zucoloto Vinyl — Liked · Jazz, rock · 1970–1979"},
+    {"filters": {"liked": false, "year_from": 1990}, "name": "Zucoloto Vinyl · ≥1990"},
+    {"filters": {"liked": false, "year_to": 1965}, "name": "Zucoloto Vinyl · ≤1965"},
+    {"filters": {"liked": true, "pepe_min": 4, "jenni_min": 3.5, "rating_mode": "or"}, "name": "Zucoloto Vinyl — Liked · Pepe ≥4 or Jenni ≥3.5"},
+    {"filters": {"liked": false, "places": ["Tracks"], "bought_from": "2024-01-01", "bought_to": "2024-06-30"}, "name": "Zucoloto Vinyl · Tracks · bought 2024-01-01–2024-06-30"},
+    {"filters": {"liked": false, "bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "name": "Zucoloto Vinyl · bought 2024-01-31"}
+  ]
+}
