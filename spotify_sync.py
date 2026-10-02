@@ -36,17 +36,6 @@ SCOPES = "playlist-read-private playlist-modify-private playlist-modify-public"
 
 DESCRIPTION = "Made from the Zucoloto vinyl collection."
 
-PLAYLISTS = {
-    "all": {
-        "name": "Zucoloto Vinyl Collection",
-        "description": "Every record in the Zucoloto vinyl collection that is on Spotify.",
-    },
-    "liked": {
-        "name": "Zucoloto Vinyl Collection — Liked",
-        "description": "The songs hearted across the Zucoloto vinyl collection.",
-    },
-}
-
 # Spotify caps both adds and removes at 100 URIs per request.
 _BATCH = 100
 # A Retry-After longer than this is not worth holding a gunicorn worker for.
