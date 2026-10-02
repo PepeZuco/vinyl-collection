@@ -10091,6 +10091,14 @@ const playlistStatus = {};      // playlist id -> {html, err}
 let playlistBusy = false;
 let playlistHighlight = null;   // id of the row a duplicate create pointed at
 
+// Every change goes through here: a sync re-renders only the list, so the
+// form's create button would otherwise keep whatever state it was drawn with.
+function setPlaylistBusy(busy){
+  playlistBusy=busy;
+  const create=document.getElementById('plCreate');
+  if(create)create.disabled=busy;
+}
+
 function blankPlaylistForm(){
   return {liked: true, year_from: '', year_to: '', genres: [], pepe_min: '', jenni_min: '',
           rating_mode: 'and', places: [], bought_from: '', bought_to: '', name: '', nameTouched: false};
@@ -10316,7 +10324,7 @@ async function createPlaylist(){
 
 async function syncPlaylist(id,note){
   if(playlistBusy)return;
-  playlistBusy=true;
+  setPlaylistBusy(true);
   playlistStatus[id]={html:'reading albums…'};
   renderPlaylistList();
   try{
@@ -10346,7 +10354,7 @@ async function syncPlaylist(id,note){
   }catch(err){
     playlistStatus[id]={html:esc('sync failed — '+err.message),err:true};
   }finally{
-    playlistBusy=false;
+    setPlaylistBusy(false);
     renderPlaylists(playlistAccount);
   }
 }
@@ -10355,7 +10363,7 @@ async function deletePlaylist(id){
   const p=savedPlaylists.find(x=>x.id===id);
   if(!p||playlistBusy)return;
   if(!confirm(`Delete “${p.name}” from Spotify too?`))return;
-  playlistBusy=true;
+  setPlaylistBusy(true);
   try{
     const r=await fetch('/api/spotify/playlists/'+id,{method:'DELETE'});
     const d=await r.json().catch(()=>({}));
@@ -10371,7 +10379,7 @@ async function deletePlaylist(id){
   }catch(err){
     playlistStatus[id]={html:esc('delete failed — '+err.message),err:true};
   }finally{
-    playlistBusy=false;
+    setPlaylistBusy(false);
     renderPlaylists(playlistAccount);
   }
 }

@@ -6,7 +6,7 @@
  * requestAnimationFrame loop keeps node's event loop alive and the run hangs
  * instead of reporting.
  *
- * What is worth testing: the item is edit-mode only, the panel offers to connect when there is no login, the saved playlists are listed, the form previews its count and name, a create that already exists resyncs that row, a sync keeps asking while the server reports it is still reading albums, and a delete removes the row.
+ * What is worth testing: the item is edit-mode only, the panel offers to connect when there is no login, the saved playlists are listed, the form previews its count and name, a create that already exists resyncs that row, a sync keeps asking while the server reports it is still reading albums, create is held while a sync runs, and a delete removes the row.
  */
 
 const test = require('node:test');
@@ -331,6 +331,31 @@ test('a sync keeps asking while the server is still reading albums', async () =>
       .map(i => i.getAttribute('src'));
     assert.deepStrictEqual(covers, ['/api/records/7/cover?v=h', '/api/records/9/cover?v=h']);
     assert.match(text, /42 tracks · synced/, 'the row did not take the stored result');
+  } finally { win.close(); }
+});
+
+test('create is held while a sync runs', async () => {
+  const { win, doc, posted } = await openPanel({
+    saved: [EVERY], syncs: [[202, { incomplete: true, done: 1, total: 300 }]] });
+  // Each sync answer waits for the test, so the sync is still running when it looks.
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const answer = win.fetch;
+  win.fetch = async (url, init) => {
+    if (/\/sync$/.test(String(url))) await gate;
+    return answer(url, init);
+  };
+  try {
+    assert.ok(!doc.getElementById('plCreate').disabled);
+    press(win, row(doc, 1).querySelector('.playlist-sync'));
+    await settle();
+    assert.ok(doc.getElementById('plCreate').disabled, 'create stayed clickable mid-sync');
+    press(win, doc.getElementById('plCreate'));
+    await settle();
+    assert.deepStrictEqual(posted, []);
+    release();
+    await settle(); await settle();
+    assert.ok(!doc.getElementById('plCreate').disabled, 'create stayed disabled after the sync');
   } finally { win.close(); }
 });
 
