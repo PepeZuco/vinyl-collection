@@ -313,6 +313,15 @@ def playlist_url(spotify_id):
     return f"https://open.spotify.com/playlist/{spotify_id}"
 
 
+def playlist_cover(client, spotify_id):
+    """The playlist's cover image URL (Spotify's mosaic, or one set by hand), or ""."""
+    images = client.call("GET", f"/playlists/{spotify_id}/images") or []
+    # Largest first, but a bare list may be unsorted or carry null sizes.
+    images = sorted((i for i in images if i and i.get("url")),
+                    key=lambda i: -(i.get("width") or 0))
+    return images[0]["url"] if images else ""
+
+
 def find_owned_by_name(client, name):
     """The owner's playlist called `name`, or None. Only legacy rows ask this."""
     me = client.call("GET", "/me")

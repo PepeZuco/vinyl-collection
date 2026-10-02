@@ -2214,7 +2214,15 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .place-delete:hover{color:var(--danger)}
 .place-empty{font-size:12px;color:var(--muted);padding:10px 2px 14px;line-height:1.5}
 .playlist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px 2px;border-bottom:1px solid var(--border)}
-.playlist-name{font-size:13px;font-weight:600;min-width:0;flex:1 1 auto}
+.playlist-name{font-size:13px;font-weight:600;min-width:0;flex:1 1 0}
+.playlist-name a{color:inherit;text-decoration:none}
+.playlist-name a:hover{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.playlist-art{flex:0 0 44px;width:44px;height:44px;border-radius:6px;overflow:hidden;background:var(--border);
+  display:flex;align-items:center;justify-content:center;color:var(--label);font-size:18px}
+.playlist-art img{width:100%;height:100%;object-fit:cover;display:block}
+.playlist-open .ti{color:#1DB954}
+/* sub-lines and status sit under the name, past the cover */
+.playlist-row>.playlist-sub,.playlist-row>.playlist-status{padding-left:54px}
 .playlist-sub{font-size:11px;color:var(--muted);flex:1 0 100%;line-height:1.5}
 .playlist-status{font-size:12px;color:var(--muted);flex:1 0 100%;line-height:1.5}
 .playlist-status a{color:var(--accent)}
@@ -2235,20 +2243,50 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .playlist-last a{color:var(--accent)}
 .playlist-new{margin-top:12px;border-top:1px solid var(--border);padding-top:8px}
 .playlist-new summary{cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--label);padding:6px 2px}
-.pl-field{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 2px;font-size:12px}
-.pl-label{flex:0 0 72px;color:var(--muted)}
-.pl-field input,.pl-field select{font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--border);
-  border-radius:6px;background:var(--bg);color:inherit;min-width:0}
-.pl-field input[type=radio]{padding:0}
-.pl-num{width:76px}
+.pl-form{display:flex;flex-direction:column;gap:2px;margin-top:6px;padding:6px 12px 10px;
+  background:var(--card);border:1px solid var(--border);border-radius:10px}
+.pl-field{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;font-size:12px;
+  border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
+.pl-field:last-of-type{border-bottom:none}
+.pl-label{flex:0 0 96px;display:inline-flex;align-items:center;gap:7px;color:var(--label);
+  font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.pl-label .ti{font-size:15px;color:var(--accent)}
+.pl-field input,.pl-field select{font:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--border);
+  border-radius:8px;background:var(--bg);color:inherit;min-width:0;outline:none;transition:border-color .12s}
+.pl-field input:focus,.pl-field select:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.pl-sep{color:var(--muted)}
+/* segmented toggles: the radios stay real inputs (keyboard, tests), only hidden */
+.pl-seg{display:inline-flex;padding:3px;gap:3px;border:1px solid var(--border);border-radius:999px;background:var(--bg)}
+.pl-seg label{position:relative;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;
+  border-radius:999px;cursor:pointer;color:var(--label);font-size:12px;transition:background .12s,color .12s}
+.pl-seg label:hover{color:var(--text)}
+.pl-seg input{position:absolute;opacity:0;pointer-events:none;width:0;height:0;margin:0}
+.pl-seg label:has(input:checked){background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);font-weight:600}
+.pl-seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:1px}
+.pl-seg .ti-heart-filled{color:var(--ev-liked)}
+.pl-seg.sm label{padding:3px 9px;font-size:11px}
+.pl-decade{width:auto}
+.pl-rate{display:inline-flex;align-items:center;gap:6px}
+.pl-rate .ti{color:var(--accent)}
 .pl-name{flex:1 1 160px}
-.pl-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 8px;border-radius:999px;
-  background:var(--border);font-size:11px}
-.pl-chip button{background:none;border:none;color:var(--muted);cursor:pointer;padding:0 4px;font-size:13px}
+.pl-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 4px 4px 11px;border-radius:999px;
+  background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-size:12px;font-weight:600}
+.pl-chip button{background:none;border:none;color:inherit;opacity:.65;cursor:pointer;padding:0 5px;font-size:14px;line-height:1}
+.pl-chip button:hover{opacity:1}
+.pl-field select.pl-add{border-style:dashed;border-radius:999px;color:var(--label);cursor:pointer}
 .pl-mode[hidden]{display:none}
-.pl-count{font-size:12px;color:var(--muted);padding:8px 2px}
+.pl-count{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--label);padding:12px 0 4px}
+
 .pl-count.warn{color:var(--danger)}
-.pl-actions{display:flex;justify-content:flex-end;padding:6px 2px}
+
+.pl-actions{display:flex;justify-content:flex-end;padding:8px 0 2px}
+.pl-matches{margin-top:6px}
+.pl-match-list{display:flex;flex-direction:column;max-height:320px;overflow-y:auto;margin-top:6px}
+.pl-match{display:flex;align-items:center;gap:10px;padding:6px 2px;border-bottom:1px solid var(--border);min-width:0}
+.pl-match .list-main{flex:1;min-width:0}
+.pl-match-liked{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--ev-liked);font-variant-numeric:tabular-nums}
+.pl-match-year{font-size:11px;color:var(--label);font-variant-numeric:tabular-nums;white-space:nowrap}
 @media (max-width:480px){.pl-label{flex-basis:100%}}
 .backup-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border);
   color:inherit;text-decoration:none}
@@ -10096,7 +10134,7 @@ let playlistHighlight = null;   // id of the row a duplicate create pointed at
 function setPlaylistBusy(busy){
   playlistBusy=busy;
   const create=document.getElementById('plCreate');
-  if(create)create.disabled=busy;
+  if(create)create.disabled=busy||!VinylPlaylistFilters.countMatching(records,playlistFilters());
 }
 
 function blankPlaylistForm(){
@@ -10191,8 +10229,16 @@ function renderPlaylistList(){
       ?`${p.last_total} tracks · synced ${esc(playlistAgo(p.last_synced_at))}`
         +(p.url?` · <a href="${esc(p.url)}" target="_blank" rel="noopener">open ↗</a>`:'')
       :'never synced';
+    const art=p.cover_url
+      ?`<img src="${esc(p.cover_url)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-playlist&quot;></i>'">`
+      :'<i class="ti ti-playlist"></i>';
+    const open=p.url?`<a class="btn btn-ghost btn-sm playlist-open" href="${esc(p.url)}" target="_blank" rel="noopener"
+        title="open in Spotify" aria-label="open in Spotify"><i class="ti ti-brand-spotify"></i></a>`:'';
     return `<div class="playlist-row${playlistHighlight===p.id?' hl':''}" data-id="${p.id}">
-      <span class="playlist-name">${esc(p.name)}</span>
+      ${p.url?`<a class="playlist-art" href="${esc(p.url)}" target="_blank" rel="noopener" tabindex="-1">${art}</a>`
+        :`<span class="playlist-art">${art}</span>`}
+      <span class="playlist-name">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`:esc(p.name)}</span>
+      ${open}
       <button class="btn btn-primary btn-sm playlist-sync" ${playlistBusy?'disabled':''}
         onclick="syncPlaylist(${p.id})"><i class="ti ti-refresh"></i><span>sync</span></button>
       <button class="btn btn-ghost btn-sm playlist-delete" ${playlistBusy?'disabled':''}
@@ -10217,34 +10263,50 @@ function renderPlaylistForm(){
         <option value="">+ add</option>${left.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
         </select>`:'');
   };
+  const decades=playlistDecades();
+  const decade=(field,ph,end)=>`<select class="pl-decade" data-field="${field}" onchange="playlistFormInput(this)">
+      <option value="">${ph}</option>${decades.map(d=>{const v=String(d+end);
+        return `<option value="${v}" ${String(f[field])===v?'selected':''}>${d}s</option>`;}).join('')}</select>`;
   const stars=field=>`<select data-field="${field}" onchange="playlistFormInput(this)">
       <option value="">–</option>${[1,2,3,4,5,6,7,8,9,10].map(i=>{const v=String(i/2);
         return `<option value="${v}" ${String(f[field])===v?'selected':''}>${v}</option>`;}).join('')}</select>`;
-  const radio=(name,field,value,label,on)=>`<label><input type="radio" name="${name}" value="${value}"
-      data-field="${field}" ${on?'checked':''} onchange="playlistFormInput(this)"> ${label}</label>`;
+  const radio=(name,field,value,label,on,icon)=>`<label><input type="radio" name="${name}" value="${value}"
+      data-field="${field}" ${on?'checked':''} onchange="playlistFormInput(this)">${icon?`<i class="ti ${icon}"></i>`:''}${label}</label>`;
+  const label=(icon,text)=>`<span class="pl-label"><i class="ti ${icon}"></i>${text}</span>`;
   const input=(field,type,ph,cls)=>`<input ${cls?`class="${cls}"`:''} type="${type}" data-field="${field}"
       ${ph?`placeholder="${ph}"`:''} value="${esc(f[field])}" oninput="playlistFormInput(this)">`;
-  el.innerHTML=`
-    <div class="pl-field"><span class="pl-label">songs</span>
-      ${radio('plLiked','liked','1','liked',f.liked)} ${radio('plLiked','liked','0','every track',!f.liked)}</div>
-    <div class="pl-field"><span class="pl-label">year</span>
-      ${input('year_from','number','from','pl-num')} – ${input('year_to','number','to','pl-num')}</div>
-    <div class="pl-field"><span class="pl-label">genre</span>${chips('genres',playlistChoices.genres)}</div>
-    <div class="pl-field"><span class="pl-label">rating</span>Pepe ≥ ${stars('pepe_min')}
-      <span class="pl-mode" id="plMode">${radio('plMode','rating_mode','and','and',f.rating_mode!=='or')}
-        ${radio('plMode','rating_mode','or','or',f.rating_mode==='or')}</span>
-      Jenni ≥ ${stars('jenni_min')}</div>
-    <div class="pl-field"><span class="pl-label">bought at</span>${chips('places',playlistChoices.places)}</div>
-    <div class="pl-field"><span class="pl-label">bought</span>
-      ${input('bought_from','date')} – ${input('bought_to','date')}</div>
+  el.innerHTML=`<div class="pl-form">
+    <div class="pl-field">${label('ti-music','songs')}<span class="pl-seg">
+      ${radio('plLiked','liked','1','liked',f.liked,'ti-heart-filled')}${radio('plLiked','liked','0','every track',!f.liked,'ti-list')}</span></div>
+    <div class="pl-field">${label('ti-calendar','decade')}
+      ${decade('year_from','any',0)} <span class="pl-sep">to</span> ${decade('year_to','any',9)}</div>
+    <div class="pl-field">${label('ti-tag','genre')}${chips('genres',playlistChoices.genres)}</div>
+    <div class="pl-field">${label('ti-star','rating')}<span class="pl-rate">Pepe ≥ ${stars('pepe_min')}</span>
+      <span class="pl-mode pl-seg sm" id="plMode">${radio('plMode','rating_mode','and','and',f.rating_mode!=='or')}${radio('plMode','rating_mode','or','or',f.rating_mode==='or')}</span>
+      <span class="pl-rate">Jenni ≥ ${stars('jenni_min')}</span></div>
+    <div class="pl-field">${label('ti-building-store','bought at')}${chips('places',playlistChoices.places)}</div>
+    <div class="pl-field">${label('ti-calendar-dollar','bought')}
+      ${input('bought_from','date')} <span class="pl-sep">to</span> ${input('bought_to','date')}</div>
     <div class="pl-count" id="plCount"></div>
-    <div class="pl-field"><span class="pl-label">name</span>
+    <div class="pl-field">${label('ti-pencil','name')}
       <input class="pl-name" id="plName" data-field="name" maxlength="100"
         value="${esc(f.name)}" oninput="playlistFormInput(this)"></div>
     <div class="pl-actions"><button class="btn btn-primary btn-sm" id="plCreate" ${playlistBusy?'disabled':''}
       onclick="createPlaylist()"><i class="ti ti-playlist-add"></i><span>create &amp; sync</span></button></div>
-    <div class="playlist-status err" id="plError" hidden></div>`;
+    <div class="playlist-status err" id="plError" hidden></div></div>
+    <div class="pl-matches" id="plMatches"></div>`;
   updatePlaylistPreview();
+}
+
+// Decade starts from the oldest record in the collection up to this decade;
+// the from/to pickers send 1970 and 1979 for "1970s", so the filters stay years.
+function playlistDecades(){
+  const years=(records||[]).map(r=>parseInt(/\d{4}/.exec(String(r&&r.year||''))||'',10)).filter(Number.isFinite);
+  const now=Math.floor(new Date().getFullYear()/10)*10;
+  const first=years.length?Math.floor(Math.min(...years)/10)*10:1950;
+  const out=[];
+  for(let d=Math.min(first,now);d<=now;d+=10)out.push(d);
+  return out;
 }
 
 function playlistFilters(){
@@ -10257,11 +10319,19 @@ function playlistFilters(){
 // Updated in place rather than re-rendered, so typing in a field keeps focus.
 function updatePlaylistPreview(){
   const filters=playlistFilters();
-  const n=VinylPlaylistFilters.countMatching(records,filters);
+  const hits=VinylPlaylistFilters.matching(records,filters);
+  const n=hits.length;
+  renderPlaylistMatches(hits,filters.liked);
   const count=document.getElementById('plCount');
   if(count){
     count.textContent=(n===1?'1 record matches':n+' records match')+(n===0?' — the playlist would be empty':'');
     count.classList.toggle('warn',n===0);
+  }
+  // Nothing to put in it, nothing to create: the button waits for a match.
+  const create=document.getElementById('plCreate');
+  if(create){
+    create.disabled=playlistBusy||n===0;
+    create.title=n===0?'no records match these filters':'';
   }
   if(!playlistForm.nameTouched){
     playlistForm.name=VinylPlaylistFilters.suggestName(filters);
@@ -10270,6 +10340,36 @@ function updatePlaylistPreview(){
   }
   const mode=document.getElementById('plMode');
   if(mode)mode.hidden=!(playlistForm.pepe_min&&playlistForm.jenni_min);
+}
+
+// The records the filters pick, under the form — the same set the server
+// would sync, so you can see what a tweak adds or drops before creating.
+function renderPlaylistMatches(hits,liked){
+  const el=document.getElementById('plMatches');
+  if(!el)return;
+  if(!hits.length){el.innerHTML='';return;}
+  const likedCount=r=>{
+    let t=r.tracks;
+    if(typeof t==='string'){try{t=t?JSON.parse(t):[];}catch(e){t=[];}}
+    return Array.isArray(t)?t.filter(s=>s&&s.liked_at).length:0;
+  };
+  const sorted=hits.slice().sort((a,b)=>String(artistDisplay(a)).localeCompare(String(artistDisplay(b)))
+    ||String(a.album_name||'').localeCompare(String(b.album_name||'')));
+  el.innerHTML=`<div class="playlist-heading">in this playlist · ${hits.length}</div>
+    <div class="pl-match-list">${sorted.map(r=>{
+      const cover=r.cover_url
+        ?censorWrap(r,`<img src="${r.cover_url}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-disc&quot;></i>'">`)
+        :'<i class="ti ti-disc"></i>';
+      const hearts=liked?likedCount(r):0;
+      return `<div class="pl-match">
+        <div class="list-cover-wrap">${cover}</div>
+        <div class="list-main">
+          <div class="list-album">${esc(r.album_name)||'untitled'}</div>
+          <div class="list-artist">${esc(artistDisplay(r))||'unknown'}</div>
+        </div>
+        ${hearts?`<span class="pl-match-liked" title="liked songs"><i class="ti ti-heart-filled"></i>${hearts}</span>`:''}
+        <span class="pl-match-year">${esc(r.year)||'—'}</span>
+      </div>`;}).join('')}</div>`;
 }
 
 function playlistFormInput(el){
@@ -10295,7 +10395,7 @@ function playlistChipRemove(field,i){
 }
 
 async function createPlaylist(){
-  if(playlistBusy)return;
+  if(playlistBusy||!VinylPlaylistFilters.countMatching(records,playlistFilters()))return;
   const err=document.getElementById('plError');
   err.hidden=true;
   let d;

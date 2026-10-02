@@ -574,6 +574,7 @@ class SpotifyPlaylist(db.Model):
     last_synced_at = db.Column(db.String(50))
     last_total     = db.Column(db.Integer)
     last_records   = db.Column(db.Integer)
+    cover_url      = db.Column(db.String(500))
 
     def to_dict(self):
         f = json.loads(self.filters)
@@ -586,6 +587,7 @@ class SpotifyPlaylist(db.Model):
             "last_synced_at": self.last_synced_at,
             "last_total": self.last_total,
             "last_records": self.last_records,
+            "cover_url": self.cover_url or "",
         }
 
 
@@ -658,8 +660,8 @@ with app.app_context(), _startup_lock():
     # lightweight auto-migration: db.create_all() only creates missing tables,
     # it won't add new columns to a table that already exists (e.g. on Railway's
     # persisted Postgres/SQLite). Add any columns that are missing.
-    # Only record and feature_video are covered: a new column on any other
-    # table (spotify_playlist, say) needs its own entry here.
+    # Only record, feature_video and spotify_playlist are covered: a new
+    # column on any other table needs its own entry here.
     inspector = inspect(db.engine)
     existing_cols = [c["name"] for c in inspector.get_columns("record")]
     missing_cols = {
@@ -680,6 +682,10 @@ with app.app_context(), _startup_lock():
     if "youtube_id" not in [c["name"] for c in inspector.get_columns("feature_video")]:
         with db.engine.connect() as conn:
             conn.execute(text("ALTER TABLE feature_video ADD COLUMN youtube_id VARCHAR(11)"))
+            conn.commit()
+    if "cover_url" not in [c["name"] for c in inspector.get_columns("spotify_playlist")]:
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE spotify_playlist ADD COLUMN cover_url VARCHAR(500)"))
             conn.commit()
 
     added_cleaned_dates = "cleaned_dates" not in existing_cols
@@ -2017,6 +2023,15 @@ class _AlbumCache:
         db.session.commit()
 
 
+def _playlist_has_records(f):
+    """Whether any owned record passes `f` — with a hearted song, for a liked
+    playlist. The same count the form's preview shows (playlist_filters.js)."""
+    for r in playlist_filters.select(_playlist_records(), f):
+        if not f.get("liked", True) or any(t.get("liked_at") for t in r["tracks"] if isinstance(t, dict)):
+            return True
+    return False
+
+
 def _playlist_records():
     """Owned records with a Spotify link, oldest purchase first — so the
     playlist reads as the collection's own history and a new record's
@@ -2104,6 +2119,9 @@ def spotify_create_playlist():
     row = _playlist_by_key(key)
     if row:
         return jsonify({"playlist": row.to_dict(), "existed": True})
+    if not _playlist_has_records(f):
+        return jsonify({"error": "no records match these filters — the playlist would be empty",
+                        "field": "filters"}), 400
     name = " ".join(str(d.get("name") or "").split())[:playlist_filters.MAX_NAME]
     row = SpotifyPlaylist(name=name or playlist_filters.suggest_name(f),
                           filters=json.dumps(f), filter_key=key,
@@ -2153,6 +2171,12 @@ def spotify_sync_playlist(pid):
     row.last_synced_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     row.last_total = result["total"]
     row.last_records = result["records"]
+    # Spotify draws the mosaic from the first albums; a sync that just changed
+    # them may still show the old one until the next sync, which is fine.
+    try:
+        row.cover_url = spotify_sync.playlist_cover(_spotify_client(acct), row.spotify_id) or row.cover_url
+    except (spotify_sync.SpotifyError, spotify_sync.NotConnected, requests.RequestException):
+        app.logger.info("Spotify playlist cover unavailable", exc_info=True)
     db.session.commit()
     return jsonify({**result, "playlist": row.to_dict()})
 

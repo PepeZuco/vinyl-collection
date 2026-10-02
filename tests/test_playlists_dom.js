@@ -201,6 +201,19 @@ test('connected, the panel lists the saved playlists with their last result', as
   } finally { win.close(); }
 });
 
+test('a synced playlist links to Spotify and shows its cover', async () => {
+  const SYNCED = Object.assign({}, LIKED, { url: 'https://open.spotify.com/playlist/PL2',
+                                            cover_url: 'https://mosaic.scdn.co/640/PL2' });
+  const { win, doc } = await openPanel({ saved: [EVERY, SYNCED] });
+  try {
+    const r = row(doc, 2);
+    assert.strictEqual(r.querySelector('.playlist-open').getAttribute('href'), SYNCED.url);
+    assert.strictEqual(r.querySelector('.playlist-name a').getAttribute('href'), SYNCED.url);
+    assert.strictEqual(r.querySelector('.playlist-art img').getAttribute('src'), SYNCED.cover_url);
+    assert.ok(!row(doc, 1).querySelector('.playlist-open'), 'a never-synced row got a link');
+  } finally { win.close(); }
+});
+
 test('with nothing saved the new-playlist form starts open', async () => {
   const { win, doc } = await openPanel({ saved: [] });
   try {
@@ -226,10 +239,29 @@ test('the form previews the match count and the name as filters change', async (
     assert.match(doc.getElementById('plCount').textContent, /^1 record matches/);
     assert.strictEqual(doc.getElementById('plName').value, 'Zucoloto Vinyl · Jazz');
 
-    const from = doc.querySelector('input[data-field="year_from"]');
+    const from = doc.querySelector('select[data-field="year_from"]');
     from.value = '2000';
     win.__peek('playlistFormInput')(from);
     assert.ok(doc.getElementById('plCount').classList.contains('warn'), '0 matches is not flagged');
+    assert.strictEqual(doc.querySelectorAll('#plMatches .pl-match').length, 0);
+  } finally { win.close(); }
+});
+
+test('the year field picks whole decades', async () => {
+  const { win, doc } = await openPanel({ saved: [EVERY], records: RECS });
+  try {
+    const every = doc.querySelector('input[name="plLiked"][value="0"]');
+    every.checked = true;
+    win.__peek('playlistFormInput')(every);
+    assert.strictEqual(doc.querySelectorAll('#plMatches .pl-match').length, 2);
+    const to = doc.querySelector('select[data-field="year_to"]');
+    assert.ok([...to.options].some(o => o.value === '1979' && o.textContent === '1970s'));
+    to.value = '1979';
+    win.__peek('playlistFormInput')(to);
+    assert.match(doc.getElementById('plCount').textContent, /^1 record matches/);
+    const shown = doc.querySelectorAll('#plMatches .pl-match');
+    assert.strictEqual(shown.length, 1);
+    assert.match(shown[0].textContent, /1973/);
   } finally { win.close(); }
 });
 
@@ -270,7 +302,7 @@ test('create posts the filters, adds the row and syncs it', async () => {
   const NEW = Object.assign({}, EVERY, { id: 3, name: 'Zucoloto Vinyl — Liked',
                                          filters: { liked: true }, summary: 'liked songs · whole collection' });
   const { win, doc, asked, posted } = await openPanel({
-    saved: [EVERY], created: [201, { playlist: NEW, existed: false }],
+    saved: [EVERY], records: RECS, created: [201, { playlist: NEW, existed: false }],
     syncs: [[200, Object.assign({}, DONE, { playlist: Object.assign({}, NEW, { last_total: 9,
             last_synced_at: '2026-10-02T09:00:00', url: 'https://open.spotify.com/playlist/PL3' }) })]],
   });
@@ -285,7 +317,7 @@ test('create posts the filters, adds the row and syncs it', async () => {
 
 test('creating filters that already exist highlights and resyncs that row', async () => {
   const { win, doc, asked } = await openPanel({
-    saved: [EVERY, LIKED], created: [200, { playlist: LIKED, existed: true }],
+    saved: [EVERY, LIKED], records: RECS, created: [200, { playlist: LIKED, existed: true }],
     syncs: [[200, Object.assign({}, DONE, { playlist: LIKED })]],
   });
   try {
@@ -300,7 +332,7 @@ test('creating filters that already exist highlights and resyncs that row', asyn
 
 test('a rejected filter shows the server error under the form', async () => {
   const { win, doc } = await openPanel({
-    saved: [EVERY], created: [400, { error: 'pepe_min: must be 0.5 to 5', field: 'pepe_min' }] });
+    saved: [EVERY], records: RECS, created: [400, { error: 'pepe_min: must be 0.5 to 5', field: 'pepe_min' }] });
   try {
     press(win, doc.getElementById('plCreate'));
     await settle();
@@ -334,9 +366,27 @@ test('a sync keeps asking while the server is still reading albums', async () =>
   } finally { win.close(); }
 });
 
+test('create stays locked while no record matches', async () => {
+  const { win, doc, posted } = await openPanel({ saved: [EVERY], records: RECS });
+  try {
+    const create = doc.getElementById('plCreate');
+    assert.ok(!create.disabled);
+    const from = doc.querySelector('select[data-field="year_from"]');
+    from.value = '2000';
+    win.__peek('playlistFormInput')(from);
+    assert.ok(create.disabled, 'create is clickable with 0 matches');
+    press(win, create);
+    await settle();
+    assert.deepStrictEqual(posted, []);
+    from.value = '';
+    win.__peek('playlistFormInput')(from);
+    assert.ok(!create.disabled, 'create stayed locked once records matched again');
+  } finally { win.close(); }
+});
+
 test('create is held while a sync runs', async () => {
   const { win, doc, posted } = await openPanel({
-    saved: [EVERY], syncs: [[202, { incomplete: true, done: 1, total: 300 }]] });
+    saved: [EVERY], records: RECS, syncs: [[202, { incomplete: true, done: 1, total: 300 }]] });
   // Each sync answer waits for the test, so the sync is still running when it looks.
   let release;
   const gate = new Promise(r => { release = r; });

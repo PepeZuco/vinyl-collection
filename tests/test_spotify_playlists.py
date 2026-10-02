@@ -74,6 +74,9 @@ class FakeSpotify:
             if path.startswith(f"/playlists/{pid}/followers") and method == "DELETE":
                 del self.playlists[pid]
                 return _Response(200)
+            if path == f"/playlists/{pid}/images" and method == "GET":
+                return _Response(200, [{"url": f"https://mosaic.scdn.co/640/{pid}", "width": 640},
+                                       {"url": f"https://mosaic.scdn.co/60/{pid}", "width": 60}])
             assert "/items" in path, f"used a removed endpoint: {method} {path}"
             if method == "GET":
                 return _Response(200, {"items": [{"item": {"uri": u}} for u in pl["uris"]],
@@ -302,9 +305,18 @@ def _connect(app_module):
     with app_module.app.app_context():
         app_module.db.session.add(app_module.SpotifyAccount(id=1, refresh_token="RT",
                                                             display_name="Me"))
+        app_module.db.session.commit()
+    _records(app_module)
+
+
+def _records(app_module):
+    """The collection the route tests share: a playlist with no record in it
+    is refused, so even the tests that never reach Spotify need these."""
+    with app_module.app.app_context():
         app_module.db.session.add(app_module.Record(
             artist="A", album_name="One", have_it=True, year="1973", genre="Rock",
-            bought_where="Tracks", spotify_url="https://open.spotify.com/album/ALB1"))
+            bought_where="Tracks", spotify_url="https://open.spotify.com/album/ALB1",
+            tracks=json.dumps([{"side": "A", "title": "Satisfaction", "liked_at": "2026-09-01"}])))
         app_module.db.session.add(app_module.Record(
             artist="A", album_name="Two", have_it=True, year="1991", genre="Jazz",
             spotify_url="https://open.spotify.com/album/ALB2"))
@@ -332,6 +344,8 @@ def test_visitors_cannot_sync_or_connect():
 
 
 def test_sync_without_a_login_asks_to_connect(client):
+    import app as app_module
+    _records(app_module)
     pid = _create(client, {}).get_json()["playlist"]["id"]
     r = client.post(f"/api/spotify/playlists/{pid}/sync")
     assert r.status_code == 409 and r.get_json()["connect"] is True
@@ -387,6 +401,8 @@ def test_create_lists_and_suggests_a_name(client):
 
 
 def test_the_same_filters_return_the_existing_playlist(client):
+    import app as app_module
+    _records(app_module)
     first = _create(client, {"genres": ["Rock", "jazz"]}, name="Mine").get_json()["playlist"]
     again = _create(client, {"genres": [" JAZZ ", "rock"]}, name="Other name")
     assert again.status_code == 200 and again.get_json()["existed"] is True
@@ -396,6 +412,7 @@ def test_the_same_filters_return_the_existing_playlist(client):
 
 def test_a_race_on_the_unique_key_still_returns_one_row(client, monkeypatch):
     import app as app_module
+    _records(app_module)
     first = _create(client, {"year_from": 1970}).get_json()["playlist"]
     # The second request's lookup misses (as if it ran before the first commit),
     # so only the unique constraint stands between it and a duplicate.
@@ -417,7 +434,20 @@ def test_a_bad_filter_is_400_with_its_field(client):
     assert r.status_code == 400 and r.get_json()["field"] == "pepe_min"
 
 
+def test_filters_that_match_no_record_are_refused(client):
+    import app as app_module
+    _records(app_module)
+    r = _create(client, {"genres": ["Jazz"]})  # Two is jazz, but nothing on it is liked
+    assert r.status_code == 400 and r.get_json()["field"] == "filters"
+    assert _create(client, {"year_from": 2000, "liked": False}).status_code == 400
+    assert _create(client, {"genres": ["Jazz"], "liked": False}).status_code == 201
+    with app_module.app.app_context():
+        assert app_module.SpotifyPlaylist.query.count() == 1
+
+
 def test_a_typed_name_is_tidied_and_capped(client):
+    import app as app_module
+    _records(app_module)
     p = _create(client, {"liked": False}, name="  My   list " + "x" * 200).get_json()["playlist"]
     assert p["name"].startswith("My list x") and len(p["name"]) == 100
 
@@ -435,6 +465,7 @@ def test_sync_applies_the_filters_and_stores_the_result(client, fake):
     p = d["playlist"]
     assert p["url"] == d["url"] and p["last_total"] == 3 and p["last_records"] == 1
     assert p["last_synced_at"]
+    assert p["cover_url"] == f"https://mosaic.scdn.co/640/{d['spotify_id']}"
 
     fake.calls.clear()
     again = client.post(f"/api/spotify/playlists/{pid}/sync").get_json()
@@ -486,6 +517,8 @@ def test_delete_removes_it_on_spotify_and_here(client, fake):
 
 
 def test_deleting_a_never_synced_playlist_needs_no_spotify(client):
+    import app as app_module
+    _records(app_module)
     pid = _create(client, {}).get_json()["playlist"]["id"]
     assert client.delete(f"/api/spotify/playlists/{pid}").status_code == 200
 

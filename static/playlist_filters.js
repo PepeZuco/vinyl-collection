@@ -109,9 +109,13 @@ const VinylPlaylistFilters = (function () {
     return Array.isArray(t) && t.some(s => s && s.liked_at);
   }
 
-  function countMatching(records, f) {
+  function matching(records, f) {
     return (records || []).filter(r => r && r.have_it && tidy(r.spotify_url)
-      && matches(r, f) && (!f.liked || hasLiked(r))).length;
+      && matches(r, f) && (!f.liked || hasLiked(r)));
+  }
+
+  function countMatching(records, f) {
+    return matching(records, f).length;
   }
 
   const num = x => String(Number(x));
@@ -140,7 +144,7 @@ const VinylPlaylistFilters = (function () {
     return name.length <= MAX ? name : name.slice(0, MAX - 1).trimEnd() + '…';
   }
 
-  return { normalize, matches, countMatching, suggestName };
+  return { normalize, matches, matching, countMatching, suggestName };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylPlaylistFilters;
