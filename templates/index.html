@@ -2230,6 +2230,26 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
 .skipped-songs{opacity:.8}
 .playlist-account{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:2px 2px 6px}
 .playlist-account .btn{margin-left:auto}
+.playlist-heading{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--label);padding:10px 2px 0}
+.playlist-row.hl{background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:6px}
+.playlist-last a{color:var(--accent)}
+.playlist-new{margin-top:12px;border-top:1px solid var(--border);padding-top:8px}
+.playlist-new summary{cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--label);padding:6px 2px}
+.pl-field{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 2px;font-size:12px}
+.pl-label{flex:0 0 72px;color:var(--muted)}
+.pl-field input,.pl-field select{font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--border);
+  border-radius:6px;background:var(--bg);color:inherit;min-width:0}
+.pl-field input[type=radio]{padding:0}
+.pl-num{width:76px}
+.pl-name{flex:1 1 160px}
+.pl-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 4px 2px 8px;border-radius:999px;
+  background:var(--border);font-size:11px}
+.pl-chip button{background:none;border:none;color:var(--muted);cursor:pointer;padding:0 4px;font-size:13px}
+.pl-mode[hidden]{display:none}
+.pl-count{font-size:12px;color:var(--muted);padding:8px 2px}
+.pl-count.warn{color:var(--danger)}
+.pl-actions{display:flex;justify-content:flex-end;padding:6px 2px}
+@media (max-width:480px){.pl-label{flex-basis:100%}}
 .backup-row{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--border);
   color:inherit;text-decoration:none}
 .backup-row:hover{color:var(--accent)}
@@ -4074,12 +4094,13 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   </div>
 </div>
 
-<!-- Two Spotify playlists on the owner's account that mirror the collection:
-     every album with a link, and only the liked songs. Each sync creates the
+<!-- spotify playlists: the playlists this app made on the owner's Spotify,
+     each defined by filters (liked/every track, year, genre, ratings, bought
+     at, bought dates), plus a form to make another. Each sync creates the
      playlist when it is missing and otherwise adds and removes until it
-     matches. -->
+     matches. See spotify_sync.py and playlist_filters.py. -->
 <div class="overlay hidden" id="playlistsOverlay">
-  <div class="modal" style="max-width:460px">
+  <div class="modal" style="max-width:520px">
     <div class="modal-head">
       <span class="modal-title">spotify playlists</span>
       <button class="btn btn-ghost btn-sm" onclick="closePlaylists()"><i class="ti ti-x"></i></button>
@@ -10058,17 +10079,23 @@ function renderBackups(list, keepDays){
     +`older snapshots are deleted automatically.</div>`;
 }
 // ── spotify playlists ──────────────────────────────────────────────────────
-// The server does the work (spotify_sync.py); this panel connects the account
-// and runs a sync. A first sync reads every album once and may need several
+// The server does the work (spotify_sync.py, playlist_filters.py); this panel
+// connects the account, lists the playlists made so far, and makes new ones
+// from filters. A first sync reads every album once and may need several
 // requests to do it — the server answers 202 with its progress each time it
-// runs out of budget, and the loop below simply asks again.
-const PLAYLIST_KINDS = [
-  { kind: 'all', sub: 'every track of every owned record with a Spotify link' },
-  { kind: 'liked', sub: 'only the songs you liked in each record’s tracklist' },
-];
+// runs out of budget, and the loop in syncPlaylist simply asks again.
 let playlistAccount = null;
-const playlistStatus = {};
+let savedPlaylists = [];
+let playlistChoices = {genres: [], places: []};
+const playlistStatus = {};      // playlist id -> {html, err}
 let playlistBusy = false;
+let playlistHighlight = null;   // id of the row a duplicate create pointed at
+
+function blankPlaylistForm(){
+  return {liked: true, year_from: '', year_to: '', genres: [], pepe_min: '', jenni_min: '',
+          rating_mode: 'and', places: [], bought_from: '', bought_to: '', name: '', nameTouched: false};
+}
+let playlistForm = blankPlaylistForm();
 
 function openPlaylists(){
   document.getElementById('playlistsOverlay').classList.remove('hidden');
@@ -10086,6 +10113,13 @@ async function loadPlaylists(){
     const r=await fetch('/api/spotify/account');
     if(!r.ok)throw new Error('HTTP '+r.status);
     playlistAccount=await r.json();
+    if(playlistAccount.configured&&playlistAccount.connected){
+      const s=await fetch('/api/spotify/playlists');
+      if(!s.ok)throw new Error('HTTP '+s.status);
+      const d=await s.json();
+      savedPlaylists=d.playlists||[];
+      playlistChoices={genres:d.genres||[],places:d.places||[]};
+    }
     renderPlaylists(playlistAccount);
   }catch(err){
     renderPlaylists('error');
@@ -10113,22 +10147,233 @@ function renderPlaylists(acct){
         <span>connect spotify</span></button></div>`;
     return;
   }
-  const rows=PLAYLIST_KINDS.map(p=>{
-    const st=playlistStatus[p.kind]||{};
-    return `<div class="playlist-row" data-kind="${p.kind}">
-      <span class="playlist-name">${esc(acct.playlists[p.kind])}</span>
-      <button class="btn btn-primary btn-sm" ${playlistBusy?'disabled':''}
-        onclick="syncPlaylist('${p.kind}')"><i class="ti ti-refresh"></i><span>sync</span></button>
-      <span class="playlist-sub">${esc(p.sub)}</span>
+  // Kept across re-renders: a sync finishing must not snap the form shut.
+  const prev=document.getElementById('playlistNew');
+  const open=prev?prev.open:!savedPlaylists.length;
+  body.innerHTML=`<div class="playlist-account"><i class="ti ti-brand-spotify"></i>
+      <span>connected as <b>${esc(acct.display_name||'Spotify')}</b></span>
+      <button class="btn btn-ghost btn-sm" onclick="disconnectSpotify()">disconnect</button></div>
+    <div class="playlist-heading">your playlists</div>
+    <div id="playlistList"></div>
+    <details class="playlist-new" id="playlistNew" ${open?'open':''}>
+      <summary>new playlist</summary><div id="playlistFormBody"></div></details>
+    <div class="backup-note">a sync creates the playlist if it is missing, adds what is new and
+      removes what no longer belongs — the playlist always mirrors the collection.</div>`;
+  renderPlaylistList();
+  renderPlaylistForm();
+}
+
+// "today", "yesterday", "3 days ago" — from a local stamp's calendar day.
+function playlistAgo(stamp){
+  const day=s=>{const [y,m,d]=s.slice(0,10).split('-').map(Number);return new Date(y,m-1,d);};
+  const n=Math.round((day(new Date().toLocaleDateString('sv'))-day(stamp))/86400000);
+  return n<=0?'today':n===1?'yesterday':n+' days ago';
+}
+
+function renderPlaylistList(){
+  const list=document.getElementById('playlistList');
+  if(!list)return;
+  if(!savedPlaylists.length){
+    list.innerHTML='<div class="place-empty">no playlists yet — make one below.</div>';
+    return;
+  }
+  list.innerHTML=savedPlaylists.map(p=>{
+    const st=playlistStatus[p.id]||{};
+    const last=p.last_synced_at
+      ?`${p.last_total} tracks · synced ${esc(playlistAgo(p.last_synced_at))}`
+        +(p.url?` · <a href="${esc(p.url)}" target="_blank" rel="noopener">open ↗</a>`:'')
+      :'never synced';
+    return `<div class="playlist-row${playlistHighlight===p.id?' hl':''}" data-id="${p.id}">
+      <span class="playlist-name">${esc(p.name)}</span>
+      <button class="btn btn-primary btn-sm playlist-sync" ${playlistBusy?'disabled':''}
+        onclick="syncPlaylist(${p.id})"><i class="ti ti-refresh"></i><span>sync</span></button>
+      <button class="btn btn-ghost btn-sm playlist-delete" ${playlistBusy?'disabled':''}
+        title="delete" aria-label="delete" onclick="deletePlaylist(${p.id})"><i class="ti ti-trash"></i></button>
+      <span class="playlist-sub">${esc(p.summary)}</span>
+      <span class="playlist-sub playlist-last">${last}</span>
       ${st.html?`<div class="playlist-status${st.err?' err':''}">${st.html}</div>`:''}
     </div>`;
   }).join('');
-  body.innerHTML=`<div class="playlist-account"><i class="ti ti-brand-spotify"></i>
-      <span>connected as <b>${esc(acct.display_name||'Spotify')}</b></span>
-      <button class="btn btn-ghost btn-sm" onclick="disconnectSpotify()">disconnect</button></div>`
-    +rows
-    +`<div class="backup-note">a sync creates the playlist if it is missing, adds what is new and
-      removes what no longer belongs — the playlist always mirrors the collection.</div>`;
+}
+
+function renderPlaylistForm(){
+  const el=document.getElementById('playlistFormBody');
+  if(!el)return;
+  const f=playlistForm;
+  const chips=(field,choices)=>{
+    const taken=new Set(f[field].map(x=>x.toLowerCase()));
+    const left=choices.filter(c=>!taken.has(c.toLowerCase()));
+    return f[field].map((c,i)=>`<span class="pl-chip">${esc(c)}<button type="button" aria-label="remove"
+        onclick="playlistChipRemove('${field}',${i})">×</button></span>`).join('')
+      +(left.length?`<select class="pl-add" data-field="${field}" onchange="playlistChipAdd(this)">
+        <option value="">+ add</option>${left.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+        </select>`:'');
+  };
+  const stars=field=>`<select data-field="${field}" onchange="playlistFormInput(this)">
+      <option value="">–</option>${[1,2,3,4,5,6,7,8,9,10].map(i=>{const v=String(i/2);
+        return `<option value="${v}" ${String(f[field])===v?'selected':''}>${v}</option>`;}).join('')}</select>`;
+  const radio=(name,field,value,label,on)=>`<label><input type="radio" name="${name}" value="${value}"
+      data-field="${field}" ${on?'checked':''} onchange="playlistFormInput(this)"> ${label}</label>`;
+  const input=(field,type,ph,cls)=>`<input ${cls?`class="${cls}"`:''} type="${type}" data-field="${field}"
+      ${ph?`placeholder="${ph}"`:''} value="${esc(f[field])}" oninput="playlistFormInput(this)">`;
+  el.innerHTML=`
+    <div class="pl-field"><span class="pl-label">songs</span>
+      ${radio('plLiked','liked','1','liked',f.liked)} ${radio('plLiked','liked','0','every track',!f.liked)}</div>
+    <div class="pl-field"><span class="pl-label">year</span>
+      ${input('year_from','number','from','pl-num')} – ${input('year_to','number','to','pl-num')}</div>
+    <div class="pl-field"><span class="pl-label">genre</span>${chips('genres',playlistChoices.genres)}</div>
+    <div class="pl-field"><span class="pl-label">rating</span>Pepe ≥ ${stars('pepe_min')}
+      <span class="pl-mode" id="plMode">${radio('plMode','rating_mode','and','and',f.rating_mode!=='or')}
+        ${radio('plMode','rating_mode','or','or',f.rating_mode==='or')}</span>
+      Jenni ≥ ${stars('jenni_min')}</div>
+    <div class="pl-field"><span class="pl-label">bought at</span>${chips('places',playlistChoices.places)}</div>
+    <div class="pl-field"><span class="pl-label">bought</span>
+      ${input('bought_from','date')} – ${input('bought_to','date')}</div>
+    <div class="pl-count" id="plCount"></div>
+    <div class="pl-field"><span class="pl-label">name</span>
+      <input class="pl-name" id="plName" data-field="name" maxlength="100"
+        value="${esc(f.name)}" oninput="playlistFormInput(this)"></div>
+    <div class="pl-actions"><button class="btn btn-primary btn-sm" id="plCreate" ${playlistBusy?'disabled':''}
+      onclick="createPlaylist()"><i class="ti ti-playlist-add"></i><span>create &amp; sync</span></button></div>
+    <div class="playlist-status err" id="plError" hidden></div>`;
+  updatePlaylistPreview();
+}
+
+function playlistFilters(){
+  const f=playlistForm;
+  return VinylPlaylistFilters.normalize({liked:f.liked,year_from:f.year_from,year_to:f.year_to,
+    genres:f.genres,pepe_min:f.pepe_min,jenni_min:f.jenni_min,rating_mode:f.rating_mode,
+    places:f.places,bought_from:f.bought_from,bought_to:f.bought_to});
+}
+
+// Updated in place rather than re-rendered, so typing in a field keeps focus.
+function updatePlaylistPreview(){
+  const filters=playlistFilters();
+  const n=VinylPlaylistFilters.countMatching(records,filters);
+  const count=document.getElementById('plCount');
+  if(count){
+    count.textContent=(n===1?'1 record matches':n+' records match')+(n===0?' — the playlist would be empty':'');
+    count.classList.toggle('warn',n===0);
+  }
+  if(!playlistForm.nameTouched){
+    playlistForm.name=VinylPlaylistFilters.suggestName(filters);
+    const name=document.getElementById('plName');
+    if(name)name.value=playlistForm.name;
+  }
+  const mode=document.getElementById('plMode');
+  if(mode)mode.hidden=!(playlistForm.pepe_min&&playlistForm.jenni_min);
+}
+
+function playlistFormInput(el){
+  const field=el.dataset.field;
+  if(field==='liked')playlistForm.liked=el.value==='1';
+  else if(field==='name'){
+    playlistForm.name=el.value;
+    // Clearing the name hands it back to the filters.
+    playlistForm.nameTouched=el.value.trim()!=='';
+  }
+  else playlistForm[field]=el.value;
+  updatePlaylistPreview();
+}
+
+function playlistChipAdd(sel){
+  if(sel.value)playlistForm[sel.dataset.field].push(sel.value);
+  renderPlaylistForm();
+}
+
+function playlistChipRemove(field,i){
+  playlistForm[field].splice(i,1);
+  renderPlaylistForm();
+}
+
+async function createPlaylist(){
+  if(playlistBusy)return;
+  const err=document.getElementById('plError');
+  err.hidden=true;
+  let d;
+  try{
+    const r=await fetch('/api/spotify/playlists',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({filters:playlistFilters(),name:playlistForm.name})});
+    d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+  }catch(e){
+    err.textContent=e.message;
+    err.hidden=false;
+    return;
+  }
+  const p=d.playlist;
+  if(!savedPlaylists.some(x=>x.id===p.id))savedPlaylists.push(p);
+  playlistHighlight=p.id;
+  // A new playlist clears the form for the next one; an existing match keeps
+  // it, since the filters were probably meant to differ and may need a tweak.
+  if(!d.existed)playlistForm=blankPlaylistForm();
+  renderPlaylists(playlistAccount);
+  const row=document.querySelector(`.playlist-row[data-id="${p.id}"]`);
+  if(row)row.scrollIntoView({block:'nearest'});
+  await syncPlaylist(p.id,d.existed?'already exists — resynced · ':'');
+}
+
+async function syncPlaylist(id,note){
+  if(playlistBusy)return;
+  playlistBusy=true;
+  playlistStatus[id]={html:'reading albums…'};
+  renderPlaylistList();
+  try{
+    // Bounded so a server that never finishes cannot spin forever.
+    for(let round=0;round<30;round++){
+      const r=await fetch('/api/spotify/playlists/'+id+'/sync',{method:'POST'});
+      const d=await r.json().catch(()=>({}));
+      if(r.status===202&&d.incomplete){
+        playlistStatus[id]={html:`reading albums… ${d.done} / ${d.total}`};
+        renderPlaylistList();
+        continue;
+      }
+      if(r.status===409&&d.connect){
+        playlistAccount.connected=false;
+        toast(d.error||'connect Spotify again');
+        return;
+      }
+      if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+      if(d.playlist){
+        const i=savedPlaylists.findIndex(x=>x.id===id);
+        if(i>=0)savedPlaylists[i]=d.playlist;
+      }
+      playlistStatus[id]={html:esc(note||'')+playlistResultHtml(d)};
+      return;
+    }
+    throw new Error('the sync did not finish — try again');
+  }catch(err){
+    playlistStatus[id]={html:esc('sync failed — '+err.message),err:true};
+  }finally{
+    playlistBusy=false;
+    renderPlaylists(playlistAccount);
+  }
+}
+
+async function deletePlaylist(id){
+  const p=savedPlaylists.find(x=>x.id===id);
+  if(!p||playlistBusy)return;
+  if(!confirm(`Delete “${p.name}” from Spotify too?`))return;
+  playlistBusy=true;
+  try{
+    const r=await fetch('/api/spotify/playlists/'+id,{method:'DELETE'});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===409&&d.connect){
+      playlistAccount.connected=false;
+      toast(d.error||'connect Spotify again');
+      return;
+    }
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    savedPlaylists=savedPlaylists.filter(x=>x.id!==id);
+    delete playlistStatus[id];
+    if(playlistHighlight===id)playlistHighlight=null;
+  }catch(err){
+    playlistStatus[id]={html:esc('delete failed — '+err.message),err:true};
+  }finally{
+    playlistBusy=false;
+    renderPlaylists(playlistAccount);
+  }
 }
 
 function playlistResultHtml(d){
@@ -10156,39 +10401,6 @@ function skippedGroupHtml(title, hint, items){
   }).join('');
   return `<details class="skipped-group"><summary>${items.length} ${title}`
     +` <span class="skipped-hint">— ${hint}</span></summary><ul>${rows}</ul></details>`;
-}
-
-async function syncPlaylist(kind){
-  if(playlistBusy)return;
-  playlistBusy=true;
-  playlistStatus[kind]={html:'reading albums…'};
-  renderPlaylists(playlistAccount);
-  try{
-    // Bounded so a server that never finishes cannot spin forever.
-    for(let round=0;round<30;round++){
-      const r=await fetch('/api/spotify/playlists/'+kind,{method:'POST'});
-      const d=await r.json().catch(()=>({}));
-      if(r.status===202&&d.incomplete){
-        playlistStatus[kind]={html:`reading albums… ${d.done} / ${d.total}`};
-        renderPlaylists(playlistAccount);
-        continue;
-      }
-      if(r.status===409&&d.connect){
-        playlistAccount.connected=false;
-        toast(d.error||'connect Spotify again');
-        return;
-      }
-      if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
-      playlistStatus[kind]={html:playlistResultHtml(d)};
-      return;
-    }
-    throw new Error('the sync did not finish — try again');
-  }catch(err){
-    playlistStatus[kind]={html:esc('sync failed — '+err.message),err:true};
-  }finally{
-    playlistBusy=false;
-    renderPlaylists(playlistAccount);
-  }
 }
 
 async function disconnectSpotify(){
