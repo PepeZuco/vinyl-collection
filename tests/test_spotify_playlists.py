@@ -105,7 +105,8 @@ def rec(album, liked=(), link=None, tracks=None):
     tracks = tracks if tracks is not None else [
         {"side": "A", "title": t, "liked_at": "2026-09-01"} for t in liked]
     return {"artist": "Artist", "album_name": album,
-            "spotify_url": link or f"https://open.spotify.com/album/{album}", "tracks": tracks}
+            "spotify_url": link or f"https://open.spotify.com/album/{album}",
+            "cover_url": f"/c/{album}", "tracks": tracks}
 
 
 # ── matching a tracklist song to a Spotify track ──────────────────────────────
@@ -182,7 +183,8 @@ def test_liked_playlist_holds_only_liked_songs(fake):
     pl = next(p for p in fake.playlists.values())
     assert pl["name"] == "Zucoloto Vinyl Collection — Liked"
     assert pl["uris"] == ["spotify:track:ALB1-1", "spotify:track:ALB2-2"]
-    assert result["unmatched"] == ["Artist — ALB1: Not On Spotify"]
+    assert result["unmatched"] == [{"label": "Artist — ALB1", "cover_url": "/c/ALB1",
+                                    "songs": ["Not On Spotify"]}]
     # A record with nothing liked costs no request at all.
     assert not any("NOLIKES" in path for _, path in fake.calls)
 
@@ -198,7 +200,8 @@ def test_bad_and_missing_links_are_skipped_not_fatal(fake):
                rec("x", link="https://open.spotify.com/artist/ZZ"),
                rec("MISSING")]
     result = spotify_sync.sync(spotify_sync.Client("RT"), records, "all", DictCache())
-    assert result["bad_links"] == ["Artist — x", "Artist — MISSING"]
+    assert [b["label"] for b in result["bad_links"]] == ["Artist — x", "Artist — MISSING"]
+    assert result["bad_links"][0]["cover_url"] == "/c/x"
     assert result["total"] == 3
 
 

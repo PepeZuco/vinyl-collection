@@ -1919,17 +1919,20 @@ def _playlist_records():
     """Owned records with a Spotify link, oldest purchase first — so the
     playlist reads as the collection's own history and a new record's
     tracks land at the end, where a sync appends them anyway."""
-    rows = (db.session.query(Record.artist, Record.album_name, Record.spotify_url, Record.tracks)
+    rows = (db.session.query(Record.id, Record.cover_hash, Record.artist, Record.album_name,
+                             Record.spotify_url, Record.tracks)
             .filter(Record.have_it.is_(True),
                     Record.spotify_url.isnot(None), Record.spotify_url != "")
             .order_by(Record.bought_date, Record.id).all())
     out = []
-    for artist, album, link, tracks in rows:
+    for rid, cover_hash, artist, album, link, tracks in rows:
         try:
             parsed = json.loads(tracks) if tracks else []
         except ValueError:
             parsed = []
         out.append({"artist": artist, "album_name": album, "spotify_url": link,
+                    # Same URL Record.to_dict hands out, so the skipped list can show it.
+                    "cover_url": f"/api/records/{rid}/cover?v={cover_hash}" if cover_hash else "",
                     "tracks": parsed if isinstance(parsed, list) else []})
     return out
 

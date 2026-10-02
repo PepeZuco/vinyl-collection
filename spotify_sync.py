@@ -258,11 +258,16 @@ def _label(record):
     return f"{record.get('artist') or '?'} — {record.get('album_name') or '?'}"
 
 
+def _skipped(record):
+    """A report entry: enough for the panel to show which record it is."""
+    return {"label": _label(record), "cover_url": record.get("cover_url") or ""}
+
+
 def desired_tracks(client, records, kind, cache, deadline=None):
     """The ordered, de-duplicated track URIs a playlist should hold.
 
-    `records` are dicts with artist, album_name, spotify_url and tracks (the
-    parsed tracklist). `cache` maps a link to its album_tracks() result —
+    `records` are dicts with artist, album_name, spotify_url, cover_url and
+    tracks (the parsed tracklist). `cache` maps a link to its album_tracks() result —
     anything with get/put. Returns (uris, report); raises Incomplete when
     `deadline` (a time.monotonic() value) passes before every album is read.
     """
@@ -280,20 +285,20 @@ def desired_tracks(client, records, kind, cache, deadline=None):
             try:
                 tracks = album_tracks(client, link)
             except ValueError:
-                report["bad_links"].append(_label(record))
+                report["bad_links"].append(_skipped(record))
                 continue
             except SpotifyError as e:
                 # A pulled or mistyped album is one record's problem, not the sync's.
                 if e.status not in (400, 404):
                     raise
-                report["bad_links"].append(_label(record))
+                report["bad_links"].append(_skipped(record))
                 continue
             cache.put(link, tracks)
 
         if kind == "all":
             picked = tracks
         else:
-            picked = []
+            picked, missing = [], []
             for song in record.get("tracks") or []:
                 if not song.get("liked_at"):
                     continue
@@ -301,7 +306,9 @@ def desired_tracks(client, records, kind, cache, deadline=None):
                 if hit:
                     picked.append(hit)
                 else:
-                    report["unmatched"].append(f"{_label(record)}: {song.get('title')}")
+                    missing.append(song.get("title") or "?")
+            if missing:
+                report["unmatched"].append({**_skipped(record), "songs": missing})
 
         if picked:
             report["records"] += 1

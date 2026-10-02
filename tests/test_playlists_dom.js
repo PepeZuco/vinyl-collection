@@ -121,7 +121,11 @@ function press(win, el) {
 
 const DONE = { kind: 'all', name: 'Zucoloto Vinyl Collection', created: true,
                url: 'https://open.spotify.com/playlist/PL1', total: 42, added: 42,
-               removed: 0, records: 4, bad_links: [], unmatched: ['A — B: Lost Song'] };
+               removed: 0, records: 4,
+               bad_links: [{ label: 'C — D', cover_url: '' },
+                           { label: 'E — F', cover_url: '/api/records/9/cover?v=h' }],
+               unmatched: [{ label: 'A — B', cover_url: '/api/records/7/cover?v=h',
+                             songs: ['Lost Song'] }] };
 
 test('a visitor is not offered the spotify playlists item', async () => {
   const { win, doc } = await boot({ authed: false });
@@ -175,7 +179,13 @@ test('a sync keeps asking while albums are being read, then shows the result', a
     assert.strictEqual(asked.filter(u => u.includes('/api/spotify/playlists/all')).length, 3);
     const row = doc.querySelector('.playlist-row[data-kind="all"]').textContent;
     assert.match(row, /created · 42 tracks from 4 records/);
-    assert.match(row, /1 skipped/);
+    const groups = [...doc.querySelectorAll('.skipped-group summary')].map(e => e.textContent);
+    assert.match(groups[0], /^1 not found/);
+    assert.match(groups[1], /^2 bad link/);
+    assert.match(row, /A — B\s*Lost Song/);
+    const covers = [...doc.querySelectorAll('.skipped-group img.skipped-cover')]
+      .map(i => i.getAttribute('src'));
+    assert.deepStrictEqual(covers, ['/api/records/7/cover?v=h', '/api/records/9/cover?v=h']);
     assert.strictEqual(doc.querySelector('.playlist-status a').getAttribute('href'),
                        'https://open.spotify.com/playlist/PL1');
   } finally { win.close(); }
