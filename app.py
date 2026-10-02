@@ -2161,12 +2161,17 @@ def spotify_sync_playlist(pid):
 @require_auth
 def spotify_delete_playlist(pid):
     row = _playlist_or_404(pid)
-    if row.spotify_id:
+    # A legacy row not yet synced has no id, but its playlist from before
+    # this table is still on Spotify under its name.
+    if row.spotify_id or row.legacy:
         acct = _spotify_account()
         if not acct or not acct.refresh_token:
             return _not_connected()
         try:
-            spotify_sync.delete_playlist(_spotify_client(acct), row.spotify_id)
+            client = _spotify_client(acct)
+            spotify_id = row.spotify_id or spotify_sync.find_owned_by_name(client, row.name)
+            if spotify_id:
+                spotify_sync.delete_playlist(client, spotify_id)
         except spotify_sync.NotConnected:
             return _login_expired(acct)
         except (spotify_sync.SpotifyError, requests.RequestException) as e:

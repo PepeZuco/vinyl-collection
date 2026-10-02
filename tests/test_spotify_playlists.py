@@ -490,6 +490,30 @@ def test_deleting_a_never_synced_playlist_needs_no_spotify(client):
     assert client.delete(f"/api/spotify/playlists/{pid}").status_code == 200
 
 
+def test_deleting_a_never_synced_legacy_row_removes_its_playlist_by_name(client, fake):
+    import app as app_module
+    _connect(app_module)
+    fake.playlists["OLD"] = {"name": "Zucoloto Vinyl Collection", "uris": []}
+    fake.playlists["KEEP"] = {"name": "Something else", "uris": []}
+    with app_module.app.app_context():
+        app_module._seed_legacy_playlists()
+    rows = client.get("/api/spotify/playlists").get_json()["playlists"]
+    assert client.delete(f"/api/spotify/playlists/{rows[0]['id']}").status_code == 200
+    assert list(fake.playlists) == ["KEEP"]
+    # Its sibling has nothing of that name on Spotify: it simply goes.
+    assert client.delete(f"/api/spotify/playlists/{rows[1]['id']}").status_code == 200
+    assert client.get("/api/spotify/playlists").get_json()["playlists"] == []
+
+
+def test_deleting_a_legacy_row_without_a_login_asks_to_connect(client):
+    import app as app_module
+    with app_module.app.app_context():
+        app_module._seed_legacy_playlists()
+    pid = client.get("/api/spotify/playlists").get_json()["playlists"][0]["id"]
+    r = client.delete(f"/api/spotify/playlists/{pid}")
+    assert r.status_code == 409 and r.get_json()["connect"] is True
+
+
 def test_a_spotify_failure_on_delete_keeps_the_row(client, fake):
     import app as app_module
     _connect(app_module)

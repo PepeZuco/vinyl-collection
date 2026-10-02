@@ -313,7 +313,7 @@ def playlist_url(spotify_id):
     return f"https://open.spotify.com/playlist/{spotify_id}"
 
 
-def _owned_by_name(client, name):
+def find_owned_by_name(client, name):
     """The owner's playlist called `name`, or None. Only legacy rows ask this."""
     me = client.call("GET", "/me")
     for p in client.pages("/me/playlists?limit=50"):
@@ -383,7 +383,7 @@ def sync(client, records, liked, cache, *, name, spotify_id=None, adopt_by_name=
     """
     desired, report = desired_tracks(client, records, liked, cache, deadline)
     if not spotify_id and adopt_by_name:
-        spotify_id = _owned_by_name(client, name)
+        spotify_id = find_owned_by_name(client, name)
     created = False
     counts = None
     if spotify_id:
