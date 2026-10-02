@@ -59,14 +59,23 @@ Com o volume montado em `/data` e `DATA_DIR=/data`, o banco (`/data/vinyl.db`) p
 
 ## Playlists no Spotify
 
-Em modo de edição, menu **⋯ → spotify playlists** mantém duas playlists na sua
-conta, ambas montadas só com os discos que você tem (não a wishlist) e que têm
-link do Spotify, na ordem de compra:
+Em modo de edição, menu **⋯ → spotify playlists** lista as playlists que o app
+criou na sua conta e permite criar novas a partir de filtros. Todas usam só os
+discos que você tem (não a wishlist) e que têm link do Spotify, na ordem de
+compra. Filtros (todos opcionais, combinados com E):
 
-- **Zucoloto Vinyl Collection** — todas as faixas de cada álbum.
-- **Zucoloto Vinyl Collection — Liked** — só as músicas curtidas na tracklist
-  de cada disco, casadas pelo título com as faixas do álbum no Spotify. As que
-  não casam aparecem como "skipped" no painel.
+- **Músicas** — só as curtidas (padrão) ou todas as faixas de cada álbum. As
+  curtidas são casadas pelo título com as faixas do álbum no Spotify; as que
+  não casam aparecem em "not found", com a capa do disco.
+- **Ano de lançamento** — de / até.
+- **Gênero** e **Comprado em** — qualquer um dos escolhidos.
+- **Nota** — mínimo da Pepe e/ou da Jenni, exigindo as duas (and) ou uma (or).
+- **Comprado entre** — datas de / até (o mesmo dia nas duas = data exata).
+
+Pedir os mesmos filtros de novo não cria outra playlist: a que já existe é
+sincronizada. As duas playlists antigas (**Zucoloto Vinyl Collection** e
+**— Liked**) viram itens da lista e continuam sendo as mesmas no Spotify.
+Apagar uma playlist no painel apaga também no Spotify.
 
 Cada **sync** cria a playlist se ela não existir (privada) e, se existir,
 adiciona o que falta no fim e remove o que não pertence mais (música

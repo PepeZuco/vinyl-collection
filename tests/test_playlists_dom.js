@@ -6,9 +6,7 @@
  * requestAnimationFrame loop keeps node's event loop alive and the run hangs
  * instead of reporting.
  *
- * What is worth testing: the item is edit-mode only, the panel offers to
- * connect when there is no login, and a sync keeps asking while the server
- * reports it is still reading albums.
+ * What is worth testing: the item is edit-mode only, the panel offers to connect when there is no login, the saved playlists are listed, the form previews its count and name, a create that already exists resyncs that row, a sync keeps asking while the server reports it is still reading albums, create is held while a sync runs, and a delete removes the row.
  */
 
 const test = require('node:test');
@@ -27,10 +25,16 @@ const PAGE = process.env.VINYL_PAGE_HTML;
 let bootCount = 0;
 
 async function boot(opts) {
-  const authed = !!(opts && opts.authed);
-  const connected = !!(opts && opts.connected);
+  opts = opts || {};
+  const authed = !!opts.authed;
+  const connected = !!opts.connected;
   // Answers for successive sync POSTs; the last one repeats.
-  const syncs = (opts && opts.syncs) || [];
+  const syncs = opts.syncs || [];
+  const saved = (opts.saved || []).map(p => Object.assign({}, p));
+  const collection = opts.records || [];
+  const created = opts.created || null;   // [status, body] for POST /api/spotify/playlists
+  const deleted = opts.deleted || [200, { ok: true }];
+  const posted = [];
 
   let html = fs.readFileSync(PAGE, 'utf8');
   html = html.replace(/<script src="https:\/\/[^"]+"><\/script>/g, '');
@@ -80,19 +84,26 @@ async function boot(opts) {
     const json = body => ({ ok: true, status: 200, json: async () => body,
                             text: async () => JSON.stringify(body) });
     if (u.endsWith('/api/auth/status')) return json({ authed });
-    if (u.endsWith('/api/records')) return json([]);
+    if (u.endsWith('/api/records')) return json(collection);
     if (u.endsWith('/api/places')) return json([]);
     if (u.endsWith('/api/spotify/account')) {
       return json({ configured: true, connected, display_name: 'Me',
-                    redirect_uri: 'https://x/api/spotify/callback',
-                    playlists: { all: 'Zucoloto Vinyl Collection',
-                                 liked: 'Zucoloto Vinyl Collection — Liked' } });
+                    redirect_uri: 'https://x/api/spotify/callback' });
     }
-    if (u.includes('/api/spotify/playlists/')) {
-      const [status, body] = syncs.length > 1 ? syncs.shift() : syncs[0];
-      return { ok: status < 300, status, json: async () => body,
-               text: async () => JSON.stringify(body) };
+    const method = (init && init.method) || 'GET';
+    const reply = ([status, body]) => ({ ok: status < 300, status, json: async () => body,
+                                         text: async () => JSON.stringify(body) });
+    if (u.endsWith('/api/spotify/playlists') && method === 'GET') {
+      return json({ playlists: saved, genres: ['Jazz', 'Rock'], places: ['Tracks'] });
     }
+    if (u.endsWith('/api/spotify/playlists') && method === 'POST') {
+      posted.push(JSON.parse(init.body));
+      return reply(created);
+    }
+    if (/\/api\/spotify\/playlists\/\d+\/sync$/.test(u)) {
+      return reply(syncs.length > 1 ? syncs.shift() : syncs[0]);
+    }
+    if (/\/api\/spotify\/playlists\/\d+$/.test(u) && method === 'DELETE') return reply(deleted);
     return json({ ok: true });
   };
 
@@ -102,7 +113,7 @@ async function boot(opts) {
   try { win.eval(source); } catch (e) { errors.push(String(e && e.message)); }
   for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
 
-  return { win, doc: win.document, errors, asked, read: expr => win.__peek(expr) };
+  return { win, doc: win.document, errors, asked, posted, read: expr => win.__peek(expr) };
 }
 
 async function settle() {
@@ -119,14 +130,6 @@ function press(win, el) {
 }
 
 
-const DONE = { kind: 'all', name: 'Zucoloto Vinyl Collection', created: true,
-               url: 'https://open.spotify.com/playlist/PL1', total: 42, added: 42,
-               removed: 0, records: 4,
-               bad_links: [{ label: 'C — D', cover_url: '' },
-                           { label: 'E — F', cover_url: '/api/records/9/cover?v=h' }],
-               unmatched: [{ label: 'A — B', cover_url: '/api/records/7/cover?v=h',
-                             songs: ['Lost Song'] }] };
-
 test('a visitor is not offered the spotify playlists item', async () => {
   const { win, doc } = await boot({ authed: false });
   try {
@@ -141,66 +144,253 @@ test('edit mode reveals the spotify playlists item', async () => {
   } finally { win.close(); }
 });
 
+const EVERY = { id: 1, name: 'Zucoloto Vinyl Collection', filters: { liked: false },
+                summary: 'every track · whole collection', url: '', last_synced_at: null,
+                last_total: null, last_records: null };
+const LIKED = { id: 2, name: 'Zucoloto Vinyl Collection — Liked', filters: { liked: true },
+                summary: 'liked songs · whole collection',
+                url: 'https://open.spotify.com/playlist/PL2', last_synced_at: '2026-10-01T10:00:00',
+                last_total: 42, last_records: 7 };
+
+const DONE = { spotify_id: 'PL1', name: 'Zucoloto Vinyl Collection', created: true,
+               url: 'https://open.spotify.com/playlist/PL1', total: 42, added: 42,
+               removed: 0, records: 4,
+               bad_links: [{ label: 'C — D', cover_url: '' },
+                           { label: 'E — F', cover_url: '/api/records/9/cover?v=h' }],
+               unmatched: [{ label: 'A — B', cover_url: '/api/records/7/cover?v=h',
+                             songs: ['Lost Song'] }],
+               playlist: Object.assign({}, EVERY, { url: 'https://open.spotify.com/playlist/PL1',
+                                                    last_synced_at: '2026-10-02T09:00:00',
+                                                    last_total: 42, last_records: 4 }) };
+
+const RECS = [
+  { have_it: true, spotify_url: 'https://open.spotify.com/album/a', genre: 'Rock', year: '1973',
+    tracks: JSON.stringify([{ side: 'A', title: 's', liked_at: '2026-01-01' }]) },
+  { have_it: true, spotify_url: 'https://open.spotify.com/album/b', genre: 'Jazz', year: '1991',
+    tracks: '' },
+];
+
+async function openPanel(opts) {
+  const b = await boot(Object.assign({ authed: true, connected: true }, opts));
+  press(b.win, b.doc.getElementById('playlistsBtn'));
+  await settle(); await settle();
+  return b;
+}
+
+const row = (doc, id) => doc.querySelector(`.playlist-row[data-id="${id}"]`);
+
 test('without a Spotify login the panel offers to connect', async () => {
-  const { win, doc } = await boot({ authed: true, connected: false });
+  const { win, doc } = await openPanel({ connected: false });
   try {
-    press(win, doc.getElementById('playlistsBtn'));
-    await settle();
     assert.ok(!doc.getElementById('playlistsOverlay').classList.contains('hidden'));
     assert.ok(doc.getElementById('spotifyConnectBtn'), 'no connect button');
     assert.strictEqual(doc.querySelectorAll('.playlist-row').length, 0);
   } finally { win.close(); }
 });
 
-test('connected, the panel lists both playlists', async () => {
-  const { win, doc } = await boot({ authed: true, connected: true });
+test('connected, the panel lists the saved playlists with their last result', async () => {
+  const { win, doc } = await openPanel({ saved: [EVERY, LIKED] });
   try {
-    press(win, doc.getElementById('playlistsBtn'));
-    await settle();
     const names = [...doc.querySelectorAll('.playlist-name')].map(e => e.textContent);
-    assert.deepStrictEqual(names, ['Zucoloto Vinyl Collection',
-                                   'Zucoloto Vinyl Collection — Liked']);
+    assert.deepStrictEqual(names, ['Zucoloto Vinyl Collection', 'Zucoloto Vinyl Collection — Liked']);
+    assert.match(row(doc, 1).textContent, /every track · whole collection/);
+    assert.match(row(doc, 1).textContent, /never synced/);
+    assert.match(row(doc, 2).textContent, /42 tracks · synced/);
+    assert.strictEqual(row(doc, 2).querySelector('a').getAttribute('href'),
+                       'https://open.spotify.com/playlist/PL2');
   } finally { win.close(); }
 });
 
-test('a sync keeps asking while albums are being read, then shows the result', async () => {
-  const { win, doc, asked } = await boot({
-    authed: true, connected: true,
+test('with nothing saved the new-playlist form starts open', async () => {
+  const { win, doc } = await openPanel({ saved: [] });
+  try {
+    assert.ok(doc.getElementById('playlistNew').open);
+    assert.match(doc.getElementById('playlistList').textContent, /no playlists yet/);
+  } finally { win.close(); }
+});
+
+test('the form previews the match count and the name as filters change', async () => {
+  const { win, doc } = await openPanel({ saved: [EVERY], records: RECS });
+  try {
+    assert.match(doc.getElementById('plCount').textContent, /^1 record matches/);
+    assert.strictEqual(doc.getElementById('plName').value, 'Zucoloto Vinyl — Liked');
+
+    const every = doc.querySelector('input[name="plLiked"][value="0"]');
+    every.checked = true;
+    win.__peek('playlistFormInput')(every);
+    assert.match(doc.getElementById('plCount').textContent, /^2 records match/);
+
+    const genre = doc.querySelector('select.pl-add[data-field="genres"]');
+    genre.value = 'Jazz';
+    win.__peek('playlistChipAdd')(genre);
+    assert.match(doc.getElementById('plCount').textContent, /^1 record matches/);
+    assert.strictEqual(doc.getElementById('plName').value, 'Zucoloto Vinyl · Jazz');
+
+    const from = doc.querySelector('input[data-field="year_from"]');
+    from.value = '2000';
+    win.__peek('playlistFormInput')(from);
+    assert.ok(doc.getElementById('plCount').classList.contains('warn'), '0 matches is not flagged');
+  } finally { win.close(); }
+});
+
+test('a typed name stops following the filters; clearing it resumes', async () => {
+  const { win, doc } = await openPanel({ saved: [EVERY], records: RECS });
+  try {
+    const name = doc.getElementById('plName');
+    name.value = 'Road trip';
+    win.__peek('playlistFormInput')(name);
+    const every = doc.querySelector('input[name="plLiked"][value="0"]');
+    every.checked = true;
+    win.__peek('playlistFormInput')(every);
+    assert.strictEqual(doc.getElementById('plName').value, 'Road trip');
+
+    name.value = '';
+    win.__peek('playlistFormInput')(name);
+    assert.strictEqual(doc.getElementById('plName').value, 'Zucoloto Vinyl');
+  } finally { win.close(); }
+});
+
+test('the and/or switch only shows once both ratings are set', async () => {
+  const { win, doc } = await openPanel({ saved: [EVERY] });
+  try {
+    const mode = () => doc.getElementById('plMode');
+    assert.ok(mode().hidden);
+    const pepe = doc.querySelector('select[data-field="pepe_min"]');
+    pepe.value = '4';
+    win.__peek('playlistFormInput')(pepe);
+    assert.ok(mode().hidden);
+    const jenni = doc.querySelector('select[data-field="jenni_min"]');
+    jenni.value = '3.5';
+    win.__peek('playlistFormInput')(jenni);
+    assert.ok(!mode().hidden);
+  } finally { win.close(); }
+});
+
+test('create posts the filters, adds the row and syncs it', async () => {
+  const NEW = Object.assign({}, EVERY, { id: 3, name: 'Zucoloto Vinyl — Liked',
+                                         filters: { liked: true }, summary: 'liked songs · whole collection' });
+  const { win, doc, asked, posted } = await openPanel({
+    saved: [EVERY], created: [201, { playlist: NEW, existed: false }],
+    syncs: [[200, Object.assign({}, DONE, { playlist: Object.assign({}, NEW, { last_total: 9,
+            last_synced_at: '2026-10-02T09:00:00', url: 'https://open.spotify.com/playlist/PL3' }) })]],
+  });
+  try {
+    press(win, doc.getElementById('plCreate'));
+    await settle(); await settle();
+    assert.deepStrictEqual(posted[0], { filters: { liked: true }, name: 'Zucoloto Vinyl — Liked' });
+    assert.ok(asked.some(u => u.endsWith('/api/spotify/playlists/3/sync')));
+    assert.match(row(doc, 3).textContent, /9 tracks · synced/);
+  } finally { win.close(); }
+});
+
+test('creating filters that already exist highlights and resyncs that row', async () => {
+  const { win, doc, asked } = await openPanel({
+    saved: [EVERY, LIKED], created: [200, { playlist: LIKED, existed: true }],
+    syncs: [[200, Object.assign({}, DONE, { playlist: LIKED })]],
+  });
+  try {
+    press(win, doc.getElementById('plCreate'));
+    await settle(); await settle();
+    assert.strictEqual(doc.querySelectorAll('.playlist-row').length, 2, 'a duplicate row appeared');
+    assert.ok(row(doc, 2).classList.contains('hl'));
+    assert.match(row(doc, 2).textContent, /already exists — resynced/);
+    assert.ok(asked.some(u => u.endsWith('/api/spotify/playlists/2/sync')));
+  } finally { win.close(); }
+});
+
+test('a rejected filter shows the server error under the form', async () => {
+  const { win, doc } = await openPanel({
+    saved: [EVERY], created: [400, { error: 'pepe_min: must be 0.5 to 5', field: 'pepe_min' }] });
+  try {
+    press(win, doc.getElementById('plCreate'));
+    await settle();
+    const err = doc.getElementById('plError');
+    assert.ok(!err.hidden);
+    assert.match(err.textContent, /pepe_min/);
+  } finally { win.close(); }
+});
+
+test('a sync keeps asking while the server is still reading albums', async () => {
+  const { win, doc, asked } = await openPanel({
+    saved: [EVERY],
     syncs: [[202, { incomplete: true, done: 100, total: 300 }],
             [202, { incomplete: true, done: 200, total: 300 }],
             [200, DONE]],
   });
   try {
-    press(win, doc.getElementById('playlistsBtn'));
-    await settle();
-    press(win, doc.querySelector('.playlist-row[data-kind="all"] button'));
+    press(win, row(doc, 1).querySelector('.playlist-sync'));
     await settle(); await settle();
-
-    assert.strictEqual(asked.filter(u => u.includes('/api/spotify/playlists/all')).length, 3);
-    const row = doc.querySelector('.playlist-row[data-kind="all"]').textContent;
-    assert.match(row, /created · 42 tracks from 4 records/);
+    assert.strictEqual(asked.filter(u => u.endsWith('/api/spotify/playlists/1/sync')).length, 3);
+    const text = row(doc, 1).textContent;
+    assert.match(text, /created · 42 tracks from 4 records/);
     const groups = [...doc.querySelectorAll('.skipped-group summary')].map(e => e.textContent);
     assert.match(groups[0], /^1 not found/);
     assert.match(groups[1], /^2 bad link/);
-    assert.match(row, /A — B\s*Lost Song/);
+    assert.match(text, /A — B\s*Lost Song/);
     const covers = [...doc.querySelectorAll('.skipped-group img.skipped-cover')]
       .map(i => i.getAttribute('src'));
     assert.deepStrictEqual(covers, ['/api/records/7/cover?v=h', '/api/records/9/cover?v=h']);
-    assert.strictEqual(doc.querySelector('.playlist-status a').getAttribute('href'),
-                       'https://open.spotify.com/playlist/PL1');
+    assert.match(text, /42 tracks · synced/, 'the row did not take the stored result');
+  } finally { win.close(); }
+});
+
+test('create is held while a sync runs', async () => {
+  const { win, doc, posted } = await openPanel({
+    saved: [EVERY], syncs: [[202, { incomplete: true, done: 1, total: 300 }]] });
+  // Each sync answer waits for the test, so the sync is still running when it looks.
+  let release;
+  const gate = new Promise(r => { release = r; });
+  const answer = win.fetch;
+  win.fetch = async (url, init) => {
+    if (/\/sync$/.test(String(url))) await gate;
+    return answer(url, init);
+  };
+  try {
+    assert.ok(!doc.getElementById('plCreate').disabled);
+    press(win, row(doc, 1).querySelector('.playlist-sync'));
+    await settle();
+    assert.ok(doc.getElementById('plCreate').disabled, 'create stayed clickable mid-sync');
+    press(win, doc.getElementById('plCreate'));
+    await settle();
+    assert.deepStrictEqual(posted, []);
+    release();
+    await settle(); await settle();
+    assert.ok(!doc.getElementById('plCreate').disabled, 'create stayed disabled after the sync');
   } finally { win.close(); }
 });
 
 test('a failed sync says so on its row', async () => {
-  const { win, doc } = await boot({ authed: true, connected: true,
-                                    syncs: [[502, { error: 'Spotify returned 500' }]] });
+  const { win, doc } = await openPanel({ saved: [EVERY, LIKED],
+                                         syncs: [[502, { error: 'Spotify returned 500' }]] });
   try {
-    press(win, doc.getElementById('playlistsBtn'));
-    await settle();
-    press(win, doc.querySelector('.playlist-row[data-kind="liked"] button'));
+    press(win, row(doc, 2).querySelector('.playlist-sync'));
     await settle(); await settle();
-    const st = doc.querySelector('.playlist-row[data-kind="liked"] .playlist-status');
+    const st = row(doc, 2).querySelector('.playlist-status');
     assert.ok(st.classList.contains('err'));
     assert.match(st.textContent, /Spotify returned 500/);
+  } finally { win.close(); }
+});
+
+test('delete confirms, calls the server and removes the row', async () => {
+  const { win, doc, asked } = await openPanel({ saved: [EVERY, LIKED] });
+  try {
+    let asked_ = '';
+    win.confirm = (m) => { asked_ = m; return true; };
+    press(win, row(doc, 2).querySelector('.playlist-delete'));
+    await settle(); await settle();
+    assert.match(asked_, /Zucoloto Vinyl Collection — Liked/);
+    assert.ok(asked.some(u => u.endsWith('/api/spotify/playlists/2')));
+    assert.strictEqual(row(doc, 2), null);
+    assert.ok(row(doc, 1));
+  } finally { win.close(); }
+});
+
+test('a failed delete keeps the row and says why', async () => {
+  const { win, doc } = await openPanel({ saved: [LIKED], deleted: [502, { error: 'Spotify returned 500' }] });
+  try {
+    press(win, row(doc, 2).querySelector('.playlist-delete'));
+    await settle(); await settle();
+    assert.ok(row(doc, 2));
+    assert.match(row(doc, 2).querySelector('.playlist-status').textContent, /delete failed/);
   } finally { win.close(); }
 });
