@@ -51,3 +51,15 @@ test('liked also needs a hearted song', () => {
   assert.strictEqual(F.countMatching(records, F.normalize({ liked: true })), 1);
   assert.strictEqual(F.countMatching(records, F.normalize({ liked: false })), 4);
 });
+
+test('calendar-invalid dates are rejected', () => {
+  assert.deepStrictEqual(
+    F.normalize({ bought_from: '2023-02-29', bought_to: '2024-04-31' }),
+    { liked: true });
+});
+
+test('leap day in a leap year is valid', () => {
+  assert.deepStrictEqual(
+    F.normalize({ bought_from: '2024-02-29' }),
+    { liked: true, bought_from: '2024-02-29' });
+});

@@ -44,7 +44,8 @@ const VinylPlaylistFilters = (function () {
   function day(v) {
     if (blank(v)) return null;
     const s = String(v).trim();
-    return DAY.test(s) && !isNaN(Date.parse(s)) ? s : null;
+    const d = new Date(s + 'T00:00:00Z');
+    return DAY.test(s) && !isNaN(d) && d.toISOString().slice(0, 10) === s ? s : null;
   }
 
   function ordered(lo, hi) {
