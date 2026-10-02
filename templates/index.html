@@ -3470,17 +3470,14 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
     <span class="mtab-icon-wrap"><i class="ti ti-calendar-month"></i></span><span>Timeline</span>
   </button>
   <button class="mtab-fab" id="mtabFab" style="display:none" onclick="openAdd()" title="add record"><i class="ti ti-plus"></i></button>
-  <!-- Visitors get the four tabs flat. Edit mode trades Stats and Readme for
-       Spotify playlists (the same modal as the header menu's item) and tucks
-       them behind "More" — the owner's slot goes to what writes. -->
-  <button class="mtab-item mtab-visitor" id="mtabStats" onclick="switchTab('stats')">
-    <span class="mtab-icon-wrap"><i class="ti ti-chart-bar"></i></span><span>Stats</span>
+  <!-- Both modes get Spotify, the playlists page (links only for visitors).
+       Visitors keep Readme beside it; edit mode tucks Readme and Stats behind
+       "More" — the owner's slot goes to what writes. -->
+  <button class="mtab-item" id="mtabSpotify" onclick="switchTab('playlists')">
+    <span class="mtab-icon-wrap"><i class="ti ti-brand-spotify"></i></span><span>Spotify</span>
   </button>
   <button class="mtab-item mtab-visitor" id="mtabReadme" onclick="switchTab('features')">
     <span class="mtab-icon-wrap"><i class="ti ti-user"></i></span><span>Readme</span>
-  </button>
-  <button class="mtab-item mtab-owner" id="mtabSpotify" onclick="switchTab('playlists')">
-    <span class="mtab-icon-wrap"><i class="ti ti-brand-spotify"></i></span><span>Spotify</span>
   </button>
   <div class="mtab-more mtab-owner" id="mtabMore">
     <button class="mtab-item" id="mtabMoreBtn" onclick="toggleMobileMore()">
@@ -11483,7 +11480,6 @@ function syncMobileTabbar() {
   document.getElementById('mtabTimeline').classList.toggle('active', currentTab === 'timeline');
   // Every tab now has an item of its own, so nothing has to lie about where
   // you are — History used to light up Stats because it had no slot at all.
-  document.getElementById('mtabStats').classList.toggle('active', currentTab === 'stats');
   document.getElementById('mtabReadme').classList.toggle('active', currentTab === 'features');
   // In edit mode Stats and Readme live behind "More", so the bar button that
   // lights up is the one the finger actually sees, not a hidden one.

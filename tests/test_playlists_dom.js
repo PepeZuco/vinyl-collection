@@ -472,3 +472,19 @@ test('a visitor sees the playlists as links only', async () => {
     assert.ok(!doc.querySelector('.playlist-account'), 'visitor got the account bar');
   } finally { win.close(); }
 });
+
+test('on the phone bar a visitor gets Spotify in place of Stats', async () => {
+  const { win, doc } = await boot({ authed: false, saved: [LIKED] });
+  try {
+    assert.ok(!doc.getElementById('mtabStats'), 'Stats is still on the visitor bar');
+    const btn = doc.getElementById('mtabSpotify');
+    assert.ok(!btn.classList.contains('mtab-owner'), 'Spotify is hidden from visitors');
+    press(win, btn);
+    await settle();
+    assert.ok(btn.classList.contains('active'));
+    assert.ok(doc.getElementById('playlistsPage').classList.contains('visible'));
+    assert.ok(!doc.getElementById('playlistsOverlay'), 'the old modal is still there');
+    assert.ok(row(doc, 2).querySelector('.playlist-name a'));
+    assert.ok(!row(doc, 2).querySelector('.playlist-sync'));
+  } finally { win.close(); }
+});
