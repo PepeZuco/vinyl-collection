@@ -68,7 +68,12 @@ class FakeSpotify:
             return _Response(200, {"items": items, "next": None})
         if path.startswith("/playlists/"):
             pid = path.split("/")[2].split("?")[0]
+            if pid not in self.playlists:
+                return _Response(404, {"error": {"status": 404}})
             pl = self.playlists[pid]
+            if path.startswith(f"/playlists/{pid}/followers") and method == "DELETE":
+                del self.playlists[pid]
+                return _Response(200)
             assert "/items" in path, f"used a removed endpoint: {method} {path}"
             if method == "GET":
                 return _Response(200, {"items": [{"item": {"uri": u}} for u in pl["uris"]],
@@ -140,11 +145,11 @@ def test_no_match_returns_none():
 
 def test_first_sync_creates_the_playlist_with_every_album_track(fake):
     client = spotify_sync.Client("RT")
-    result = spotify_sync.sync(client, [rec("ALB1"), rec("ALB2")], "all", DictCache())
+    result = spotify_sync.sync(client, [rec("ALB1"), rec("ALB2")], False, DictCache(), name="Every")
 
     assert result["created"] is True
     (pl,) = fake.playlists.values()
-    assert pl["name"] == "Zucoloto Vinyl Collection"
+    assert pl["name"] == "Every"
     assert pl["uris"] == [f"spotify:track:ALB1-{i}" for i in range(3)] + \
                          [f"spotify:track:ALB2-{i}" for i in range(3)]
     assert result["total"] == 6 and result["records"] == 2
@@ -152,10 +157,10 @@ def test_first_sync_creates_the_playlist_with_every_album_track(fake):
 
 
 def test_resync_adds_new_and_removes_what_no_longer_belongs(fake):
-    fake.playlists["X"] = {"name": "Zucoloto Vinyl Collection",
+    fake.playlists["X"] = {"name": "Every",
                            "uris": ["spotify:track:ALB1-0", "spotify:track:GONE"]}
     client = spotify_sync.Client("RT")
-    result = spotify_sync.sync(client, [rec("ALB1")], "all", DictCache())
+    result = spotify_sync.sync(client, [rec("ALB1")], False, DictCache(), name="Every", spotify_id="X")
 
     assert result["created"] is False
     assert len(fake.playlists) == 1, "a second playlist was created"
@@ -165,9 +170,9 @@ def test_resync_adds_new_and_removes_what_no_longer_belongs(fake):
 
 
 def test_unchanged_playlist_is_not_written(fake):
-    fake.playlists["X"] = {"name": "Zucoloto Vinyl Collection",
+    fake.playlists["X"] = {"name": "Every",
                            "uris": [f"spotify:track:ALB1-{i}" for i in range(3)]}
-    spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1")], "all", DictCache())
+    spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1")], False, DictCache(), name="Every", spotify_id="X")
     assert not [c for c in fake.calls if c[0] in ("POST", "DELETE") and "/playlists" in c[1]]
 
 
@@ -178,7 +183,7 @@ def test_liked_playlist_holds_only_liked_songs(fake):
                             {"side": "A", "title": "Song B"}]),
         rec("ALB1", liked=[], link="https://open.spotify.com/album/NOLIKES"),
     ]
-    result = spotify_sync.sync(spotify_sync.Client("RT"), records, "liked", DictCache())
+    result = spotify_sync.sync(spotify_sync.Client("RT"), records, True, DictCache(), name="Zucoloto Vinyl Collection — Liked")
 
     pl = next(p for p in fake.playlists.values())
     assert pl["name"] == "Zucoloto Vinyl Collection — Liked"
@@ -191,7 +196,7 @@ def test_liked_playlist_holds_only_liked_songs(fake):
 
 def test_track_link_stands_for_its_album(fake):
     record = rec("ALB1", link="https://open.spotify.com/track/T1?si=abc")
-    spotify_sync.sync(spotify_sync.Client("RT"), [record], "all", DictCache())
+    spotify_sync.sync(spotify_sync.Client("RT"), [record], False, DictCache(), name="Every")
     assert next(iter(fake.playlists.values()))["uris"][0] == "spotify:track:ALB1-0"
 
 
@@ -199,29 +204,29 @@ def test_bad_and_missing_links_are_skipped_not_fatal(fake):
     records = [rec("ALB1"),
                rec("x", link="https://open.spotify.com/artist/ZZ"),
                rec("MISSING")]
-    result = spotify_sync.sync(spotify_sync.Client("RT"), records, "all", DictCache())
+    result = spotify_sync.sync(spotify_sync.Client("RT"), records, False, DictCache(), name="Every")
     assert [b["label"] for b in result["bad_links"]] == ["Artist — x", "Artist — MISSING"]
     assert result["bad_links"][0]["cover_url"] == "/c/x"
     assert result["total"] == 3
 
 
 def test_duplicate_records_add_each_track_once(fake):
-    spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1"), rec("ALB1")], "all", DictCache())
+    spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1"), rec("ALB1")], False, DictCache(), name="Every")
     assert len(next(iter(fake.playlists.values()))["uris"]) == 3
 
 
 def test_out_of_time_writes_nothing_and_keeps_what_it_read(fake):
     cache = DictCache()
     with pytest.raises(spotify_sync.Incomplete) as e:
-        spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1"), rec("ALB2")], "all",
-                          cache, deadline=time.monotonic() - 1)
+        spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1"), rec("ALB2")], False,
+                          cache, name="Every", deadline=time.monotonic() - 1)
     assert (e.value.done, e.value.total) == (0, 2)
     assert fake.playlists == {}
 
     cache.put("https://open.spotify.com/album/ALB1", [{"uri": "c", "name": "c", "disc": 1}])
     with pytest.raises(spotify_sync.Incomplete) as e:
-        spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1"), rec("ALB2")], "all",
-                          cache, deadline=time.monotonic() - 1)
+        spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1"), rec("ALB2")], False,
+                          cache, name="Every", deadline=time.monotonic() - 1)
     assert e.value.done == 1, "a cached album was not counted as read"
 
 
@@ -230,6 +235,49 @@ def test_revoked_login_raises_not_connected():
     with patch.object(spotify_sync.requests, "request", return_value=bad):
         with pytest.raises(spotify_sync.NotConnected):
             spotify_sync.Client("RT").call("GET", "/me")
+
+
+def test_a_new_playlist_is_created_once_and_its_id_returned(fake):
+    result = spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1")], False, DictCache(),
+                               name="Mine")
+    assert result["created"] is True
+    assert fake.playlists[result["spotify_id"]]["name"] == "Mine"
+    assert result["url"] == f"https://open.spotify.com/playlist/{result['spotify_id']}"
+
+    again = spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1")], False, DictCache(),
+                              name="Mine", spotify_id=result["spotify_id"])
+    assert again["created"] is False and len(fake.playlists) == 1
+
+
+def test_a_playlist_deleted_on_spotify_is_recreated(fake):
+    result = spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1")], False, DictCache(),
+                               name="Mine", spotify_id="GONE")
+    assert result["created"] is True and result["spotify_id"] != "GONE"
+    assert fake.playlists[result["spotify_id"]]["uris"]
+
+
+def test_legacy_rows_adopt_the_playlist_already_on_spotify(fake):
+    fake.playlists["OLD"] = {"name": "Zucoloto Vinyl Collection", "uris": []}
+    result = spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1")], False, DictCache(),
+                               name="Zucoloto Vinyl Collection", adopt_by_name=True)
+    assert (result["spotify_id"], result["created"]) == ("OLD", False)
+    assert len(fake.playlists) == 1
+
+
+def test_without_adopt_a_same_named_playlist_is_left_alone(fake):
+    fake.playlists["THEIRS"] = {"name": "Mine", "uris": ["spotify:track:keep"]}
+    result = spotify_sync.sync(spotify_sync.Client("RT"), [rec("ALB1")], False, DictCache(),
+                               name="Mine")
+    assert result["spotify_id"] != "THEIRS"
+    assert fake.playlists["THEIRS"]["uris"] == ["spotify:track:keep"]
+
+
+def test_delete_unfollows_and_a_missing_one_counts_as_gone(fake):
+    fake.playlists["PL9"] = {"name": "x", "uris": []}
+    spotify_sync.delete_playlist(spotify_sync.Client("RT"), "PL9")
+    assert "PL9" not in fake.playlists
+    assert ("DELETE", "/playlists/PL9/followers") in fake.calls
+    spotify_sync.delete_playlist(spotify_sync.Client("RT"), "PL9")  # no raise
 
 
 # ── routes ────────────────────────────────────────────────────────────────────
