@@ -1530,6 +1530,13 @@ select option{background:var(--surface);color:var(--text)}
 .nav-tab:hover{color:var(--text);background:color-mix(in srgb, var(--text) 6%, transparent)}
 .nav-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700;
   background:color-mix(in srgb, var(--accent) 12%, transparent)}
+/* Spotify's own green rather than the app accent: the tab is Spotify's */
+.nav-tab-spotify.active{color:#1DB954;border-bottom-color:#1DB954;
+  background:color-mix(in srgb, #1DB954 12%, transparent)}
+
+/* spotify playlists page — what was the header menu's modal, now a tab */
+.playlists-page{display:none;max-width:640px}
+.playlists-page.visible{display:block}
 
 /* features page — the tab is public: no login shows visitors what the admin
    tools above (Claude photo scan, Spotify matching, MusicBrainz search) do,
@@ -3148,6 +3155,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
     <button class="nav-tab active" id="tabCollection"><i class="ti ti-layout-grid"></i> Collection</button>
     <button class="nav-tab" id="tabTimeline"><i class="ti ti-calendar-month"></i> Timeline</button>
     <button class="nav-tab" id="tabStats"><i class="ti ti-chart-bar"></i> Statistics</button>
+    <button class="nav-tab nav-tab-spotify" id="tabPlaylists"><i class="ti ti-brand-spotify"></i> Spotify playlists</button>
     <button class="nav-tab" id="tabFeatures" style="margin-left:auto"><i class="ti ti-user"></i> Readme</button>
   </div>
 
@@ -3367,6 +3375,12 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
     </div>
   </div>
 
+  <!-- spotify playlists page: visitors get the list as links; edit mode adds
+       sync/delete and the new-playlist form. See the playlists script. -->
+  <div class="playlists-page" id="playlistsPage">
+    <div id="playlistsBody"></div>
+  </div>
+
   <!-- stats page -->
   <div class="stats-page" id="statsPage">
     <div class="kpi" id="statsCards"></div>
@@ -3465,7 +3479,7 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   <button class="mtab-item mtab-visitor" id="mtabReadme" onclick="switchTab('features')">
     <span class="mtab-icon-wrap"><i class="ti ti-user"></i></span><span>Readme</span>
   </button>
-  <button class="mtab-item mtab-owner" id="mtabSpotify" onclick="openPlaylists()">
+  <button class="mtab-item mtab-owner" id="mtabSpotify" onclick="switchTab('playlists')">
     <span class="mtab-icon-wrap"><i class="ti ti-brand-spotify"></i></span><span>Spotify</span>
   </button>
   <div class="mtab-more mtab-owner" id="mtabMore">
@@ -4145,20 +4159,11 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   </div>
 </div>
 
-<!-- spotify playlists: the playlists this app made on the owner's Spotify,
+<!-- spotify playlists: now the #playlistsPage tab. The playlists this app made on the owner's Spotify,
      each defined by filters (liked/every track, year, genre, ratings, bought
      at, bought dates), plus a form to make another. Each sync creates the
      playlist when it is missing and otherwise adds and removes until it
      matches. See spotify_sync.py and playlist_filters.py. -->
-<div class="overlay hidden" id="playlistsOverlay">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-head">
-      <span class="modal-title">spotify playlists</span>
-      <button class="btn btn-ghost btn-sm" onclick="closePlaylists()"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-body" id="playlistsBody"></div>
-  </div>
-</div>
 
 <div class="overlay hidden" id="loginOverlay">
   <div class="modal" style="max-width:340px">
@@ -4430,6 +4435,8 @@ function setAuthed(val) {
   // Every action in there writes to the owner's Spotify account.
   document.getElementById('playlistsBtn').style.display = val ? '' : 'none';
   document.getElementById('mtabFab').style.display = val ? '' : 'none';
+  // The playlists tab differs by mode (links only vs. sync and the form).
+  if (currentTab === 'playlists') loadPlaylists();
   // Re-render cards to show/hide play count editors
   render();
 }
@@ -10157,18 +10164,22 @@ function blankPlaylistForm(){
 let playlistForm = blankPlaylistForm();
 
 function openPlaylists(){
-  document.getElementById('playlistsOverlay').classList.remove('hidden');
   document.getElementById('morePanel').classList.add('hidden');
-  loadPlaylists();
+  switchTab('playlists');
 }
 
-function closePlaylists(){
-  document.getElementById('playlistsOverlay').classList.add('hidden');
-}
-
+// Visitors skip the account (it is the owner's) and see only the playlists
+// that exist on Spotify, as links.
 async function loadPlaylists(){
   renderPlaylists(null);
   try{
+    if(!authed){
+      const s=await fetch('/api/spotify/playlists');
+      if(!s.ok)throw new Error('HTTP '+s.status);
+      savedPlaylists=(await s.json()).playlists||[];
+      renderPlaylists('visitor');
+      return;
+    }
     const r=await fetch('/api/spotify/account');
     if(!r.ok)throw new Error('HTTP '+r.status);
     playlistAccount=await r.json();
@@ -10190,6 +10201,11 @@ function renderPlaylists(acct){
   if(acct===null){body.innerHTML='<div class="backup-note">loading…</div>';return;}
   if(acct==='error'){
     body.innerHTML='<div class="backup-note">could not reach the server — try again.</div>';
+    return;
+  }
+  if(acct==='visitor'){
+    body.innerHTML=`<div class="playlist-heading">playlists</div><div id="playlistList"></div>`;
+    renderPlaylistList();
     return;
   }
   if(!acct.configured){
@@ -10233,12 +10249,13 @@ function renderPlaylistList(){
   const list=document.getElementById('playlistList');
   if(!list)return;
   if(!savedPlaylists.length){
-    list.innerHTML='<div class="place-empty">no playlists yet — make one below.</div>';
+    list.innerHTML=`<div class="place-empty">no playlists yet${authed?' — make one below':''}.</div>`;
     return;
   }
   list.innerHTML=savedPlaylists.map(p=>{
     const st=playlistStatus[p.id]||{};
-    const last=p.last_synced_at
+    const last=!authed?(p.last_total!=null?`${p.last_total} tracks`:'')
+      :p.last_synced_at
       ?`${p.last_total} tracks · synced ${esc(playlistAgo(p.last_synced_at))}`
         +(p.url?` · <a href="${esc(p.url)}" target="_blank" rel="noopener">open ↗</a>`:'')
       :'never synced';
@@ -10252,10 +10269,10 @@ function renderPlaylistList(){
         :`<span class="playlist-art">${art}</span>`}
       <span class="playlist-name">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`:esc(p.name)}</span>
       ${open}
-      <button class="btn btn-primary btn-sm playlist-sync" ${playlistBusy?'disabled':''}
+      ${authed?`<button class="btn btn-primary btn-sm playlist-sync" ${playlistBusy?'disabled':''}
         onclick="syncPlaylist(${p.id})"><i class="ti ti-refresh"></i><span>sync</span></button>
       <button class="btn btn-ghost btn-sm playlist-delete" ${playlistBusy?'disabled':''}
-        title="delete" aria-label="delete" onclick="deletePlaylist(${p.id})"><i class="ti ti-trash"></i></button>
+        title="delete" aria-label="delete" onclick="deletePlaylist(${p.id})"><i class="ti ti-trash"></i></button>`:''}
       <span class="playlist-sub">${esc(p.summary)}</span>
       <span class="playlist-sub playlist-last">${last}</span>
       ${st.html?`<div class="playlist-status${st.err?' err':''}">${st.html}</div>`:''}
@@ -10564,6 +10581,7 @@ function bindEvents(){
   document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
   document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
   document.getElementById('tabFeatures').addEventListener('click', () => switchTab('features'));
+  document.getElementById('tabPlaylists').addEventListener('click', () => switchTab('playlists'));
   document.getElementById('racePlayBtn').addEventListener('click', function () {
     histPlaying ? histPause() : histPlay();
   });
@@ -11431,6 +11449,8 @@ function switchTab(tab) {
   document.getElementById('statsPage').classList.toggle('visible', tab === 'stats');
   document.getElementById('timelinePage').classList.toggle('visible', tab === 'timeline');
   document.getElementById('featuresPage').classList.toggle('visible', tab === 'features');
+  document.getElementById('playlistsPage').classList.toggle('visible', tab === 'playlists');
+  document.getElementById('tabPlaylists').classList.toggle('active', tab === 'playlists');
   document.getElementById('tabCollection').classList.toggle('active', tab === 'collection');
   document.getElementById('tabStats').classList.toggle('active', tab === 'stats');
   document.getElementById('tabTimeline').classList.toggle('active', tab === 'timeline');
@@ -11438,7 +11458,9 @@ function switchTab(tab) {
   // The filter row is on every surface that describes the collection — but
   // Features is a static portfolio page, nothing on it is filtered by a
   // query, so the whole bar (not just Arrange) is out of place there.
-  document.getElementById('filterBar').style.display = tab === 'features' ? 'none' : '';
+  // Same for the playlists: each one carries its own filters.
+  document.getElementById('filterBar').style.display =
+    tab === 'features' || tab === 'playlists' ? 'none' : '';
   document.getElementById('arrangeRow').style.display = tab === 'collection' ? '' : 'none';
   closeFacetPop();
   syncMobileTabbar();
@@ -11450,6 +11472,7 @@ function switchTab(tab) {
   if (tab === 'stats') renderStats();
   if (tab === 'timeline') renderTimeline();
   if (tab === 'features') renderFeatures();
+  if (tab === 'playlists') loadPlaylists();
   syncUrl(true);
 }
 
@@ -11468,6 +11491,7 @@ function syncMobileTabbar() {
   document.getElementById('mtabMoreBtn').classList.toggle('active', behindMore);
   document.getElementById('mtabMoreStats').classList.toggle('active', currentTab === 'stats');
   document.getElementById('mtabFeatures').classList.toggle('active', currentTab === 'features');
+  document.getElementById('mtabSpotify').classList.toggle('active', currentTab === 'playlists');
 }
 
 // ── mobile bottom bar's "more" popover — Search and Features share the slot

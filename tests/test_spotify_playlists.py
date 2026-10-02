@@ -336,7 +336,6 @@ def test_visitors_cannot_sync_or_connect():
     import app as app_module
     c = app_module.app.test_client()
     assert c.post("/api/spotify/playlists/1/sync").status_code == 401
-    assert c.get("/api/spotify/playlists").status_code == 401
     assert c.post("/api/spotify/playlists", json={"filters": {}}).status_code == 401
     assert c.delete("/api/spotify/playlists/1").status_code == 401
     assert c.get("/api/spotify/connect").status_code == 401
@@ -579,3 +578,24 @@ def test_legacy_seed_adopts_the_playlist_already_on_spotify(client, fake):
 
 def test_account_no_longer_lists_fixed_playlists(client):
     assert "playlists" not in client.get("/api/spotify/account").get_json()
+
+
+def test_visitors_see_only_synced_playlists_as_links(client):
+    import app as app_module
+    with app_module.app.app_context():
+        app_module.db.session.add_all([
+            app_module.SpotifyPlaylist(name="Made", spotify_id="PL1", filters='{"liked": true}',
+                                       filter_key="a", last_total=12, cover_url="https://c/1"),
+            app_module.SpotifyPlaylist(name="Never synced", filters='{"liked": false}',
+                                       filter_key="b"),
+        ])
+        app_module.db.session.commit()
+    visitor = app_module.app.test_client()
+    r = visitor.get("/api/spotify/playlists")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert set(body) == {"playlists"}
+    [p] = body["playlists"]
+    assert p["name"] == "Made"
+    assert p["url"] == spotify_sync.playlist_url("PL1")
+    assert set(p) == {"id", "name", "summary", "url", "cover_url", "last_total"}

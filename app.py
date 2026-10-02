@@ -2098,10 +2098,16 @@ def _distinct_names(column):
     return sorted(seen.values(), key=str.lower)
 
 
+# Public: the Spotify tab shows visitors the playlists that exist on Spotify,
+# as links. They get only what a link needs — the filters and the sync
+# history are the owner's working state, like the form's genre/place choices.
 @app.route("/api/spotify/playlists")
-@require_auth
 def spotify_playlists():
     rows = SpotifyPlaylist.query.order_by(SpotifyPlaylist.id).all()
+    if not is_authed():
+        return jsonify({"playlists": [
+            {k: d[k] for k in ("id", "name", "summary", "url", "cover_url", "last_total")}
+            for d in (r.to_dict() for r in rows) if d["url"]]})
     return jsonify({"playlists": [r.to_dict() for r in rows],
                     "genres": _distinct_names(Record.genre),
                     "places": _distinct_names(Record.bought_where)})

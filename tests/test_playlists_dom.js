@@ -182,7 +182,7 @@ const row = (doc, id) => doc.querySelector(`.playlist-row[data-id="${id}"]`);
 test('without a Spotify login the panel offers to connect', async () => {
   const { win, doc } = await openPanel({ connected: false });
   try {
-    assert.ok(!doc.getElementById('playlistsOverlay').classList.contains('hidden'));
+    assert.ok(doc.getElementById('playlistsPage').classList.contains('visible'));
     assert.ok(doc.getElementById('spotifyConnectBtn'), 'no connect button');
     assert.strictEqual(doc.querySelectorAll('.playlist-row').length, 0);
   } finally { win.close(); }
@@ -442,5 +442,33 @@ test('a failed delete keeps the row and says why', async () => {
     await settle(); await settle();
     assert.ok(row(doc, 2));
     assert.match(row(doc, 2).querySelector('.playlist-status').textContent, /delete failed/);
+  } finally { win.close(); }
+});
+
+test('the desktop Spotify tab opens the playlists page, not a modal', async () => {
+  const { win, doc } = await boot({ authed: true, connected: true, saved: [LIKED] });
+  try {
+    doc.getElementById('tabPlaylists').click();
+    await settle();
+    assert.ok(doc.getElementById('tabPlaylists').classList.contains('active'));
+    assert.ok(doc.getElementById('playlistsPage').classList.contains('visible'));
+    assert.ok(doc.getElementById('collectionPage').classList.contains('hidden'));
+    assert.ok(doc.getElementById('playlistNew'), 'edit mode has the new-playlist form');
+    assert.ok(row(doc, 2).querySelector('.playlist-sync'));
+  } finally { win.close(); }
+});
+
+test('a visitor sees the playlists as links only', async () => {
+  const { win, doc, asked } = await boot({ authed: false, saved: [LIKED] });
+  try {
+    doc.getElementById('tabPlaylists').click();
+    await settle();
+    assert.ok(!asked.some(u => u.endsWith('/api/spotify/account')), 'visitor asked for the account');
+    const r = row(doc, 2);
+    assert.strictEqual(r.querySelector('.playlist-name a').getAttribute('href'), LIKED.url);
+    assert.ok(!r.querySelector('.playlist-sync'), 'visitor got a sync button');
+    assert.ok(!r.querySelector('.playlist-delete'), 'visitor got a delete button');
+    assert.ok(!doc.getElementById('playlistNew'), 'visitor got the new-playlist form');
+    assert.ok(!doc.querySelector('.playlist-account'), 'visitor got the account bar');
   } finally { win.close(); }
 });
