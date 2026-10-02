@@ -452,6 +452,29 @@ def test_sync_reports_progress_when_out_of_time(client, fake, monkeypatch):
     assert r.get_json() == {"incomplete": True, "done": 0, "total": 2}
 
 
+def test_a_sync_failing_after_creating_keeps_the_new_id(client, fake):
+    import app as app_module
+    _connect(app_module)
+    pid = _create(client, {"liked": False}).get_json()["playlist"]["id"]
+    real = fake.request
+    failed = []
+
+    def fail_first_write(method, url, **kw):
+        if method == "POST" and "/items" in url and not failed:
+            failed.append(url)
+            return _Response(500, {"error": {"status": 500}})
+        return real(method, url, **kw)
+    with patch.object(spotify_sync.requests, "request", side_effect=fail_first_write):
+        assert client.post(f"/api/spotify/playlists/{pid}/sync").status_code == 502
+    (sid,) = fake.playlists
+    with app_module.app.app_context():
+        assert app_module.db.session.get(app_module.SpotifyPlaylist, pid).spotify_id == sid
+
+    d = client.post(f"/api/spotify/playlists/{pid}/sync").get_json()
+    assert (d["spotify_id"], d["created"]) == (sid, False)
+    assert len(fake.playlists) == 1, "the failed sync's playlist was orphaned"
+
+
 def test_delete_removes_it_on_spotify_and_here(client, fake):
     import app as app_module
     _connect(app_module)

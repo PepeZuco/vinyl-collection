@@ -372,12 +372,14 @@ def mirror(client, playlist_id, desired):
 
 
 def sync(client, records, liked, cache, *, name, spotify_id=None, adopt_by_name=False,
-         deadline=None):
+         deadline=None, on_created=None):
     """Read the albums, then bring the playlist in line. Raises Incomplete first if out of time.
 
     `spotify_id` is the playlist this app made last time; a playlist deleted on
     Spotify since answers 404 and is made again. `adopt_by_name` is for the two
     playlists made before ids were stored: they are found by name, once.
+    `on_created(spotify_id)` hears of a new playlist before anything is written
+    to it, so a sync that fails partway does not leave it orphaned.
     """
     desired, report = desired_tracks(client, records, liked, cache, deadline)
     if not spotify_id and adopt_by_name:
@@ -393,6 +395,8 @@ def sync(client, records, liked, cache, *, name, spotify_id=None, adopt_by_name=
     if counts is None:
         spotify_id = _create(client, name)
         created = True
+        if on_created:
+            on_created(spotify_id)
         counts = mirror(client, spotify_id, desired)
     added, removed = counts
     return {

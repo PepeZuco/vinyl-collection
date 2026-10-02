@@ -2129,10 +2129,18 @@ def spotify_sync_playlist(pid):
     f = json.loads(row.filters)
     records = playlist_filters.select(_playlist_records(), f)
     deadline = time.monotonic() + _SPOTIFY_READ_BUDGET
+
+    def keep_new_id(new_id):
+        # Stored before the playlist is filled: if filling fails, the next
+        # sync finds this one instead of making another.
+        row.spotify_id = new_id
+        row.legacy = False
+        db.session.commit()
     try:
         result = spotify_sync.sync(_spotify_client(acct), records, f.get("liked", True),
                                    _AlbumCache(), name=row.name, spotify_id=row.spotify_id,
-                                   adopt_by_name=bool(row.legacy), deadline=deadline)
+                                   adopt_by_name=bool(row.legacy), deadline=deadline,
+                                   on_created=keep_new_id)
     except spotify_sync.Incomplete as e:
         return jsonify({"incomplete": True, "done": e.done, "total": e.total}), 202
     except spotify_sync.NotConnected:
