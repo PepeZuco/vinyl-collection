@@ -287,6 +287,7 @@ def client():
     import app as app_module
     with app_module.app.app_context():
         app_module.SpotifyPlaylist.query.delete()
+        app_module.AppFlag.query.delete()
         app_module.SpotifyAccount.query.delete()
         app_module.SpotifyAlbumCache.query.delete()
         app_module.Record.query.delete()

@@ -13,6 +13,7 @@ from sqlalchemy.orm import defer
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from functools import wraps
+from contextlib import contextmanager
 
 import requests
 
@@ -594,8 +595,21 @@ _LEGACY_PLAYLISTS = (
 )
 
 
+# One-off facts about this database, such as a seed that has already run.
+class AppFlag(db.Model):
+    key   = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.String(200))
+
+
+_PLAYLISTS_SEEDED = "spotify_playlists_seeded"
+
+
 def _seed_legacy_playlists():
-    """The two playlists the app synced before filters existed, as saved rows."""
+    """The two playlists the app synced before filters existed, as saved rows.
+
+    The rows and the flag saying so land in one commit: a boot that dies
+    halfway leaves neither, and the next boot seeds again.
+    """
     for name, raw in _LEGACY_PLAYLISTS:
         f = playlist_filters.normalize_filters(raw)
         key = playlist_filters.filter_key(f)
@@ -603,17 +617,49 @@ def _seed_legacy_playlists():
             db.session.add(SpotifyPlaylist(
                 name=name, filters=json.dumps(f), filter_key=key, legacy=True,
                 created_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%S")))
+    if db.session.get(AppFlag, _PLAYLISTS_SEEDED) is None:
+        db.session.add(AppFlag(key=_PLAYLISTS_SEEDED,
+                               value=datetime.now().strftime("%Y-%m-%dT%H:%M:%S")))
     db.session.commit()
 
-with app.app_context():
+
+def _seed_legacy_playlists_once():
+    """Seed unless this database ever was, so deleting both legacy rows sticks."""
+    if db.session.get(AppFlag, _PLAYLISTS_SEEDED) is None:
+        _seed_legacy_playlists()
+
+
+@contextmanager
+def _startup_lock():
+    """Hold the boot-time schema work to one process at a time.
+
+    gunicorn's workers each import this module, so without it two of them
+    race through create_all, the ALTER TABLEs and the seeds against one
+    database. The lock is released on exit: tests import the app again in
+    the same process. Native Windows has no flock — and no gunicorn either.
+    """
+    data_dir = os.environ.get("DATA_DIR") or "."
+    os.makedirs(data_dir, exist_ok=True)
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    with open(os.path.join(data_dir, ".startup.lock"), "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+with app.app_context(), _startup_lock():
     from sqlalchemy import inspect, text
-    # Seeded only when the table is new, so deleting both legacy playlists
-    # does not bring them back on the next deploy.
-    new_playlist_table = not inspect(db.engine).has_table("spotify_playlist")
     db.create_all()
     # lightweight auto-migration: db.create_all() only creates missing tables,
     # it won't add new columns to a table that already exists (e.g. on Railway's
     # persisted Postgres/SQLite). Add any columns that are missing.
+    # Only record and feature_video are covered: a new column on any other
+    # table (spotify_playlist, say) needs its own entry here.
     inspector = inspect(db.engine)
     existing_cols = [c["name"] for c in inspector.get_columns("record")]
     missing_cols = {
@@ -691,12 +737,11 @@ with app.app_context():
                                [{"name": n, "url": ""} for n in sorted(names)])
             db.session.commit()
 
+    _seed_legacy_playlists_once()
+
     # Photos uploaded into a form that was then abandoned have nothing pointing
     # at them and nothing that will ever call the save-time reap. This is the
     # only thing that collects them.
-    if new_playlist_table:
-        _seed_legacy_playlists()
-
     _sweep_note_images()
 
 # ── auth helpers ──────────────────────────────────────────────────────────────
