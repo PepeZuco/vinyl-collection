@@ -763,7 +763,7 @@ select option{background:var(--surface);color:var(--text)}
 .dd-tabs{position:sticky;top:0;z-index:2;background:var(--surface)}
 /* the seam between two blocks — the pinned row says which one you are in, so
    this only has to make the break legible, not label it */
-.dd-sec + .dd-sec{margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}
+.dd-sec + .dd-sec{margin-top:24px;padding-top:22px;border-top:3px solid color-mix(in srgb,var(--label) 45%,var(--border))}
 /* The last block has to be able to reach the row like the other two, and it
    can only do that if there is a column's worth of room beneath it — without
    this, clicking Timeline on a record with a short history scrolls to the
@@ -2339,17 +2339,73 @@ select option{background:var(--surface);color:var(--text)}
 /* a date and its optional time, side by side — the time is the narrower half
    because it is the one that is often left blank */
 .datetime-pair{display:grid;grid-template-columns:1fr 112px;gap:8px}
-.notes-add-row{display:grid;grid-template-columns:140px 104px 1fr auto;gap:8px;align-items:start}
-.notes-add-row textarea{resize:vertical;min-height:72px;font-family:var(--font-mono);font-size:12px;line-height:1.5;width:100%;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;outline:none;font-family:var(--font)}
-.notes-add-row textarea:focus{border-color:var(--accent)}
-.notes-add-row input[type=date],.notes-add-row input[type=time]{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-size:13px;outline:none;font-family:var(--font);width:100%}
-.notes-add-row input[type=date]:focus,.notes-add-row input[type=time]:focus{border-color:var(--accent)}
+/* The composer is one card: words on top, then a toolbar holding when, what
+   to attach, who can read it, and the add button. Inputs carry
+   color-scheme so the native date/time pickers draw a light glyph in dark. */
+.notes-add-row,.note-entry.editing{display:flex;flex-direction:column;gap:10px;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px;transition:border-color .15s,box-shadow .15s}
+.notes-add-row:focus-within{border-color:color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent)}
+.notes-section textarea{resize:vertical;min-height:84px;width:100%;font-size:13px;
+  line-height:1.6;background:var(--surface);color:var(--text);
+  border:1px solid transparent;border-radius:var(--radius-sm);padding:9px 34px 9px 11px;
+  outline:none;font-family:var(--font);display:block;transition:border-color .15s}
+.notes-section textarea::placeholder{color:var(--label);opacity:.8}
+.notes-section textarea:focus{border-color:color-mix(in srgb, var(--accent) 50%, transparent)}
+.notes-section .note-shots:empty{display:none}
+.notes-section .note-shots{margin-top:0}
+
+.note-photo-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.note-when{display:flex;gap:6px;flex-shrink:0}
+.note-when .field > i{left:9px;font-size:14px;color:var(--label)}
+.note-when input{height:32px;background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:0 8px 0 30px;font-size:12.5px;outline:none;font-family:var(--font);
+  width:100%;min-width:0;color-scheme:light}
+[data-theme="dark"] .note-when input{color-scheme:dark}
+.note-when input:focus{border-color:var(--accent)}
+.note-when .field:first-child{width:148px}
+.note-when .field:last-child{width:128px}
+.note-when .field{min-width:0}
+.note-when input::-webkit-calendar-picker-indicator{opacity:.7;cursor:pointer}
+.note-when input::-webkit-calendar-picker-indicator:hover{opacity:1}
+
+.note-tools{display:flex;align-items:center;gap:2px;flex:1;min-width:0}
+.note-tool,.note-private-check{height:32px;display:inline-flex;align-items:center;gap:5px;
+  padding:0 9px;border-radius:var(--radius-sm);border:1px solid transparent;
+  background:transparent;color:var(--label);font-size:12px;font-family:var(--font);
+  cursor:pointer;white-space:nowrap;user-select:none;transition:background .12s,color .12s}
+.note-tool i,.note-private-check i{font-size:16px}
+.note-tool:hover,.note-private-check:hover{background:var(--card-hover);color:var(--text)}
+.note-private-check input{position:absolute;opacity:0;width:0;height:0;margin:0}
+.note-private-check:has(input:checked){color:var(--ev-note);
+  background:color-mix(in srgb, var(--ev-note) 14%, transparent);
+  border-color:color-mix(in srgb, var(--ev-note) 40%, transparent)}
+.note-private-check:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:1px}
+.note-add-btn{height:32px;margin-left:auto;font-weight:600}
+
 .notes-list{display:flex;flex-direction:column;gap:8px}
-.note-entry{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;position:relative}
-.note-entry-date{font-size:10px;color:var(--label);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;font-weight:700}
-.note-entry-body{font-size:12px;line-height:1.6;color:var(--text)}
+.note-entry{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 12px;position:relative;border-left:3px solid var(--ev-note)}
+.note-entry-head{display:flex;align-items:center;gap:8px;min-height:28px}
+.note-entry-date{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;
+  color:var(--label);text-transform:uppercase;letter-spacing:.06em;font-weight:700;
+  font-family:var(--font-mono);white-space:nowrap}
+.note-entry-date i{font-size:13px;color:var(--ev-note)}
+.note-entry-body{font-size:13px;line-height:1.6;color:var(--text);margin-top:4px;
+  overflow-wrap:anywhere}
 .note-entry-body p{margin-bottom:4px}
-.note-delete{position:absolute;top:8px;right:8px;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;line-height:1}
+.note-entry-body p:last-child{margin-bottom:0}
+.notes-list .note-shots{margin-top:8px}
+.note-entry-actions{margin-left:auto;display:flex;gap:2px;opacity:.75;transition:opacity .15s}
+.note-entry:hover .note-entry-actions,.note-entry-actions:focus-within{opacity:1}
+.note-entry-actions button{width:28px;height:28px;display:inline-flex;align-items:center;
+  justify-content:center;background:transparent;border:none;border-radius:var(--radius-sm);
+  color:var(--label);cursor:pointer;font-size:15px;padding:0;transition:background .12s,color .12s}
+.note-entry-actions button:hover{background:var(--card-hover)}
+.note-edit-btn:hover{color:var(--accent)}
+.note-private-toggle:hover{color:var(--ev-note)}
 .note-delete:hover{color:var(--danger)}
 
 /* A note only edit mode can read. The mark is the same everywhere it shows —
@@ -2357,52 +2413,52 @@ select option{background:var(--surface);color:var(--text)}
    always the same: can a visitor read this? */
 .note-lock{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
   font-family:var(--font-mono);color:var(--ev-note);display:inline-flex;
-  align-items:center;gap:3px;white-space:nowrap}
-.note-entry.private{border-style:dashed;border-color:color-mix(in srgb, var(--ev-note) 45%, var(--border));
+  align-items:center;gap:3px;white-space:nowrap;padding:2px 6px;border-radius:999px;
+  background:color-mix(in srgb, var(--ev-note) 14%, transparent)}
+.note-entry.private{border-style:dashed;border-left-style:solid;
+  border-color:color-mix(in srgb, var(--ev-note) 45%, var(--border));
+  border-left-color:var(--ev-note);
   background:color-mix(in srgb, var(--ev-note) 5%, var(--card))}
-.note-entry-head{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.note-entry-head .note-entry-date{margin-bottom:0}
-/* Sits left of the delete button, which is absolutely positioned at the corner. */
-.note-private-toggle{position:absolute;top:8px;right:30px;background:transparent;
-  border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;
-  border-radius:3px;line-height:1}
-.note-private-toggle:hover{color:var(--ev-note)}
 .note-entry.private .note-private-toggle{color:var(--ev-note)}
-/* Left of the lock again, on the same corner rail. */
-.note-edit-btn{position:absolute;top:8px;right:52px;background:transparent;
-  border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px;
-  border-radius:3px;line-height:1}
-.note-edit-btn:hover{color:var(--accent)}
 
 /* ── a note open for editing ────────────────────────────────────────────────
-   The entry keeps its place in the list and grows the controls in place, so
-   the note never moves out from under the words being changed. The accent
-   edge is the whole signal that this one is live; the corner buttons are gone
-   because save and cancel are the only two ways out. */
-.note-entry.editing{border-color:var(--accent);
-  background:color-mix(in srgb, var(--accent) 4%, var(--card))}
-.note-edit-when{display:grid;grid-template-columns:140px 104px;gap:8px;margin-bottom:8px}
-.note-edit-when input{background:var(--card);color:var(--text);border:1px solid var(--border);
-  border-radius:var(--radius-sm);padding:7px 9px 7px 30px;font-size:13px;outline:none;
-  font-family:var(--font);width:100%}
-.note-edit-when input:focus{border-color:var(--accent)}
-.note-entry.editing textarea{resize:vertical;min-height:88px;width:100%;font-size:12px;
-  line-height:1.6;background:var(--card);color:var(--text);border:1px solid var(--border);
-  border-radius:var(--radius-sm);padding:7px 9px;outline:none;font-family:var(--font)}
-.note-entry.editing textarea:focus{border-color:var(--accent)}
-.note-edit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px}
-.note-edit-actions .grow{flex:1}
-@media (max-width:640px){
-  .note-edit-when{grid-template-columns:1fr 1fr}
-  .note-edit-actions .grow{flex-basis:100%}
+   The entry keeps its place in the list and grows the composer's controls in
+   place, so the note never moves out from under the words being changed. The
+   accent edge is the whole signal that this one is live; save and cancel are
+   the only two ways out. */
+.note-entry.editing{border-color:var(--accent);border-left:3px solid var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent)}
+.note-edit-btns{display:flex;gap:6px;margin-left:auto}
+.note-edit-btns .btn{height:32px}
+.note-edit-btns .btn:not(.btn-primary){color:var(--label)}
+.note-edit-btns .btn:not(.btn-primary):hover{color:var(--text)}
+
+@media (max-width:760px){
+  .note-when{width:100%}
+  .note-when .field:first-child,.note-when .field:last-child{flex:1;width:auto}
+  .note-when input{height:40px;font-size:16px}
+  .note-tool,.note-private-check{height:40px;padding:0 10px}
+  .note-tool i,.note-private-check i{font-size:18px}
+  .note-tools{flex:1 1 100%;justify-content:space-between}
+  .note-tool,.note-private-check{flex:1;justify-content:center}
+  .note-add-btn,.note-edit-btns{flex:1 1 100%;margin-left:0}
+  .note-add-btn,.note-edit-btns .btn{height:44px;font-size:14px;justify-content:center}
+  .note-edit-btns .btn{flex:1}
+  .note-entry-head{flex-wrap:wrap}
+  .notes-section textarea{font-size:16px;min-height:96px}
+  .note-entry-actions{opacity:1}
+  .note-entry-actions button{width:36px;height:36px;font-size:17px}
+}
+@media (max-width:380px){
+  .note-tool span,.note-private-check span{display:none}
 }
 
 /* A textarea (add row or edit row) plus the button that opens the markdown
    preview modal on it, pinned to the textarea's own corner. */
 .note-text-wrap{position:relative}
 .note-md-expand{position:absolute;top:6px;right:6px;background:transparent;border:none;
-  color:var(--muted);cursor:pointer;padding:3px 5px;border-radius:3px;font-size:13px;line-height:1}
-.note-md-expand:hover{color:var(--accent)}
+  color:var(--label);cursor:pointer;padding:4px 5px;border-radius:var(--radius-sm);font-size:14px;line-height:1}
+.note-md-expand:hover{color:var(--accent);background:var(--card-hover)}
 
 /* ── note markdown preview modal ─────────────────────────────────────────────
    Edits the real textarea it was opened from live, so closing this is just
@@ -2439,11 +2495,6 @@ select option{background:var(--surface);color:var(--text)}
 .note-link-row .nlr-album{font-size:12.5px;color:var(--muted);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 
-/* The add row's own switch. */
-.note-private-check{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
-  color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap}
-.note-private-check input{accent-color:var(--ev-note);margin:0;cursor:pointer}
-.note-private-check:has(input:checked){color:var(--ev-note)}
 .dm-hist-entry.note.private .ht{border-left:2px dashed color-mix(in srgb, var(--ev-note) 55%, transparent);
   padding-left:8px}
 
@@ -2458,7 +2509,6 @@ select option{background:var(--surface);color:var(--text)}
   display:flex;align-items:center;justify-content:center}
 .note-shot-drop:hover{color:var(--danger)}
 .note-shot.missing{background:var(--surface);border-style:dashed}
-.note-photo-row{grid-column:1 / -1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 /* ── play-date editor in form ──────────────────────────────────────────────── */
 .playdates-section{display:flex;flex-direction:column;gap:8px}
@@ -2604,11 +2654,6 @@ select option{background:var(--surface);color:var(--text)}
   #formOverlay .own-switch button{height:46px;font-size:13px}
   #formOverlay .scan-actions{--face:20px}
   #formOverlay .scan-actions button{height:42px;font-size:13px}
-  #formOverlay .notes-add-row{grid-template-columns:1fr 1fr}
-  #formOverlay .notes-add-row .note-text-wrap{grid-column:1 / -1}
-  /* Direct child only: the add button is a grid item, the photo buttons are
-     flex children of .note-photo-row and would just stretch. */
-  #formOverlay .notes-add-row > .btn{grid-column:1 / -1;width:100%;justify-content:center}
   /* 14px on desktop, then 20px here; 22px is what it takes to stop a 6 and a
      7 from being the same tap. */
   #formOverlay .rating-row .segs button{height:22px}
@@ -2803,6 +2848,7 @@ select option{background:var(--surface);color:var(--text)}
   #formOverlay .form-grid{grid-template-columns:1fr}
   #formOverlay .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   #formOverlay .field input,#formOverlay .field select{height:50px}
+  #formOverlay .note-when .field input{height:42px;padding-left:32px}
 
   /* ── steps 2-4: bought-at chips, collapsed log sections, full-width
      pickers ───────────────────────────────────────────────────────────────
@@ -3864,28 +3910,32 @@ select option{background:var(--surface);color:var(--text)}
         <div class="sec-body">
           <div class="notes-section">
             <div class="notes-add-row">
-              <div class="field"><i class="ti ti-calendar"></i><input type="date" id="fNoteDate"></div>
-              <div class="field"><i class="ti ti-clock"></i><input type="time" id="fNoteTime" title="time of the note — leave blank if it does not matter"></div>
               <div class="note-text-wrap">
                 <textarea id="fNoteText" placeholder="Add a note…"></textarea>
                 <button type="button" class="note-md-expand" title="markdown preview" onclick="openNoteMdModal(this.previousElementSibling)"><i class="ti ti-arrows-maximize"></i></button>
               </div>
-              <button type="button" class="btn btn-primary btn-sm" style="height:34px;align-self:start" onclick="addNote()"><i class="ti ti-plus"></i> add</button>
               <!-- Photos attach to the note being composed and are uploaded as
                    they are picked, so the record save stays small. -->
+              <div class="note-shots" id="fNoteShots"></div>
               <div class="note-photo-row">
-                <button type="button" class="btn btn-sm" id="notePickerFile" onclick="pickNotePhoto()">
-                  <i class="ti ti-folder"></i> photo
-                </button>
-                <button type="button" class="btn btn-sm" id="notePickerCamera" onclick="openCamera('note')">
-                  <i class="ti ti-camera"></i> take photo
-                </button>
-                <!-- Sticky while the form is open: the mistake that cannot be
-                     undone is publishing the second of two private notes. -->
-                <label class="note-private-check" title="only visible in edit mode">
-                  <input type="checkbox" id="fNotePrivate"><i class="ti ti-lock"></i> private
-                </label>
-                <div class="note-shots" id="fNoteShots"></div>
+                <div class="note-when">
+                  <div class="field"><i class="ti ti-calendar"></i><input type="date" id="fNoteDate"></div>
+                  <div class="field"><i class="ti ti-clock"></i><input type="time" id="fNoteTime" title="time of the note — leave blank if it does not matter"></div>
+                </div>
+                <div class="note-tools">
+                  <button type="button" class="note-tool" id="notePickerFile" title="attach a photo" onclick="pickNotePhoto()">
+                    <i class="ti ti-photo"></i><span>photo</span>
+                  </button>
+                  <button type="button" class="note-tool" id="notePickerCamera" title="take a photo" onclick="openCamera('note')">
+                    <i class="ti ti-camera"></i><span>camera</span>
+                  </button>
+                  <!-- Sticky while the form is open: the mistake that cannot be
+                       undone is publishing the second of two private notes. -->
+                  <label class="note-private-check" title="only visible in edit mode">
+                    <input type="checkbox" id="fNotePrivate"><i class="ti ti-lock"></i><span>private</span>
+                  </label>
+                </div>
+                <button type="button" class="btn btn-primary btn-sm note-add-btn" onclick="addNote()"><i class="ti ti-plus"></i> add note</button>
               </div>
             </div>
             <div class="notes-list" id="fNotesList"></div>
@@ -6979,14 +7029,16 @@ function renderNotesForm() {
       : '';
     return `<div class="note-entry${n.private ? ' private' : ''}">
       <div class="note-entry-head">
-        <div class="note-entry-date">${noteDateLabel(n.date)}</div>
+        <div class="note-entry-date"><i class="ti ti-calendar-event"></i>${noteDateLabel(n.date)}</div>
         ${n.private ? '<span class="note-lock"><i class="ti ti-lock"></i>private</span>' : ''}
+        <div class="note-entry-actions">
+          <button type="button" class="note-edit-btn" title="edit note" onclick="startNoteEdit(${origIdx})"><i class="ti ti-pencil"></i></button>
+          <button type="button" class="note-private-toggle" title="${n.private ? 'make this note public' : 'hide this note from visitors'}" onclick="toggleNotePrivate(${origIdx})"><i class="ti ti-${n.private ? 'lock' : 'lock-open'}"></i></button>
+          <button type="button" class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
+        </div>
       </div>
-      <div class="note-entry-body">${noteHTML(n.text)}</div>
+      ${n.text && n.text.trim() ? `<div class="note-entry-body">${noteHTML(n.text)}</div>` : ''}
       ${shots}
-      <button class="note-edit-btn" title="edit note" onclick="startNoteEdit(${origIdx})"><i class="ti ti-pencil"></i></button>
-      <button class="note-private-toggle" title="${n.private ? 'make this note public' : 'hide this note from visitors'}" onclick="toggleNotePrivate(${origIdx})"><i class="ti ti-${n.private ? 'lock' : 'lock-open'}"></i></button>
-      <button class="note-delete" title="delete note" onclick="deleteNote(${origIdx})"><i class="ti ti-trash"></i></button>
     </div>`;
   }).join('');
   formChanged();   // a note added or removed
@@ -7302,24 +7354,27 @@ function noteEditHTML() {
          noteShotHTML(id, `removeEditImage('${id}')`)).join('')}</div>`
     : '';
   return `<div class="note-entry editing${d.private ? ' private' : ''}" id="noteEditRow" data-seq="${editSeq}">
-    <div class="note-edit-when">
-      <div class="field"><i class="ti ti-calendar"></i><input type="date" class="ne-date" value="${esc(stampDay(d.date))}"></div>
-      <div class="field"><i class="ti ti-clock"></i><input type="time" class="ne-time" value="${esc(stampTime(d.date))}" title="time of the note — leave blank if it does not matter"></div>
-    </div>
     <div class="note-text-wrap">
       <textarea class="ne-text" placeholder="Add a note…">${esc(d.text)}</textarea>
       <button type="button" class="note-md-expand" title="markdown preview" onclick="openNoteMdModal(this.previousElementSibling)"><i class="ti ti-arrows-maximize"></i></button>
     </div>
     ${shots}
-    <div class="note-edit-actions">
-      <button type="button" class="btn btn-sm" onclick="pickNotePhoto()"><i class="ti ti-photo"></i> photo</button>
-      <button type="button" class="btn btn-sm" onclick="openCamera('note')"><i class="ti ti-camera"></i> camera</button>
-      <label class="note-private-check" title="only visible in edit mode">
-        <input type="checkbox" class="ne-private"${d.private ? ' checked' : ''} onchange="syncNoteEditFromDOM()"><i class="ti ti-lock"></i> private
-      </label>
-      <span class="grow"></span>
-      <button type="button" class="btn btn-sm" onclick="cancelNoteEdit()">cancel</button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="saveNoteEdit()"><i class="ti ti-check"></i> save</button>
+    <div class="note-photo-row note-edit-actions">
+      <div class="note-when note-edit-when">
+        <div class="field"><i class="ti ti-calendar"></i><input type="date" class="ne-date" value="${esc(stampDay(d.date))}"></div>
+        <div class="field"><i class="ti ti-clock"></i><input type="time" class="ne-time" value="${esc(stampTime(d.date))}" title="time of the note — leave blank if it does not matter"></div>
+      </div>
+      <div class="note-tools">
+        <button type="button" class="note-tool" title="attach a photo" onclick="pickNotePhoto()"><i class="ti ti-photo"></i><span>photo</span></button>
+        <button type="button" class="note-tool" title="take a photo" onclick="openCamera('note')"><i class="ti ti-camera"></i><span>camera</span></button>
+        <label class="note-private-check" title="only visible in edit mode">
+          <input type="checkbox" class="ne-private"${d.private ? ' checked' : ''} onchange="syncNoteEditFromDOM()"><i class="ti ti-lock"></i><span>private</span>
+        </label>
+      </div>
+      <div class="note-edit-btns">
+        <button type="button" class="btn btn-sm" onclick="cancelNoteEdit()">cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveNoteEdit()"><i class="ti ti-check"></i> save</button>
+      </div>
     </div>
   </div>`;
 }
