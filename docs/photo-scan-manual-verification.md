@@ -371,7 +371,7 @@ whether the estimate matches a real photo, so:
 1. Open the form, attach a sleeve photo, tap Analyse.
    - On desktop (windows wider than 760px), the panel replaces the whole form: a 128px thinking face on the left, stages and footer on the right, form fields hidden.
    - On phone (windows 760px or narrower), the panel replaces the cover area: a 92px thinking face above the stage list, footer below.
-   - Stages light up in order: reading the sleeve → matching on MusicBrainz → fetching cover art → confirming it is vinyl → checking your shelf.
+   - Stages light up in order: reading the sleeve → finding it on Spotify → matching on MusicBrainz → fetching cover art → confirming it is vinyl → checking your shelf.
    - Each badge takes its service's colour only once that stage starts.
 2. Paste a Spotify link instead.
    - The first two stages are "reading the album" (green Spotify badge) and "placing it in a genre" — the photo path's "reading the sleeve" stage never appears.
@@ -380,3 +380,18 @@ whether the estimate matches a real photo, so:
 4. With MusicBrainz unreachable (block `musicbrainz.org` in /etc/hosts):
    - The MusicBrainz row goes grey and struck through, reading "MusicBrainz unavailable — no year or alternates".
    - The scan still finishes and the form still fills from the sleeve.
+
+---
+
+## Spotify link from a photo scan
+
+- [ ] Scan a sleeve of a well-known album. "finding it on Spotify" reads
+      "link added", and the form's Spotify link field holds an
+      `open.spotify.com/album/…` link. Open it: it is the same album.
+- [ ] Scan an obscure sleeve that is not on Spotify. The stage greys out with
+      "not found on Spotify", the link field stays empty, and "not on Spotify"
+      stays ticked.
+- [ ] Edit a record that already has a link, attach a sleeve and Analyse. The
+      existing link is kept, not replaced by the search result.
+- [ ] Unset `SPOTIFY_CLIENT_ID` and scan a sleeve. The scan still finishes;
+      only the link is missing.

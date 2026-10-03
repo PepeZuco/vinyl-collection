@@ -1558,13 +1558,23 @@ select option{background:var(--surface);color:var(--text)}
 .feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:16px;display:flex;flex-direction:column;gap:11px}
 .feature-card-head{display:flex;align-items:center;gap:10px}
-.feature-card-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;
-  justify-content:center;background:color-mix(in srgb, var(--accent) 16%, transparent);
-  color:var(--accent);font-size:17px;flex-shrink:0}
 .feature-card h3{margin:0;font-size:15px;font-weight:700}
 .feature-card p{margin:0;font-size:12.5px;line-height:1.55;color:var(--label)}
 
-.features-grid.flows{grid-template-columns:1fr}
+.features-grid.flows{grid-template-columns:1fr;gap:12px}
+.feature-fold{padding:0;gap:0}
+.feature-fold > summary{list-style:none;cursor:pointer;padding:14px 16px;border-radius:var(--radius);transition:background .15s}
+.feature-fold > summary::-webkit-details-marker{display:none}
+.feature-fold > summary:hover{background:var(--card-hover)}
+.feature-fold[open] > summary{border-bottom:1px solid var(--border);border-radius:var(--radius) var(--radius) 0 0}
+.feature-fold > p{padding:14px 16px 0}
+.feature-fold > .feature-flow{margin:12px 16px 16px}
+.feature-fold-chev{margin-left:auto;font-size:18px;color:var(--label);transition:transform .2s}
+.feature-fold[open] .feature-fold-chev{transform:rotate(180deg)}
+.feature-card-logo{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.feature-card-logo svg,.feature-card-logo img{width:22px;height:22px;display:block}
+.feature-logo-claude{background:rgba(217,119,87,.12);border:1px solid rgba(217,119,87,.4)}
+.feature-logo-spotify{background:rgba(30,215,96,.10);border:1px solid rgba(30,215,96,.4)}
 /* Each diagram is its own page (static/flow) in a frame: its canvas, styles and
    script stay out of this file entirely. Desktop gets a fixed height and the
    frame scrolls its own side panel; at phone width the frame reports its full
@@ -11513,7 +11523,7 @@ document.addEventListener('click', e => {
 // one interactive pipeline diagram served from static/flow. ──
 const FEATURE_CARDS = [
   {
-    flow: 'claude', icon: 'ti-sparkles',
+    flow: 'claude', logo: 'claude',
     title: 'Claude API Integration',
     text: 'Upload a sleeve photo, point the live camera at it, or just type an artist. One ' +
       'Analyse step sends the photo to Claude’s vision model and the words to a Claude parser; ' +
@@ -11521,7 +11531,7 @@ const FEATURE_CARDS = [
       'of every Claude call counted as it happens. Press Run, pick an input, and follow it through.',
   },
   {
-    flow: 'spotify', icon: 'ti-brand-spotify',
+    flow: 'spotify', logo: 'spotify',
     title: 'Spotify Link',
     text: 'Paste a Spotify album or track link, share-sheet short links included. It resolves ' +
       'through Spotify’s API, Claude places the album in one of the collection’s genres, ' +
@@ -11530,22 +11540,45 @@ const FEATURE_CARDS = [
   },
 ];
 
+// The two brand marks: Claude's starburst drawn inline, Spotify's from the logo we already ship.
+const CLAUDE_MARK = '<svg viewBox="-12 -12 24 24" aria-hidden="true">' +
+  [[0,11],[30,9],[62,10.5],[95,8.5],[128,11],[160,9.5],[192,10.5],[225,8.5],[258,11],[290,9],[322,10]]
+    .map(([a, l]) => `<rect x="-1.15" y="${-l}" width="2.3" height="${l}" rx="1.15" fill="#D97757" transform="rotate(${a})"/>`).join('') +
+  '</svg>';
+const FEATURE_LOGOS = {
+  claude: CLAUDE_MARK,
+  spotify: '<img src="/static/spotify-logo.png" alt="">',
+};
+
+// Closed by default: a <details> per diagram, and the frame is only created the
+// first time it opens, so a visitor who never expands one never loads it.
 function featureCardHtml(card) {
-  return `<div class="feature-card" id="featureCard-${card.flow}">
-    <div class="feature-card-head">
-      <span class="feature-card-icon"><i class="ti ${card.icon}"></i></span>
+  return `<details class="feature-card feature-fold" id="featureCard-${card.flow}" data-flow="${card.flow}">
+    <summary class="feature-card-head">
+      <span class="feature-card-logo feature-logo-${card.logo}">${FEATURE_LOGOS[card.logo]}</span>
       <h3>${esc(card.title)}</h3>
-    </div>
+      <i class="ti ti-chevron-down feature-fold-chev"></i>
+    </summary>
     <p>${esc(card.text)}</p>
-    <div class="feature-flow"><iframe src="/static/flow/index.html?embed=1&flow=${card.flow}&theme=${theme}"
-      title="${esc(card.title)} diagram" loading="lazy"></iframe></div>
-  </div>`;
+    <div class="feature-flow"></div>
+  </details>`;
+}
+
+function openFeatureFlow(el) {
+  const box = el.querySelector('.feature-flow');
+  if (!el.open || box.firstChild) return;
+  const card = FEATURE_CARDS.find(c => c.flow === el.dataset.flow);
+  box.innerHTML = `<iframe src="/static/flow/index.html?embed=1&flow=${card.flow}&theme=${theme}"
+    title="${esc(card.title)} diagram"></iframe>`;
 }
 
 // Rendered once: switching tabs must not reload the frames and lose a run in progress.
 function renderFeatures() {
   const grid = document.getElementById('featuresGrid');
-  if (!grid.children.length) grid.innerHTML = FEATURE_CARDS.map(featureCardHtml).join('');
+  if (grid.children.length) return;
+  grid.innerHTML = FEATURE_CARDS.map(featureCardHtml).join('');
+  grid.querySelectorAll('.feature-fold').forEach(el =>
+    el.addEventListener('toggle', () => openFeatureFlow(el)));
 }
 
 // A frame at phone width reports its full height; size it so the page scrolls, not the frame.
