@@ -265,9 +265,24 @@ body.embed .side{width:330px}
 .zoom .btn{background:var(--surface)}
 .hint{position:absolute;left:16px;top:14px;font-size:11.5px;color:var(--muted);z-index:2;display:flex;gap:6px;align-items:center}
 
+/* ── stage: the canvas with the bill docked under it ───────────────────── */
+.stage{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.bill-dock{flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);padding:12px 16px}
+/* a fixed height, so a new bill row never shrinks the canvas mid-run; the rows scroll instead */
+.bill-dock .bill{margin:0;height:128px;display:grid;grid-template-columns:minmax(220px,300px) 1fr;
+  grid-template-rows:auto auto 1fr;column-gap:22px;align-content:start}
+.bill-dock .bill-h,.bill-dock .bill-big,.bill-dock .bill-sub{grid-column:1}
+.bill-dock .bill-big{font-size:34px;margin-top:6px}
+.bill-dock .bill-rows{grid-column:2;grid-row:1/4;margin-top:0;overflow:auto;min-height:0}
+/* while the run drives the camera, the diagram can't be dragged or zoomed */
+.canvas.follow{cursor:default}
+
 /* ── side panel: the app preview ───────────────────────────────────────── */
 .side{width:400px;flex-shrink:0;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-height:0}
 .side-scroll{flex:1;overflow:auto;padding:16px}
+/* desktop: the app preview is opt-in, so the diagram gets the full width */
+@media (min-width:901px){ .side{display:none} body.app-on .side{display:flex} }
+#appBtn.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
 .sec-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700;
   margin:4px 0 10px;display:flex;align-items:center;gap:8px}
 .sec-h::after{content:'';flex:1;height:1px;background:var(--border)}
@@ -383,6 +398,11 @@ body.embed .side{width:330px}
   body{overflow:auto;height:auto}
   .main{flex-direction:column}
   .canvas{height:62vh;flex:none}
+  .stage{flex:none}
+  .bill-dock .bill{display:block;height:auto}
+  .bill-dock .bill-big{font-size:40px;margin-top:8px}
+  .bill-dock .bill-rows{margin-top:10px}
+  #appBtn{display:none}
   .side{width:100%;border-left:0;border-top:1px solid var(--border)}
   .side-scroll{overflow:visible}
   .top{padding:10px 16px}
@@ -409,11 +429,13 @@ body.embed .side{width:330px}
     <button class="btn icon" id="stepBtn" title="Step one event"><i class="ti ti-player-track-next"></i></button>
     <button class="btn icon" id="resetBtn" title="Reset"><i class="ti ti-refresh"></i></button>
     <button class="btn primary" id="playBtn"><i class="ti ti-player-play-filled"></i><span>Run flow</span></button>
+    <button class="btn" id="appBtn" title="Show what the app shows during the run"><i class="ti ti-layout-sidebar-right"></i><span>In the app</span></button>
     <button class="btn icon" id="themeBtn" title="Toggle theme"><i class="ti ti-sun"></i></button>
   </div>
 </header>
 
 <div class="main">
+  <div class="stage">
   <div class="canvas" id="canvas">
     <div class="meter" id="meter"><span class="m" id="meterMark"></span><div><small id="meterLabel">this scan</small><b id="meterVal">$0.0000</b><span class="avg" id="meterAvg"></span></div></div>
     <div class="hint"><i class="ti ti-hand-move"></i> drag to pan · scroll to zoom · click a node · <b style="color:var(--label)">▶ on a branch runs that path</b></div>
@@ -432,15 +454,18 @@ body.embed .side{width:330px}
     <div class="inspector" id="inspector"></div>
     <div class="choose-toast"><i class="ti ti-hand-click"></i><span>How does the record come in? <b>Click a square:</b> upload a photo, use the live camera, or search artists.</span></div>
   </div>
+  <div class="bill-dock">
+    <div class="bill" id="bill">
+      <div class="bill-h"><span class="m" id="billMark"></span>Claude API cost<span class="bill-tag" id="billTag">this scan</span></div>
+      <div class="bill-big" id="billBig"><span class="cur">$</span>0.0000</div>
+      <div class="bill-sub" id="billSub"></div>
+      <div class="bill-rows" id="billRows"></div>
+    </div>
+  </div>
+  </div>
 
   <aside class="side">
     <div class="side-scroll">
-      <div class="bill" id="bill">
-        <div class="bill-h"><span class="m" id="billMark"></span>Claude API cost<span class="bill-tag" id="billTag">this scan</span></div>
-        <div class="bill-big" id="billBig"><span class="cur">$</span>0.0000</div>
-        <div class="bill-sub" id="billSub"></div>
-        <div class="bill-rows" id="billRows"></div>
-      </div>
       <div class="sec-h">In the app</div>
       <div class="input" id="inputCard"></div>
       <button class="analyse-btn" id="analyseBtn"><span class="face" id="btnFace"></span><span id="analyseLabel">analyse</span></button>
@@ -1133,27 +1158,50 @@ function closeInspector(){ $('inspector').classList.remove('on'); document.query
 let view={x:0,y:0,k:1}, bounds={w:1,h:1};
 function apply(){ world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;
   canvas.style.backgroundPosition=`${view.x}px ${view.y}px`; canvas.style.backgroundSize=`${22*view.k}px ${22*view.k}px`; }
-function fit(){
+function fitView(){
   const r=canvas.getBoundingClientRect(), pad=40;
   const k=Math.min((r.width-pad*2)/bounds.w,(r.height-pad*2-30)/bounds.h,1.1);
-  view={k, x:(r.width-bounds.w*k)/2, y:(r.height-bounds.h*k)/2+10};
   // on a phone, fitting 2000px of graph makes it unreadable — start zoomed at the trigger, drag to follow
-  if(r.width<600){ view.k=.5; view.x=16; view.y=(r.height-bounds.h*.5)/2; }
-  apply();
+  if(r.width<600) return {k:.5, x:16, y:(r.height-bounds.h*.5)/2};
+  return {k, x:(r.width-bounds.w*k)/2, y:(r.height-bounds.h*k)/2+10};
 }
+function fit(){ cancelAnimationFrame(camAnim); setFollow(false); view=fitView(); apply(); }
+
+/* ── camera: while a run plays it follows the active box; when the run ends it
+   zooms back out, and only once that lands does pan & zoom go back to the visitor ── */
+let follow=false, camAnim=0;
+function setFollow(on){ follow=on; canvas.classList.toggle('follow',on); document.querySelectorAll('.zoom .btn').forEach(b=>b.disabled=on); }
+function tween(to,ms,done){
+  cancelAnimationFrame(camAnim); const from={...view}, t0=performance.now();
+  (function tick(){ const t=Math.min(1,(performance.now()-t0)/ms), e=t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    view={x:from.x+(to.x-from.x)*e, y:from.y+(to.y-from.y)*e, k:from.k+(to.k-from.k)*e}; apply();
+    if(t<1) camAnim=requestAnimationFrame(tick); else done?.(); })();
+}
+// frame a box and the tools hanging off it, with room for its cost chip above and caption below
+function focus(ids){
+  const F=FLOWS[cur], set=new Set(ids);
+  F.edges.forEach(e=>{ if(e.sub!==undefined && ids.includes(e.f)) set.add(e.t); });
+  const gs=[...set].map(id=>F.nodes.find(n=>n.id===id)).filter(Boolean).map(geom); if(!gs.length) return;
+  const x0=Math.min(...gs.map(g=>g.x)), y0=Math.min(...gs.map(g=>g.y))-34,
+        x1=Math.max(...gs.map(g=>g.x+g.w)), y1=Math.max(...gs.map(g=>g.y+g.h))+56;
+  const r=canvas.getBoundingClientRect(), pad=50;
+  const k=Math.max(.3,Math.min(1,(r.width-pad*2)/(x1-x0),(r.height-pad*2)/(y1-y0)));
+  tween({k, x:r.width/2-(x0+x1)/2*k, y:r.height/2-(y0+y1)/2*k}, 650);
+}
+function releaseCamera(){ tween(fitView(),900,()=>{ if(!running) setFollow(false); }); }
 function zoomAt(f,cx,cy){ const k=Math.min(2.2,Math.max(.25,view.k*f)); view.x=cx-(cx-view.x)*(k/view.k); view.y=cy-(cy-view.y)*(k/view.k); view.k=k; apply(); }
-canvas.addEventListener('wheel',e=>{e.preventDefault(); const r=canvas.getBoundingClientRect(); zoomAt(e.deltaY<0?1.1:1/1.1,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+canvas.addEventListener('wheel',e=>{ if(follow) return; e.preventDefault(); const r=canvas.getBoundingClientRect(); zoomAt(e.deltaY<0?1.1:1/1.1,e.clientX-r.left,e.clientY-r.top);},{passive:false});
 let drag=null;
-canvas.addEventListener('pointerdown',e=>{ if(e.target.closest('.node,.zoom,.inspector,.legend,.branch'))return; drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,moved:false}; canvas.classList.add('drag'); canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerdown',e=>{ if(follow||e.target.closest('.node,.zoom,.inspector,.legend,.branch'))return; drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,moved:false}; canvas.classList.add('drag'); canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointermove',e=>{ if(!drag)return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; apply(); });
 canvas.addEventListener('pointerup',()=>{ if(drag&&!drag.moved)closeInspector(); drag=null; canvas.classList.remove('drag'); });
 canvas.addEventListener('pointercancel',()=>{ drag=null; canvas.classList.remove('drag'); });
 $('zin').onclick=()=>{const r=canvas.getBoundingClientRect(); zoomAt(1.2,r.width/2,r.height/2);};
 $('zout').onclick=()=>{const r=canvas.getBoundingClientRect(); zoomAt(1/1.2,r.width/2,r.height/2);};
-$('zfit').onclick=fit;
+$('zfit').onclick=()=>{ if(!follow) fit(); };
 // the embedded frame grows as the panel fills in; only a width change is worth a refit
 let fitW=innerWidth;
-addEventListener('resize',()=>{ if(innerWidth!==fitW){ fitW=innerWidth; fit(); } });
+addEventListener('resize',()=>{ if(innerWidth!==fitW){ fitW=innerWidth; if(!follow) fit(); } });
 
 /* ── face sprite ticker: steps every visible .face.on through 30 frames ── */
 let frame=0;
@@ -1337,12 +1385,12 @@ const nodeColor = id => colorOf(FLOWS[cur].nodes.find(n=>n.id===id)?.src);
 
 async function exec(op,id){
   if(op.op==='wait') return sleep(op.ms,id);
-  if(op.op==='state') return setNode(op.n,op.s,op.d);
+  if(op.op==='state'){ if(op.s==='run') focus([op.n]); return setNode(op.n,op.s,op.d); }
   if(op.op==='sse') return onSse(op.ev,op.data);
   if(op.op==='ui') return uiOp(op.what,op.data);
   if(op.op==='flow'){
     const p=edgeEls[op.f+'>'+op.t]; if(!p) return;
-    p.classList.add('lit'); await pulse(p,nodeColor(op.t),650,false,id); return;
+    p.classList.add('lit'); focus([op.f,op.t]); await pulse(p,nodeColor(op.t),650,false,id); return;
   }
   if(op.op==='sub'){
     const p=edgeEls[op.f+'>'+op.t]; if(!p) return;
@@ -1354,13 +1402,13 @@ async function exec(op,id){
 async function run(){
   if(running) { stepMode=false; stepResolve?.(); return; }
   if(pc>=script.length) reset();
-  running=true; const id=runId; updateButtons();
+  running=true; const id=runId; setFollow(true); updateButtons();
   while(pc<script.length && id===runId){
     if(stepMode){ await new Promise(r=>stepResolve=r); stepResolve=null; if(id!==runId) break; }
     const op=script[pc++]; await exec(op,id);
     if(stepMode && ['state','sse','ui','wait'].includes(op.op)){ /* step granularity: one op */ }
   }
-  if(id===runId){ running=false; stepMode=false; updateButtons(); }
+  if(id===runId){ running=false; stepMode=false; updateButtons(); releaseCamera(); }
 }
 function step(){
   if(!running){ stepMode=true; run(); setTimeout(()=>stepResolve?.(),0); return; }
@@ -1382,6 +1430,7 @@ function choose(id){
   stepping ? step() : run();
 }
 function reset(){
+  if(follow) releaseCamera();
   awaiting=false; pendingStep=false; canvas.classList.remove('choose');
   runId++; running=false; stepMode=false; stepResolve?.(); stepResolve=null; clearInterval(clockTimer);
   script=build(cur,scen); pc=0; closeInspector(); render(); updateButtons();
@@ -1405,6 +1454,7 @@ $('playBtn').onclick=()=>{ if(awaiting) return; if(running) run(); else begin();
 $('analyseBtn').onclick=()=>{ if(!running&&!awaiting) begin(); };
 $('stepBtn').onclick=()=>{ if(awaiting) return; if(running) step(); else begin(true); };
 $('resetBtn').onclick=reset;
+$('appBtn').onclick=()=>{ const on=document.body.classList.toggle('app-on'); $('appBtn').classList.toggle('on',on); if(!follow) fit(); };
 $('themeBtn').onclick=()=>{ const r=document.documentElement, light=r.dataset.theme!=='light'; r.dataset.theme=light?'light':'dark';
   $('themeBtn').innerHTML=`<i class="ti ti-${light?'moon':'sun'}"></i>`; try{localStorage.setItem('flow-theme',r.dataset.theme);}catch(e){} };
 // ?embed=1 — framed inside the app's Readme page: one flow per frame, no brand or tabs,
@@ -1423,7 +1473,7 @@ if(EMBED){
 } else {
   try{ if(localStorage.getItem('flow-theme')==='light') $('themeBtn').click(); }catch(e){}
 }
-addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT')return; if(e.code==='Space'){e.preventDefault(); $('playBtn').click();} if(e.key==='ArrowRight') $('stepBtn').click(); if(e.key==='r') reset(); if(e.key==='f') fit(); });
+addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT')return; if(e.code==='Space'){e.preventDefault(); $('playBtn').click();} if(e.key==='ArrowRight') $('stepBtn').click(); if(e.key==='r') reset(); if(e.key==='f'&&!follow) fit(); });
 
 // ?flow=spotify&scenario=owned&autoplay — handy for sharing one exact run
 const q=new URLSearchParams(location.search);
