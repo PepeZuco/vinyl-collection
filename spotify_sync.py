@@ -32,7 +32,9 @@ import scan
 API = "https://api.spotify.com/v1"
 ACCOUNTS = "https://accounts.spotify.com"
 TIMEOUT = 10.0
-SCOPES = "playlist-read-private playlist-modify-private playlist-modify-public"
+# ugc-image-upload is for the generated cover (cover_art.py); a login granted
+# before it was asked for syncs fine but is refused the upload.
+SCOPES = "playlist-read-private playlist-modify-private playlist-modify-public ugc-image-upload"
 
 DESCRIPTION = "Made from the Zucoloto vinyl collection."
 
@@ -143,11 +145,12 @@ class Client:
         url = path if path.startswith("https://") else f"{API}{path}"
         if self._access is None:
             self._refresh()
+        extra = kwargs.pop("headers", {})
         refreshed = False
         for _ in range(4):
             response = requests.request(
                 method, url, timeout=TIMEOUT,
-                headers={"Authorization": f"Bearer {self._access}"}, **kwargs)
+                headers={"Authorization": f"Bearer {self._access}", **extra}, **kwargs)
             if response.status_code == 401 and not refreshed:
                 refreshed = True
                 self._refresh()
@@ -337,6 +340,12 @@ def playlist_cover(client, spotify_id):
     images = sorted((i for i in images if i and i.get("url")),
                     key=lambda i: -(i.get("width") or 0))
     return images[0]["url"] if images else ""
+
+
+def upload_cover(client, spotify_id, jpeg):
+    """Set the playlist's cover: a JPEG of at most 256 KB once base64-encoded."""
+    client.call("PUT", f"/playlists/{spotify_id}/images",
+                data=base64.b64encode(jpeg), headers={"Content-Type": "image/jpeg"})
 
 
 def find_owned_by_name(client, name):

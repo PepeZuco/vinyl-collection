@@ -18,6 +18,7 @@ from contextlib import contextmanager
 import requests
 
 import backup
+import cover_art
 import pricing
 import scan
 import playlist_filters
@@ -2263,14 +2264,32 @@ def spotify_sync_playlist(pid):
     row.last_synced_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     row.last_total = result["total"]
     row.last_records = result["records"]
-    # Spotify draws the mosaic from the first albums; a sync that just changed
-    # them may still show the old one until the next sync, which is fine.
+    spotify = _spotify_client(acct)
+    cover = _upload_generated_cover(spotify, row.spotify_id, f, result["total"])
+    # Spotify takes a moment to process an upload (or to redraw its mosaic),
+    # so the URL read back may still be the old picture until the next sync.
     try:
-        row.cover_url = spotify_sync.playlist_cover(_spotify_client(acct), row.spotify_id) or row.cover_url
+        row.cover_url = spotify_sync.playlist_cover(spotify, row.spotify_id) or row.cover_url
     except (spotify_sync.SpotifyError, spotify_sync.NotConnected, requests.RequestException):
         app.logger.info("Spotify playlist cover unavailable", exc_info=True)
     db.session.commit()
-    return jsonify({**result, "playlist": row.to_dict()})
+    return jsonify({**result, "cover": cover, "playlist": row.to_dict()})
+
+
+def _upload_generated_cover(spotify, spotify_id, filters, total):
+    """Draw the playlist's cover and set it on Spotify. Never fails the sync:
+    "uploaded", "needs_reconnect" (a login from before covers asked for
+    ugc-image-upload) or "failed"."""
+    try:
+        spotify_sync.upload_cover(spotify, spotify_id, cover_art.render(filters, total))
+        return "uploaded"
+    except spotify_sync.SpotifyError as e:
+        if e.status in (401, 403):
+            return "needs_reconnect"
+        app.logger.warning("Spotify playlist cover upload failed", exc_info=True)
+    except (spotify_sync.NotConnected, requests.RequestException):
+        app.logger.warning("Spotify playlist cover upload failed", exc_info=True)
+    return "failed"
 
 
 @app.route("/api/spotify/playlists/<int:pid>", methods=["DELETE"])

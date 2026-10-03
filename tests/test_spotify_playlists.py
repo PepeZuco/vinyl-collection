@@ -5,6 +5,8 @@ handful of endpoints spotify_sync uses — under their February 2026 paths, so a
 regression to the removed /tracks endpoints fails here rather than in prod.
 """
 
+import base64
+import io
 import json
 import time
 from unittest.mock import patch
@@ -38,6 +40,7 @@ class FakeSpotify:
         self.playlists = playlists or {}   # id -> {"name", "uris"}
         self.calls = []
         self.refreshes = 0
+        self.covers = {}                   # id -> (content type, base64 body)
 
     def request(self, method, url, headers=None, json=None, data=None, timeout=None, **kw):
         path = url.replace(spotify_sync.API, "")
@@ -81,6 +84,9 @@ class FakeSpotify:
             if path.startswith(f"/playlists/{pid}/followers") and method == "DELETE":
                 del self.playlists[pid]
                 return _Response(200)
+            if path == f"/playlists/{pid}/images" and method == "PUT":
+                self.covers[pid] = (headers.get("Content-Type"), data)
+                return _Response(202)
             if path == f"/playlists/{pid}/images" and method == "GET":
                 return _Response(200, [{"url": f"https://mosaic.scdn.co/640/{pid}", "width": 640},
                                        {"url": f"https://mosaic.scdn.co/60/{pid}", "width": 60}])
@@ -606,6 +612,70 @@ def test_visitors_see_only_synced_playlists_as_links(client):
     assert p["name"] == "Made"
     assert p["url"] == spotify_sync.playlist_url("PL1")
     assert set(p) == {"id", "name", "filters", "summary", "url", "cover_url", "last_total"}
+
+
+# ── the generated cover ───────────────────────────────────────────────────────
+
+def test_the_login_asks_for_cover_uploads():
+    assert "ugc-image-upload" in spotify_sync.SCOPES.split()
+
+
+def test_upload_cover_puts_the_jpeg_as_base64(fake):
+    fake.playlists["PL1"] = {"name": "x", "uris": []}
+    spotify_sync.upload_cover(spotify_sync.Client("RT"), "PL1", b"\xff\xd8jpeg")
+    kind, body = fake.covers["PL1"]
+    assert kind == "image/jpeg"
+    assert base64.b64decode(body) == b"\xff\xd8jpeg"
+
+
+def _decoded_cover(fake, sid):
+    from PIL import Image
+    img = Image.open(io.BytesIO(base64.b64decode(fake.covers[sid][1])))
+    return img.format, img.size
+
+
+def test_sync_uploads_a_generated_cover(client, fake):
+    import app as app_module
+    _connect(app_module)
+    pid = _create(client, {"liked": False, "year_from": 1970, "year_to": 1979}).get_json()["playlist"]["id"]
+    d = client.post(f"/api/spotify/playlists/{pid}/sync").get_json()
+    assert d["cover"] == "uploaded"
+    assert _decoded_cover(fake, d["spotify_id"]) == ("JPEG", (640, 640))
+    upload = fake.calls.index(("PUT", f"/playlists/{d['spotify_id']}/images"))
+    assert ("GET", f"/playlists/{d['spotify_id']}/images") in fake.calls[upload:], \
+        "the cover was read back before it was uploaded"
+
+
+def _refuse_cover(fake, status):
+    real = fake.request
+
+    def refuse(method, url, **kw):
+        if method == "PUT" and url.endswith("/images"):
+            return _Response(status, {"error": {"status": status}})
+        return real(method, url, **kw)
+    return patch.object(spotify_sync.requests, "request", side_effect=refuse)
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_login_without_the_cover_scope_still_syncs_and_asks_to_reconnect(client, fake, status):
+    import app as app_module
+    _connect(app_module)
+    pid = _create(client, {"liked": False}).get_json()["playlist"]["id"]
+    with _refuse_cover(fake, status):
+        r = client.post(f"/api/spotify/playlists/{pid}/sync")
+    assert r.status_code == 200, r.get_json()
+    d = r.get_json()
+    assert d["cover"] == "needs_reconnect"
+    assert d["total"] > 0 and d["playlist"]["last_total"] == d["total"], "the sync was not saved"
+
+
+def test_a_failed_cover_upload_still_syncs(client, fake):
+    import app as app_module
+    _connect(app_module)
+    pid = _create(client, {"liked": False}).get_json()["playlist"]["id"]
+    with _refuse_cover(fake, 500):
+        r = client.post(f"/api/spotify/playlists/{pid}/sync")
+    assert r.status_code == 200 and r.get_json()["cover"] == "failed"
 
 
 def test_playlist_link_is_read_as_a_compilation(fake):
