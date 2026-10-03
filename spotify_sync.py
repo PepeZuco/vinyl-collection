@@ -176,13 +176,29 @@ class Client:
 
 # ── what belongs in each playlist ─────────────────────────────────────────────
 
+_PLAYLIST_LINK = re.compile(
+    r"^(?:https?://open\.spotify\.com/(?:intl-[a-z]+/)?playlist/|spotify:playlist:)([A-Za-z0-9]+)",
+    re.IGNORECASE)
+
+
 def album_tracks(client, link):
     """The album behind a record's link: [{uri, name, disc}] in album order.
 
-    A track link stands for its whole album — the record is the album.
-    Raises ValueError for a link that is not an album or a track.
+    A track link stands for its whole album — the record is the album. A
+    playlist link is a compilation that is not an album on Spotify: its
+    tracks, in playlist order, with no disc (they come from many albums).
+    Raises ValueError for a link that is none of those.
     """
-    kind, spotify_id = scan.parse_spotify_url(scan._resolve_short_link(link))
+    link = scan._resolve_short_link(link)
+    m = _PLAYLIST_LINK.match((link or "").strip())
+    if m:
+        out = []
+        for entry in client.pages(f"/playlists/{m.group(1)}/items?limit=50&additional_types=track"):
+            item = (entry or {}).get("item") or (entry or {}).get("track") or {}
+            if item.get("uri") and item.get("type", "track") == "track":
+                out.append({"uri": item["uri"], "name": item.get("name") or "", "disc": None})
+        return out
+    kind, spotify_id = scan.parse_spotify_url(link)
     if kind == "track":
         album = (client.call("GET", f"/tracks/{spotify_id}").get("album") or {})
         spotify_id = album.get("id")
@@ -276,8 +292,9 @@ def desired_tracks(client, records, liked, cache, deadline=None):
                 report["bad_links"].append(_skipped(record))
                 continue
             except SpotifyError as e:
-                # A pulled or mistyped album is one record's problem, not the sync's.
-                if e.status not in (400, 404):
+                # A pulled or mistyped album — or someone else's playlist
+                # Spotify will not show us — is one record's problem, not the sync's.
+                if e.status not in (400, 403, 404):
                     raise
                 report["bad_links"].append(_skipped(record))
                 continue

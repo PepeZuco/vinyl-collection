@@ -21,7 +21,15 @@
     {"why": "same day both ends is an exact date", "filters": {"bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "record": {"bought_date": "2024-01-31"}, "match": true},
     {"why": "the day after is out", "filters": {"bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "record": {"bought_date": "2024-02-01"}, "match": false},
     {"why": "no purchase date is out once a bound is set", "filters": {"bought_from": "2024-01-01"}, "record": {"bought_date": ""}, "match": false},
-    {"why": "filters combine with and", "filters": {"genres": ["Rock"], "year_from": 1980}, "record": {"genre": "Rock", "year": "1975"}, "match": false}
+    {"why": "filters combine with and", "filters": {"genres": ["Rock"], "year_from": 1980}, "record": {"genre": "Rock", "year": "1975"}, "match": false},
+    {"why": "albums by default", "filters": {}, "record": {"spotify_url": "https://open.spotify.com/album/X"}, "match": true},
+    {"why": "a playlist link is left out by default", "filters": {}, "record": {"spotify_url": "https://open.spotify.com/playlist/Y"}, "match": false},
+    {"why": "a track link counts as its album", "filters": {"source": "albums"}, "record": {"spotify_url": "https://open.spotify.com/track/T"}, "match": true},
+    {"why": "compilations keep playlist links", "filters": {"source": "compilations"}, "record": {"spotify_url": "https://open.spotify.com/playlist/Y"}, "match": true},
+    {"why": "compilations drop album links", "filters": {"source": "compilations"}, "record": {"spotify_url": "https://open.spotify.com/album/X"}, "match": false},
+    {"why": "a locale segment is still a playlist", "filters": {"source": "compilations"}, "record": {"spotify_url": "https://open.spotify.com/intl-pt/playlist/Y?si=1"}, "match": true},
+    {"why": "a spotify: playlist URI is a playlist", "filters": {"source": "compilations"}, "record": {"spotify_url": "spotify:playlist:Y"}, "match": true},
+    {"why": "all keeps both kinds", "filters": {"source": "all"}, "record": {"spotify_url": "https://open.spotify.com/playlist/Y"}, "match": true}
   ],
   "names": [
     {"filters": {"liked": true}, "name": "Zucoloto Vinyl — Liked"},
@@ -31,6 +39,9 @@
     {"filters": {"liked": false, "year_to": 1965}, "name": "Zucoloto Vinyl · ≤1965"},
     {"filters": {"liked": true, "pepe_min": 4, "jenni_min": 3.5, "rating_mode": "or"}, "name": "Zucoloto Vinyl — Liked · Pepe ≥4 or Jenni ≥3.5"},
     {"filters": {"liked": false, "places": ["Tracks"], "bought_from": "2024-01-01", "bought_to": "2024-06-30"}, "name": "Zucoloto Vinyl · Tracks · bought 2024-01-01–2024-06-30"},
-    {"filters": {"liked": false, "bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "name": "Zucoloto Vinyl · bought 2024-01-31"}
+    {"filters": {"liked": false, "bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "name": "Zucoloto Vinyl · bought 2024-01-31"},
+    {"filters": {"liked": false, "source": "compilations"}, "name": "Zucoloto Vinyl · compilations only"},
+    {"filters": {"liked": true, "source": "all"}, "name": "Zucoloto Vinyl — Liked · + compilations"},
+    {"filters": {"liked": true, "source": "albums"}, "name": "Zucoloto Vinyl — Liked"}
   ]
 }

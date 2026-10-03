@@ -82,3 +82,13 @@ def test_describe_says_what_is_in_it():
 def test_select_keeps_order():
     recs = [{"year": "1971"}, {"year": "1990"}, {"year": "1975"}]
     assert pf.select(recs, pf.normalize_filters({"year_to": 1980})) == [recs[0], recs[2]]
+
+
+def test_source_defaults_to_albums_and_keeps_old_keys():
+    # Playlists saved before the source filter existed must keep their key.
+    assert pf.normalize_filters({"source": "albums"}) == {"liked": True}
+    assert pf.filter_key(pf.normalize_filters({"source": "all"})) != \
+           pf.filter_key(pf.normalize_filters({}))
+    with pytest.raises(pf.FilterError) as e:
+        pf.normalize_filters({"source": "singles"})
+    assert e.value.field == "source"

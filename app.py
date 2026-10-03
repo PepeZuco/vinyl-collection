@@ -767,7 +767,14 @@ def require_auth(f):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    # Analytics is opt-in: with no website id the tracker is never rendered,
+    # so local runs and the test suite report nothing. Read per request rather
+    # than at import so a Railway variable change needs no code path reload.
+    return render_template(
+        "index.html",
+        umami_website_id=os.environ.get("UMAMI_WEBSITE_ID", ""),
+        umami_script_url=os.environ.get("UMAMI_SCRIPT_URL") or "https://cloud.umami.is/script.js",
+    )
 
 # ── auth endpoints ────────────────────────────────────────────────────────────
 

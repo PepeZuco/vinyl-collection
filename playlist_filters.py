@@ -14,6 +14,9 @@ Filters (all optional; absent means "does not filter"; they combine with AND):
   rating_mode              "and" | "or" — only kept when both minimums are set
   places                   any of these bought-at places
   bought_from, bought_to   YYYY-MM-DD purchase range, inclusive
+  source                   "albums" (default) | "compilations" | "all" — which kind of
+                           Spotify link counts: an album (or track) link, or a playlist
+                           someone made for a compilation that is not an album on Spotify
 
 `filter_key` is what makes "same filters" mean "same playlist": two filter
 sets that select the same records produce the same key, whatever the order,
@@ -29,6 +32,10 @@ MAX_NAME = 100  # Spotify's limit
 
 _YEAR = re.compile(r"\d{4}")
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_PLAYLIST_LINK = re.compile(r"^(?:https?://open\.spotify\.com/(?:intl-[a-z]+/)?playlist/|spotify:playlist:)",
+                            re.IGNORECASE)
+
+SOURCES = ("albums", "compilations", "all")
 
 
 class FilterError(ValueError):
@@ -134,6 +141,14 @@ def normalize_filters(raw):
             raise FilterError("rating_mode", "must be and or or")
         f["rating_mode"] = mode
 
+    source = raw.get("source") or "albums"
+    if source not in SOURCES:
+        raise FilterError("source", "must be albums, compilations or all")
+    # The default stays out of the canonical form, so playlists made before
+    # this filter existed keep their key.
+    if source != "albums":
+        f["source"] = source
+
     lo = None if _blank(raw.get("bought_from")) else _day("bought_from", raw["bought_from"])
     hi = None if _blank(raw.get("bought_to")) else _day("bought_to", raw["bought_to"])
     lo, hi = _ordered(lo, hi)
@@ -178,6 +193,10 @@ def _parts(f):
         out.append(", ".join(f["places"]))
     if "bought_from" in f or "bought_to" in f:
         out.append("bought " + _span(f.get("bought_from"), f.get("bought_to")))
+    if f.get("source") == "compilations":
+        out.append("compilations only")
+    elif f.get("source") == "all":
+        out.append("+ compilations")
     return out
 
 
@@ -198,7 +217,16 @@ def record_year(value):
     return int(m.group()) if m else None
 
 
+def link_kind(link):
+    """"playlist" for a playlist link, else "album" — an album or track link,
+    or anything unreadable, which the sync reports as a bad link."""
+    return "playlist" if _PLAYLIST_LINK.match(str(link or "").strip()) else "album"
+
+
 def _matches(r, f):
+    source = f.get("source", "albums")
+    if source != "all" and link_kind(r.get("spotify_url")) != ("playlist" if source == "compilations" else "album"):
+        return False
     if "year_from" in f or "year_to" in f:
         y = record_year(r.get("year"))
         if y is None or y < f.get("year_from", y) or y > f.get("year_to", y):

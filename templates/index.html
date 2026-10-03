@@ -22,6 +22,11 @@
 <!-- The tile caption truncates near 12 characters; "Zucoloto's Vin…" is worse
      than a short true name. -->
 <meta name="apple-mobile-web-app-title" content="Vinyl">
+{% if umami_website_id %}
+<!-- Cookieless visit counts (Umami). Only rendered when UMAMI_WEBSITE_ID is
+     set, so local runs never report. -->
+<script defer src="{{ umami_script_url }}" data-website-id="{{ umami_website_id }}"></script>
+{% endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
@@ -10172,7 +10177,7 @@ function setPlaylistBusy(busy){
 
 function blankPlaylistForm(){
   return {liked: true, year_from: '', year_to: '', genres: [], pepe_min: '', jenni_min: '',
-          rating_mode: 'and', places: [], bought_from: '', bought_to: '', name: '', nameTouched: false};
+          rating_mode: 'and', places: [], bought_from: '', bought_to: '', source: 'albums', name: '', nameTouched: false};
 }
 let playlistForm = blankPlaylistForm();
 
@@ -10321,6 +10326,8 @@ function renderPlaylistForm(){
   el.innerHTML=`<div class="pl-form">
     <div class="pl-field">${label('ti-music','songs')}<span class="pl-seg">
       ${radio('plLiked','liked','1','liked',f.liked,'ti-heart-filled')}${radio('plLiked','liked','0','every track',!f.liked,'ti-list')}</span></div>
+    <div class="pl-field">${label('ti-brand-spotify','from')}<span class="pl-seg">
+      ${radio('plSource','source','albums','albums',f.source==='albums','ti-vinyl')}${radio('plSource','source','compilations','compilations',f.source==='compilations','ti-playlist')}${radio('plSource','source','all','both',f.source==='all')}</span></div>
     <div class="pl-field">${label('ti-calendar','decade')}
       ${decade('year_from','any',0)} <span class="pl-sep">to</span> ${decade('year_to','any',9)}</div>
     <div class="pl-field">${label('ti-tag','genre')}${chips('genres',playlistChoices.genres)}</div>
@@ -10356,7 +10363,7 @@ function playlistFilters(){
   const f=playlistForm;
   return VinylPlaylistFilters.normalize({liked:f.liked,year_from:f.year_from,year_to:f.year_to,
     genres:f.genres,pepe_min:f.pepe_min,jenni_min:f.jenni_min,rating_mode:f.rating_mode,
-    places:f.places,bought_from:f.bought_from,bought_to:f.bought_to});
+    places:f.places,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source});
 }
 
 // Updated in place rather than re-rendered, so typing in a field keeps focus.

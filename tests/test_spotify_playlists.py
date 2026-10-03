@@ -66,6 +66,13 @@ class FakeSpotify:
             items = [{"uri": f"spotify:track:{aid}-{i}", "name": n, "disc_number": d}
                      for i, (n, d) in enumerate(ALBUMS[aid])]
             return _Response(200, {"items": items, "next": None})
+        if path.startswith("/playlists/COMP/items") and method == "GET":
+            # Someone else's compilation playlist: tracks from many albums.
+            return _Response(200, {"items": [
+                {"item": {"uri": "spotify:track:C1", "name": "Ain't No Sunshine", "type": "track"}},
+                {"item": {"uri": "spotify:episode:E1", "name": "A podcast", "type": "episode"}},
+                {"item": {"uri": "spotify:track:C2", "name": "Lovely Day", "type": "track"}}],
+                "next": None})
         if path.startswith("/playlists/"):
             pid = path.split("/")[2].split("?")[0]
             if pid not in self.playlists:
@@ -599,3 +606,15 @@ def test_visitors_see_only_synced_playlists_as_links(client):
     assert p["name"] == "Made"
     assert p["url"] == spotify_sync.playlist_url("PL1")
     assert set(p) == {"id", "name", "summary", "url", "cover_url", "last_total"}
+
+
+def test_playlist_link_is_read_as_a_compilation(fake):
+    comp = "https://open.spotify.com/playlist/COMP"
+    every = spotify_sync.sync(spotify_sync.Client("RT"), [rec("Greatest Hits", link=comp)],
+                              False, DictCache(), name="Every")
+    assert fake.playlists[every["spotify_id"]]["uris"] == ["spotify:track:C1", "spotify:track:C2"]
+    assert every["bad_links"] == []
+
+    liked = spotify_sync.sync(spotify_sync.Client("RT"), [rec("Greatest Hits", link=comp, liked=["Lovely Day"])],
+                              True, DictCache(), name="Liked")
+    assert fake.playlists[liked["spotify_id"]]["uris"] == ["spotify:track:C2"]

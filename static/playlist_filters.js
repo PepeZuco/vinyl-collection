@@ -13,6 +13,8 @@ const VinylPlaylistFilters = (function () {
   const MAX = 100;
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
   const YEAR = /\d{4}/;
+  const PLAYLIST_LINK = /^(?:https?:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?playlist\/|spotify:playlist:)/i;
+  const SOURCES = ['albums', 'compilations', 'all'];
 
   const tidy = s => String(s === undefined || s === null ? '' : s).split(/\s+/).filter(Boolean).join(' ');
   const fold = s => tidy(s).toLowerCase();
@@ -68,6 +70,7 @@ const VinylPlaylistFilters = (function () {
     if (p !== null) f.pepe_min = p;
     if (j !== null) f.jenni_min = j;
     if (p !== null && j !== null) f.rating_mode = raw.rating_mode === 'or' ? 'or' : 'and';
+    if (SOURCES.includes(raw.source) && raw.source !== 'albums') f.source = raw.source;
     const [bf, bt] = ordered(day(raw.bought_from), day(raw.bought_to));
     if (bf !== null) f.bought_from = bf;
     if (bt !== null) f.bought_to = bt;
@@ -79,7 +82,13 @@ const VinylPlaylistFilters = (function () {
     return m ? parseInt(m[0], 10) : null;
   }
 
+  function linkKind(link) {
+    return PLAYLIST_LINK.test(tidy(link)) ? 'playlist' : 'album';
+  }
+
   function matches(r, f) {
+    const source = f.source || 'albums';
+    if (source !== 'all' && linkKind(r.spotify_url) !== (source === 'compilations' ? 'playlist' : 'album')) return false;
     if ('year_from' in f || 'year_to' in f) {
       const y = recordYear(r.year);
       if (y === null) return false;
@@ -136,6 +145,8 @@ const VinylPlaylistFilters = (function () {
     if (r.length) out.push(r.join(f.rating_mode === 'or' ? ' or ' : ' and '));
     if (f.places) out.push(f.places.join(', '));
     if ('bought_from' in f || 'bought_to' in f) out.push('bought ' + span(f.bought_from, f.bought_to));
+    if (f.source === 'compilations') out.push('compilations only');
+    else if (f.source === 'all') out.push('+ compilations');
     return out;
   }
 
@@ -144,7 +155,7 @@ const VinylPlaylistFilters = (function () {
     return name.length <= MAX ? name : name.slice(0, MAX - 1).trimEnd() + '…';
   }
 
-  return { normalize, matches, matching, countMatching, suggestName };
+  return { normalize, linkKind, matches, matching, countMatching, suggestName };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylPlaylistFilters;
