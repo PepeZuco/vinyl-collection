@@ -48,6 +48,11 @@ python seed_db.py
      usado. O scan por foto não é afetado.
    - `BACKUP_ENABLED` — opcional, padrão ligado. `0` desliga o backup diário
      (ver abaixo).
+   - `UMAMI_WEBSITE_ID` — opcional. ID do site no Umami (cloud.umami.is →
+     Settings → Websites). Sem ela, o script de analytics nem é incluído na
+     página, então rodar localmente não conta visitas.
+   - `UMAMI_SCRIPT_URL` — opcional, padrão `https://cloud.umami.is/script.js`.
+     Só muda se o Umami for self-hosted.
 
    As credenciais ficam só no servidor e não são enviadas para o navegador, por
    isso nenhuma das duas opções some da tela quando falta configuração — o que
