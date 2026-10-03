@@ -854,7 +854,7 @@ fetch('/api/records').then(r=>r.ok?r.json():Promise.reject()).then(rs=>{
   if(!Array.isArray(rs)||!rs.length) return;
   SHELF=rs.filter(r=>r.have_it).map(r=>({id:r.id,artist:r.artist,album:r.album_name,year:r.year}));
   nextId=Math.max(...rs.map(r=>r.id))+1;
-  if(!running&&pc===0) renderPanel();
+  if(!running&&!awaiting&&pc===0) renderPanel();
 }).catch(()=>{});
 
 // this run's record: an artist, one of their albums, and what you typed / which photo you took
@@ -910,7 +910,7 @@ function build(flowKey, sc){
 function buildCore(flowKey, sc, T){
   const F=FLOWS[flowKey], kind=F.kind, owned=sc==='owned', mbdown=sc==='mbdown', nokey=sc==='nokey';
   const s=[
-    st(T,'done', T==='upload'?'IMG_4821.jpg · 1.2 MB':T==='camera'?'frame captured':kind==='photo'?'1.2 MB → 180 KB':kind==='spotify'?'album link':'"thriller mj"'),
+    st(T,'done', T==='upload'?`${photoName} · 1.2 MB`:T==='camera'?'frame captured':kind==='photo'?'1.2 MB → 180 KB':kind==='spotify'?'album link':`"${typed()}"`),
     ui('start'),
     ...(T==='trigger' ? [flow('trigger','analyse')]
        : [flow(T,'analyse')]),
@@ -919,13 +919,16 @@ function buildCore(flowKey, sc, T){
   let calls=[];
   const bill=c=>{ calls.push(c); s.push(ui('spend',c)); };
   const fail = {error:'ANTHROPIC_API_KEY is not set', status:503};
+  // what this run is about: the album's pressings stand in for MusicBrainz's candidates, and an
+  // album MusicBrainz never saw on vinyl gets Haiku's "likely" rather than a confirmation
+  const rec=ownedRec(P,A)||{id:87}, k=Math.max(1,Math.min(A[5]||1,4)), verdict=mbdown||!A[5]?'likely':'confirmed';
   const abort = (node) => [flow(node,'nokey'), st('nokey','err','ANTHROPIC_API_KEY is not set'), st('analyse','err','503'), ui('error', fail)];
 
   if(kind==='photo'){
     s.push(flow('analyse','vision'));
     if(nokey){ s.push(...stage('vision',{subs:['schema','genres'],dur:500,error:fail}), ...abort('vision')); return s; }
     s.push(...stage('vision',{subs:['sonnet','schema','genres'],dur:1700,detail:`${ART} — ${ALB}`}));
-    s.push(ui('fill',{artist:ART,album:ALB,genre:'Pop',label:'Epic',cat:'QE 38112'}));
+    s.push(ui('fill',{artist:ART,album:ALB,genre:P.genre,label:A[3],cat:A[4]}));
     bill(['claude-sonnet-5',1420,96,AVG.vision,'reading the sleeve']);
     s.push(flow('vision','mb'));
   } else if(kind==='spotify'){
@@ -934,8 +937,8 @@ function buildCore(flowKey, sc, T){
     s.push(ui('fill',{artist:ART,album:ALB}));
     s.push(flow('spotify','genre'));
     if(nokey){ s.push(...stage('genre',{subs:['genres'],dur:400,error:fail}), ...abort('genre')); return s; }
-    s.push(...stage('genre',{subs:['haiku1','genres'],dur:900,detail:'Pop'}));
-    s.push(ui('fill',{genre:'Pop'}));
+    s.push(...stage('genre',{subs:['haiku1','genres'],dur:900,detail:P.genre}));
+    s.push(ui('fill',{genre:P.genre}));
     bill(['claude-haiku-4-5',160,8,AVG.genre,'placing it in a genre']);
     s.push(flow('genre','mb'));
   } else {
@@ -951,16 +954,18 @@ function buildCore(flowKey, sc, T){
       return s;
     }
     s.push(flow('parse','artist'), ...stage('artist',{dur:800,detail:ART}));
-    s.push(flow('artist','discography'), ...stage('discography',{ticks:3,detail:'12 release(s) found'}));
-    s.push(flow('discography','covers'), ...stage('covers',{subs:['caa','itunes'],ticks:12,tickMs:170,detail:'11 of 12 had artwork'}));
-    s.push(flow('covers','vinyl'), ...stage('vinyl',{subs:['haiku2'],dur:1000,detail:'12 confirmed on vinyl'}));
+    const n=P.albums.length, withArt=P.albums.filter(a=>a[2]).length, onVinyl=P.albums.filter(a=>a[5]).length;
+    const dupes=P.albums.filter(a=>ownedRec(P,a)).length;
+    s.push(flow('artist','discography'), ...stage('discography',{ticks:3,detail:`${n} release(s) found`}));
+    s.push(flow('discography','covers'), ...stage('covers',{subs:['caa','itunes'],ticks:n,tickMs:2040/n,detail:`${withArt} of ${n} had artwork`}));
+    s.push(flow('covers','vinyl'), ...stage('vinyl',{subs:['haiku2'],dur:1000,detail:`${onVinyl} confirmed on vinyl`+(n>onVinyl?` · ${n-onVinyl} likely`:'')}));
     bill(['claude-haiku-4-5',220,16,AVG.vinylSearch,'confirming it is vinyl']);
-    s.push(flow('vinyl','shelf'), ...stage('shelf',{dur:500,detail: owned?'1 already on your shelf':'0 already on your shelf'}));
-    s.push(sse('done',{results:'[12 rows]', artist:{name:ART}}), st('analyse','done','12 results'));
+    s.push(flow('vinyl','shelf'), ...stage('shelf',{dur:500,detail:`${dupes} already on your shelf`}));
+    s.push(sse('done',{results:`[${n} rows]`, artist:{name:ART}}), st('analyse','done',`${n} results`));
     s.push(ui('grid'));
     s.push(...ledgerSteps(calls));
-    if(owned){ s.push(flow('shelf','dup'), st('dup','warn','Thriller · owned'), ui('dup')); return s; }
-    s.push(flow('shelf','form'), st('form','run','choosing…'), wait(1200), ui('pick'), ui('fill',{artist:ART,album:ALB,year:'1982',genre:'Pop',country:'US',cover:true}), st('form','done','Thriller (1982)'));
+    if(owned){ s.push(flow('shelf','dup'), st('dup','warn',`${ALB} · owned`), ui('dup',rec)); return s; }
+    s.push(flow('shelf','form'), st('form','run','choosing…'), wait(1200), ui('pick'), ui('fill',{artist:ART,album:ALB,year:A[1],genre:P.genre,country:P.country,cover:true,vinyl:A[5]?'confirmed':'likely'}), st('form','done',`${ALB} (${A[1]})`));
     s.push(...saveSteps()); return s;
   }
 
@@ -972,21 +977,21 @@ function buildCore(flowKey, sc, T){
     s.push(sse('step',{id:'cover',state:'run'}), sse('step',{id:'cover',state:'skip',detail:'nothing to fetch artwork for'}), st('cover','skip','nothing to fetch'));
     s.push(flow('mb','vinyl'), ...stage('vinyl',{subs:[kind==='photo'?'haiku':'haiku2'],dur:900,detail:'likely'}));
   } else {
-    s.push(...stage('mb',{ticks:4,detail:'3 pressing(s) found'}));
-    s.push(ui('fill',{year:'1982',country:'US'}));
-    s.push(flow('mb','cover'), ...stage('cover',{subs:['caa','itunes'],ticks:3,tickMs:420,detail:'3 of 3 had artwork'}));
-    s.push(ui('fill',{cover:true, alts:3}));
-    s.push(flow('cover','vinyl'), ...stage('vinyl',{subs:[kind==='photo'?'haiku':'haiku2'],dur:700,detail:'confirmed'}));
+    s.push(...stage('mb',{ticks:4,detail:`${k} pressing(s) found`}));
+    s.push(ui('fill',{year:A[1],country:P.country}));
+    s.push(flow('mb','cover'), ...stage('cover',{subs:['caa','itunes'],ticks:k,tickMs:1260/k,detail:`${k} of ${k} had artwork`}));
+    s.push(ui('fill',{cover:true, alts:k}));
+    s.push(flow('cover','vinyl'), ...stage('vinyl',{subs:[kind==='photo'?'haiku':'haiku2'],dur:700,detail:verdict}));
   }
   bill(['claude-haiku-4-5',220,8,kind==='photo'?AVG.vinylPhoto:AVG.vinylSpotify,'confirming it is vinyl']);
-  s.push(ui('fill',{vinyl: mbdown?'likely':'confirmed'}));
+  s.push(ui('fill',{vinyl:verdict}));
   s.push(flow('vinyl','shelf'), ...stage('shelf',{dur:500,detail: owned?'already on your shelf':'not a duplicate'}));
-  s.push(sse('done',{source:kind, artist:ART, album_name:ALB, genre:'Pop', vinyl: mbdown?'likely':'confirmed',
-      candidates: mbdown?'[]':'[3]', lookup_failed:mbdown, duplicate_of: owned?{id:87,artist:ART,album_name:ALB}:null}),
+  s.push(sse('done',{source:kind, artist:ART, album_name:ALB, genre:P.genre, vinyl:verdict,
+      candidates: mbdown?'[]':`[${k}]`, lookup_failed:mbdown, duplicate_of: owned?{id:rec.id,artist:ART,album_name:ALB}:null}),
     st('analyse','done','stream closed'));
   if(mbdown) s.push(ui('mbdown'));
   s.push(...ledgerSteps(calls));
-  if(owned){ s.push(flow('shelf','dup'), st('dup','warn','record #87'), ui('dup')); return s; }
+  if(owned){ s.push(flow('shelf','dup'), st('dup','warn',`record #${rec.id}`), ui('dup',rec)); return s; }
   s.push(flow('shelf','form'), st('form','run','reviewing…'), wait(1300), st('form','done', mbdown?'year left blank':'looks right'));
   s.push(...saveSteps());
   return s;
@@ -1000,7 +1005,7 @@ function ledgerSteps(calls){
 function saveSteps(){
   return [flow('form','save'), ui('press'), st('save','run'), wait(700),
     st('save','done','201 Created'),
-    flow('save','db'), st('db','done','record #412'), ui('saved')];
+    flow('save','db'), st('db','done',`record #${nextId}`), ui('saved')];
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1081,7 +1086,7 @@ function render(){
       ? `<div class="ico">${icon(n.icon)}</div><div class="in-title"><b>${n.title}</b><span>${n.sub}</span></div>`
       : `<div class="ico">${icon(n.icon)}</div>`;
     const cap = n.k==='agent' ? `<div class="cap" style="top:calc(100% + ${n.ports?22:0}px)"><span class="detail"></span></div>`
-      : `<div class="cap${n.capSide?' side':''}"><b>${n.title}</b><span>${n.sub}</span><span class="detail"></span></div>`;
+      : `<div class="cap${n.capSide?' side':''}"><b>${n.title}</b><span>${n.id==='query'?`"${typed()}"`:n.sub}</span><span class="detail"></span></div>`;
     let ports='';
     if(n.k!=='trigger' && n.k!=='sub' && n.src!=='err') ports+=`<div class="port in"></div>`;
     F.edges.forEach(e=>{
@@ -1169,10 +1174,12 @@ function renderPanel(){
   $('anStage').textContent='idle'; $('anClock').textContent='0.0s'; $('anBar').style.width='0';
   $('panel').classList.remove('live');
   $('anCost').innerHTML=`avg ${usd(AVG[kind])} per ${kind==='search'?'search':'scan'} · billed to <span style="font-family:var(--font-mono)">ANTHROPIC_API_KEY</span>`;
-  const card = kind==='photo' && inp==='camera' ? `<div class="ph"><i class="ti ti-camera"></i></div><div class="t"><b>live camera</b><span>rear camera · tap to capture</span></div>`
-    : kind==='photo' ? `<img src="thriller.jpg" alt=""><div class="t"><b>sleeve photo</b><span>IMG_4821.jpg · 1.2 MB</span></div>`
+  // the photo is of this run's album, so the sleeve in the card is the one the diagram reads
+  const shot=cover(P,A);
+  const card = kind==='photo' && inp==='camera' ? `<div class="cam"><img src="${shot}" alt=""><i class="ti ti-camera"></i></div><div class="t"><b>live camera</b><span>rear camera · frame captured</span></div>`
+    : kind==='photo' ? `<img src="${shot}" alt=""><div class="t"><b>sleeve photo</b><span>${photoName} · 1.2 MB</span></div>`
     : kind==='spotify' ? `<div class="ph" style="--c:var(--spotify)"><img src="../spotify-logo.png" style="width:30px;height:30px;box-shadow:none" alt=""></div><div class="t"><b>spotify link</b><span>open.spotify.com/album/…?si=8f2c</span></div>`
-    : `<div class="ph"><i class="ti ti-search"></i></div><div class="t"><b>search artists</b><span>"thriller mj"</span></div>`;
+    : `<div class="ph"><i class="ti ti-search"></i></div><div class="t"><b>search artists</b><span>"${typed()}"</span></div>`;
   $('inputCard').innerHTML=card;
   $('analyseLabel').textContent = kind==='search'?'search':'analyse';
   $('scanHint').textContent='nothing is sent until you press it';
@@ -1186,26 +1193,27 @@ function renderPanel(){
 }
 let formState={};
 
-/* ── search results grid ──
-   Michael Jackson's albums from MusicBrainz, covers from Cover Art Archive (front-250).
-   Off the Wall genuinely has no front cover there, so the grid shows a real miss. */
-const DEMO=[['Ben','1972','1972a'],['Got to Be There','1972','1972b'],['Music & Me','1973','1973'],['Forever, Michael','1975','1975'],
-  ['Off the Wall','1979',null],['Thriller','1982','1982'],['Bad','1987','1987'],['Dangerous','1991','1991'],
-  ['HIStory','1995','1995'],['Invincible','2001','2001'],['Michael','2010','2010'],['Xscape','2014','2014']];
+/* ── search results grid ── this run's artist; the owned tags come from your shelf */
 function renderGrid(mode){
+  const L=P.albums, n=L.length, withArt=L.filter(a=>a[2]).length, owned=L.filter(a=>ownedRec(P,a)).length;
   // mode: 'demo' — everything loaded · 'wait' — a search is out, nothing back yet · 'rows' — titles back, art pending
   $('sgrid').innerHTML = mode==='wait' ? Array.from({length:8},()=>'<div class="tile skel"><div class="art"></div></div>').join('')
-    : DEMO.map(([t,y,f],i)=>`<div class="tile ${mode==='demo'?'vinyl':'skel'}" data-i="${i}"><div class="art">${mode==='demo'?art(f):''}<span class="tag v">vinyl</span><span class="tag o">owned</span></div><b>${t}</b><span class="y">${y}</span></div>`).join('');
-  $('sgridNote').textContent = mode==='demo' ? '12 releases · 11 with artwork · loaded as demo data, a search run streams them in live'
+    : L.map((a,i)=>{ const r=ownedRec(P,a);
+        return `<div class="tile ${mode==='demo'?'vinyl'+(r?' owned':''):'skel'}" data-i="${i}"${r?` title="on your shelf · record #${r.id}"`:''}><div class="art">${mode==='demo'?art(a):''}<span class="tag v">vinyl</span><span class="tag o">owned</span></div><b>${a[0]}</b><span class="y">${a[1]}</span></div>`; }).join('');
+  $('sgridNote').textContent = mode==='demo' ? `${P.artist} · ${n} release${n>1?'s':''} · ${withArt} with artwork · ${owned} on your shelf — demo data, every run draws another artist`
     : mode==='wait' ? 'waiting for the discography…' : 'fetching cover art…';
-  $('sgridTag').textContent = mode==='demo' ? 'demo · "thriller mj"' : 'live · "thriller mj"';
+  $('sgridTag').textContent = `${mode==='demo'?'demo':'live'} · "${typed()}"`;
 }
-const art = f => f ? `<img src="covers/${f}.jpg" alt="">` : '<div class="none"><i class="ti ti-photo-off"></i>no artwork</div>';
+const art = a => a[2] ? `<img src="${cover(P,a)}" alt="">` : '<div class="none"><i class="ti ti-photo-off"></i>no artwork</div>';
 function gridReveal(n){
   document.querySelectorAll('#sgrid .tile').forEach((el,i)=>{ if(i<n && el.classList.contains('skel')){
-    el.classList.remove('skel'); el.querySelector('.art').insertAdjacentHTML('afterbegin',art(DEMO[i][2])); } });
+    el.classList.remove('skel'); el.querySelector('.art').insertAdjacentHTML('afterbegin',art(P.albums[i])); } });
 }
-function gridPick(){ document.querySelector('#sgrid .tile[data-i="5"]')?.classList.add('picked'); $('sgridNote').textContent='you picked Thriller (1982) — it fills the form like a scan'; }
+function gridOwned(){
+  const tiles=document.querySelectorAll('#sgrid .tile');
+  P.albums.forEach((a,i)=>{ const r=ownedRec(P,a); if(r){ tiles[i]?.classList.add('owned'); tiles[i]?.setAttribute('title',`on your shelf · record #${r.id}`); } });
+}
+function gridPick(){ document.querySelector(`#sgrid .tile[data-i="${P.albums.indexOf(A)}"]`)?.classList.add('picked'); $('sgridNote').textContent=`you picked ${ALB} (${A[1]}) — it fills the form like a scan`; }
 
 /* ── the bill ── */
 let billTotal=0, billShown=0, billAnim=null;
@@ -1240,8 +1248,8 @@ function setFields(patch){
     let v=formState[k];
     if(k==='vinyl'&&v) v=`<span class="pill ${v==='likely'?'muted':''}"><i class="ti ti-vinyl"></i>${v==='confirmed'?'vinyl':'likely vinyl'}</span>`;
     return `<dt>${l}</dt><dd class="${v?'':'empty'} ${k in patch?'fill':''}">${v||'—'}</dd>`;}).join('');
-  if(patch.cover) $('rCoverWrap').innerHTML='<img class="r-cover fill" src="thriller.jpg" alt="">';
-  if(patch.alts) $('rAlts').innerHTML=Array.from({length:patch.alts},()=>'<div></div>').join('')+`<span>${patch.alts} pressings</span>`;
+  if(patch.cover) $('rCoverWrap').innerHTML=`<img class="r-cover fill" src="${cover(P,A)}" alt="">`;
+  if(patch.alts) $('rAlts').innerHTML=Array.from({length:patch.alts},()=>`<div style="background-image:url('${cover(P,A)}')"></div>`).join('')+`<span>${patch.alts} pressing${patch.alts>1?'s':''}</span>`;
 }
 
 let t0=0, clockTimer=null;
@@ -1256,11 +1264,11 @@ function uiOp(what,data){
   if(what==='fill') setFields(data);
   if(what==='pick') gridPick();
   if(what==='mbdown') $('nMb').classList.add('on');
-  if(what==='dup'){ const n=$('nDup'); n.querySelector('div').innerHTML=`<b>${ALB}</b> by ${ART} is already on your shelf (record #87). <u style="cursor:pointer">open it</u> or save anyway.`; n.classList.add('on'); }
+  if(what==='dup'){ const n=$('nDup'); n.querySelector('div').innerHTML=`<b>${ALB}</b> by ${ART} is already on your shelf (record #${data.id}). <u style="cursor:pointer">open it</u> or save anyway.`; n.classList.add('on'); }
   if(what==='error'){ stopClock();
     if(!billTotal){ $('billSub').className='bill-sub'; $('billSub').innerHTML=`<b>${usd(0)}</b>: the request failed before any Claude call, so nothing was billed.`; } const n=$('nErr'); n.querySelector('div').innerHTML=`<b>${data.status}</b> · ${data.error}<br><span style="color:var(--label)">${data.status===503?'The scan stays visible; manual entry still works.':'Nothing was saved.'}</span>`; n.classList.add('on'); $('anStage').textContent='failed'; }
   if(what==='press'){ const b=$('saveBtn'); b.classList.add('press'); setTimeout(()=>b.classList.remove('press'),250); }
-  if(what==='saved'){ $('saveBtn').classList.add('hide'); const n=$('nSaved'); n.querySelector('div').innerHTML=`Saved to your shelf — <b>record #412</b>. Daily backup picks it up tonight.`; n.classList.add('on'); }
+  if(what==='saved'){ $('saveBtn').classList.add('hide'); const n=$('nSaved'); n.querySelector('div').innerHTML=`Saved to your shelf — <b>record #${nextId}</b>. Daily backup picks it up tonight.`; n.classList.add('on'); }
   if(what==='spend') spend(data);
   if(what==='cost'){
     const avg=AVG[K()], failed=document.querySelector('.node.s-err');
@@ -1275,9 +1283,12 @@ function onSse(ev,data){
   if(ev==='step' && K()==='search'){
     if(data.id==='discography' && data.state==='done') renderGrid('rows');
     if(data.id==='covers' && data.n) gridReveal(data.n);
-    if(data.id==='covers' && data.state==='done'){ gridReveal(99); $('sgridNote').textContent='11 of 12 had artwork — Off the Wall has none on Cover Art Archive'; }
+    if(data.id==='covers' && data.state==='done'){ gridReveal(99);
+      const miss=P.albums.filter(a=>!a[2]).map(a=>a[0]);
+      $('sgridNote').textContent=`${P.albums.length-miss.length} of ${P.albums.length} had artwork`+(miss.length?` — ${miss.join(', ')} ${miss.length>1?'have':'has'} none on Cover Art Archive or iTunes`:''); }
     if(data.id==='vinyl' && data.state==='done') document.querySelectorAll('#sgrid .tile').forEach(t=>t.classList.add('vinyl'));
-    if(data.id==='shelf' && data.state==='done' && /^1 /.test(data.detail||'')) document.querySelector('#sgrid .tile[data-i="5"]')?.classList.add('owned');
+    if(data.id==='shelf' && data.state==='done'){ gridOwned(); const o=document.querySelectorAll('#sgrid .tile.owned').length;
+      $('sgridNote').textContent = o ? `${o} of ${P.albums.length} already on your shelf — tagged owned` : `none of ${ART}'s ${P.albums.length} releases are on your shelf yet`; }
   }
   if(ev==='step'){
     const row=document.querySelector(`.an-step[data-id="${data.id}"]`); if(!row) return;
@@ -1360,14 +1371,14 @@ const PICK={upload:'upload', camera:'camera', query:'search'};
 let awaiting=false, pendingStep=false;
 // Run on the Claude tab only gets as far as the entry squares; a click on one carries it on
 function begin(stepping){
-  if(cur!=='claude'){ if(pc>=script.length&&!running) reset(); stepping?step():run(); return; }
+  if(cur!=='claude'){ roll(); reset(); stepping?step():run(); return; }
   reset(); awaiting=true; pendingStep=!!stepping; canvas.classList.add('choose');
   $('inputCard').innerHTML='<div class="ph"><i class="ti ti-hand-click"></i></div><div class="t"><b>choose an input</b><span>upload · live camera · search artists</span></div>';
   $('analyseBtn').disabled=true; $('scanHint').textContent='pick one of the squares on the diagram';
   updateButtons();
 }
 function choose(id){
-  const stepping=pendingStep; inp=PICK[id]; reset();
+  const stepping=pendingStep; inp=PICK[id]; roll(); reset();
   stepping ? step() : run();
 }
 function reset(){
@@ -1419,7 +1430,7 @@ const q=new URLSearchParams(location.search);
 if(TABS.includes(q.get('flow'))) cur=q.get('flow');
 if(['upload','camera','search'].includes(q.get('input'))) inp=q.get('input');
 if(FLOWS[cur].scenarios[q.get('scenario')]) scen=q.get('scenario');
-renderTabs(); reset();
+roll(); renderTabs(); reset();
 if(q.has('autoplay')) setTimeout(()=> cur==='claude'&&!q.get('input') ? begin() : run(), 400);
 </script>
 </body>
