@@ -2281,7 +2281,13 @@ def _upload_generated_cover(spotify, spotify_id, filters, total):
     "uploaded", "needs_reconnect" (a login from before covers asked for
     ugc-image-upload) or "failed"."""
     try:
-        spotify_sync.upload_cover(spotify, spotify_id, cover_art.render(filters, total))
+        jpeg = cover_art.render(filters, total)
+    except Exception:
+        # A drawing bug must not undo a sync Spotify has already applied.
+        app.logger.exception("Playlist cover could not be drawn")
+        return "failed"
+    try:
+        spotify_sync.upload_cover(spotify, spotify_id, jpeg)
         return "uploaded"
     except spotify_sync.SpotifyError as e:
         if e.status in (401, 403):

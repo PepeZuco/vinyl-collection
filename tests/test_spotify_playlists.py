@@ -678,6 +678,20 @@ def test_a_failed_cover_upload_still_syncs(client, fake):
     assert r.status_code == 200 and r.get_json()["cover"] == "failed"
 
 
+def test_a_cover_that_cannot_be_drawn_still_syncs(client, fake, monkeypatch):
+    import app as app_module
+    import cover_art
+    _connect(app_module)
+    pid = _create(client, {"liked": False}).get_json()["playlist"]["id"]
+
+    def broken(*a):
+        raise OSError("cannot open resource")
+    monkeypatch.setattr(cover_art, "render", broken)
+    r = client.post(f"/api/spotify/playlists/{pid}/sync")
+    assert r.status_code == 200 and r.get_json()["cover"] == "failed"
+    assert r.get_json()["playlist"]["last_synced_at"], "the sync was not saved"
+
+
 def test_playlist_link_is_read_as_a_compilation(fake):
     comp = "https://open.spotify.com/playlist/COMP"
     every = spotify_sync.sync(spotify_sync.Client("RT"), [rec("Greatest Hits", link=comp)],
