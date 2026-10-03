@@ -1186,7 +1186,7 @@ function focus(ids){
         x1=Math.max(...gs.map(g=>g.x+g.w)), y1=Math.max(...gs.map(g=>g.y+g.h))+56;
   const r=canvas.getBoundingClientRect(), pad=50;
   const k=Math.max(.3,Math.min(1,(r.width-pad*2)/(x1-x0),(r.height-pad*2)/(y1-y0)));
-  tween({k, x:r.width/2-(x0+x1)/2*k, y:r.height/2-(y0+y1)/2*k}, 650);
+  tween({k, x:r.width/2-(x0+x1)/2*k, y:r.height/2-(y0+y1)/2*k}, 650/speed);
 }
 function releaseCamera(){ tween(fitView(),900,()=>{ if(!running) setFollow(false); }); }
 function zoomAt(f,cx,cy){ const k=Math.min(2.2,Math.max(.25,view.k*f)); view.x=cx-(cx-view.x)*(k/view.k); view.y=cy-(cy-view.y)*(k/view.k); view.k=k; apply(); }
@@ -1358,7 +1358,7 @@ function onSse(ev,data){
 /* ═══════════════════════════════════════════════════════════════════════
    Runner
    ═══════════════════════════════════════════════════════════════════════ */
-const speed=1; // playback is always real-time
+const speed=.75; // playback runs at 3/4 real time, slow enough to follow
 let runId=0, running=false, stepMode=false, stepResolve=null, script=[], pc=0;
 const sleep=(ms,id)=>new Promise(r=>setTimeout(()=>r(id===runId),ms/speed));
 
