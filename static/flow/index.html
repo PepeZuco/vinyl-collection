@@ -367,19 +367,9 @@ body.embed .side{width:330px}
 .save-btn.hide{display:none}
 :root[data-theme="light"] .save-btn,:root[data-theme="light"] .btn.primary{color:#fff}
 
-/* the event stream */
-.log{margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-family:var(--font-mono);font-size:11.5px;
-  padding:10px 12px;height:230px;overflow:auto;line-height:1.55}
-.log .l{white-space:pre-wrap;word-break:break-word;animation:rise .25s ease}
-.log .ts{color:var(--muted);margin-right:6px}
-.log .ev{font-weight:700}
-.log .ev.step{color:var(--label)}
-.log .ev.done{color:#5FBF7A}
-.log .ev.error{color:var(--danger)}
-.log .req{color:var(--accent)}
-.log .note{color:var(--muted);font-style:italic}
-.log .s-claude{color:var(--claude)}.log .s-mb{color:var(--mb)}.log .s-spotify{color:var(--spotify)}.log .s-shelf{color:var(--accent)}
-.log:empty::before{content:'waiting for a run…';color:var(--muted)}
+
+/* touch: a vertical swipe scrolls the page, a sideways drag pans the diagram */
+@media (pointer:coarse){ .canvas{touch-action:pan-y} }
 
 /* ── narrow screens ────────────────────────────────────────────────────── */
 @media (max-width:900px){
@@ -409,7 +399,6 @@ body.embed .side{width:330px}
   <div class="seg" id="flowTabs"></div>
   <div class="spacer"></div>
   <div class="ctl">
-    <button class="btn" id="speedBtn" title="Playback speed"><i class="ti ti-gauge"></i><span>1×</span></button>
     <button class="btn icon" id="stepBtn" title="Step one event"><i class="ti ti-player-track-next"></i></button>
     <button class="btn icon" id="resetBtn" title="Reset"><i class="ti ti-refresh"></i></button>
     <button class="btn primary" id="playBtn"><i class="ti ti-player-play-filled"></i><span>Run flow</span></button>
@@ -480,8 +469,6 @@ body.embed .side{width:330px}
       <div class="sgrid" id="sgrid"></div>
       <div class="sgrid-note" id="sgridNote"></div>
 
-      <div class="sec-h" style="margin-top:20px">Event stream <span style="text-transform:none;letter-spacing:0;font-weight:500;font-family:var(--font-mono)">text/event-stream</span></div>
-      <div class="log" id="log"></div>
     </div>
   </aside>
 </div>
@@ -726,7 +713,6 @@ const st=(n,s,d)=>({op:'state',n,s,d});
 const sub=(f,t)=>({op:'sub',f,t});
 const wait=ms=>({op:'wait',ms});
 const sse=(ev,data)=>({op:'sse',ev,data});
-const log=(text,cls)=>({op:'log',text,cls});
 const ui=(what,data)=>({op:'ui',what,data});
 
 function stage(id,o={}){
@@ -750,25 +736,17 @@ function build(flowKey, sc){
 }
 function buildCore(flowKey, sc, T){
   const F=FLOWS[flowKey], kind=F.kind, owned=sc==='owned', mbdown=sc==='mbdown', nokey=sc==='nokey';
-  const endpoint = kind==='search' ? '/api/search' : '/api/scan';
-  const body = kind==='photo' ? '{"image":"data:image/jpeg;base64,/9j/4AAQ…"}'
-             : kind==='spotify' ? '{"spotify_url":"https://open.spotify.com/album/…"}'
-             : '{"query":"thriller mj"}';
   const s=[
     st(T,'done', T==='upload'?'IMG_4821.jpg · 1.2 MB':T==='camera'?'frame captured':kind==='photo'?'1.2 MB → 180 KB':kind==='spotify'?'album link':'"thriller mj"'),
     ui('start'),
-    log(`→ POST ${endpoint}  Accept: text/event-stream`,'req'),
-    log(`  ${body}`,'note'),
     ...(T==='trigger' ? [flow('trigger','analyse')]
        : [flow(T,'analyse')]),
     st('analyse','run','streaming'),
-    log('← 200 OK  content-type: text/event-stream','req'),
   ];
   let calls=[];
   const bill=c=>{ calls.push(c); s.push(ui('spend',c)); };
   const fail = {error:'ANTHROPIC_API_KEY is not set', status:503};
-  const abort = (node) => [...[flow(node,'nokey'), st('nokey','err','ANTHROPIC_API_KEY is not set'), st('analyse','err','503'), ui('error', fail),
-    log('  finally: spent[] empty → nothing written to the ledger','note')]];
+  const abort = (node) => [flow(node,'nokey'), st('nokey','err','ANTHROPIC_API_KEY is not set'), st('analyse','err','503'), ui('error', fail)];
 
   if(kind==='photo'){
     s.push(flow('analyse','vision'));
@@ -816,7 +794,6 @@ function buildCore(flowKey, sc, T){
   // shared middle: MusicBrainz → cover → vinyl → shelf
   if(mbdown){
     s.push(sse('step',{id:'mb',state:'run'}), st('mb','run'), wait(1600),
-      log('  MusicBrainz 503 ×4 — retry budget spent','note'),
       sse('step',{id:'mb',state:'skip',detail:'MusicBrainz unavailable — no year or alternates'}), st('mb','skip','unavailable'));
     // no candidates → the cover stage is skipped: the run takes the bypass straight to the vinyl check
     s.push(sse('step',{id:'cover',state:'run'}), sse('step',{id:'cover',state:'skip',detail:'nothing to fetch artwork for'}), st('cover','skip','nothing to fetch'));
@@ -844,13 +821,12 @@ function buildCore(flowKey, sc, T){
 function ledgerSteps(calls){
   const total=calls.reduce((a,c)=>a+c[3],0);
   return [sub('analyse','ledger'), wait(200),
-    log(`  finally: ledger ← ${calls.length} row(s) · $${total.toFixed(4)}`,'s-shelf'), st('ledger','done',`${calls.length} call${calls.length>1?'s':''} · $${total.toFixed(4)}`),
+    st('ledger','done',`${calls.length} call${calls.length>1?'s':''} · $${total.toFixed(4)}`),
     ui('cost',{total,calls})];
 }
 function saveSteps(){
-  return [flow('form','save'), ui('press'), st('save','run'),
-    log('→ POST /api/records  {"artist":"Michael Jackson","album_name":"Thriller","year":"1982",…}','req'), wait(700),
-    log('← 201 Created  {"id":412,…}','req'), st('save','done','201 Created'),
+  return [flow('form','save'), ui('press'), st('save','run'), wait(700),
+    st('save','done','201 Created'),
     flow('save','db'), st('db','done','record #412'), ui('saved')];
 }
 
@@ -955,8 +931,10 @@ function render(){
   });
   world.style.width=maxX+'px'; world.style.height=maxY+'px';
   bounds={w:maxX,h:maxY};
-  renderPanel(); fit();
+  renderPanel();
+  if(fitFor!==cur){ fitFor=cur; fit(); }
 }
+let fitFor=null;
 
 /* ── inspector ── */
 function inspect(n){
@@ -991,10 +969,13 @@ let drag=null;
 canvas.addEventListener('pointerdown',e=>{ if(e.target.closest('.node,.zoom,.inspector,.legend,.branch'))return; drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,moved:false}; canvas.classList.add('drag'); canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener('pointermove',e=>{ if(!drag)return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; apply(); });
 canvas.addEventListener('pointerup',()=>{ if(drag&&!drag.moved)closeInspector(); drag=null; canvas.classList.remove('drag'); });
+canvas.addEventListener('pointercancel',()=>{ drag=null; canvas.classList.remove('drag'); });
 $('zin').onclick=()=>{const r=canvas.getBoundingClientRect(); zoomAt(1.2,r.width/2,r.height/2);};
 $('zout').onclick=()=>{const r=canvas.getBoundingClientRect(); zoomAt(1/1.2,r.width/2,r.height/2);};
 $('zfit').onclick=fit;
-addEventListener('resize',fit);
+// the embedded frame grows as the panel fills in; only a width change is worth a refit
+let fitW=innerWidth;
+addEventListener('resize',()=>{ if(innerWidth!==fitW){ fitW=innerWidth; fit(); } });
 
 /* ── face sprite ticker: steps every visible .face.on through 30 frames ── */
 let frame=0;
@@ -1026,7 +1007,6 @@ function renderPanel(){
   ['result','nErr','nDup','nMb','nSaved'].forEach(id=>$(id).classList.remove('on'));
   $('saveBtn').classList.remove('hide','press');
   $('rFields').innerHTML=''; $('rAlts').innerHTML=''; $('rCoverWrap').innerHTML='<div class="r-cover none"><i class="ti ti-vinyl"></i></div>';
-  $('log').innerHTML='';
   document.querySelectorAll('.face').forEach(f=>{f.classList.remove('on'); f.style.backgroundPositionX='0';});
   formState={};
   resetBill(); renderGrid('demo');
@@ -1119,10 +1099,6 @@ function uiOp(what,data){
 function stopClock(){ clearInterval(clockTimer); document.querySelectorAll('#panelFace,#btnFace,.node[data-id="analyse"] .face').forEach(f=>f.classList.remove('on')); }
 
 function onSse(ev,data){
-  const ts=((performance.now()-t0)/1000*speed).toFixed(2).padStart(5,' ');
-  const src = data.id && STAGE_META[data.id] ? STAGE_META[data.id].src : '';
-  const json = JSON.stringify(data);
-  addLog(`<span class="ts">+${ts}s</span><span class="ev ${ev}">${ev.padEnd(5,' ')}</span> <span class="s-${src}">${esc(json)}</span>`);
   if(ev==='step' && K()==='search'){
     if(data.id==='discography' && data.state==='done') renderGrid('rows');
     if(data.id==='covers' && data.n) gridReveal(data.n);
@@ -1146,13 +1122,12 @@ function onSse(ev,data){
   if(ev==='error'){ const row=document.querySelector('.an-step.run'); if(row){ row.className='an-step err'; row.querySelector('.tick').innerHTML='<i class="ti ti-x"></i>'; row.querySelector('.an-detail').textContent=data.error; } }
   if(ev==='done'){ stopClock(); $('anStage').textContent='done'; $('anBar').style.width='100%'; }
 }
-function addLog(html){ const l=$('log'), d=document.createElement('div'); d.className='l'; d.innerHTML=html; l.appendChild(d); l.scrollTop=l.scrollHeight; }
-const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
 /* ═══════════════════════════════════════════════════════════════════════
    Runner
    ═══════════════════════════════════════════════════════════════════════ */
-let speed=1, runId=0, running=false, stepMode=false, stepResolve=null, script=[], pc=0;
+const speed=1; // playback is always real-time
+let runId=0, running=false, stepMode=false, stepResolve=null, script=[], pc=0;
 const sleep=(ms,id)=>new Promise(r=>setTimeout(()=>r(id===runId),ms/speed));
 
 function setNode(id,s,d){
@@ -1180,7 +1155,6 @@ async function exec(op,id){
   if(op.op==='wait') return sleep(op.ms,id);
   if(op.op==='state') return setNode(op.n,op.s,op.d);
   if(op.op==='sse') return onSse(op.ev,op.data);
-  if(op.op==='log') return addLog(`<span class="${op.cls||''}">${esc(op.text)}</span>`);
   if(op.op==='ui') return uiOp(op.what,op.data);
   if(op.op==='flow'){
     const p=edgeEls[op.f+'>'+op.t]; if(!p) return;
@@ -1200,7 +1174,7 @@ async function run(){
   while(pc<script.length && id===runId){
     if(stepMode){ await new Promise(r=>stepResolve=r); stepResolve=null; if(id!==runId) break; }
     const op=script[pc++]; await exec(op,id);
-    if(stepMode && ['state','sse','log','ui','wait'].includes(op.op)){ /* step granularity: one op */ }
+    if(stepMode && ['state','sse','ui','wait'].includes(op.op)){ /* step granularity: one op */ }
   }
   if(id===runId){ running=false; stepMode=false; updateButtons(); }
 }
@@ -1247,8 +1221,6 @@ $('playBtn').onclick=()=>{ if(awaiting) return; if(running) run(); else begin();
 $('analyseBtn').onclick=()=>{ if(!running&&!awaiting) begin(); };
 $('stepBtn').onclick=()=>{ if(awaiting) return; if(running) step(); else begin(true); };
 $('resetBtn').onclick=reset;
-const SPEEDS=[1,2,4,.5];
-$('speedBtn').onclick=()=>{ speed=SPEEDS[(SPEEDS.indexOf(speed)+1)%SPEEDS.length]; $('speedBtn').querySelector('span').textContent=speed+'×'; };
 $('themeBtn').onclick=()=>{ const r=document.documentElement, light=r.dataset.theme!=='light'; r.dataset.theme=light?'light':'dark';
   $('themeBtn').innerHTML=`<i class="ti ti-${light?'moon':'sun'}"></i>`; try{localStorage.setItem('flow-theme',r.dataset.theme);}catch(e){} };
 // ?embed=1 — framed inside the app's Readme page: one flow per frame, no brand or tabs,
@@ -1269,12 +1241,11 @@ if(EMBED){
 }
 addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT')return; if(e.code==='Space'){e.preventDefault(); $('playBtn').click();} if(e.key==='ArrowRight') $('stepBtn').click(); if(e.key==='r') reset(); if(e.key==='f') fit(); });
 
-// ?flow=spotify&scenario=owned&speed=2&autoplay — handy for sharing one exact run
+// ?flow=spotify&scenario=owned&autoplay — handy for sharing one exact run
 const q=new URLSearchParams(location.search);
 if(TABS.includes(q.get('flow'))) cur=q.get('flow');
 if(['upload','camera','search'].includes(q.get('input'))) inp=q.get('input');
 if(FLOWS[cur].scenarios[q.get('scenario')]) scen=q.get('scenario');
-if(SPEEDS.includes(+q.get('speed'))){ speed=+q.get('speed'); $('speedBtn').querySelector('span').textContent=speed+'×'; }
 renderTabs(); reset();
 if(q.has('autoplay')) setTimeout(()=> cur==='claude'&&!q.get('input') ? begin() : run(), 400);
 </script>
