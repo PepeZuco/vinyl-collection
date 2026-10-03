@@ -1,4 +1,4 @@
-import os, io, base64, csv, json, re, time, uuid, hashlib
+import os, io, base64, csv, json, re, time, uuid, hashlib, hmac, threading
 # 64MB per field, not 10: note_images packs every photo on one record into a
 # single field, where the old ceiling (sized for one cover) would reject a
 # photo-heavy row on import — an export that cannot be restored. The whole-upload
@@ -24,8 +24,27 @@ import playlist_filters
 import spotify_sync
 
 
+def _on_railway():
+    return bool(os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT"))
+
+def _required_secret(name, dev_default):
+    """A secret from the environment, with a fallback only off Railway.
+
+    The fallbacks are in this public repo, so serving with one is serving with
+    no secret at all: SECRET_KEY signs the session cookie, and whoever knows it
+    can mint an `authed` cookie without ever touching the password. On Railway
+    a missing, blank or default value therefore stops the boot, where it shows
+    up in the deploy log, instead of quietly running unlocked.
+    """
+    value = (os.environ.get(name) or "").strip()
+    if value and value != dev_default:
+        return value
+    if _on_railway():
+        raise RuntimeError(f"{name} must be set to a non-default value in the Railway variables")
+    return value or dev_default
+
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
+app.secret_key = _required_secret("SECRET_KEY", "change-me-in-production")
 
 _default_sqlite_path = os.path.join(os.environ.get("DATA_DIR", "."), "vinyl.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", f"sqlite:///{_default_sqlite_path}")
@@ -51,7 +70,7 @@ def _upload_ceiling_bytes():
 
 app.config["MAX_CONTENT_LENGTH"] = _upload_ceiling_bytes()
 
-EDIT_PASSWORD = os.environ.get("EDIT_PASSWORD", "vinyl123")
+EDIT_PASSWORD = _required_secret("EDIT_PASSWORD", "vinyl123")
 
 BACKUP_DIR = os.path.join(os.environ.get("DATA_DIR", "."), "backups")
 
@@ -778,12 +797,54 @@ def index():
 
 # ── auth endpoints ────────────────────────────────────────────────────────────
 
+# Failed logins per client, kept in memory: a restart or a deploy forgets them,
+# and each gunicorn worker counts on its own, so the real ceiling is
+# LOGIN_MAX_FAILURES per worker. Still enough to turn a password guesser from
+# thousands of tries a minute into a handful an hour.
+LOGIN_MAX_FAILURES = 5
+LOGIN_WINDOW_SECONDS = 15 * 60
+_login_failures = {}  # client ip -> monotonic times of recent failures
+_login_failures_lock = threading.Lock()
+
+def _client_ip():
+    # Railway's proxy appends the address it saw to X-Forwarded-For, so the
+    # last entry is the real client; everything left of it is client-supplied.
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[-1].strip()
+    return request.remote_addr or "unknown"
+
+def _recent_failures(ip, now):
+    cutoff = now - LOGIN_WINDOW_SECONDS
+    times = [t for t in _login_failures.get(ip, ()) if t > cutoff]
+    if times:
+        _login_failures[ip] = times
+    else:
+        _login_failures.pop(ip, None)
+    return times
+
 @app.route("/api/auth/login", methods=["POST"])
 def login():
+    ip = _client_ip()
+    now = time.monotonic()
+    with _login_failures_lock:
+        failures = _recent_failures(ip, now)
+        if len(failures) >= LOGIN_MAX_FAILURES:
+            retry = int(failures[0] + LOGIN_WINDOW_SECONDS - now) + 1
+            resp = jsonify({"error": "Too many attempts. Try again later."})
+            resp.headers["Retry-After"] = str(retry)
+            return resp, 429
+
     data = request.get_json(silent=True) or {}
-    if data.get("password") == EDIT_PASSWORD:
+    password = data.get("password")
+    # compare_digest takes as long for a near miss as for a far one.
+    if isinstance(password, str) and hmac.compare_digest(password.encode(), EDIT_PASSWORD.encode()):
+        with _login_failures_lock:
+            _login_failures.pop(ip, None)
         session["authed"] = True
         return jsonify({"ok": True})
+    with _login_failures_lock:
+        _login_failures.setdefault(ip, []).append(now)
     return jsonify({"error": "Wrong password"}), 403
 
 @app.route("/api/auth/logout", methods=["POST"])
