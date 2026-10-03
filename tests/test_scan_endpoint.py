@@ -22,7 +22,8 @@ def _vinyl_offline():
     route. Tests that care about the badge patch over these."""
     with patch.object(app_module.scan, "vinyl_rgids", return_value=set()), \
          patch.object(app_module.scan, "confirm_vinyl",
-                      side_effect=lambda rows, **kw: ["unsure"] * len(rows)):
+                      side_effect=lambda rows, **kw: ["unsure"] * len(rows)), \
+         patch.object(app_module.scan, "find_spotify_album", return_value=None):
         yield
 
 
@@ -245,3 +246,44 @@ def test_the_scan_never_reorders_its_candidates(client):
 
     assert [c["mbid"] for c in body["candidates"]] == ["best", "other"]
     assert body["candidates"][0]["vinyl"] == "none"
+
+
+_WITHERS = {"artist": "Bill Withers", "album_name": "Live at Carnegie Hall",
+           "genre": "Soul & Funk", "label": None, "catalog_number": None}
+
+
+def test_a_photo_scan_finds_the_album_on_spotify(client):
+    found = {"url": "https://open.spotify.com/album/4LH4",
+             "image_url": "https://i.scdn.co/image/big"}
+    with patch.object(app_module.scan, "extract_from_image", return_value=_WITHERS), \
+         patch.object(app_module.scan, "lookup_musicbrainz", return_value=[{"mbid": "a", "year": "1973"}]), \
+         patch.object(app_module.scan, "find_spotify_album", return_value=found) as find, \
+         patch.object(app_module.scan, "fetch_cover", return_value=None) as cover:
+        body = client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"}).get_json()
+
+    find.assert_called_once_with("Bill Withers", "Live at Carnegie Hall")
+    assert body["spotify_url"] == "https://open.spotify.com/album/4LH4"
+    # Spotify's artwork is the last-resort cover, the same as on a link scan.
+    assert cover.call_args.args[1] == "https://i.scdn.co/image/big"
+
+
+def test_a_photo_scan_not_on_spotify_leaves_the_link_empty(client):
+    with patch.object(app_module.scan, "extract_from_image", return_value=_WITHERS), \
+         patch.object(app_module.scan, "lookup_musicbrainz", return_value=[]):
+        body = client.post("/api/scan", json={"image": "data:image/jpeg;base64,x"}).get_json()
+
+    assert body["spotify_url"] == ""
+
+
+def test_a_spotify_link_scan_does_not_search_spotify_again(client):
+    resolved = {"artist": "Bill Withers", "album_name": "Live at Carnegie Hall",
+                "image_url": None}
+    with patch.object(app_module.scan, "extract_from_spotify", return_value=resolved), \
+         patch.object(app_module.scan, "classify_genre", return_value="Soul & Funk"), \
+         patch.object(app_module.scan, "lookup_musicbrainz", return_value=[]), \
+         patch.object(app_module.scan, "find_spotify_album") as find:
+        body = client.post("/api/scan",
+                           json={"spotify_url": "https://open.spotify.com/album/4LH4"}).get_json()
+
+    find.assert_not_called()
+    assert body["spotify_url"] == ""

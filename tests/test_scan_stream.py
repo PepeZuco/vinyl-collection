@@ -62,7 +62,8 @@ def _pipeline_offline():
          patch.object(app_module.scan, "fetch_cover", return_value=None), \
          patch.object(app_module.scan, "flag_vinyl",
                       side_effect=lambda rows, **kw: [r.setdefault("vinyl", "yes") for r in rows]), \
-         patch.object(app_module.scan, "find_duplicate", return_value=None):
+         patch.object(app_module.scan, "find_duplicate", return_value=None), \
+         patch.object(app_module.scan, "find_spotify_album", return_value=None):
         yield
 
 
@@ -79,7 +80,7 @@ def test_photo_scan_streams_its_stages_in_order(client):
     for e, p in got:
         if e == "step" and p["state"] == "run" and (not ids or ids[-1] != p["id"]):
             ids.append(p["id"])
-    assert ids == ["vision", "mb", "cover", "vinyl", "shelf"]
+    assert ids == ["vision", "spotify_find", "mb", "cover", "vinyl", "shelf"]
 
 
 def test_spotify_scan_streams_spotify_then_genre_never_vision(client):

@@ -1188,3 +1188,54 @@ def extract_from_spotify(url: str) -> dict:
         "album_name": album.get("name") or "",
         "image_url": images[0]["url"] if images else None,
     }
+
+
+# A Spotify catalogue title often carries the reissue on its tail — "Construção
+# (Remastered 2015)", "Racional - Deluxe Edition". Neither changes which album
+# it is, so both come off before comparing.
+_SPOTIFY_TITLE_DASH = re.compile(r"\s+-\s+.*$")
+
+
+def _spotify_title(value: str) -> str:
+    return _normalise(_SPOTIFY_TITLE_DASH.sub("", _TITLE_TAIL.sub(" ", value or "")))
+
+
+def find_spotify_album(artist: str, album: str) -> dict | None:
+    """Look an identified album up on Spotify: {url, image_url}, or None.
+
+    Strict on purpose. The link is saved on the record and drives the playlist
+    sync, so a wrong album is worse than an empty field the user can paste into.
+    The title must match exactly once reissue tails are dropped — "Clube da
+    Esquina 2" is not "Clube da Esquina" — and one of the credited artists (or
+    all of them joined, the way extract_from_spotify writes them) must be the
+    sleeve's.
+
+    Never raises: a scan that identified the sleeve is not failed by Spotify.
+    """
+    if not artist or not album:
+        return None
+    try:
+        query = urllib.parse.urlencode({
+            "q": f'album:"{album}" artist:"{artist}"',
+            "type": "album",
+            "limit": 10,
+        })
+        payload = _spotify_get(f"/search?{query}")
+    except Exception:
+        logger.warning("Spotify album search failed for %r / %r", artist, album,
+                       exc_info=True)
+        return None
+
+    want_title = _spotify_title(album)
+    want_artist = _normalise(artist)
+    for item in ((payload.get("albums") or {}).get("items") or []):
+        if not item or _spotify_title(item.get("name")) != want_title:
+            continue
+        names = [a.get("name") or "" for a in item.get("artists") or []]
+        credits = {_normalise(n) for n in names} | {_normalise(", ".join(names))}
+        if want_artist not in credits or not item.get("id"):
+            continue
+        images = item.get("images") or []
+        return {"url": f"https://open.spotify.com/album/{item['id']}",
+                "image_url": images[0].get("url") if images else None}
+    return None

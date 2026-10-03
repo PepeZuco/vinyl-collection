@@ -1564,32 +1564,21 @@ select option{background:var(--surface);color:var(--text)}
 .feature-card h3{margin:0;font-size:15px;font-weight:700}
 .feature-card p{margin:0;font-size:12.5px;line-height:1.55;color:var(--label)}
 
-.feature-media{position:relative;border-radius:var(--radius-sm);overflow:hidden;
-  background:var(--bg);border:1px solid var(--border);aspect-ratio:16/9}
-.feature-media video{width:100%;height:100%;object-fit:cover;display:block}
-.feature-media iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
-.feature-media-empty{position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:11.5px;
-  text-align:center;padding:10px}
-.feature-media-empty i{font-size:24px}
-
-/* upload/replace/remove — visible only in edit mode, same gate as the grid's pencil */
-.feature-upload{display:none}
-body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.feature-upload label{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
-  padding:6px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);
-  cursor:pointer;color:var(--label);transition:all .15s}
-.feature-upload label:hover{color:var(--text);border-color:var(--accent)}
-.feature-upload input[type=file]{display:none}
-.feature-upload button{font-size:11.5px;color:var(--danger);background:none;border:none;
-  cursor:pointer;padding:6px 2px}
-.feature-upload button.fu-youtube{display:inline-flex;align-items:center;gap:6px;
-  padding:6px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);
-  color:var(--label);transition:all .15s}
-.feature-upload button.fu-youtube:hover{color:var(--text);border-color:var(--accent)}
-.feature-upload .fu-status{font-size:11px;color:var(--muted)}
+.features-grid.flows{grid-template-columns:1fr}
+/* Each diagram is its own page (static/flow) in a frame: its canvas, styles and
+   script stay out of this file entirely. Desktop gets a fixed height and the
+   frame scrolls its own side panel; at phone width the frame reports its full
+   height (flow-height message) and grows to fit, so nothing scrolls twice. */
+.feature-flow{position:relative;border-radius:var(--radius-sm);overflow:hidden;
+  background:var(--bg);border:1px solid var(--border);height:780px}
+.feature-flow iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.features-avatar{width:76px;height:76px;border-radius:50%;object-fit:cover;flex-shrink:0;
+  border:2px solid var(--accent);box-shadow:0 6px 18px -8px rgba(0,0,0,.6)}
+.features-intro{display:flex;align-items:center;gap:18px}
 @media(max-width:760px){
   .features-hero{flex-direction:column;align-items:flex-start}
+  .features-intro{align-items:flex-start}
+  .features-avatar{width:60px;height:60px}
 }
 
 /* stats page */
@@ -3432,24 +3421,26 @@ body.is-authed .feature-upload{display:flex;align-items:center;gap:10px;flex-wra
   <!-- features page — public, no auth required. The AI/API work (Claude
        vision scans, Spotify resolution, MusicBrainz search) only ever runs
        for the admin, so without this tab a visitor would never see it. Each
-       card gets one uploaded clip or YouTube embed (see /api/feature-media); the upload
-       controls stay hidden behind body.is-authed exactly like the record
-       grid's edit pencil. -->
+       card frames an interactive diagram of one pipeline (static/flow) that a
+       visitor can run step by step, Claude spend included. -->
   <div class="features-page" id="featuresPage">
     <div class="features-hero">
-      <div>
+      <div class="features-intro">
+        <img class="features-avatar" src="/static/profile_linkedin.jpg" alt="Profile photo">
+        <div>
         <h1>Behind the collection</h1>
         <p>A look at the AI and API integrations that run this project — built to explore
           Claude's API, Spotify's API and the MusicBrainz discography database.</p>
         <p>This project exists to practice building software, and to keep a real history
           of the records as the collection grows.</p>
+        </div>
       </div>
       <a class="features-linkedin" id="featuresLinkedinLink" href="https://www.linkedin.com/in/jo%C3%A3o-pedro-martins-longo-zucoloto-169638182/" target="_blank" rel="noopener">
         <i class="ti ti-brand-linkedin"></i> Connect on LinkedIn
       </a>
     </div>
 
-    <div class="features-grid" id="featuresGrid"></div>
+    <div class="features-grid flows" id="featuresGrid"></div>
   </div>
 
   <!-- collection page -->
@@ -4307,6 +4298,8 @@ function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   document.getElementById('themeBtn').textContent = t === 'dark' ? '☀' : '☾';
   localStorage.setItem('vinyl-theme', t);
+  document.querySelectorAll('.feature-flow iframe').forEach(f =>
+    f.contentWindow?.postMessage({ type: 'theme', theme: t }, location.origin));
 }
 
 applyTheme(theme);
@@ -8779,7 +8772,7 @@ function setScanField(id, value){
 // server decides which of them actually run, so the spotify-only stages simply
 // never arrive on a photo scan.
 const SCAN_STAGES = {
-  photo:   ['vision', 'mb', 'cover', 'vinyl', 'shelf'],
+  photo:   ['vision', 'spotify_find', 'mb', 'cover', 'vinyl', 'shelf'],
   spotify: ['spotify', 'genre', 'mb', 'cover', 'vinyl', 'shelf'],
   // Search is its own pipeline, not a variant of the two above: it starts from
   // a typed phrase rather than a sleeve, and walks an artist's whole
@@ -8789,6 +8782,7 @@ const SCAN_STAGES = {
 const STAGE_META = {
   vision:  {src:'claude',  icon:'ti-sparkles',        label:'reading the sleeve',      sub:'Claude vision'},
   spotify: {src:'spotify', icon:'ti-brand-spotify',   label:'reading the album',       sub:'Spotify API'},
+  spotify_find: {src:'spotify', icon:'ti-brand-spotify', label:'finding it on Spotify', sub:'Spotify search'},
   genre:   {src:'claude',  icon:'ti-tag',             label:'placing it in a genre',   sub:'Claude'},
   mb:      {src:'mb',      icon:'ti-database-search', label:'matching on MusicBrainz', sub:'release groups'},
   cover:   {src:'mb',      icon:'ti-photo-search',    label:'fetching cover art',      sub:'Cover Art Archive'},
@@ -9561,6 +9555,14 @@ function applyScanResult(data){
   // making the user paste it a second time.
   if(data.source === 'spotify' && pendingSpotifyUrl){
     document.getElementById('fSpotifyUrl').value = pendingSpotifyUrl;
+    updateSpotifyLinkBtn();
+  }
+  // A photo scan looks the album up on Spotify itself. It only fills an empty
+  // field: a link the user typed, or one an edited record already carries,
+  // is theirs and a catalogue search does not get to replace it.
+  const linkField = document.getElementById('fSpotifyUrl');
+  if(data.source === 'photo' && data.spotify_url && !linkField.value.trim()){
+    linkField.value = data.spotify_url;
     updateSpotifyLinkBtn();
   }
 
@@ -11507,155 +11509,51 @@ document.addEventListener('click', e => {
 
 // ── features page — a public "how this was built" tab. Content is hardcoded
 // here rather than editable through the app: there is exactly one author, so
-// a CMS for it would be solving a problem that does not exist. Only the video
-// per card comes from the server, keyed by slot (see /api/feature-media). ──
+// a CMS for it would be solving a problem that does not exist. Each card frames
+// one interactive pipeline diagram served from static/flow. ──
 const FEATURE_CARDS = [
   {
-    slot: 'ai_scan', icon: 'ti-camera',
-    title: 'AI Sleeve Recognition',
-    text: 'Point a phone camera at a record sleeve and Claude’s vision model reads the ' +
-      'artist, album and pressing details straight off the photo, then researches the release ' +
-      'to fill in genre, year and tracklist automatically. Built to explore multimodal ' +
-      'prompting and structured extraction with the Claude API.',
+    flow: 'claude', icon: 'ti-sparkles',
+    title: 'Claude API Integration',
+    text: 'Upload a sleeve photo, point the live camera at it, or just type an artist. One ' +
+      'Analyse step sends the photo to Claude’s vision model and the words to a Claude parser; ' +
+      'MusicBrainz, Cover Art Archive and a Claude vinyl check fill in the rest, with the cost ' +
+      'of every Claude call counted as it happens. Press Run, pick an input, and follow it through.',
   },
   {
-    slot: 'spotify_match', icon: 'ti-brand-spotify',
-    title: 'Spotify Link Resolution',
-    text: 'Paste a shared Spotify link — including the shortened spotify.link share-sheet ' +
-      'format — and the app resolves it through Spotify’s API to the exact album or ' +
-      'track, then cross-references it against the collection to catch duplicates before ' +
-      'they’re added.',
-  },
-  {
-    slot: 'musicbrainz', icon: 'ti-database',
-    title: 'MusicBrainz Metadata Search',
-    text: 'Behind every scan and search, a ranking layer queries MusicBrainz’s open ' +
-      'discography database, scores candidate releases against what the sleeve or Spotify ' +
-      'link actually says, and throttles and retries around MusicBrainz’s rate limits — ' +
-      'the plumbing that makes the AI features reliable.',
-  },
-  {
-    slot: 'timeline_stats', icon: 'ti-chart-bar',
-    title: 'Timeline & Stats Dashboard',
-    text: 'The Timeline replays the whole collection’s growth as an animated bar-chart ' +
-      'race by genre, and Statistics turns hundreds of records into charts — ratings by ' +
-      'genre, a world map of pressing countries, release-year distribution — all built ' +
-      'from scratch rather than a charting-library skin.',
+    flow: 'spotify', icon: 'ti-brand-spotify',
+    title: 'Spotify Link',
+    text: 'Paste a Spotify album or track link, share-sheet short links included. It resolves ' +
+      'through Spotify’s API, Claude places the album in one of the collection’s genres, ' +
+      'MusicBrainz finds the pressings, and the shelf is checked for duplicates before anything ' +
+      'is saved.',
   },
 ];
 
-let featureMediaManifest = {};
-
-// The manifest hands out either our own clip URL or a YouTube embed URL.
-const YOUTUBE_EMBED_PREFIX = 'https://www.youtube-nocookie.com/embed/';
-
-function featureMediaHtml(slot) {
-  const url = featureMediaManifest[slot];
-  if (url && url.startsWith(YOUTUBE_EMBED_PREFIX))
-    return `<iframe src="${esc(url)}?rel=0" title="video" loading="lazy"
-      allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
-  return url
-    ? `<video src="${esc(url)}" controls preload="metadata"></video>`
-    : `<div class="feature-media-empty"><i class="ti ti-video"></i>
-         <span>video coming soon</span></div>`;
-}
-
-function featureUploadHtml(slot) {
-  const has = !!featureMediaManifest[slot];
-  return `<div class="feature-upload">
-    <label><i class="ti ti-upload"></i><span>${has ? 'replace' : 'upload'} video</span>
-      <input type="file" accept="video/*" onchange="uploadFeatureMedia('${slot}', this)">
-    </label>
-    <button class="fu-youtube" onclick="setFeatureYoutube('${slot}')">
-      <i class="ti ti-brand-youtube"></i><span>YouTube link</span></button>
-    ${has ? `<button onclick="removeFeatureMedia('${slot}')">remove</button>` : ''}
-    <span class="fu-status" id="fuStatus-${slot}"></span>
-  </div>`;
-}
-
 function featureCardHtml(card) {
-  return `<div class="feature-card" id="featureCard-${card.slot}">
+  return `<div class="feature-card" id="featureCard-${card.flow}">
     <div class="feature-card-head">
       <span class="feature-card-icon"><i class="ti ${card.icon}"></i></span>
       <h3>${esc(card.title)}</h3>
     </div>
     <p>${esc(card.text)}</p>
-    <div class="feature-media" id="featureMedia-${card.slot}">${featureMediaHtml(card.slot)}</div>
-    ${featureUploadHtml(card.slot)}
+    <div class="feature-flow"><iframe src="/static/flow/index.html?embed=1&flow=${card.flow}&theme=${theme}"
+      title="${esc(card.title)} diagram" loading="lazy"></iframe></div>
   </div>`;
 }
 
-function renderFeaturesGrid() {
-  document.getElementById('featuresGrid').innerHTML = FEATURE_CARDS.map(featureCardHtml).join('');
+// Rendered once: switching tabs must not reload the frames and lose a run in progress.
+function renderFeatures() {
+  const grid = document.getElementById('featuresGrid');
+  if (!grid.children.length) grid.innerHTML = FEATURE_CARDS.map(featureCardHtml).join('');
 }
 
-async function renderFeatures() {
-  renderFeaturesGrid();   // placeholders first paint immediately, no flash of nothing
-  try {
-    const res = await fetch('/api/feature-media');
-    if (res.ok) featureMediaManifest = await res.json();
-  } catch (e) { /* offline — placeholders stay, nothing worse happens */ }
-  renderFeaturesGrid();
-}
-
-async function uploadFeatureMedia(slot, input) {
-  const file = input.files[0];
-  if (!file) return;
-  const status = document.getElementById(`fuStatus-${slot}`);
-  status.textContent = 'uploading…';
-  try {
-    const data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    const res = await fetch(`/api/feature-media/${slot}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      toast(body.error || 'upload failed');
-      status.textContent = '';
-      return;
-    }
-    toast('video uploaded');
-    await renderFeatures();
-  } catch (e) {
-    toast('upload failed');
-    status.textContent = '';
-  } finally {
-    input.value = '';
-  }
-}
-
-// For clips too big to upload: put them on YouTube as Unlisted (Private
-// ones won't play for visitors) and paste the share link here.
-async function setFeatureYoutube(slot) {
-  const url = prompt('Paste the YouTube link (upload it as Unlisted, not Private):');
-  if (!url || !url.trim()) return;
-  const res = await fetch(`/api/feature-media/${slot}/youtube`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: url.trim() }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    toast(body.error || 'could not save link');
-    return;
-  }
-  toast('video linked');
-  await renderFeatures();
-}
-
-async function removeFeatureMedia(slot) {
-  if (!confirm('Remove this video?')) return;
-  const res = await fetch(`/api/feature-media/${slot}`, { method: 'DELETE' });
-  if (!res.ok) { toast('could not remove video'); return; }
-  await renderFeatures();
-}
+// A frame at phone width reports its full height; size it so the page scrolls, not the frame.
+window.addEventListener('message', e => {
+  if (e.origin !== location.origin || e.data?.type !== 'flow-height') return;
+  const box = document.querySelector(`#featureCard-${e.data.flow} .feature-flow`);
+  if (box) box.style.height = e.data.h ? e.data.h + 'px' : '';
+});
 
 // ── history: the collection's growth as a bar chart race ───────────────────
 const RACE_COVER_CAP = 48;    // covers put in the DOM per bar; more than any

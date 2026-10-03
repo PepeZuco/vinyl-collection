@@ -1300,6 +1300,22 @@ def scan_record():
             artist = fields.get("artist") or ""
             album = fields.get("album_name") or ""
 
+            # A sleeve says nothing about Spotify, so a photo scan looks the
+            # album up there to fill the link the form would otherwise leave
+            # for the user to paste. A link scan already has its link. Never
+            # raises: a miss or an outage just leaves the field empty.
+            found_spotify_url = ""
+            if image:
+                yield _sse("step", {"id": "spotify_find", "state": "run"})
+                found = scan.find_spotify_album(artist, album)
+                if found:
+                    found_spotify_url = found["url"]
+                    spotify_image = found.get("image_url")
+                yield _sse("step", {"id": "spotify_find",
+                                    "state": "done" if found else "skip",
+                                    "detail": "link added" if found
+                                              else "not found on Spotify"})
+
             # Caught here rather than by the handlers below, which would
             # answer 502 and throw away a sleeve the vision call already read
             # and billed for. An unreachable MusicBrainz costs the year, the
@@ -1378,6 +1394,8 @@ def scan_record():
                 # such release, or MusicBrainz could not be reached and
                 # retrying is worth the user's time.
                 "lookup_failed": lookup_failed,
+                # Only a photo scan fills this; see find_spotify_album above.
+                "spotify_url": found_spotify_url,
                 "duplicate_of": {"id": duplicate["id"], "artist": duplicate["artist"],
                                  "album_name": duplicate["album_name"]} if duplicate else None,
                 "search_string": " ".join(p for p in [artist, album, year, "vinyl cover"] if p),

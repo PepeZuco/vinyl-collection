@@ -1,0 +1,1282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Add-a-Record Flows</title>
+<link rel="icon" href="../vinyl-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<style>
+/* ── tokens: lifted from vinyl-collection/templates/index.html ─────────── */
+:root{
+  --bg:#0c0c0c;--surface:#141414;--card:#181818;--border:#3A2C1D;
+  --text:#e8e8e0;--muted:#555;--label:#9a9a92;--accent:#f1c23f;--danger:#e0533f;
+  --card-hover:#1f1f1f;--dot:rgba(255,255,255,.07);--edge:#4a4a46;--node:#1b1b1b;
+  --spotify:#1DB954;--mb:#EB743B;--claude:#D97757;--shelf:var(--accent);
+  --font:'Inter',system-ui,sans-serif;--font-mono:'Courier Prime',monospace;
+}
+:root[data-theme="light"]{
+  --bg:#e1ddd3;--surface:#f0ede6;--card:#f0ede6;--border:#CBB596;
+  --text:#1a1a18;--muted:#827e74;--label:#63635b;--accent:#7A5A00;--danger:#c0392b;
+  --card-hover:#e9e5dc;--dot:rgba(0,0,0,.10);--edge:#a59f92;--node:#f6f3ec;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;
+  display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font-family:var(--font)}
+
+/* ── top bar ───────────────────────────────────────────────────────────── */
+.top{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-wrap:wrap;position:relative;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;margin-right:6px}
+.brand img{width:28px;height:28px;animation:spin 6s linear infinite}
+.brand b{font-size:14px;letter-spacing:-.02em;display:block}
+.brand small{font-family:var(--font-mono);font-size:11px;color:var(--label)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.seg{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--label);font-size:12.5px;font-weight:600;
+  padding:6px 11px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+.seg button i{font-size:15px}
+.seg.small button{font-size:11.5px;padding:5px 9px;font-weight:500}
+.spacer{flex:1}
+.ctl{display:flex;gap:6px;align-items:center}
+.btn{height:32px;padding:0 12px;border-radius:7px;border:1px solid var(--border);background:transparent;
+  color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+.btn:hover{background:var(--card-hover)}
+.btn i{font-size:16px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#141414}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.icon{width:32px;padding:0;justify-content:center}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── layout ────────────────────────────────────────────────────────────── */
+.main{flex:1;display:flex;min-height:0}
+.canvas{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;
+  background-color:var(--bg);
+  background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px}
+.canvas.drag{cursor:grabbing}
+.world{position:absolute;left:0;top:0;transform-origin:0 0}
+svg.edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+
+/* ── edges ─────────────────────────────────────────────────────────────── */
+.edge{fill:none;stroke:var(--edge);stroke-width:2;transition:stroke .4s}
+.edge.dash{stroke-dasharray:5 5;stroke-width:1.6}
+.edge.lit{stroke:var(--c,var(--accent))}
+.edge.lit.dash{animation:dash 1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-20}}
+.edge-label{font:600 9.5px var(--font);fill:var(--label)}
+.edge-pill{fill:var(--card);stroke:var(--border)}
+.branch{pointer-events:all;cursor:pointer}
+.branch rect{fill:var(--card);stroke:var(--bc);stroke-width:1.2;transition:fill .2s}
+.branch text{font:700 11px var(--font);fill:var(--bc)}
+.branch:hover rect{fill:color-mix(in srgb,var(--bc) 18%,var(--card))}
+.branch.on rect{fill:var(--bc)}
+.branch.on text{fill:#111}
+.pulse{filter:drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 2px var(--c))}
+
+/* ── nodes ─────────────────────────────────────────────────────────────── */
+.node{position:absolute;--c:var(--edge);cursor:pointer;user-select:none}
+.node[data-src="claude"]{--c:var(--claude)}
+.node[data-src="mb"]{--c:var(--mb)}
+.node[data-src="spotify"]{--c:var(--spotify)}
+.node[data-src="shelf"]{--c:var(--shelf)}
+.node[data-src="err"]{--c:var(--danger)}
+.node .box{position:absolute;inset:0;border-radius:14px;background:var(--node);
+  border:1.5px solid color-mix(in srgb,var(--edge) 80%,transparent);
+  display:flex;align-items:center;justify-content:center;gap:12px;transition:border-color .35s,box-shadow .35s,background .35s}
+.node.k-trigger .box{border-radius:38px 14px 14px 38px}
+.node.k-sub .box{border-radius:50%}
+.node.k-agent .box{justify-content:flex-start;padding:0 16px}
+.node:hover .box{border-color:color-mix(in srgb,var(--c) 70%,transparent)}
+.node .ico{font-size:30px;color:var(--c);display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .35s}
+.node.k-sub .ico{font-size:22px}
+.node .ico img{width:30px;height:30px;object-fit:contain}
+.node.k-sub .ico img{width:22px;height:22px}
+.node .ico svg{width:32px;height:32px}
+.node.k-sub .ico svg{width:22px;height:22px}
+.node .in-title{min-width:0}
+.node .in-title b{display:block;font-size:13.5px;letter-spacing:-.01em}
+.node .in-title span{display:block;font-size:11px;color:var(--label);margin-top:2px;font-family:var(--font-mono)}
+.node .cap{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:9px;text-align:center;width:150px;pointer-events:none}
+.node .cap b{display:block;font-size:12.5px;font-weight:600;line-height:1.25}
+.node .cap span{display:block;font-size:10.5px;color:var(--label);margin-top:2px;font-family:var(--font-mono)}
+.node.k-sub .cap{width:110px;margin-top:7px}
+.node .cap.side{top:50%;left:100%;transform:translateY(-50%);margin:0 0 0 14px;text-align:left;width:150px}
+.node .cap.side .detail{margin:4px 0 0}
+.node.k-sub .cap b{font-size:11.5px}
+.node .detail{display:block;font-size:10.5px;color:var(--c);margin-top:4px;font-weight:600;min-height:0;
+  opacity:0;transform:translateY(-3px);transition:all .3s;line-height:1.3}
+.node .detail.on{opacity:1;transform:none}
+.node .detail{display:table;margin:4px auto 0;padding:1px 6px;border-radius:4px}
+.node .detail.on{background:var(--bg);box-shadow:0 0 0 3px var(--bg)}
+.node .detail:empty{display:none}
+.port{position:absolute;width:10px;height:10px;border-radius:50%;background:var(--edge);border:2px solid var(--bg);transition:background .35s}
+.port.in{left:-5px;top:calc(50% - 5px)}
+.port.out{right:-5px;top:calc(50% - 5px)}
+.node.k-agent .port.b,.node .port.b{width:9px;height:9px;transform:rotate(45deg);border-radius:1px;bottom:-5px}
+.plabel{position:absolute;top:calc(100% + 7px);font-size:9px;color:var(--label);transform:translateX(-50%);
+  background:var(--card);border:1px solid var(--border);padding:1px 5px;border-radius:4px;white-space:nowrap}
+.trig{position:absolute;left:-26px;top:calc(50% - 10px);color:#e0533f;font-size:18px}
+.badge{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:13px;background:var(--c);color:#111;transform:scale(0);transition:transform .3s cubic-bezier(.3,1.6,.5,1)}
+.node.s-done .badge,.node.s-skip .badge,.node.s-err .badge,.node.s-warn .badge{transform:scale(1)}
+.node.s-skip .badge{background:var(--label)}
+.node.s-err .badge{background:var(--danger);color:#fff}
+.node.s-warn .badge{background:var(--accent)}
+/* states */
+.node.s-run .box{border-color:var(--c);background:color-mix(in srgb,var(--c) 9%,var(--node));
+  animation:glow 1.4s ease-in-out infinite}
+.node.s-run .ico,.node.s-done .ico,.node.s-warn .ico,.node.s-err .ico{opacity:1}
+.node.s-done .box{border-color:color-mix(in srgb,var(--c) 75%,transparent);box-shadow:0 0 22px -8px var(--c)}
+.node.s-skip .box{border-style:dashed;border-color:var(--label)}
+.node.s-err .box{border-color:var(--danger);box-shadow:0 0 24px -6px var(--danger)}
+.node.s-err .detail{color:var(--danger)}
+.node.s-warn .box{border-color:var(--accent);box-shadow:0 0 24px -6px var(--accent)}
+.node.s-done .port,.node.s-run .port{background:var(--c)}
+.node.sel .box{outline:2px solid color-mix(in srgb,var(--accent) 60%,transparent);outline-offset:4px}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 50%,transparent),0 0 26px -6px var(--c)}
+  50%{box-shadow:0 0 0 7px transparent,0 0 30px -4px var(--c)}}
+.node.k-sub .badge{width:18px;height:18px;font-size:11px;top:-4px;right:-4px}
+
+/* the thinking face — the same 30-frame strip the app steps by hand */
+/* the input preview square — shows assets/sleeve-scan.gif once it exists, a placeholder until then */
+.node.k-media .box{border-radius:14px;padding:8px;overflow:hidden}
+.gif{position:relative;width:100%;height:100%;border-radius:9px;overflow:hidden;background:var(--bg)}
+.gif img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+.gif-ph{position:absolute;inset:0;border:1.5px dashed color-mix(in srgb,var(--accent) 45%,transparent);border-radius:9px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;color:var(--label);
+  background:repeating-linear-gradient(135deg,transparent 0 10px,color-mix(in srgb,var(--accent) 4%,transparent) 10px 20px)}
+.gif-ph i{font-size:34px;color:var(--accent);opacity:.8}
+.gif-ph b{font-size:11.5px;color:var(--text)}
+.gif-ph span{font-family:var(--font-mono);font-size:9.5px}
+.gif-ph::after{content:'';position:absolute;left:8%;right:8%;height:2px;top:12%;background:var(--accent);
+  box-shadow:0 0 12px var(--accent);opacity:.75;animation:scanline 2.2s ease-in-out infinite alternate}
+@keyframes scanline{to{top:86%}}
+.cost{position:absolute;bottom:calc(100% + 7px);left:0;display:flex;align-items:center;gap:5px;white-space:nowrap;
+  font:700 10.5px var(--font-mono);color:var(--claude);background:color-mix(in srgb,var(--claude) 10%,var(--bg));
+  border:1px solid color-mix(in srgb,var(--claude) 40%,transparent);border-radius:20px;padding:2px 8px 2px 6px}
+.cost i{font-size:12px}
+.cost small{font-weight:400;color:var(--label);font-size:9.5px}
+.cost.run{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg));border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+/* waiting for an input: everything else steps back, the three entry squares call for a click */
+.canvas.choose .node:not(.pick),.canvas.choose svg.edges{opacity:.28;transition:opacity .3s}
+.node.pick .tap{display:none}
+.canvas.choose .node.pick{z-index:2}
+.canvas.choose .node.pick .box{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--node));animation:pick 1.3s ease-in-out infinite}
+.canvas.choose .node.pick .ico{opacity:1;color:var(--accent)}
+.canvas.choose .node.pick .tap{display:flex;position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);white-space:nowrap;
+  align-items:center;gap:5px;font:700 11px var(--font);color:#141414;background:var(--accent);padding:3px 9px;border-radius:20px;
+  animation:bob 1.3s ease-in-out infinite}
+.canvas.choose .node.pick .tap::after{content:'';position:absolute;top:100%;left:50%;margin-left:-5px;border:5px solid transparent;border-top-color:var(--accent)}
+@keyframes pick{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent),0 0 26px -6px var(--accent)}50%{box-shadow:0 0 0 9px transparent,0 0 34px -4px var(--accent)}}
+@keyframes bob{50%{transform:translate(-50%,-4px)}}
+.choose-toast{position:absolute;top:56px;left:50%;transform:translate(-50%,-8px);opacity:0;pointer-events:none;transition:all .25s;z-index:3;
+  background:var(--surface);border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);border-radius:10px;padding:9px 14px;
+  font-size:12.5px;display:flex;align-items:center;gap:8px;box-shadow:0 14px 30px -14px rgba(0,0,0,.7);max-width:calc(100% - 32px)}
+.choose-toast i{color:var(--accent);font-size:17px}
+.canvas.choose .choose-toast{opacity:1;transform:translate(-50%,0)}
+/* the bill — what this run cost on the Claude API, counted up call by call */
+.bill{border-radius:12px;padding:14px 16px 12px;margin-bottom:18px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--claude) 16%,var(--card)),var(--card) 70%);
+  border:1px solid color-mix(in srgb,var(--claude) 45%,transparent)}
+.bill.flash{animation:billflash .7s ease}
+@keyframes billflash{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--claude) 60%,transparent)}100%{box-shadow:0 0 0 14px transparent}}
+.bill-h{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--claude)}
+.bill-h .m{width:15px;height:15px;display:flex}
+.bill-tag{margin-left:auto;font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--label);font-weight:600;
+  border:1px solid var(--border);border-radius:20px;padding:1px 8px}
+.bill-big{font:700 40px/1.05 var(--font);letter-spacing:-.03em;margin-top:8px;font-variant-numeric:tabular-nums;color:var(--text)}
+.bill-big .cur{color:var(--claude);font-size:26px;vertical-align:6px;margin-right:2px}
+.bill-sub{font-size:12px;color:var(--label);margin-top:4px;line-height:1.45}
+.bill-sub b{color:var(--text)}
+.bill-sub.warn b{color:var(--danger)}
+.bill-rows{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+.bill-row{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;font-size:11.5px;padding:6px 8px;border-radius:7px;
+  background:color-mix(in srgb,var(--bg) 55%,transparent);animation:rise .3s ease}
+.bill-row .mdl{font:700 10px var(--font-mono);color:var(--claude);border:1px solid color-mix(in srgb,var(--claude) 45%,transparent);border-radius:5px;padding:1px 5px}
+.bill-row .what{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.bill-row .what small{display:block;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.bill-row .usd{font:700 12px var(--font-mono);color:var(--text)}
+.meter{position:absolute;left:16px;top:40px;z-index:2;display:flex;align-items:center;gap:10px;padding:8px 14px 8px 10px;border-radius:12px;
+  background:color-mix(in srgb,var(--surface) 92%,transparent);border:1px solid color-mix(in srgb,var(--claude) 45%,transparent);
+  box-shadow:0 12px 30px -16px rgba(0,0,0,.8)}
+.meter .m{width:26px;height:26px;display:flex}
+.meter small{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--label);font-weight:700}
+.meter b{display:block;font:700 22px/1.1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.meter span.avg{font-size:10.5px;color:var(--muted)}
+.meter.flash{animation:billflash .7s ease}
+.group{position:absolute;border:1.5px dashed color-mix(in srgb,var(--accent) 40%,transparent);border-radius:18px;
+  background:color-mix(in srgb,var(--accent) 4%,transparent);pointer-events:none}
+.group b{position:absolute;top:-10px;left:14px;background:var(--bg);padding:0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--accent)}
+.group b small{text-transform:none;letter-spacing:0;color:var(--label);font-weight:500;margin-left:5px}
+.canvas.choose .group{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+/* search results — a real discography, loaded by default as demo data */
+.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 8px;margin-top:2px}
+.tile{min-width:0;position:relative}
+.tile .art{position:relative;aspect-ratio:1;border-radius:4px;overflow:hidden;background:var(--bg);border:1px solid var(--border);
+  box-shadow:0 6px 14px -8px rgba(0,0,0,.7);transition:outline-color .2s}
+.tile .art img{width:100%;height:100%;object-fit:cover;display:block;animation:artin .45s ease}
+@keyframes artin{from{opacity:0;transform:scale(1.06)}}
+.tile .art .none{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  color:var(--muted);font-size:9px;text-align:center;border:1px dashed var(--border);border-radius:4px}
+.tile .art .none i{font-size:22px}
+.tile.skel .art{background:linear-gradient(90deg,var(--card) 25%,var(--card-hover) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+.tile b{display:block;font-size:10.5px;font-weight:600;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile span.y{display:block;font:10px var(--font-mono);color:var(--muted)}
+.tile .tag{position:absolute;left:4px;top:4px;font:700 8.5px var(--font);padding:1px 5px;border-radius:10px;z-index:1;
+  background:rgba(12,12,12,.8);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);display:none}
+.tile.vinyl .tag.v{display:block}
+.tile .tag.o{left:auto;right:4px;color:#141414;background:var(--accent);border-color:var(--accent)}
+.tile.owned .tag.o{display:block}
+.tile.picked .art{outline:2px solid var(--accent);outline-offset:2px}
+.sgrid-note{font-size:11px;color:var(--muted);margin-top:8px}
+/* embedded in the app's Readme */
+body.embed .brand,body.embed #flowTabs,body.embed #themeBtn{display:none}
+body.embed .top{padding:8px 12px}
+body.embed .side{width:330px}
+@media (max-width:900px){ body.embed .canvas{height:440px} body.embed .side{width:100%} body.embed .side-scroll{overflow:visible} .meter{display:none} }
+.face{width:var(--face);height:var(--face);background:url('../analyse-sprite-128.png') no-repeat;
+  background-size:calc(var(--face) * 30) var(--face);background-position:0 0}
+.node .face{--face:56px}
+
+/* ── inspector (floating) ──────────────────────────────────────────────── */
+.inspector{position:absolute;left:16px;bottom:16px;width:330px;max-width:calc(100% - 32px);background:var(--surface);
+  border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:0 18px 40px -16px rgba(0,0,0,.7);
+  transform:translateY(12px);opacity:0;pointer-events:none;transition:all .2s;z-index:3;cursor:default}
+.inspector.on{transform:none;opacity:1;pointer-events:auto}
+.inspector h4{margin:0;font-size:14px;display:flex;align-items:center;gap:8px}
+.inspector h4 .x{margin-left:auto;cursor:pointer;color:var(--label);font-size:16px}
+.inspector .where{font-family:var(--font-mono);font-size:11.5px;color:var(--accent);margin-top:4px}
+.inspector p{margin:9px 0 0;color:var(--label);line-height:1.5;font-size:12.5px}
+.inspector .io{margin-top:10px;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:11.5px}
+.inspector .io dt{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.06em;padding-top:1px}
+.inspector .io dd{margin:0;font-family:var(--font-mono);color:var(--text);word-break:break-word}
+.legend{position:absolute;right:16px;bottom:16px;display:flex;gap:12px;font-size:11px;color:var(--label);
+  background:color-mix(in srgb,var(--surface) 85%,transparent);border:1px solid var(--border);border-radius:8px;padding:7px 11px;z-index:2;flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.zoom{position:absolute;right:16px;top:16px;display:flex;flex-direction:column;gap:4px;z-index:2}
+.zoom .btn{background:var(--surface)}
+.hint{position:absolute;left:16px;top:14px;font-size:11.5px;color:var(--muted);z-index:2;display:flex;gap:6px;align-items:center}
+
+/* ── side panel: the app preview ───────────────────────────────────────── */
+.side{width:400px;flex-shrink:0;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.side-scroll{flex:1;overflow:auto;padding:16px}
+.sec-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700;
+  margin:4px 0 10px;display:flex;align-items:center;gap:8px}
+.sec-h::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* the sleeve / input card shown before a run */
+.input{display:flex;gap:12px;align-items:center;border:1px dashed var(--border);border-radius:9px;padding:12px;background:var(--card)}
+.input img{width:64px;height:64px;border-radius:4px;object-fit:cover;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+.input .ph{width:64px;height:64px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--bg);color:var(--c,var(--accent))}
+.input .t b{display:block;font-size:13px}
+.input .t span{display:block;font-family:var(--font-mono);font-size:11px;color:var(--label);margin-top:3px;word-break:break-all}
+.analyse-btn{margin-top:10px;width:100%;height:46px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:10px;
+  border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);
+  color:var(--accent);font-size:13.5px;font-weight:700;cursor:pointer;transition:all .12s}
+.analyse-btn:hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.analyse-btn:disabled{opacity:.45;cursor:not-allowed}
+.analyse-btn .face{--face:34px;background-image:url('../analyse-sprite.png')}
+.scan-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
+
+/* replica of .analysing */
+.analysing{--face:76px;margin-top:14px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:9px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--card)),var(--card));overflow:hidden;
+  opacity:.45;transition:opacity .3s}
+.analysing.live{opacity:1}
+.an-head{display:flex;align-items:center;gap:14px;padding:14px 15px 12px}
+.an-head-main{min-width:0;flex:1}
+.an-title{font-size:15px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:7px}
+.an-title em{font-style:normal;color:var(--accent)}
+.an-sub{font-size:11.5px;color:var(--label);margin-top:3px;font-variant-numeric:tabular-nums}
+.an-sub .dot{opacity:.4;margin:0 5px}
+.an-bar{height:3px;background:color-mix(in srgb,var(--border) 60%,transparent);margin-top:9px;border-radius:2px;overflow:hidden}
+.an-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .45s cubic-bezier(.4,0,.2,1)}
+.an-steps{border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent);padding:6px 0 8px}
+.an-step{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:7px 15px;position:relative;transition:background .2s}
+.an-step.run{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.an-step::before{content:'';position:absolute;left:27px;top:0;bottom:0;width:1px;background:color-mix(in srgb,var(--border) 70%,transparent)}
+.an-step:first-child::before{top:50%}
+.an-step:last-child::before{bottom:50%}
+.an-badge{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;position:relative;z-index:1;
+  border:1px solid var(--bdr,var(--border));background:var(--bgc,var(--card));color:var(--fg,var(--muted));transition:all .25s}
+.an-step[data-src="spotify"]{--fg:#1DB954;--bdr:rgba(30,215,96,.45);--bgc:rgba(30,215,96,.10)}
+.an-step[data-src="mb"]{--fg:#EB743B;--bdr:rgba(235,116,59,.45);--bgc:rgba(235,116,59,.10)}
+.an-step[data-src="claude"]{--fg:#D97757;--bdr:rgba(217,119,87,.45);--bgc:rgba(217,119,87,.10)}
+.an-step[data-src="shelf"]{--fg:var(--accent);--bdr:color-mix(in srgb,var(--accent) 45%,transparent);--bgc:color-mix(in srgb,var(--accent) 10%,transparent)}
+.an-step.wait .an-badge{--fg:var(--muted);--bdr:var(--border);--bgc:transparent;opacity:.5}
+.an-step.run .an-badge{animation:an-pulse 1.5s ease-in-out infinite}
+.an-step.skip .an-badge{--fg:var(--label);--bdr:var(--border);--bgc:transparent;border-style:dashed}
+.an-step.err .an-badge{--fg:var(--danger);--bdr:var(--danger);--bgc:transparent}
+@keyframes an-pulse{0%,100%{box-shadow:0 0 0 0 var(--bdr)}50%{box-shadow:0 0 0 4px transparent}}
+.an-body{min-width:0;padding-top:2px}
+.an-label{font-size:12.5px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
+.an-label small{font-weight:500;color:var(--muted);font-size:10.5px}
+.an-step.wait .an-label{color:var(--label);font-weight:500}
+.an-label .tick{font-size:14px;color:var(--accent);margin-left:auto;flex-shrink:0}
+.an-step.skip .an-label .tick{color:var(--label)}
+.an-step.err .an-label .tick{color:var(--danger)}
+.an-detail{font-size:11.5px;color:var(--label);margin-top:2px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.an-step.err .an-detail{color:var(--danger)}
+.an-step.wait .an-detail{display:none}
+.an-pips{display:flex;gap:3px;margin-top:5px}
+.an-pips i{width:14px;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.an-pips i.on{background:var(--fg)}
+.an-foot{display:flex;align-items:center;gap:8px;padding:9px 15px;border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.an-cost{font-size:10.5px;color:var(--muted);flex:1;min-width:0;line-height:1.35}
+
+/* the filled form */
+.result{margin-top:14px;border:1px solid var(--border);border-radius:9px;background:var(--card);padding:14px;display:none}
+.result.on{display:block;animation:rise .4s cubic-bezier(.2,.8,.3,1)}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+.r-top{display:flex;gap:14px}
+.r-cover{width:96px;height:96px;border-radius:4px;object-fit:cover;box-shadow:0 8px 20px rgba(0,0,0,.55);flex-shrink:0}
+.r-cover.none{display:flex;align-items:center;justify-content:center;background:var(--bg);font-size:38px;color:var(--muted);box-shadow:none;border:1px dashed var(--border)}
+.r-fields{flex:1;min-width:0;display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;align-content:start}
+.r-fields dt{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;padding-top:2px}
+.r-fields dd{margin:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-fields dd.empty{color:var(--muted);font-weight:400;font-style:italic}
+.fill{animation:fill .6s ease}
+@keyframes fill{0%{background:color-mix(in srgb,var(--accent) 30%,transparent)}100%{background:transparent}}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;
+  border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.pill.muted{border-color:var(--border);color:var(--label);background:transparent}
+.alts{display:flex;gap:6px;margin-top:12px}
+.alts div{width:38px;height:38px;border-radius:3px;background:url('thriller.jpg') center/cover;opacity:.85;border:1px solid var(--border)}
+.alts div:first-child{outline:2px solid var(--accent);outline-offset:1px;opacity:1}
+.alts span{font-size:11px;color:var(--label);align-self:center;margin-left:4px}
+.notice{margin-top:12px;padding:9px 11px;border-radius:7px;font-size:12px;line-height:1.45;display:none;gap:8px;align-items:flex-start}
+.notice.on{display:flex}
+.notice i{font-size:16px;flex-shrink:0;margin-top:1px}
+.notice.warn{background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);color:var(--text)}
+.notice.warn i{color:var(--accent)}
+.notice.err{background:color-mix(in srgb,var(--danger) 10%,transparent);border:1px solid color-mix(in srgb,var(--danger) 45%,transparent)}
+.notice.err i{color:var(--danger)}
+.notice.ok{background:color-mix(in srgb,#5FBF7A 10%,transparent);border:1px solid color-mix(in srgb,#5FBF7A 45%,transparent)}
+.notice.ok i{color:#5FBF7A}
+.save-btn{margin-top:12px;width:100%;height:40px;border-radius:7px;border:0;background:var(--accent);color:#141414;font-weight:700;font-size:13px;
+  display:flex;align-items:center;justify-content:center;gap:7px;transition:transform .12s,filter .2s}
+.save-btn.press{transform:scale(.97);filter:brightness(1.15)}
+.save-btn.hide{display:none}
+:root[data-theme="light"] .save-btn,:root[data-theme="light"] .btn.primary{color:#fff}
+
+/* the event stream */
+.log{margin-top:14px;background:var(--bg);border:1px solid var(--border);border-radius:9px;font-family:var(--font-mono);font-size:11.5px;
+  padding:10px 12px;height:230px;overflow:auto;line-height:1.55}
+.log .l{white-space:pre-wrap;word-break:break-word;animation:rise .25s ease}
+.log .ts{color:var(--muted);margin-right:6px}
+.log .ev{font-weight:700}
+.log .ev.step{color:var(--label)}
+.log .ev.done{color:#5FBF7A}
+.log .ev.error{color:var(--danger)}
+.log .req{color:var(--accent)}
+.log .note{color:var(--muted);font-style:italic}
+.log .s-claude{color:var(--claude)}.log .s-mb{color:var(--mb)}.log .s-spotify{color:var(--spotify)}.log .s-shelf{color:var(--accent)}
+.log:empty::before{content:'waiting for a run…';color:var(--muted)}
+
+/* ── narrow screens ────────────────────────────────────────────────────── */
+@media (max-width:900px){
+  body{overflow:auto;height:auto}
+  .main{flex-direction:column}
+  .canvas{height:62vh;flex:none}
+  .side{width:100%;border-left:0;border-top:1px solid var(--border)}
+  .side-scroll{overflow:visible}
+  .top{padding:10px 16px}
+  .brand small{display:none}
+  .legend{display:none}
+  body{overflow-x:hidden}
+  .seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+  .main,.top,.side,.side-scroll{min-width:0;max-width:100vw;width:100%}
+  .side{overflow:hidden}
+  .hint{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <img src="../vinyl-icon.svg" alt="">
+    <div><b>Zucoloto's Vinyl</b><small>how a record gets onto the shelf</small></div>
+  </div>
+  <div class="seg" id="flowTabs"></div>
+  <div class="spacer"></div>
+  <div class="ctl">
+    <button class="btn" id="speedBtn" title="Playback speed"><i class="ti ti-gauge"></i><span>1×</span></button>
+    <button class="btn icon" id="stepBtn" title="Step one event"><i class="ti ti-player-track-next"></i></button>
+    <button class="btn icon" id="resetBtn" title="Reset"><i class="ti ti-refresh"></i></button>
+    <button class="btn primary" id="playBtn"><i class="ti ti-player-play-filled"></i><span>Run flow</span></button>
+    <button class="btn icon" id="themeBtn" title="Toggle theme"><i class="ti ti-sun"></i></button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="canvas" id="canvas">
+    <div class="meter" id="meter"><span class="m" id="meterMark"></span><div><small id="meterLabel">this scan</small><b id="meterVal">$0.0000</b><span class="avg" id="meterAvg"></span></div></div>
+    <div class="hint"><i class="ti ti-hand-move"></i> drag to pan · scroll to zoom · click a node · <b style="color:var(--label)">▶ on a branch runs that path</b></div>
+    <div class="world" id="world"><svg class="edges" id="edges"></svg></div>
+    <div class="zoom">
+      <button class="btn icon" id="zin" title="Zoom in"><i class="ti ti-plus"></i></button>
+      <button class="btn icon" id="zout" title="Zoom out"><i class="ti ti-minus"></i></button>
+      <button class="btn icon" id="zfit" title="Fit"><i class="ti ti-arrows-maximize"></i></button>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--claude)"></i>Claude API</span>
+      <span><i style="background:var(--mb)"></i>MusicBrainz</span>
+      <span><i style="background:var(--spotify)"></i>Spotify</span>
+      <span><i style="background:var(--accent)"></i>your shelf</span>
+    </div>
+    <div class="inspector" id="inspector"></div>
+    <div class="choose-toast"><i class="ti ti-hand-click"></i><span>How does the record come in? <b>Click a square:</b> upload a photo, use the live camera, or search artists.</span></div>
+  </div>
+
+  <aside class="side">
+    <div class="side-scroll">
+      <div class="bill" id="bill">
+        <div class="bill-h"><span class="m" id="billMark"></span>Claude API cost<span class="bill-tag" id="billTag">this scan</span></div>
+        <div class="bill-big" id="billBig"><span class="cur">$</span>0.0000</div>
+        <div class="bill-sub" id="billSub"></div>
+        <div class="bill-rows" id="billRows"></div>
+      </div>
+      <div class="sec-h">In the app</div>
+      <div class="input" id="inputCard"></div>
+      <button class="analyse-btn" id="analyseBtn"><span class="face" id="btnFace"></span><span id="analyseLabel">analyse</span></button>
+      <div class="scan-hint" id="scanHint"></div>
+
+      <div class="analysing" id="panel">
+        <div class="an-head">
+          <div class="face" id="panelFace"></div>
+          <div class="an-head-main">
+            <div class="an-title">analysing<em id="anWhat"></em></div>
+            <div class="an-sub"><span id="anStage">idle</span><span class="dot">·</span><span id="anClock">0.0s</span></div>
+            <div class="an-bar"><i id="anBar"></i></div>
+          </div>
+        </div>
+        <div class="an-steps" id="anSteps"></div>
+        <div class="an-foot"><div class="an-cost" id="anCost"></div></div>
+      </div>
+
+      <div class="result" id="result">
+        <div class="r-top">
+          <div id="rCoverWrap"></div>
+          <dl class="r-fields" id="rFields"></dl>
+        </div>
+        <div class="alts" id="rAlts"></div>
+        <div class="notice warn" id="nDup"><i class="ti ti-copy"></i><div></div></div>
+        <div class="notice warn" id="nMb"><i class="ti ti-cloud-off"></i><div>MusicBrainz couldn't be reached — no year, country or alternate pressings. Retrying is worth it.</div></div>
+        <button class="save-btn" id="saveBtn"><i class="ti ti-device-floppy"></i>save record</button>
+        <div class="notice ok" id="nSaved"><i class="ti ti-circle-check"></i><div></div></div>
+      </div>
+      <div class="notice err" id="nErr"><i class="ti ti-alert-triangle"></i><div></div></div>
+
+      <div class="sec-h" style="margin-top:20px">Search results <span style="text-transform:none;letter-spacing:0;font-weight:500;font-family:var(--font-mono)" id="sgridTag">demo · "thriller mj"</span></div>
+      <div class="sgrid" id="sgrid"></div>
+      <div class="sgrid-note" id="sgridNote"></div>
+
+      <div class="sec-h" style="margin-top:20px">Event stream <span style="text-transform:none;letter-spacing:0;font-weight:500;font-family:var(--font-mono)">text/event-stream</span></div>
+      <div class="log" id="log"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   Icons
+   ═══════════════════════════════════════════════════════════════════════ */
+function claudeMark(){
+  // a starburst of rounded rays, in Claude clay
+  const rays=[[0,11],[30,9],[62,10.5],[95,8.5],[128,11],[160,9.5],[192,10.5],[225,8.5],[258,11],[290,9],[322,10]];
+  return `<svg viewBox="-12 -12 24 24">${rays.map(([a,l])=>
+    `<rect x="-1.15" y="${-l}" width="2.3" height="${l}" rx="1.15" fill="#D97757" transform="rotate(${a})"/>`).join('')}</svg>`;
+}
+const ICON = {
+  claude: claudeMark,
+  spotify: ()=>`<img src="../spotify-logo.png" alt="">`,
+  face: ()=>`<div class="face"></div>`,
+};
+const icon = s => ICON[s] ? ICON[s]() : `<i class="ti ${s}"></i>`;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   The flows — straight from app.py /api/scan, /api/search, /api/records
+   ═══════════════════════════════════════════════════════════════════════ */
+const STAGE_META = {
+  vision:  {src:'claude',  icon:'ti-sparkles',        label:'reading the sleeve',      sub:'Claude vision'},
+  spotify: {src:'spotify', icon:'ti-brand-spotify',   label:'reading the album',       sub:'Spotify API'},
+  genre:   {src:'claude',  icon:'ti-tag',             label:'placing it in a genre',   sub:'Claude'},
+  mb:      {src:'mb',      icon:'ti-database-search', label:'matching on MusicBrainz', sub:'release groups'},
+  cover:   {src:'mb',      icon:'ti-photo-search',    label:'fetching cover art',      sub:'Cover Art Archive'},
+  vinyl:   {src:'claude',  icon:'ti-vinyl',           label:'confirming it is vinyl',  sub:'Claude'},
+  shelf:   {src:'shelf',   icon:'ti-checklist',       label:'checking your shelf',     sub:'local'},
+  parse:       {src:'claude', icon:'ti-quote',           label:'reading your words',      sub:'Claude'},
+  artist:      {src:'mb',     icon:'ti-microphone-2',    label:'finding the artist',      sub:'MusicBrainz'},
+  discography: {src:'mb',     icon:'ti-list-search',     label:'fetching the releases',   sub:'discography'},
+  covers:      {src:'mb',     icon:'ti-photo-search',    label:'fetching cover art',      sub:'Cover Art Archive'},
+};
+
+// sizes per node kind
+const SIZE = {media:[150,150], trigger:[84,84], main:[84,84], if:[84,84], agent:[220,84], sub:[58,58]};
+
+// shared sub-nodes / tails
+const tail = (x0, ifLabel) => ([
+  {id:'shelf', k:'if', x:x0, y:280, src:'shelf', icon:'ti-git-branch', title:ifLabel||'On the shelf?', sub:'find_duplicate',
+    info:{where:'scan.py · find_duplicate()', does:'Normalises artist + album (accents, "The", "Os"…) and compares against the four columns loaded from every Record. No network, no cost.', io:{in:'artist, album, existing[]', out:'duplicate row | None'}}},
+  {id:'dup', k:'main', x:x0+250, y:96, src:'shelf', icon:'ti-copy', title:'Duplicate warning', sub:'duplicate_of',
+    info:{where:'index.html · scan form', does:'The form still fills, but a banner names the copy already on the shelf and links to it, so a second copy is a conscious choice.', io:{in:'duplicate_of {id, artist, album}', out:'banner + open link'}}},
+  {id:'form', k:'main', x:x0+250, y:464, src:'shelf', icon:'ti-forms', title:'Form filled', sub:'you review',
+    info:{where:'index.html · applyScan()', does:'candidates[0] fills the form and supplies the year; the alternates sit below as a grid of pressings. Nothing is saved until you press save.', io:{in:'done payload', out:'form fields + cover'}}},
+  {id:'save', k:'main', x:x0+410, y:464, src:'shelf', icon:'ti-device-floppy', title:'Save', sub:'POST /api/records',
+    info:{where:'app.py · create_record()', does:'@require_auth. Cleans tracks, normalises colors and the Spotify link, hashes the cover, and registers the shop in Places.', io:{in:'record JSON', out:'201 + record.to_dict()'}}},
+  {id:'db', k:'main', x:x0+570, y:464, src:'shelf', icon:'ti-database', title:'SQLite', sub:'/data/vinyl.db',
+    info:{where:'Railway volume · /data', does:'The row lands in vinyl.db on the mounted volume. A daily online-backup snapshot keeps the last five.', io:{in:'INSERT record', out:'record #412'}}},
+]);
+const tailEdges = [
+  {f:'shelf', t:'dup', port:'true', label:'true · already owned', sc:'owned', at:.5},
+  {f:'shelf', t:'form', port:'false', label:'false · new record', sc:'happy', at:.5},
+  {f:'form', t:'save'}, {f:'save', t:'db'},
+];
+const noKey = (x, step) => ({id:'nokey', k:'main', x, y:96, src:'err', icon:'ti-key-off', title:'503 · no API key', sub:'event: error', capSide:true,
+  info:{where:'scan.py · _anthropic_client()', does:`No ANTHROPIC_API_KEY on the server: ${step} raises RuntimeError("… is not set") and the route turns it into an error frame with status 503. Manual entry keeps working, and spent[] is empty, so no ledger row.`, io:{in:'RuntimeError', out:'event: error {status: 503}'}}});
+const ledger = (x) => ({id:'ledger', k:'sub', x, y:480, src:'shelf', icon:'ti-receipt-2', title:'Spend ledger', sub:'ScanSpend',
+  info:{where:'app.py · _record_scan_spend()', does:'Runs in the generator\'s finally: every Claude call is billed the moment it returns, so even a cancelled scan writes its rows. Feeds the "≈ $ per scan" estimate.', io:{in:'spent[] {model, tokens}', out:'one row per call'}}});
+const haiku = (id,x,title) => ({id, k:'sub', x, y:480, src:'claude', icon:'claude', title:title||'Haiku 4.5', sub:'claude-haiku-4-5',
+  info:{where:'Anthropic Messages API', does:'Small, fast model used for the cheap text judgements: genre, search parsing and the vinyl verdict.', io:{in:'short prompt + json_schema', out:'structured JSON'}}});
+const genresSub = (id,x) => ({id, k:'sub', x, y:480, src:'shelf', icon:'ti-tag', title:'Your genres', sub:'enum from shelf',
+  info:{where:'app.py · scan_record()', does:'The distinct genres already on your shelf become a JSON-schema enum, so Claude can only answer with a genre you already use (or null).', io:{in:'SELECT DISTINCT genre', out:'enum[]'}}});
+const coverSubs = (x) => ([
+  {id:'caa', k:'sub', x, y:480, src:'mb', icon:'ti-photo', title:'Cover Art Archive', sub:'front-500',
+    info:{where:'scan.py · fetch_cover()', does:'First stop for artwork: coverartarchive.org/release-group/{mbid}/front-500.', io:{in:'mbid', out:'data URI | miss'}}},
+  {id:'itunes', k:'sub', x:x+92, y:480, src:'mb', icon:'ti-brand-apple', title:'iTunes', sub:'fallback',
+    info:{where:'scan.py · _itunes_artwork_url()', does:'Second stop when the Archive has nothing. One HTTP call per miss, capped so a big search never gets the IP throttled.', io:{in:'artist, album', out:'artwork URL | None'}}},
+]);
+
+// Average Claude spend. The per-run figures are app.py's SEED_ESTIMATE_USD — what the
+// form quotes until the ScanSpend ledger holds real scans — split across the calls each run makes.
+const AVG = {photo:0.0060, spotify:0.0004, search:0.0005,
+  vision:0.0057, genre:0.0002, parse:0.0002, vinylPhoto:0.0003, vinylSpotify:0.0002, vinylSearch:0.0003};
+const usd = v => '$'+v.toFixed(4);
+
+const FLOWS = {
+  photo: {
+    label:'Photo scan', icon:'ti-camera', what:'sleeve', kind:'photo',
+    nodes:[
+      {id:'trigger', k:'trigger', x:40, y:280, src:'shelf', icon:'ti-camera', title:'Sleeve photo', sub:'camera · data URI', trig:true,
+        info:{where:'index.html · openCamera()', does:'You photograph the sleeve (or pick a file). It is resized client-side and sent as a base64 data URI.', io:{in:'camera / file', out:'image: data:image/jpeg…'}}},
+      {id:'analyse', k:'main', x:200, y:280, src:'shelf', icon:'face', title:'Analyse', sub:'POST /api/scan',
+        info:{where:'app.py · scan_record()', does:'One generator, one frame per stage. Asked with Accept: text/event-stream it streams every step; otherwise it keeps only the last frame — so both paths can never disagree.', io:{in:'{image} | {spotify_url}', out:'SSE: step… done | error'}}},
+      {id:'vision', k:'agent', x:360, y:280, src:'claude', icon:'claude', title:'Claude vision', sub:'extract_from_image', ports:['Model','Schema','Genres'],
+        info:{where:'scan.py · extract_from_image()', does:'Sonnet 5 reads only what is printed: artist, album, genre, label, catalog no. It is told never to guess the year — that comes from MusicBrainz.', io:{in:'sleeve image + json_schema', out:'{artist, album_name, genre, label, catalog_number}'}}},
+      {id:'sonnet', k:'sub', x:352, y:480, src:'claude', icon:'claude', title:'Sonnet 5', sub:'effort: low',
+        info:{where:'VISION_MODEL = "claude-sonnet-5"', does:'Adaptive thinking with low effort; max_tokens 16000 as a ceiling, not a spend.', io:{in:'image + text', out:'JSON text block'}}},
+      {id:'schema', k:'sub', x:441, y:480, src:'claude', icon:'ti-braces', title:'JSON schema', sub:'output_config',
+        info:{where:'scan.py · _sleeve_schema()', does:'Every field nullable; genre is anyOf(enum, null) so null stays reachable and the model is never forced to invent one.', io:{in:'genres[]', out:'json_schema'}}},
+      genresSub('genres', 530),
+      {id:'mb', k:'main', x:670, y:280, src:'mb', icon:'ti-database-search', title:'MusicBrainz', sub:'release groups',
+        info:{where:'scan.py · lookup_musicbrainz()', does:'Lucene query, ranked by score and title match, throttled to 1 req/s with retry + backoff. Supplies year, country and the alternate pressings.', io:{in:'artist, album', out:'candidates[] (ranked)'}}},
+      {id:'cover', k:'main', x:830, y:280, src:'mb', icon:'ti-photo-search', title:'Cover art', sub:'fetch_cover',
+        info:{where:'scan.py · fetch_cover()', does:'For each candidate: Cover Art Archive → iTunes → (Spotify image). Never raises.', io:{in:'candidate', out:'cover_data (base64)'}}},
+      ...coverSubs(780),
+      {id:'vinyl', k:'agent', x:1000, y:280, src:'claude', icon:'claude', title:'Vinyl check', sub:'flag_vinyl', ports:['Model'],
+        info:{where:'scan.py · flag_vinyl() / confirm_vinyl()', does:'MusicBrainz formats win the tie; where MB is silent, Haiku is asked. Silence only hardens into "none" when Claude says no too.', io:{in:'candidates | album row', out:'confirmed | likely | none'}}},
+      haiku('haiku', 1081),
+      ledger(213),
+      noKey(428, 'the vision call'),
+      ...tail(1310),
+    ],
+    edges:[
+      {f:'trigger',t:'analyse'},{f:'analyse',t:'vision'},{f:'vision',t:'mb'},{f:'mb',t:'cover'},{f:'cover',t:'vinyl'},{f:'vinyl',t:'shelf'},
+      {f:'vision',t:'sonnet',sub:0},{f:'vision',t:'schema',sub:1},{f:'vision',t:'genres',sub:2},
+      {f:'cover',t:'caa',sub:-1},{f:'cover',t:'itunes',sub:-1},{f:'vinyl',t:'haiku',sub:0},{f:'analyse',t:'ledger',sub:-1},
+      {f:'vision',t:'nokey',port:'up',label:'no API key',sc:'nokey'},
+      {f:'mb',t:'vinyl',port:'over',label:'MusicBrainz down',sc:'mbdown'},
+      ...tailEdges,
+    ],
+    scenarios:{happy:'New record', owned:'Already owned', mbdown:'MusicBrainz down', nokey:'No API key'},
+  },
+  spotify: {
+    label:'Spotify link', icon:'ti-brand-spotify', what:'album', kind:'spotify',
+    nodes:[
+      {id:'trigger', k:'trigger', x:40, y:280, src:'spotify', icon:'spotify', title:'Spotify link', sub:'paste · share sheet', trig:true,
+        info:{where:'index.html · spotify field', does:'Accepts open.spotify.com album/track links, spotify: URIs, and spotify.link short codes (expanded server-side, hop-by-hop, never leaving Spotify).', io:{in:'pasted URL', out:'spotify_url'}}},
+      {id:'analyse', k:'main', x:200, y:280, src:'shelf', icon:'face', title:'Analyse', sub:'POST /api/scan',
+        info:{where:'app.py · scan_record()', does:'Same generator as the photo scan, different first stages. Credentials stay on the server.', io:{in:'{spotify_url}', out:'SSE: step… done | error'}}},
+      {id:'spotify', k:'main', x:360, y:280, src:'spotify', icon:'spotify', title:'Spotify API', sub:'extract_from_spotify',
+        info:{where:'scan.py · extract_from_spotify()', does:'Client-credentials token, then /albums or /tracks → album. Gives artist, album and the artwork URL used as a last-resort cover.', io:{in:'kind, spotify_id', out:'{artist, album_name, image_url}'}}},
+      {id:'genre', k:'agent', x:520, y:280, src:'claude', icon:'claude', title:'Genre', sub:'classify_genre', ports:['Model','Genres'],
+        info:{where:'scan.py · classify_genre()', does:'Spotify has no album genres, so Haiku places the record into one of the genres already on your shelf.', io:{in:'artist, album, genres[]', out:'genre | null'}}},
+      haiku('haiku1', 541), genresSub('genres', 641),
+      {id:'mb', k:'main', x:830, y:280, src:'mb', icon:'ti-database-search', title:'MusicBrainz', sub:'release groups',
+        info:{where:'scan.py · lookup_musicbrainz()', does:'Same ranked lookup as the photo scan: year, country, alternates.', io:{in:'artist, album', out:'candidates[]'}}},
+      {id:'cover', k:'main', x:990, y:280, src:'mb', icon:'ti-photo-search', title:'Cover art', sub:'fetch_cover',
+        info:{where:'scan.py · fetch_cover()', does:'Cover Art Archive → iTunes → the Spotify artwork as the final fallback.', io:{in:'candidate, spotify_image', out:'cover_data'}}},
+      ...coverSubs(940),
+      {id:'vinyl', k:'agent', x:1160, y:280, src:'claude', icon:'claude', title:'Vinyl check', sub:'flag_vinyl', ports:['Model'],
+        info:{where:'scan.py · flag_vinyl()', does:'Spotify has everything, including albums never pressed — so the album itself gets a verdict too.', io:{in:'candidates | album row', out:'confirmed | likely | none'}}},
+      haiku('haiku2', 1241),
+      ledger(213),
+      noKey(588, 'the genre call'),
+      ...tail(1470),
+    ],
+    edges:[
+      {f:'trigger',t:'analyse'},{f:'analyse',t:'spotify'},{f:'spotify',t:'genre'},{f:'genre',t:'mb'},{f:'mb',t:'cover'},{f:'cover',t:'vinyl'},{f:'vinyl',t:'shelf'},
+      {f:'genre',t:'haiku1',sub:0},{f:'genre',t:'genres',sub:1},{f:'cover',t:'caa',sub:-1},{f:'cover',t:'itunes',sub:-1},
+      {f:'vinyl',t:'haiku2',sub:0},{f:'analyse',t:'ledger',sub:-1},
+      {f:'genre',t:'nokey',port:'up',label:'no API key',sc:'nokey'},
+      {f:'mb',t:'vinyl',port:'over',label:'MusicBrainz down',sc:'mbdown'},
+      ...tailEdges,
+    ],
+    scenarios:{happy:'New record', owned:'Already owned', mbdown:'MusicBrainz down', nokey:'No API key'},
+  },
+  search: {
+    label:'Search', icon:'ti-search', what:'search', kind:'search',
+    nodes:[
+      {id:'trigger', k:'trigger', x:40, y:280, src:'shelf', icon:'ti-keyboard', title:'Typed phrase', sub:'"thriller mj"', trig:true,
+        info:{where:'index.html · search box', does:'Free text — an artist, an album, or both, misspelled or not.', io:{in:'keyboard', out:'query'}}},
+      {id:'analyse', k:'main', x:200, y:280, src:'shelf', icon:'face', title:'Search', sub:'POST /api/search',
+        info:{where:'app.py · /api/search', does:'Its own pipeline: starts from words, walks the artist\'s whole discography instead of matching one release group.', io:{in:'{query}', out:'SSE: step… done | error'}}},
+      {id:'parse', k:'agent', x:360, y:280, src:'claude', icon:'claude', title:'Parse words', sub:'parse_search_query', ports:['Model'],
+        info:{where:'scan.py · parse_search_query()', does:'Haiku splits the phrase into artist and (optional) album, fixing typos.', io:{in:'query', out:'{artist, album}'}}},
+      haiku('haiku1', 441),
+      {id:'artist', k:'main', x:670, y:280, src:'mb', icon:'ti-microphone-2', title:'Find artist', sub:'lookup_artist',
+        info:{where:'scan.py · lookup_artist()', does:'Resolves the name to a MusicBrainz artist id.', io:{in:'name', out:'{mbid, name}'}}},
+      {id:'discography', k:'main', x:830, y:280, src:'mb', icon:'ti-list-search', title:'Discography', sub:'lookup_discography',
+        info:{where:'scan.py · lookup_discography()', does:'Every album release group by the artist, the typed album floated first.', io:{in:'mbid, album?', out:'releases[]'}}},
+      {id:'covers', k:'main', x:990, y:280, src:'mb', icon:'ti-photo-search', title:'Cover art', sub:'search_covers ×8',
+        info:{where:'scan.py · search_covers()', does:'The only fan-out: 8 workers, at most 24 rows, so nobody pays for artwork no-one scrolls to.', io:{in:'rows[]', out:'cover_data per row'}}},
+      ...coverSubs(940),
+      {id:'vinyl', k:'agent', x:1160, y:280, src:'claude', icon:'claude', title:'Vinyl check', sub:'flag_vinyl', ports:['Model'],
+        info:{where:'scan.py · vinyl_rgids_for_artist() + confirm_vinyl()', does:'A sweep of the artist\'s vinyl formats on MusicBrainz, then Haiku for the ones MB is silent on.', io:{in:'rows[], arid', out:'badge per row'}}},
+      haiku('haiku2', 1241),
+      ledger(213),
+      noKey(428, 'the parse call'),
+      {id:'mberr', k:'main', x:800, y:96, src:'err', icon:'ti-cloud-off', title:'502 · MusicBrainz down', sub:'event: error', capSide:true,
+        info:{where:'app.py · /api/search', does:'A search cannot degrade the way a scan does: without MusicBrainz there is no artist and no discography. It answers 502 "Couldn\'t reach MusicBrainz — try again in a moment". The parse call was already billed, so it still lands in the ledger.', io:{in:'MusicBrainzUnavailable', out:'event: error {status: 502}'}}},
+      ...tail(1470, 'Any owned?').map(n=>n.id==='form'?{...n, icon:'ti-layout-grid', title:'Pick a pressing', sub:'result grid',
+        info:{where:'index.html · search grid', does:'Releases appear as a grid, vinyl-first. Tap one and it fills the form exactly like a scan.', io:{in:'results[]', out:'chosen row → form'}}}
+        : n.id==='dup'?{...n, title:'Owned badge', sub:'on your shelf',
+        info:{where:'index.html · search grid', does:'Rows already on the shelf get an "owned" badge so you do not buy the same record twice.', io:{in:'dupes', out:'badges'}}}:n),
+    ],
+    edges:[
+      {f:'trigger',t:'analyse'},{f:'analyse',t:'parse'},{f:'parse',t:'artist'},{f:'artist',t:'discography'},{f:'discography',t:'covers'},{f:'covers',t:'vinyl'},{f:'vinyl',t:'shelf'},
+      {f:'parse',t:'haiku1',sub:0},{f:'covers',t:'caa',sub:-1},{f:'covers',t:'itunes',sub:-1},{f:'vinyl',t:'haiku2',sub:0},{f:'analyse',t:'ledger',sub:-1},
+      {f:'parse',t:'nokey',port:'up',label:'no API key',sc:'nokey'},
+      {f:'artist',t:'mberr',port:'up',label:'MusicBrainz down',sc:'mbdown'},
+      ...tailEdges.map(e=>e.t==='form'?{...e,label:'false · pick a pressing'}:e),
+    ],
+    scenarios:{happy:'Pick a pressing', owned:'Already owned', mbdown:'MusicBrainz down', nokey:'No API key'},
+  },
+};
+
+/* ── Claude Code API Integration: photo (upload | live camera) on top, artist search below,
+      both landing on the same shelf check, form, save and database ── */
+(()=>{
+  const TAIL=['trigger','ledger','shelf','dup','form','save','db'];
+  const shift=(n,dx,dy,ren={})=>({...n, id:ren[n.id]||n.id, x:n.x+dx, y:n.y+dy});
+  const SREN={caa:'caa2', itunes:'itunes2', vinyl:'vinyl2', nokey:'nokey2'};
+  const photo=FLOWS.photo.nodes.filter(n=>!TAIL.includes(n.id)).map(n=>shift(n,220,-80));
+  const search=FLOWS.search.nodes.filter(n=>!TAIL.includes(n.id)&&n.id!=='analyse').map(n=>shift(n,220,480,SREN));
+  const tailN=tail(1690).map(n=>({...n, y:{shelf:480,dup:300,form:660,save:660,db:660}[n.id]}))
+    .map(n=>n.id==='form'?{...n, sub:'scan fills · search picks'}:n.id==='shelf'?{...n, title:'On the shelf?'}:n);
+  const cost=(id,v,l)=>n=>n.id===id?{...n,cost:v,costLabel:l}:n;
+  const nodes=[
+    {id:'upload', k:'trigger', x:40, y:300, src:'shelf', icon:'ti-upload', title:'Upload photo', sub:'file picker', trig:true,
+      info:{where:'index.html · pickCoverFile()', does:'A plain <input type="file" accept="image/*">. HEIC straight off an iPhone is converted before it goes anywhere.', io:{in:'file', out:'image blob'}}},
+    {id:'camera', k:'trigger', x:40, y:438, src:'shelf', icon:'ti-camera', title:'Live camera', sub:'getUserMedia', trig:true,
+      info:{where:'index.html · openCamera()', does:'Opens the rear camera live (facingMode: environment) and grabs a frame. Without getUserMedia it falls back to the capture="environment" file input.', io:{in:'video stream', out:'captured frame'}}},
+    {id:'query', k:'trigger', x:40, y:576, src:'shelf', icon:'ti-keyboard', title:'Search artists', sub:'"thriller mj"', trig:true,
+      info:{where:'index.html · search box', does:'Type an artist, an album, or both — misspellings welcome. Claude sorts out which is which.', io:{in:'keyboard', out:'query'}}},
+    ...photo.map(n=>n.id!=='analyse'?n:{...n, x:240, y:438, sub:'/api/scan · /api/search', costText:`avg ${usd(AVG.photo)} <small>/ scan</small> · ${usd(AVG.search)} <small>/ search</small>`,
+      info:{where:'app.py · scan_record() / search route', does:'One button, two pipelines. A photo goes to POST /api/scan and Claude vision reads the sleeve; typed words go to POST /api/search and Claude parses them. Both stream their steps back as server-sent events.', io:{in:'{image} | {query}', out:'SSE: step… done | error'}}}).map(cost('vision',AVG.vision,'/ req')).map(cost('vinyl',AVG.vinylPhoto,'/ req')),
+    ...search.map(cost('parse',AVG.parse,'/ req')).map(cost('vinyl2',AVG.vinylSearch,'/ req')),
+    {...ledger(253), y:640, capSide:true},
+    ...tailN,
+  ];
+  const drop=e=>TAIL.includes(e.f)||TAIL.includes(e.t);
+  const ren=e=>({...e, f:SREN[e.f]||e.f, t:SREN[e.t]||e.t});
+  const edges=[
+    {f:'upload',t:'analyse'},{f:'camera',t:'analyse'},{f:'query',t:'analyse'},
+    ...FLOWS.photo.edges.filter(e=>!drop(e)).map(e=>e.f==='analyse'&&e.t==='vision'?{...e,label:'photo · /api/scan'}:e),
+    ...FLOWS.search.edges.filter(e=>!drop(e)&&!(e.f==='analyse'&&e.t==='ledger')).map(ren).map(e=>e.f==='analyse'&&e.t==='parse'?{...e,label:'search · /api/search'}:e),
+    {f:'vinyl',t:'shelf'},{f:'vinyl2',t:'shelf'},
+    {f:'analyse',t:'ledger',sub:-1},
+    ...tailEdges.map(e=>e.t==='form'?{...e,label:'false · new record'}:e),
+  ];
+  FLOWS.claude={label:'Claude API Integration', icon:'claude', what:'sleeve', kind:'photo', nodes, edges,
+    groups:[{x:14, y:262, w:136, h:452, label:'Inputs', sub:'choose one'}],
+    scenarios:{happy:'New record', owned:'Already owned', mbdown:'MusicBrainz down', nokey:'No API key'}};
+  // the Spotify flow gets its averages too
+  FLOWS.spotify.nodes=FLOWS.spotify.nodes.map(cost('analyse',AVG.spotify,'/ scan')).map(cost('genre',AVG.genre,'/ req')).map(cost('vinyl',AVG.vinylSpotify,'/ req'));
+})();
+const INPUTS={upload:'Upload', camera:'Live camera', search:'Search artists'};
+// which pipeline is live right now — the merged tab switches on the chosen input
+const K = () => cur==='claude' ? (inp==='search'?'search':'photo') : FLOWS[cur].kind;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Scripts — each scenario is the exact sequence of SSE frames the route yields
+   ═══════════════════════════════════════════════════════════════════════ */
+const ART='Michael Jackson', ALB='Thriller';
+const flow=(f,t)=>({op:'flow',f,t});
+const st=(n,s,d)=>({op:'state',n,s,d});
+const sub=(f,t)=>({op:'sub',f,t});
+const wait=ms=>({op:'wait',ms});
+const sse=(ev,data)=>({op:'sse',ev,data});
+const log=(text,cls)=>({op:'log',text,cls});
+const ui=(what,data)=>({op:'ui',what,data});
+
+function stage(id,o={}){
+  const node=o.node||id, out=[sse('step',{id,state:'run'}), st(node,'run')];
+  (o.subs||[]).forEach(s=>out.push(sub(node,s), wait(140)));
+  if(o.ticks){ for(let i=1;i<=o.ticks;i++){ out.push(wait(o.tickMs||340), sse('step',{id,state:'run',n:i,of:o.ticks})); } out.push(wait(220)); }
+  else out.push(wait(o.dur||900));
+  if(o.error){ out.push(sse('error',o.error), st(node,'err',`${o.error.status} · failed`)); return out; }
+  const s=o.state||'done';
+  out.push(sse('step',{id,state:s,detail:o.detail}), st(node,s,o.detail));
+  return out;
+}
+
+function build(flowKey, sc){
+  if(flowKey!=='claude') return buildCore(flowKey, sc, 'trigger');
+  if(inp==='search'){
+    const m={trigger:'query', caa:'caa2', itunes:'itunes2', vinyl:'vinyl2', nokey:'nokey2'}, r=x=>m[x]||x;
+    return buildCore('search', sc, 'trigger').map(op=>({...op, ...(op.n&&{n:r(op.n)}), ...(op.f&&{f:r(op.f)}), ...(op.t&&{t:r(op.t)})}));
+  }
+  return buildCore('photo', sc, inp);
+}
+function buildCore(flowKey, sc, T){
+  const F=FLOWS[flowKey], kind=F.kind, owned=sc==='owned', mbdown=sc==='mbdown', nokey=sc==='nokey';
+  const endpoint = kind==='search' ? '/api/search' : '/api/scan';
+  const body = kind==='photo' ? '{"image":"data:image/jpeg;base64,/9j/4AAQ…"}'
+             : kind==='spotify' ? '{"spotify_url":"https://open.spotify.com/album/…"}'
+             : '{"query":"thriller mj"}';
+  const s=[
+    st(T,'done', T==='upload'?'IMG_4821.jpg · 1.2 MB':T==='camera'?'frame captured':kind==='photo'?'1.2 MB → 180 KB':kind==='spotify'?'album link':'"thriller mj"'),
+    ui('start'),
+    log(`→ POST ${endpoint}  Accept: text/event-stream`,'req'),
+    log(`  ${body}`,'note'),
+    ...(T==='trigger' ? [flow('trigger','analyse')]
+       : [flow(T,'analyse')]),
+    st('analyse','run','streaming'),
+    log('← 200 OK  content-type: text/event-stream','req'),
+  ];
+  let calls=[];
+  const bill=c=>{ calls.push(c); s.push(ui('spend',c)); };
+  const fail = {error:'ANTHROPIC_API_KEY is not set', status:503};
+  const abort = (node) => [...[flow(node,'nokey'), st('nokey','err','ANTHROPIC_API_KEY is not set'), st('analyse','err','503'), ui('error', fail),
+    log('  finally: spent[] empty → nothing written to the ledger','note')]];
+
+  if(kind==='photo'){
+    s.push(flow('analyse','vision'));
+    if(nokey){ s.push(...stage('vision',{subs:['schema','genres'],dur:500,error:fail}), ...abort('vision')); return s; }
+    s.push(...stage('vision',{subs:['sonnet','schema','genres'],dur:1700,detail:`${ART} — ${ALB}`}));
+    s.push(ui('fill',{artist:ART,album:ALB,genre:'Pop',label:'Epic',cat:'QE 38112'}));
+    bill(['claude-sonnet-5',1420,96,AVG.vision,'reading the sleeve']);
+    s.push(flow('vision','mb'));
+  } else if(kind==='spotify'){
+    s.push(flow('analyse','spotify'));
+    s.push(...stage('spotify',{dur:800,detail:`${ART} — ${ALB}`}));
+    s.push(ui('fill',{artist:ART,album:ALB}));
+    s.push(flow('spotify','genre'));
+    if(nokey){ s.push(...stage('genre',{subs:['genres'],dur:400,error:fail}), ...abort('genre')); return s; }
+    s.push(...stage('genre',{subs:['haiku1','genres'],dur:900,detail:'Pop'}));
+    s.push(ui('fill',{genre:'Pop'}));
+    bill(['claude-haiku-4-5',160,8,AVG.genre,'placing it in a genre']);
+    s.push(flow('genre','mb'));
+  } else {
+    s.push(flow('analyse','parse'));
+    if(nokey){ s.push(...stage('parse',{dur:400,error:fail}), ...abort('parse')); return s; }
+    s.push(...stage('parse',{subs:['haiku1'],dur:900,detail:`${ART} · ${ALB}`}));
+    bill(['claude-haiku-4-5',180,40,AVG.parse,'reading your words']);
+    if(mbdown){
+      const down={error:"Couldn't reach MusicBrainz — try again in a moment", status:502};
+      s.push(flow('parse','artist'), ...stage('artist',{dur:1600,error:down}),
+        flow('artist','mberr'), st('mberr','err','try again in a moment'), st('analyse','err','502'), ui('error',down),
+        ...ledgerSteps(calls));
+      return s;
+    }
+    s.push(flow('parse','artist'), ...stage('artist',{dur:800,detail:ART}));
+    s.push(flow('artist','discography'), ...stage('discography',{ticks:3,detail:'12 release(s) found'}));
+    s.push(flow('discography','covers'), ...stage('covers',{subs:['caa','itunes'],ticks:12,tickMs:170,detail:'11 of 12 had artwork'}));
+    s.push(flow('covers','vinyl'), ...stage('vinyl',{subs:['haiku2'],dur:1000,detail:'12 confirmed on vinyl'}));
+    bill(['claude-haiku-4-5',220,16,AVG.vinylSearch,'confirming it is vinyl']);
+    s.push(flow('vinyl','shelf'), ...stage('shelf',{dur:500,detail: owned?'1 already on your shelf':'0 already on your shelf'}));
+    s.push(sse('done',{results:'[12 rows]', artist:{name:ART}}), st('analyse','done','12 results'));
+    s.push(ui('grid'));
+    s.push(...ledgerSteps(calls));
+    if(owned){ s.push(flow('shelf','dup'), st('dup','warn','Thriller · owned'), ui('dup')); return s; }
+    s.push(flow('shelf','form'), st('form','run','choosing…'), wait(1200), ui('pick'), ui('fill',{artist:ART,album:ALB,year:'1982',genre:'Pop',country:'US',cover:true}), st('form','done','Thriller (1982)'));
+    s.push(...saveSteps()); return s;
+  }
+
+  // shared middle: MusicBrainz → cover → vinyl → shelf
+  if(mbdown){
+    s.push(sse('step',{id:'mb',state:'run'}), st('mb','run'), wait(1600),
+      log('  MusicBrainz 503 ×4 — retry budget spent','note'),
+      sse('step',{id:'mb',state:'skip',detail:'MusicBrainz unavailable — no year or alternates'}), st('mb','skip','unavailable'));
+    // no candidates → the cover stage is skipped: the run takes the bypass straight to the vinyl check
+    s.push(sse('step',{id:'cover',state:'run'}), sse('step',{id:'cover',state:'skip',detail:'nothing to fetch artwork for'}), st('cover','skip','nothing to fetch'));
+    s.push(flow('mb','vinyl'), ...stage('vinyl',{subs:[kind==='photo'?'haiku':'haiku2'],dur:900,detail:'likely'}));
+  } else {
+    s.push(...stage('mb',{ticks:4,detail:'3 pressing(s) found'}));
+    s.push(ui('fill',{year:'1982',country:'US'}));
+    s.push(flow('mb','cover'), ...stage('cover',{subs:['caa','itunes'],ticks:3,tickMs:420,detail:'3 of 3 had artwork'}));
+    s.push(ui('fill',{cover:true, alts:3}));
+    s.push(flow('cover','vinyl'), ...stage('vinyl',{subs:[kind==='photo'?'haiku':'haiku2'],dur:700,detail:'confirmed'}));
+  }
+  bill(['claude-haiku-4-5',220,8,kind==='photo'?AVG.vinylPhoto:AVG.vinylSpotify,'confirming it is vinyl']);
+  s.push(ui('fill',{vinyl: mbdown?'likely':'confirmed'}));
+  s.push(flow('vinyl','shelf'), ...stage('shelf',{dur:500,detail: owned?'already on your shelf':'not a duplicate'}));
+  s.push(sse('done',{source:kind, artist:ART, album_name:ALB, genre:'Pop', vinyl: mbdown?'likely':'confirmed',
+      candidates: mbdown?'[]':'[3]', lookup_failed:mbdown, duplicate_of: owned?{id:87,artist:ART,album_name:ALB}:null}),
+    st('analyse','done','stream closed'));
+  if(mbdown) s.push(ui('mbdown'));
+  s.push(...ledgerSteps(calls));
+  if(owned){ s.push(flow('shelf','dup'), st('dup','warn','record #87'), ui('dup')); return s; }
+  s.push(flow('shelf','form'), st('form','run','reviewing…'), wait(1300), st('form','done', mbdown?'year left blank':'looks right'));
+  s.push(...saveSteps());
+  return s;
+}
+function ledgerSteps(calls){
+  const total=calls.reduce((a,c)=>a+c[3],0);
+  return [sub('analyse','ledger'), wait(200),
+    log(`  finally: ledger ← ${calls.length} row(s) · $${total.toFixed(4)}`,'s-shelf'), st('ledger','done',`${calls.length} call${calls.length>1?'s':''} · $${total.toFixed(4)}`),
+    ui('cost',{total,calls})];
+}
+function saveSteps(){
+  return [flow('form','save'), ui('press'), st('save','run'),
+    log('→ POST /api/records  {"artist":"Michael Jackson","album_name":"Thriller","year":"1982",…}','req'), wait(700),
+    log('← 201 Created  {"id":412,…}','req'), st('save','done','201 Created'),
+    flow('save','db'), st('db','done','record #412'), ui('saved')];
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Rendering
+   ═══════════════════════════════════════════════════════════════════════ */
+const $=id=>document.getElementById(id);
+const world=$('world'), svg=$('edges'), canvas=$('canvas');
+let cur='claude', scen='happy', inp='upload', nodes={}, edgeEls={};
+
+function geom(n){ const [w,h]=SIZE[n.k]; return {x:n.x,y:n.y,w,h,cx:n.x+w/2,cy:n.y+h/2}; }
+function edgePath(e, F){
+  const A=F.nodes.find(n=>n.id===e.f), B=F.nodes.find(n=>n.id===e.t), a=geom(A), b=geom(B);
+  if(e.sub==='up'){
+    const y1=a.y, y2=b.y+b.h, mid=(y1-y2)/2;
+    return {d:`M${a.cx},${y1} C${a.cx},${y1-mid} ${b.cx},${y2+mid} ${b.cx},${y2}`, dash:true};
+  }
+  if(e.sub!==undefined){
+    let px=a.cx;
+    if(e.sub>=0 && A.ports){ px = a.x + (a.w/(A.ports.length+1))*(e.sub+1); }
+    const y1=a.y+a.h, y2=b.y, mid=(y2-y1)/2;
+    return {d:`M${px},${y1} C${px},${y1+mid} ${b.cx},${y2-mid} ${b.cx},${y2}`, dash:true};
+  }
+  if(e.port==='up'){   // straight up out of the node's top, into the bottom of an end node
+    const x1=a.cx, y1=a.y, x2=b.cx, y2=b.y+b.h;
+    return {d:`M${x1},${y1} C${x1},${y1-50} ${x2},${y2+50} ${x2},${y2}`};
+  }
+  if(e.port==='over'){ // an arc over the stages it skips, landing on the target's top
+    const x1=a.cx, y1=a.y, x2=b.x+40, y2=b.y;
+    return {d:`M${x1},${y1} C${x1},${y1-130} ${x2},${y2-130} ${x2},${y2}`};
+  }
+  let y1=a.cy;
+  if(e.port==='true') y1=a.cy-20; if(e.port==='false') y1=a.cy+20;
+  const x1=a.x+a.w, x2=b.x, y2=b.cy, dx=Math.max(50,(x2-x1)/2);
+  return {d:`M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`, lx:x1+24, ly:y1};
+}
+const TABS = ['claude','spotify'];
+const SC_COLOR={happy:'#5FBF7A', owned:'var(--accent)', mbdown:'var(--mb)', nokey:'var(--danger)'};
+const colorOf = src => ({claude:'var(--claude)',mb:'var(--mb)',spotify:'var(--spotify)',shelf:'var(--accent)',err:'var(--danger)'}[src]||'var(--accent)');
+
+function render(){
+  const F=FLOWS[cur];
+  world.querySelectorAll('.node,.group').forEach(n=>n.remove());
+  (F.groups||[]).forEach(g=>{ const d=document.createElement('div'); d.className='group';
+    Object.assign(d.style,{left:g.x+'px',top:g.y+'px',width:g.w+'px',height:g.h+'px'});
+    d.innerHTML=`<b>${g.label}<small>${g.sub||''}</small></b>`; world.insertBefore(d,svg); });
+  svg.innerHTML=`<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="var(--edge)"/></marker></defs>`;
+  nodes={}; edgeEls={};
+  let maxX=0,maxY=0; const labels=[];
+  F.edges.forEach(e=>{
+    const p=edgePath(e,F), path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',p.d); path.setAttribute('class','edge'+(p.dash?' dash':''));
+    if(!p.dash) path.setAttribute('marker-end','url(#arr)');
+    const B=F.nodes.find(n=>n.id===e.t); path.style.setProperty('--c',colorOf(B.src));
+    svg.appendChild(path); edgeEls[e.f+'>'+e.t]=path;
+    if(e.label) labels.push([e,path]);
+  });
+  // drawn after every edge so a pill always sits on top of the lines it crosses
+  labels.forEach(([e,path])=>{
+    const pt=path.getPointAtLength(path.getTotalLength()*(e.at||.5)), text=(e.sc||e.inp?'▶ ':'')+e.label, w=text.length*6.4+16;
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    if(!e.sc&&!e.inp) g.style.cursor='default';
+    g.setAttribute('class','branch'+((e.sc&&e.sc===scen)||(e.inp&&e.inp===inp)?' on':''));
+    g.style.setProperty('--bc', e.inp?'var(--accent)':SC_COLOR[e.sc]||'var(--label)');
+    g.innerHTML=`<title>${!e.sc&&!e.inp?e.label:'Run '}${!e.sc&&!e.inp?'':e.inp?'from "'+INPUTS[e.inp]+'"':'the "'+FLOWS[cur].scenarios[e.sc]+'" path'}</title><rect x="${pt.x-w/2}" y="${pt.y-10}" width="${w}" height="20" rx="10"/>
+      <text x="${pt.x}" y="${pt.y+4}" text-anchor="middle">${text}</text>`;
+    if(e.sc) g.addEventListener('click',ev=>{ev.stopPropagation(); scen=e.sc; begin();});
+    svg.appendChild(g);
+  });
+  F.nodes.forEach(n=>{
+    const g=geom(n), el=document.createElement('div');
+    el.className=`node k-${n.k} s-wait`; el.dataset.src=n.src; el.dataset.id=n.id;
+    Object.assign(el.style,{left:g.x+'px',top:g.y+'px',width:g.w+'px',height:g.h+'px'});
+    const inner = n.k==='media'
+      ? `<div class="gif"><div class="gif-ph"><i class="ti ti-gif"></i><b>GIF placeholder</b><span>assets/sleeve-scan.gif</span></div>
+           <img src="assets/sleeve-scan.gif" alt="" onerror="this.remove()"></div>`
+      : n.k==='agent'
+      ? `<div class="ico">${icon(n.icon)}</div><div class="in-title"><b>${n.title}</b><span>${n.sub}</span></div>`
+      : `<div class="ico">${icon(n.icon)}</div>`;
+    const cap = n.k==='agent' ? `<div class="cap" style="top:calc(100% + ${n.ports?22:0}px)"><span class="detail"></span></div>`
+      : `<div class="cap${n.capSide?' side':''}"><b>${n.title}</b><span>${n.sub}</span><span class="detail"></span></div>`;
+    let ports='';
+    if(n.k!=='trigger' && n.k!=='sub' && n.src!=='err') ports+=`<div class="port in"></div>`;
+    F.edges.forEach(e=>{
+      if(e.f===n.id && (e.port==='up'||e.port==='over')) ports+=`<div class="port" style="top:-5px;left:calc(50% - 5px)"></div>`;
+      if(e.t===n.id && (e.port==='up'||e.sub==='up')) ports+=`<div class="port" style="bottom:-5px;left:calc(50% - 5px)"></div>`;
+      if(e.t===n.id && e.port==='over') ports+=`<div class="port" style="top:-5px;left:35px"></div>`;
+    });
+    if(n.k==='sub') ports+=`<div class="port b" style="top:-5px;left:calc(50% - 4.5px)"></div>`;
+    else if(n.k==='if') ports+=`<div class="port out" style="top:calc(50% - 25px)"></div><div class="port out" style="top:calc(50% + 15px)"></div>`;
+    else if(!['dup','db'].includes(n.id) && n.src!=='err') ports+=`<div class="port out"></div>`;
+    (n.ports||[]).forEach((p,i)=>{ const x=(g.w/(n.ports.length+1))*(i+1);
+      ports+=`<div class="port b" style="left:${x-4.5}px"></div><div class="plabel" style="left:${x}px">${p}</div>`; });
+    if(n.id==='analyse') ports+=`<div class="port b" style="left:calc(50% - 4.5px)"></div>`;
+    const chip = n.costText ? `<div class="cost run" title="average Claude API spend per run"><i class="ti ti-coin"></i>${n.costText}</div>` : n.cost ? `<div class="cost${n.costLabel==='/ req'?'':' run'}" title="average Claude API spend ${n.costLabel==='/ req'?'per request':'per run'}">${n.costLabel==='/ req'?'<span style="width:11px;height:11px;display:flex">'+claudeMark()+'</span>':'<i class="ti ti-coin"></i>'}avg ${usd(n.cost)} <small>${n.costLabel}</small></div>` : '';
+    el.innerHTML=`<div class="box">${inner}</div>${chip}${cap}${ports}${n.trig?'<i class="ti ti-bolt-filled trig"></i>':''}<div class="badge"><i class="ti ti-check"></i></div>`;
+    if(PICK[n.id] && cur==='claude'){ el.classList.add('pick'); el.insertAdjacentHTML('beforeend','<div class="tap"><i class="ti ti-pointer"></i>click to start</div>'); }
+    el.addEventListener('click',ev=>{ev.stopPropagation(); if(PICK[n.id] && cur==='claude' && !running) choose(n.id); else inspect(n);});
+    world.appendChild(el); nodes[n.id]=el;
+    maxX=Math.max(maxX,g.x+g.w+80); maxY=Math.max(maxY,g.y+g.h+90);
+  });
+  world.style.width=maxX+'px'; world.style.height=maxY+'px';
+  bounds={w:maxX,h:maxY};
+  renderPanel(); fit();
+}
+
+/* ── inspector ── */
+function inspect(n){
+  document.querySelectorAll('.node.sel').forEach(x=>x.classList.remove('sel'));
+  nodes[n.id].classList.add('sel');
+  const i=n.info||{}, el=$('inspector');
+  el.innerHTML=`<h4><span style="color:${colorOf(n.src)};display:flex;font-size:18px;width:20px;height:20px">${icon(n.icon)}</span>${n.title}<i class="ti ti-x x"></i></h4>
+    <div class="where">${i.where||''}</div><p>${i.does||''}</p>
+    ${i.io?`<dl class="io"><dt>in</dt><dd>${i.io.in}</dd><dt>out</dt><dd>${i.io.out}</dd></dl>`:''}`;
+  el.querySelector('svg')?.setAttribute('style','width:20px;height:20px');
+  el.querySelector('img')?.setAttribute('style','width:18px;height:18px');
+  el.querySelector('.x').onclick=closeInspector;
+  el.classList.add('on');
+}
+function closeInspector(){ $('inspector').classList.remove('on'); document.querySelectorAll('.node.sel').forEach(x=>x.classList.remove('sel')); }
+
+/* ── pan & zoom ── */
+let view={x:0,y:0,k:1}, bounds={w:1,h:1};
+function apply(){ world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;
+  canvas.style.backgroundPosition=`${view.x}px ${view.y}px`; canvas.style.backgroundSize=`${22*view.k}px ${22*view.k}px`; }
+function fit(){
+  const r=canvas.getBoundingClientRect(), pad=40;
+  const k=Math.min((r.width-pad*2)/bounds.w,(r.height-pad*2-30)/bounds.h,1.1);
+  view={k, x:(r.width-bounds.w*k)/2, y:(r.height-bounds.h*k)/2+10};
+  // on a phone, fitting 2000px of graph makes it unreadable — start zoomed at the trigger, drag to follow
+  if(r.width<600){ view.k=.5; view.x=16; view.y=(r.height-bounds.h*.5)/2; }
+  apply();
+}
+function zoomAt(f,cx,cy){ const k=Math.min(2.2,Math.max(.25,view.k*f)); view.x=cx-(cx-view.x)*(k/view.k); view.y=cy-(cy-view.y)*(k/view.k); view.k=k; apply(); }
+canvas.addEventListener('wheel',e=>{e.preventDefault(); const r=canvas.getBoundingClientRect(); zoomAt(e.deltaY<0?1.1:1/1.1,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+let drag=null;
+canvas.addEventListener('pointerdown',e=>{ if(e.target.closest('.node,.zoom,.inspector,.legend,.branch'))return; drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,moved:false}; canvas.classList.add('drag'); canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove',e=>{ if(!drag)return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true; view.x=drag.vx+dx; view.y=drag.vy+dy; apply(); });
+canvas.addEventListener('pointerup',()=>{ if(drag&&!drag.moved)closeInspector(); drag=null; canvas.classList.remove('drag'); });
+$('zin').onclick=()=>{const r=canvas.getBoundingClientRect(); zoomAt(1.2,r.width/2,r.height/2);};
+$('zout').onclick=()=>{const r=canvas.getBoundingClientRect(); zoomAt(1/1.2,r.width/2,r.height/2);};
+$('zfit').onclick=fit;
+addEventListener('resize',fit);
+
+/* ── face sprite ticker: steps every visible .face.on through 30 frames ── */
+let frame=0;
+setInterval(()=>{ frame=(frame+1)%30;
+  document.querySelectorAll('.face.on').forEach(f=>{ const s=parseFloat(getComputedStyle(f).width); f.style.backgroundPositionX=`${-frame*s}px`; });
+},70);
+
+/* ═══════════════════════════════════════════════════════════════════════
+   The app-side panel
+   ═══════════════════════════════════════════════════════════════════════ */
+function renderPanel(){
+  const F=FLOWS[cur], kind=K();
+  const stages = kind==='photo'?['vision','mb','cover','vinyl','shelf']:kind==='spotify'?['spotify','genre','mb','cover','vinyl','shelf']:['parse','artist','discography','covers','vinyl','shelf'];
+  $('anSteps').innerHTML=stages.map(id=>{const m=STAGE_META[id]; return `<div class="an-step wait" data-src="${m.src}" data-id="${id}">
+    <div class="an-badge"><i class="ti ${m.icon}"></i></div>
+    <div class="an-body"><div class="an-label">${m.label} <small>${m.sub}</small><span class="tick"></span></div><div class="an-detail"></div><div class="an-pips"></div></div></div>`;}).join('');
+  $('anWhat').textContent=' '+(kind==='search'?'search':kind==='spotify'?'album':'sleeve');
+  $('anStage').textContent='idle'; $('anClock').textContent='0.0s'; $('anBar').style.width='0';
+  $('panel').classList.remove('live');
+  $('anCost').innerHTML=`avg ${usd(AVG[kind])} per ${kind==='search'?'search':'scan'} · billed to <span style="font-family:var(--font-mono)">ANTHROPIC_API_KEY</span>`;
+  const card = kind==='photo' && inp==='camera' ? `<div class="ph"><i class="ti ti-camera"></i></div><div class="t"><b>live camera</b><span>rear camera · tap to capture</span></div>`
+    : kind==='photo' ? `<img src="thriller.jpg" alt=""><div class="t"><b>sleeve photo</b><span>IMG_4821.jpg · 1.2 MB</span></div>`
+    : kind==='spotify' ? `<div class="ph" style="--c:var(--spotify)"><img src="../spotify-logo.png" style="width:30px;height:30px;box-shadow:none" alt=""></div><div class="t"><b>spotify link</b><span>open.spotify.com/album/…?si=8f2c</span></div>`
+    : `<div class="ph"><i class="ti ti-search"></i></div><div class="t"><b>search artists</b><span>"thriller mj"</span></div>`;
+  $('inputCard').innerHTML=card;
+  $('analyseLabel').textContent = kind==='search'?'search':'analyse';
+  $('scanHint').textContent='nothing is sent until you press it';
+  $('analyseBtn').disabled=false;
+  ['result','nErr','nDup','nMb','nSaved'].forEach(id=>$(id).classList.remove('on'));
+  $('saveBtn').classList.remove('hide','press');
+  $('rFields').innerHTML=''; $('rAlts').innerHTML=''; $('rCoverWrap').innerHTML='<div class="r-cover none"><i class="ti ti-vinyl"></i></div>';
+  $('log').innerHTML='';
+  document.querySelectorAll('.face').forEach(f=>{f.classList.remove('on'); f.style.backgroundPositionX='0';});
+  formState={};
+  resetBill(); renderGrid('demo');
+}
+let formState={};
+
+/* ── search results grid ──
+   Michael Jackson's albums from MusicBrainz, covers from Cover Art Archive (front-250).
+   Off the Wall genuinely has no front cover there, so the grid shows a real miss. */
+const DEMO=[['Ben','1972','1972a'],['Got to Be There','1972','1972b'],['Music & Me','1973','1973'],['Forever, Michael','1975','1975'],
+  ['Off the Wall','1979',null],['Thriller','1982','1982'],['Bad','1987','1987'],['Dangerous','1991','1991'],
+  ['HIStory','1995','1995'],['Invincible','2001','2001'],['Michael','2010','2010'],['Xscape','2014','2014']];
+function renderGrid(mode){
+  // mode: 'demo' — everything loaded · 'wait' — a search is out, nothing back yet · 'rows' — titles back, art pending
+  $('sgrid').innerHTML = mode==='wait' ? Array.from({length:8},()=>'<div class="tile skel"><div class="art"></div></div>').join('')
+    : DEMO.map(([t,y,f],i)=>`<div class="tile ${mode==='demo'?'vinyl':'skel'}" data-i="${i}"><div class="art">${mode==='demo'?art(f):''}<span class="tag v">vinyl</span><span class="tag o">owned</span></div><b>${t}</b><span class="y">${y}</span></div>`).join('');
+  $('sgridNote').textContent = mode==='demo' ? '12 releases · 11 with artwork · loaded as demo data, a search run streams them in live'
+    : mode==='wait' ? 'waiting for the discography…' : 'fetching cover art…';
+  $('sgridTag').textContent = mode==='demo' ? 'demo · "thriller mj"' : 'live · "thriller mj"';
+}
+const art = f => f ? `<img src="covers/${f}.jpg" alt="">` : '<div class="none"><i class="ti ti-photo-off"></i>no artwork</div>';
+function gridReveal(n){
+  document.querySelectorAll('#sgrid .tile').forEach((el,i)=>{ if(i<n && el.classList.contains('skel')){
+    el.classList.remove('skel'); el.querySelector('.art').insertAdjacentHTML('afterbegin',art(DEMO[i][2])); } });
+}
+function gridPick(){ document.querySelector('#sgrid .tile[data-i="5"]')?.classList.add('picked'); $('sgridNote').textContent='you picked Thriller (1982) — it fills the form like a scan'; }
+
+/* ── the bill ── */
+let billTotal=0, billShown=0, billAnim=null;
+const runWord = () => K()==='search'?'search':'scan';
+function resetBill(){
+  billTotal=0; setBill(0);
+  $('billMark').innerHTML=claudeMark(); $('meterMark').innerHTML=claudeMark();
+  $('billTag').textContent='this '+runWord(); $('meterLabel').textContent='Claude API · this '+runWord();
+  $('meterAvg').textContent=`avg ${usd(AVG[K()])} per ${runWord()}`;
+  $('billSub').className='bill-sub';
+  $('billSub').innerHTML=`Nothing billed yet. On average a ${runWord()} costs <b>${usd(AVG[K()])}</b>.`;
+  $('billRows').innerHTML='';
+}
+function setBill(v){ billShown=v; $('billBig').innerHTML=`<span class="cur">$</span>${v.toFixed(4)}`; $('meterVal').textContent=usd(v); }
+function countTo(target){
+  clearInterval(billAnim); const from=billShown, t0=performance.now(), D=600;
+  billAnim=setInterval(()=>{ const t=Math.min(1,(performance.now()-t0)/D), e=1-Math.pow(1-t,3);
+    setBill(from+(target-from)*e); if(t>=1) clearInterval(billAnim); },30);
+  ['bill','meter'].forEach(id=>{ const el=$(id); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); });
+}
+function spend(c){
+  billTotal+=c[3]; countTo(billTotal);
+  $('billRows').insertAdjacentHTML('beforeend',`<div class="bill-row"><span class="mdl">${c[0].replace('claude-','').replace('-4-5',' 4.5').replace('-5',' 5')}</span>
+    <span class="what">${c[4]}<small>${c[1].toLocaleString()} in · ${c[2]} out tokens</small></span><span class="usd">${usd(c[3])}</span></div>`);
+  $('billSub').innerHTML=`${$('billRows').children.length} Claude call${$('billRows').children.length>1?'s':''} so far · billed the moment each one returns.`;
+}
+function setFields(patch){
+  Object.assign(formState,patch);
+  const rows=[['artist','Artist'],['album','Album'],['year','Year'],['genre','Genre'],['country','Country'],['label','Label'],['cat','Catalog'],['vinyl','Format']];
+  $('result').classList.add('on');
+  $('rFields').innerHTML=rows.filter(([k])=>k!=='label'&&k!=='cat'||formState[k]).map(([k,l])=>{
+    let v=formState[k];
+    if(k==='vinyl'&&v) v=`<span class="pill ${v==='likely'?'muted':''}"><i class="ti ti-vinyl"></i>${v==='confirmed'?'vinyl':'likely vinyl'}</span>`;
+    return `<dt>${l}</dt><dd class="${v?'':'empty'} ${k in patch?'fill':''}">${v||'—'}</dd>`;}).join('');
+  if(patch.cover) $('rCoverWrap').innerHTML='<img class="r-cover fill" src="thriller.jpg" alt="">';
+  if(patch.alts) $('rAlts').innerHTML=Array.from({length:patch.alts},()=>'<div></div>').join('')+`<span>${patch.alts} pressings</span>`;
+}
+
+let t0=0, clockTimer=null;
+function uiOp(what,data){
+  if(what==='start'){
+    $('panel').classList.add('live'); $('anStage').textContent='starting…'; $('analyseBtn').disabled=true; $('scanHint').textContent='sent — streaming…';
+    document.querySelectorAll('#panelFace,#btnFace,.node[data-id="analyse"] .face').forEach(f=>f.classList.add('on'));
+    if(K()==='search') renderGrid('wait');
+    t0=performance.now(); clearInterval(clockTimer);
+    clockTimer=setInterval(()=>{$('anClock').textContent=((performance.now()-t0)/1000*speed).toFixed(1)+'s';},100);
+  }
+  if(what==='fill') setFields(data);
+  if(what==='pick') gridPick();
+  if(what==='mbdown') $('nMb').classList.add('on');
+  if(what==='dup'){ const n=$('nDup'); n.querySelector('div').innerHTML=`<b>${ALB}</b> by ${ART} is already on your shelf (record #87). <u style="cursor:pointer">open it</u> or save anyway.`; n.classList.add('on'); }
+  if(what==='error'){ stopClock();
+    if(!billTotal){ $('billSub').className='bill-sub'; $('billSub').innerHTML=`<b>${usd(0)}</b>: the request failed before any Claude call, so nothing was billed.`; } const n=$('nErr'); n.querySelector('div').innerHTML=`<b>${data.status}</b> · ${data.error}<br><span style="color:var(--label)">${data.status===503?'The scan stays visible; manual entry still works.':'Nothing was saved.'}</span>`; n.classList.add('on'); $('anStage').textContent='failed'; }
+  if(what==='press'){ const b=$('saveBtn'); b.classList.add('press'); setTimeout(()=>b.classList.remove('press'),250); }
+  if(what==='saved'){ $('saveBtn').classList.add('hide'); const n=$('nSaved'); n.querySelector('div').innerHTML=`Saved to your shelf — <b>record #412</b>. Daily backup picks it up tonight.`; n.classList.add('on'); }
+  if(what==='spend') spend(data);
+  if(what==='cost'){
+    const avg=AVG[K()], failed=document.querySelector('.node.s-err');
+    $('billSub').className='bill-sub'+(failed?' warn':'');
+    $('billSub').innerHTML = failed
+      ? `This ${runWord()} cost <b>${usd(data.total)}</b> even though it failed: the call had already returned, and nothing refunds it.`
+      : `This ${runWord()} cost <b>${usd(data.total)}</b> · ${Math.abs(data.total-avg)<.00005?'right on':'vs'} the ${usd(avg)} average. Written to the ScanSpend ledger.`; $('anCost').innerHTML=`this ${K()==='search'?'search':'scan'} cost <b style="color:var(--text)">$${data.total.toFixed(4)}</b> · ${data.calls.map(c=>c[0].replace('claude-','')).join(' + ')}`; }
+}
+function stopClock(){ clearInterval(clockTimer); document.querySelectorAll('#panelFace,#btnFace,.node[data-id="analyse"] .face').forEach(f=>f.classList.remove('on')); }
+
+function onSse(ev,data){
+  const ts=((performance.now()-t0)/1000*speed).toFixed(2).padStart(5,' ');
+  const src = data.id && STAGE_META[data.id] ? STAGE_META[data.id].src : '';
+  const json = JSON.stringify(data);
+  addLog(`<span class="ts">+${ts}s</span><span class="ev ${ev}">${ev.padEnd(5,' ')}</span> <span class="s-${src}">${esc(json)}</span>`);
+  if(ev==='step' && K()==='search'){
+    if(data.id==='discography' && data.state==='done') renderGrid('rows');
+    if(data.id==='covers' && data.n) gridReveal(data.n);
+    if(data.id==='covers' && data.state==='done'){ gridReveal(99); $('sgridNote').textContent='11 of 12 had artwork — Off the Wall has none on Cover Art Archive'; }
+    if(data.id==='vinyl' && data.state==='done') document.querySelectorAll('#sgrid .tile').forEach(t=>t.classList.add('vinyl'));
+    if(data.id==='shelf' && data.state==='done' && /^1 /.test(data.detail||'')) document.querySelector('#sgrid .tile[data-i="5"]')?.classList.add('owned');
+  }
+  if(ev==='step'){
+    const row=document.querySelector(`.an-step[data-id="${data.id}"]`); if(!row) return;
+    row.className=`an-step ${data.state}`;
+    const tick=row.querySelector('.tick');
+    tick.innerHTML = data.state==='done'?'<i class="ti ti-check"></i>':data.state==='skip'?'<i class="ti ti-minus"></i>':'';
+    if(data.detail) row.querySelector('.an-detail').textContent=data.detail;
+    if(data.of){ const p=row.querySelector('.an-pips'); if(p.children.length!==data.of) p.innerHTML='<i></i>'.repeat(data.of);
+      [...p.children].forEach((c,i)=>c.classList.toggle('on',i<data.n)); }
+    if(data.state==='done'||data.state==='skip') row.querySelector('.an-pips').querySelectorAll('i').forEach(i=>i.classList.add('on'));
+    if(data.state==='run') $('anStage').textContent=STAGE_META[data.id].label+'…';
+    const all=document.querySelectorAll('.an-step').length, fin=document.querySelectorAll('.an-step.done,.an-step.skip').length;
+    $('anBar').style.width=(fin/all*100)+'%';
+  }
+  if(ev==='error'){ const row=document.querySelector('.an-step.run'); if(row){ row.className='an-step err'; row.querySelector('.tick').innerHTML='<i class="ti ti-x"></i>'; row.querySelector('.an-detail').textContent=data.error; } }
+  if(ev==='done'){ stopClock(); $('anStage').textContent='done'; $('anBar').style.width='100%'; }
+}
+function addLog(html){ const l=$('log'), d=document.createElement('div'); d.className='l'; d.innerHTML=html; l.appendChild(d); l.scrollTop=l.scrollHeight; }
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Runner
+   ═══════════════════════════════════════════════════════════════════════ */
+let speed=1, runId=0, running=false, stepMode=false, stepResolve=null, script=[], pc=0;
+const sleep=(ms,id)=>new Promise(r=>setTimeout(()=>r(id===runId),ms/speed));
+
+function setNode(id,s,d){
+  const el=nodes[id]; if(!el) return;
+  el.classList.remove('s-wait','s-run','s-done','s-skip','s-err','s-warn'); el.classList.add('s-'+s);
+  const b=el.querySelector('.badge i'); b.className='ti '+({skip:'ti-minus',err:'ti-x',warn:'ti-alert-triangle'}[s]||'ti-check');
+  const det=el.querySelector('.detail'); if(det&&d!==undefined){ det.textContent=d; det.classList.add('on'); }
+}
+function pulse(pathEl,color,dur,reverse,id){
+  return new Promise(res=>{
+    const len=pathEl.getTotalLength(), c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('r',5); c.setAttribute('class','pulse'); c.setAttribute('fill',color); c.style.setProperty('--c',color);
+    svg.appendChild(c); const start=performance.now(), D=dur/speed;
+    (function tick(now){
+      if(id!==runId){c.remove();return res(false);}
+      let t=Math.min(1,(now-start)/D); const e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+      const p=pathEl.getPointAtLength((reverse?1-e:e)*len); c.setAttribute('cx',p.x); c.setAttribute('cy',p.y);
+      if(t<1) setTimeout(()=>tick(performance.now()),16); else {c.remove(); res(true);}
+    })(start);
+  });
+}
+const nodeColor = id => colorOf(FLOWS[cur].nodes.find(n=>n.id===id)?.src);
+
+async function exec(op,id){
+  if(op.op==='wait') return sleep(op.ms,id);
+  if(op.op==='state') return setNode(op.n,op.s,op.d);
+  if(op.op==='sse') return onSse(op.ev,op.data);
+  if(op.op==='log') return addLog(`<span class="${op.cls||''}">${esc(op.text)}</span>`);
+  if(op.op==='ui') return uiOp(op.what,op.data);
+  if(op.op==='flow'){
+    const p=edgeEls[op.f+'>'+op.t]; if(!p) return;
+    p.classList.add('lit'); await pulse(p,nodeColor(op.t),650,false,id); return;
+  }
+  if(op.op==='sub'){
+    const p=edgeEls[op.f+'>'+op.t]; if(!p) return;
+    p.classList.add('lit'); setNode(op.t,'run');
+    // request down, response back up — not awaited, so a stage's tools light together
+    pulse(p,nodeColor(op.t),480,false,id).then(ok=>ok&&pulse(p,nodeColor(op.t),480,true,id)).then(ok=>ok&&setNode(op.t,'done'));
+  }
+}
+async function run(){
+  if(running) { stepMode=false; stepResolve?.(); return; }
+  if(pc>=script.length) reset();
+  running=true; const id=runId; updateButtons();
+  while(pc<script.length && id===runId){
+    if(stepMode){ await new Promise(r=>stepResolve=r); stepResolve=null; if(id!==runId) break; }
+    const op=script[pc++]; await exec(op,id);
+    if(stepMode && ['state','sse','log','ui','wait'].includes(op.op)){ /* step granularity: one op */ }
+  }
+  if(id===runId){ running=false; stepMode=false; updateButtons(); }
+}
+function step(){
+  if(!running){ stepMode=true; run(); setTimeout(()=>stepResolve?.(),0); return; }
+  stepMode=true; stepResolve?.();
+}
+// the three entry squares of the Claude tab, and which input each one is
+const PICK={upload:'upload', camera:'camera', query:'search'};
+let awaiting=false, pendingStep=false;
+// Run on the Claude tab only gets as far as the entry squares; a click on one carries it on
+function begin(stepping){
+  if(cur!=='claude'){ if(pc>=script.length&&!running) reset(); stepping?step():run(); return; }
+  reset(); awaiting=true; pendingStep=!!stepping; canvas.classList.add('choose');
+  $('inputCard').innerHTML='<div class="ph"><i class="ti ti-hand-click"></i></div><div class="t"><b>choose an input</b><span>upload · live camera · search artists</span></div>';
+  $('analyseBtn').disabled=true; $('scanHint').textContent='pick one of the squares on the diagram';
+  updateButtons();
+}
+function choose(id){
+  const stepping=pendingStep; inp=PICK[id]; reset();
+  stepping ? step() : run();
+}
+function reset(){
+  awaiting=false; pendingStep=false; canvas.classList.remove('choose');
+  runId++; running=false; stepMode=false; stepResolve?.(); stepResolve=null; clearInterval(clockTimer);
+  script=build(cur,scen); pc=0; closeInspector(); render(); updateButtons();
+}
+function updateButtons(){
+  const b=$('playBtn'), done=pc>=script.length&&!running&&pc>0, path=`<small style="font-weight:500;opacity:.75">· ${cur==='claude'&&(running||done)?INPUTS[inp]+' · ':''}${FLOWS[cur].scenarios[scen]}</small>`;
+  b.innerHTML = awaiting ? '<i class="ti ti-hand-click"></i><span>Choose an input…</span>'
+    : running&&!stepMode ? '<i class="ti ti-loader-2"></i><span>Running…</span>'+path
+    : done ? '<i class="ti ti-reload"></i><span>Run again</span>'+path
+    : running&&stepMode ? '<i class="ti ti-player-play-filled"></i><span>Continue</span>'
+    : '<i class="ti ti-player-play-filled"></i><span>Run</span>'+path;
+  b.querySelector('.ti-loader-2')?.animate([{transform:'rotate(0)'},{transform:'rotate(360deg)'}],{duration:900,iterations:Infinity});
+}
+
+/* ── controls ── */
+function renderTabs(){
+  $('flowTabs').innerHTML=TABS.map(k=>[k,FLOWS[k]]).map(([k,f])=>`<button data-k="${k}" class="${k===cur?'on':''}">${f.icon==='claude'?`<span style="width:15px;height:15px;display:flex">${claudeMark()}</span>`:`<i class="ti ${f.icon}"></i>`}${f.label}</button>`).join('');
+}
+$('flowTabs').onclick=e=>{const b=e.target.closest('button'); if(!b)return; cur=b.dataset.k; renderTabs(); reset();};
+$('playBtn').onclick=()=>{ if(awaiting) return; if(running) run(); else begin(); };
+$('analyseBtn').onclick=()=>{ if(!running&&!awaiting) begin(); };
+$('stepBtn').onclick=()=>{ if(awaiting) return; if(running) step(); else begin(true); };
+$('resetBtn').onclick=reset;
+const SPEEDS=[1,2,4,.5];
+$('speedBtn').onclick=()=>{ speed=SPEEDS[(SPEEDS.indexOf(speed)+1)%SPEEDS.length]; $('speedBtn').querySelector('span').textContent=speed+'×'; };
+$('themeBtn').onclick=()=>{ const r=document.documentElement, light=r.dataset.theme!=='light'; r.dataset.theme=light?'light':'dark';
+  $('themeBtn').innerHTML=`<i class="ti ti-${light?'moon':'sun'}"></i>`; try{localStorage.setItem('flow-theme',r.dataset.theme);}catch(e){} };
+// ?embed=1 — framed inside the app's Readme page: one flow per frame, no brand or tabs,
+// and the theme follows the host page instead of this page's own toggle.
+const EMBED=new URLSearchParams(location.search).has('embed');
+function setTheme(t){ document.documentElement.dataset.theme=t==='light'?'light':'dark';
+  $('themeBtn').innerHTML=`<i class="ti ti-${t==='light'?'moon':'sun'}"></i>`; }
+if(EMBED){
+  document.body.classList.add('embed');
+  setTheme(new URLSearchParams(location.search).get('theme')||'dark');
+  addEventListener('message',e=>{ if(e.origin===location.origin && e.data?.type==='theme') setTheme(e.data.theme); });
+  // narrow frames stack the panel under the canvas; the host sizes the frame to fit, so nothing scrolls twice
+  const report=()=>parent.postMessage({type:'flow-height', flow:new URLSearchParams(location.search).get('flow'),
+    h: innerWidth<=900 ? document.documentElement.scrollHeight : 0}, location.origin);
+  new ResizeObserver(report).observe(document.body); addEventListener('resize',report);
+} else {
+  try{ if(localStorage.getItem('flow-theme')==='light') $('themeBtn').click(); }catch(e){}
+}
+addEventListener('keydown',e=>{ if(e.target.tagName==='INPUT')return; if(e.code==='Space'){e.preventDefault(); $('playBtn').click();} if(e.key==='ArrowRight') $('stepBtn').click(); if(e.key==='r') reset(); if(e.key==='f') fit(); });
+
+// ?flow=spotify&scenario=owned&speed=2&autoplay — handy for sharing one exact run
+const q=new URLSearchParams(location.search);
+if(TABS.includes(q.get('flow'))) cur=q.get('flow');
+if(['upload','camera','search'].includes(q.get('input'))) inp=q.get('input');
+if(FLOWS[cur].scenarios[q.get('scenario')]) scen=q.get('scenario');
+if(SPEEDS.includes(+q.get('speed'))){ speed=+q.get('speed'); $('speedBtn').querySelector('span').textContent=speed+'×'; }
+renderTabs(); reset();
+if(q.has('autoplay')) setTimeout(()=> cur==='claude'&&!q.get('input') ? begin() : run(), 400);
+</script>
+</body>
+</html>
