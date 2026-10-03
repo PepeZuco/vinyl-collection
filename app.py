@@ -2192,7 +2192,7 @@ def spotify_playlists():
     rows = SpotifyPlaylist.query.order_by(SpotifyPlaylist.id).all()
     if not is_authed():
         return jsonify({"playlists": [
-            {k: d[k] for k in ("id", "name", "summary", "url", "cover_url", "last_total")}
+            {k: d[k] for k in ("id", "name", "filters", "summary", "url", "cover_url", "last_total")}
             for d in (r.to_dict() for r in rows) if d["url"]]})
     return jsonify({"playlists": [r.to_dict() for r in rows],
                     "genres": _distinct_names(Record.genre),

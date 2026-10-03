@@ -193,7 +193,10 @@ test('connected, the panel lists the saved playlists with their last result', as
   try {
     const names = [...doc.querySelectorAll('.playlist-name')].map(e => e.textContent);
     assert.deepStrictEqual(names, ['Zucoloto Vinyl Collection', 'Zucoloto Vinyl Collection — Liked']);
-    assert.match(row(doc, 1).textContent, /every track · whole collection/);
+    const tags = id => [...row(doc, id).querySelectorAll('.pl-tag')].map(e => e.textContent);
+    assert.deepStrictEqual(tags(1), ['every track', 'whole collection']);
+    assert.deepStrictEqual(tags(2), ['liked songs', 'whole collection']);
+    assert.ok(row(doc, 2).querySelector('.pl-tag.liked .ti-heart-filled'), 'liked songs has no heart');
     assert.match(row(doc, 1).textContent, /never synced/);
     assert.match(row(doc, 2).textContent, /42 tracks · synced/);
     assert.strictEqual(row(doc, 2).querySelector('a').getAttribute('href'),
@@ -211,6 +214,23 @@ test('a synced playlist links to Spotify and shows its cover', async () => {
     assert.strictEqual(r.querySelector('.playlist-name a').getAttribute('href'), SYNCED.url);
     assert.strictEqual(r.querySelector('.playlist-art img').getAttribute('src'), SYNCED.cover_url);
     assert.ok(!row(doc, 1).querySelector('.playlist-open'), 'a never-synced row got a link');
+  } finally { win.close(); }
+});
+
+test('each filter gets its own chip, and only the first draw pops in', async () => {
+  const PICKY = Object.assign({}, LIKED, { id: 3, filters: { liked: true, genres: ['Jazz', 'Rock'],
+    year_from: 1970, year_to: 1979, pepe_min: 4, jenni_min: 3.5, rating_mode: 'or',
+    places: ['Shop'], source: 'all' } });
+  const { win, doc } = await openPanel({ saved: [PICKY] });
+  try {
+    const tags = () => row(doc, 3).querySelectorAll('.pl-tag');
+    assert.deepStrictEqual([...tags()].map(e => e.textContent),
+      ['liked songs', '+ compilations', 'Jazz', 'Rock', '1970–1979', 'Pepe ≥ 4 or Jenni ≥ 3.5', 'Shop']);
+    assert.ok(row(doc, 3).querySelector('.playlist-tags.enter'));
+    // cover, name and the Spotify logo — no separate "open" text link
+    assert.strictEqual(row(doc, 3).querySelectorAll('a[href]').length, 3);
+    win.renderPlaylistList();
+    assert.ok(!row(doc, 3).querySelector('.playlist-tags.enter'), 'the chips popped in again');
   } finally { win.close(); }
 });
 

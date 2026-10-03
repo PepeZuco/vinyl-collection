@@ -2234,7 +2234,25 @@ select option{background:var(--surface);color:var(--text)}
 .playlist-art{flex:0 0 44px;width:44px;height:44px;border-radius:6px;overflow:hidden;background:var(--border);
   display:flex;align-items:center;justify-content:center;color:var(--label);font-size:18px}
 .playlist-art img{width:100%;height:100%;object-fit:cover;display:block}
-.playlist-open .ti{color:#1DB954}
+.playlist-open{height:40px;min-width:40px;padding:0 4px;justify-content:center}
+.playlist-open .ti{color:#1DB954;font-size:28px;transition:transform .2s ease}
+.playlist-open:hover .ti{transform:scale(1.12)}
+/* filter chips under the name: they pop in one after another the first time
+   a row is drawn, and the liked heart keeps a slow beat */
+.playlist-tags{display:flex;flex-wrap:wrap;gap:5px}
+.pl-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 9px 2px 7px;border-radius:999px;
+  font-size:11px;color:var(--label);background:color-mix(in srgb,var(--accent) 8%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);transition:transform .15s ease,background .15s ease}
+.pl-tag:hover{transform:translateY(-1px);background:color-mix(in srgb,var(--accent) 15%,transparent)}
+.pl-tag .ti{font-size:13px;color:var(--accent)}
+.pl-tag.liked{color:var(--ev-liked);background:color-mix(in srgb,var(--ev-liked) 10%,transparent);
+  border-color:color-mix(in srgb,var(--ev-liked) 28%,transparent)}
+.pl-tag.liked .ti{color:var(--ev-liked);animation:pl-beat 2.4s ease-in-out infinite}
+.pl-tag.rating .ti{color:#F5C518}
+.playlist-tags.enter .pl-tag{animation:pl-pop .45s cubic-bezier(.34,1.56,.64,1) both;animation-delay:calc(var(--i) * 70ms)}
+@keyframes pl-pop{from{opacity:0;transform:translateY(6px) scale(.8)}to{opacity:1;transform:none}}
+@keyframes pl-beat{0%,40%,100%{transform:scale(1)}10%{transform:scale(1.28)}20%{transform:scale(.95)}30%{transform:scale(1.15)}}
+@media (prefers-reduced-motion:reduce){.pl-tag .ti,.playlist-tags.enter .pl-tag{animation:none}}
 /* sub-lines and status sit under the name, past the cover */
 .playlist-row>.playlist-sub,.playlist-row>.playlist-status{padding-left:54px}
 .playlist-sub{font-size:11px;color:var(--muted);flex:1 0 100%;line-height:1.5}
@@ -10223,6 +10241,7 @@ let playlistChoices = {genres: [], places: []};
 const playlistStatus = {};      // playlist id -> {html, err}
 let playlistBusy = false;
 let playlistHighlight = null;   // id of the row a duplicate create pointed at
+const playlistTagsShown = new Set(); // rows whose chips already popped in this visit
 
 // Every change goes through here: a sync re-renders only the list, so the
 // form's create button would otherwise keep whatever state it was drawn with.
@@ -10246,6 +10265,7 @@ function openPlaylists(){
 // Visitors skip the account (it is the owner's) and see only the playlists
 // that exist on Spotify, as links.
 async function loadPlaylists(){
+  playlistTagsShown.clear();
   renderPlaylists(null);
   try{
     if(!authed){
@@ -10332,7 +10352,6 @@ function renderPlaylistList(){
     const last=!authed?(p.last_total!=null?`${p.last_total} tracks`:'')
       :p.last_synced_at
       ?`${p.last_total} tracks · synced ${esc(playlistAgo(p.last_synced_at))}`
-        +(p.url?` · <a href="${esc(p.url)}" target="_blank" rel="noopener">open ↗</a>`:'')
       :'never synced';
     const art=p.cover_url
       ?`<img src="${esc(p.cover_url)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;ti ti-playlist&quot;></i>'">`
@@ -10348,11 +10367,40 @@ function renderPlaylistList(){
         onclick="syncPlaylist(${p.id})"><i class="ti ti-refresh"></i><span>sync</span></button>
       <button class="btn btn-ghost btn-sm playlist-delete" ${playlistBusy?'disabled':''}
         title="delete" aria-label="delete" onclick="deletePlaylist(${p.id})"><i class="ti ti-trash"></i></button>`:''}
-      <span class="playlist-sub">${esc(p.summary)}</span>
+      ${playlistFilterChips(p)}
       <span class="playlist-sub playlist-last">${last}</span>
       ${st.html?`<div class="playlist-status${st.err?' err':''}">${st.html}</div>`:''}
     </div>`;
   }).join('');
+}
+
+// The filters under a playlist's name, one chip each with the form's own icon
+// for that field — a heart for liked songs, a tag for genres — so a row reads
+// at a glance. A playlist without its filters falls back to the summary text.
+function playlistFilterChips(p){
+  const f=p.filters;
+  if(!f||typeof f!=='object')return `<span class="playlist-sub">${esc(p.summary||'')}</span>`;
+  const span=(lo,hi)=>lo!=null&&hi!=null?(lo===hi?String(lo):lo+'–'+hi):lo!=null?'≥ '+lo:'≤ '+hi;
+  const chips=[];
+  const chip=(icon,text,cls)=>chips.push(`<span class="pl-tag${cls?' '+cls:''}" style="--i:${chips.length}">`
+    +`<i class="ti ${icon}"></i>${esc(text)}</span>`);
+  if(f.liked!==false)chip('ti-heart-filled','liked songs','liked');
+  else chip('ti-list','every track');
+  if(f.source==='compilations')chip('ti-playlist','compilations only');
+  else if(f.source==='all')chip('ti-playlist','+ compilations');
+  (f.genres||[]).forEach(g=>chip('ti-tag',g));
+  if(f.year_from!=null||f.year_to!=null)chip('ti-calendar',span(f.year_from,f.year_to));
+  const rate=[];
+  if(f.pepe_min!=null)rate.push('Pepe ≥ '+Number(f.pepe_min));
+  if(f.jenni_min!=null)rate.push('Jenni ≥ '+Number(f.jenni_min));
+  if(rate.length)chip('ti-star-filled',rate.join(f.rating_mode==='or'?' or ':' & '),'rating');
+  (f.places||[]).forEach(pl=>chip('ti-building-store',pl));
+  if(f.bought_from||f.bought_to)chip('ti-calendar-dollar','bought '+span(f.bought_from,f.bought_to));
+  if(chips.length===1)chip('ti-vinyl','whole collection');
+  // Only the first draw pops in: a sync re-renders the list on every round.
+  const enter=!playlistTagsShown.has(p.id);
+  playlistTagsShown.add(p.id);
+  return `<span class="playlist-sub playlist-tags${enter?' enter':''}">${chips.join('')}</span>`;
 }
 
 function renderPlaylistForm(){
@@ -10594,8 +10642,7 @@ async function deletePlaylist(id){
 function playlistResultHtml(d){
   const verb=d.created?'created':'synced';
   const delta=d.created?'':` · +${d.added} / −${d.removed}`;
-  let html=`${verb} · ${d.total} tracks from ${d.records} records${delta} · `
-    +`<a href="${esc(d.url)}" target="_blank" rel="noopener">open in Spotify</a>`;
+  let html=`${verb} · ${d.total} tracks from ${d.records} records${delta}`;
   html+=skippedGroupHtml('not found', 'liked songs Spotify has no match for', d.unmatched);
   html+=skippedGroupHtml('bad link', 'records whose Spotify link is not an album', d.bad_links);
   return html;

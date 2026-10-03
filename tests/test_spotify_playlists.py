@@ -605,7 +605,7 @@ def test_visitors_see_only_synced_playlists_as_links(client):
     [p] = body["playlists"]
     assert p["name"] == "Made"
     assert p["url"] == spotify_sync.playlist_url("PL1")
-    assert set(p) == {"id", "name", "summary", "url", "cover_url", "last_total"}
+    assert set(p) == {"id", "name", "filters", "summary", "url", "cover_url", "last_total"}
 
 
 def test_playlist_link_is_read_as_a_compilation(fake):
