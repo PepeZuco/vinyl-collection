@@ -2252,6 +2252,10 @@ select option{background:var(--surface);color:var(--text)}
 .skipped-songs{opacity:.8}
 .playlist-account{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:2px 2px 6px}
 .playlist-account .btn{margin-left:auto}
+.playlist-intro{font-size:13px;line-height:1.6;color:var(--text);padding:4px 2px 12px;border-bottom:1px solid var(--border)}
+.playlist-intro p{margin:0 0 8px}
+.playlist-intro p:last-child{margin-bottom:0}
+.playlist-intro .ti{color:#1DB954}
 .playlist-heading{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--label);padding:10px 2px 0}
 .playlist-row.hl{background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:6px}
 .playlist-last a{color:var(--accent)}
@@ -2436,7 +2440,8 @@ select option{background:var(--surface);color:var(--text)}
 @media (max-width:760px){
   .note-when{width:100%}
   .note-when .field:first-child,.note-when .field:last-child{flex:1;width:auto}
-  .note-when input{height:40px;font-size:16px}
+  .note-when{gap:8px}
+  .note-when input{height:40px;font-size:15px}
   .note-tool,.note-private-check{height:40px;padding:0 10px}
   .note-tool i,.note-private-check i{font-size:18px}
   .note-tools{flex:1 1 100%;justify-content:space-between}
@@ -2444,7 +2449,8 @@ select option{background:var(--surface);color:var(--text)}
   .note-add-btn,.note-edit-btns{flex:1 1 100%;margin-left:0}
   .note-add-btn,.note-edit-btns .btn{height:44px;font-size:14px;justify-content:center}
   .note-edit-btns .btn{flex:1}
-  .note-entry-head{flex-wrap:wrap}
+  .notes-list .note-lock{font-size:0;padding:3px 5px}
+  .notes-list .note-lock i{font-size:12px}
   .notes-section textarea{font-size:16px;min-height:96px}
   .note-entry-actions{opacity:1}
   .note-entry-actions button{width:36px;height:36px;font-size:17px}
@@ -2848,7 +2854,7 @@ select option{background:var(--surface);color:var(--text)}
   #formOverlay .form-grid{grid-template-columns:1fr}
   #formOverlay .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   #formOverlay .field input,#formOverlay .field select{height:50px}
-  #formOverlay .note-when .field input{height:42px;padding-left:32px}
+  #formOverlay .note-when .field input{height:42px;padding:0 6px 0 30px}
 
   /* ── steps 2-4: bought-at chips, collapsed log sections, full-width
      pickers ───────────────────────────────────────────────────────────────
@@ -10277,7 +10283,18 @@ function renderPlaylists(acct){
     return;
   }
   if(acct==='visitor'){
-    body.innerHTML=`<div class="playlist-heading">playlists</div><div id="playlistList"></div>`;
+    body.innerHTML=`<div class="playlist-intro">
+        <p><i class="ti ti-brand-spotify"></i> These playlists are built automatically from our
+          record collection. Every album we own lives in a database with its year, genres, where
+          and when we bought it, and a rating from each of us.</p>
+        <p>A playlist is just a saved set of filters on that data — liked songs or every track,
+          albums or compilations, a range of decades, genres, a minimum rating from Pepe and/or
+          Jenni, the shop or the date we bought it. The app turns the filters into a track list
+          and creates the playlist on Spotify.</p>
+        <p>Each sync adds what is new and removes what no longer matches, so a playlist always
+          mirrors the collection as it grows and the ratings change.</p>
+      </div>
+      <div class="playlist-heading">playlists</div><div id="playlistList"></div>`;
     renderPlaylistList();
     return;
   }
