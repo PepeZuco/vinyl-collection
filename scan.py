@@ -1093,6 +1093,118 @@ def _vinyl_status(mb_has_vinyl: bool, verdict: str) -> str:
     return "none" if verdict == "no" else "likely"
 
 
+# ── which album a playlist song is from ──────────────────────────────────────
+
+IDENTIFY_MODEL = "claude-haiku-4-5"
+
+# Fifty numbered lines is a short prompt and a short answer; a 500-song
+# playlist is ten of them, run IDENTIFY_WORKERS at a time so the whole pass
+# fits comfortably inside one request.
+IDENTIFY_BATCH = 50
+IDENTIFY_WORKERS = 4
+
+_IDENTIFY_SYSTEM = (
+    "You name the album a song comes from, so the owner can look for it on vinyl.\n"
+    "Rules:\n"
+    "1. Answer with the ORIGINAL STUDIO ALBUM by that artist that first "
+    "included the song — never a compilation, greatest-hits, single, live "
+    "album, soundtrack reissue, deluxe edition or remaster. Drop edition "
+    "suffixes such as \"(Remastered 2009)\" or \"(Deluxe)\".\n"
+    "2. The Spotify album is a hint, not the answer: playlists are full of "
+    "compilations and remasters.\n"
+    "3. A song that was only ever a single, or that you do not know, gets "
+    "album null. Never guess.\n"
+    "4. artist is the album's credited artist as usually written.\n"
+    "5. One answer per numbered song, in the order given."
+)
+
+_IDENTIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "albums": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "artist": {"type": "string"},
+                    "album": {"type": ["string", "null"]},
+                    "year": {"type": ["string", "null"]},
+                },
+                "required": ["artist", "album", "year"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["albums"],
+    "additionalProperties": False,
+}
+
+
+def _spotify_fallback(track: dict) -> dict:
+    return {"artist": (track.get("artists") or [""])[0],
+            "album": track.get("album") or None,
+            "year": track.get("release_year") or None,
+            "unverified": True}
+
+
+def _identify_batch(batch: list, usage_out: list | None) -> list:
+    """One Claude call for up to IDENTIFY_BATCH songs. Never raises."""
+    lines = [f"{i}. {', '.join(t.get('artists') or ['?'])} — {t.get('title') or '?'}"
+             f" — on Spotify: {t.get('album') or '?'}"
+             for i, t in enumerate(batch, 1)]
+    answers: list = []
+    try:
+        client = _anthropic_client()
+        response = client.messages.create(
+            model=IDENTIFY_MODEL,
+            # About thirty tokens per answer, plus the JSON scaffolding.
+            max_tokens=40 * len(batch) + 64,
+            system=_IDENTIFY_SYSTEM,
+            output_config={"format": {"type": "json_schema", "schema": _IDENTIFY_SCHEMA}},
+            messages=[{"role": "user", "content": "\n".join(lines)}],
+        )
+        _record_usage(usage_out, IDENTIFY_MODEL, response)
+        text = next(b.text for b in response.content if b.type == "text")
+        parsed = json.loads(text)
+        answers = parsed.get("albums") if isinstance(parsed, dict) else []
+        if not isinstance(answers, list):
+            answers = []
+    except Exception:
+        logger.warning("Album identification failed for a batch", exc_info=True)
+        answers = []
+
+    # Same discipline as confirm_vinyl: a short answer is never zipped as-is,
+    # or every song after the gap would be credited to its neighbour's album.
+    out = []
+    for i, track in enumerate(batch):
+        a = answers[i] if i < len(answers) and isinstance(answers[i], dict) else None
+        if a is None or not isinstance(a.get("artist"), str):
+            out.append(_spotify_fallback(track))
+            continue
+        out.append({"artist": a["artist"].strip(),
+                    "album": (a.get("album") or "").strip() or None,
+                    "year": (a.get("year") or "").strip()[:4] or None,
+                    "unverified": False})
+    return out
+
+
+def identify_albums(tracks: list, usage_out: list | None = None) -> list:
+    """The original studio album of each song, in order. Never raises.
+
+    A batch whose call fails falls back to each song's own Spotify album,
+    marked unverified — the owner still gets a list to review, and the badge
+    says which rows Claude did not check.
+    """
+    if not tracks:
+        return []
+    batches = [tracks[i:i + IDENTIFY_BATCH] for i in range(0, len(tracks), IDENTIFY_BATCH)]
+    # usage_out is appended from worker threads; list.append is atomic in
+    # CPython, and the order of ledger rows does not matter.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=IDENTIFY_WORKERS) as pool:
+        results = list(pool.map(lambda b: _identify_batch(b, usage_out), batches))
+    return [row for batch in results for row in batch]
+
+
 def flag_vinyl(rows: list, arid: str | None = None,
                usage_out: list | None = None) -> None:
     """Stamp each row with `vinyl`: "confirmed" | "likely" | "none".
