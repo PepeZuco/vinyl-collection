@@ -381,6 +381,54 @@ def playlist_uris(client, playlist_id):
     return out
 
 
+# ── reading the owner's playlists, for the wishlist tool ─────────────────────
+
+def _first_image(images):
+    return ((images or [{}])[0] or {}).get("url") or ""
+
+
+def user_playlists(client):
+    """Every playlist on the owner's account, owned or followed, in Spotify's order.
+
+    The count moved from `tracks.total` to `items.total` in the February 2026
+    API change; both are read so a cached old-shape page does not show zero.
+    """
+    out = []
+    for p in client.pages("/me/playlists?limit=50"):
+        if not p or not p.get("id"):
+            continue
+        owner = p.get("owner") or {}
+        count = (p.get("items") or p.get("tracks") or {}).get("total") or 0
+        out.append({"id": p["id"], "name": p.get("name") or "",
+                    "image_url": _first_image(p.get("images")),
+                    "track_count": int(count),
+                    "owner": owner.get("display_name") or owner.get("id") or ""})
+    return out
+
+
+def playlist_tracks(client, playlist_id, cap):
+    """The songs on a playlist, as the wishlist scan needs them, and whether `cap` cut it.
+
+    Local files and podcast episodes are skipped: neither names an album that
+    could be on a record. One entry past the cap is read so "exactly cap" and
+    "more than cap" can be told apart.
+    """
+    out = []
+    for entry in client.pages(f"/playlists/{playlist_id}/items?limit=50&additional_types=track"):
+        item = (entry or {}).get("item") or (entry or {}).get("track")
+        if not item or item.get("type") != "track" or item.get("is_local"):
+            continue
+        if len(out) == cap:
+            return out, True
+        album = item.get("album") or {}
+        out.append({"title": item.get("name") or "",
+                    "artists": [a.get("name") or "" for a in item.get("artists") or []],
+                    "album": album.get("name") or "",
+                    "release_year": (album.get("release_date") or "")[:4],
+                    "image_url": _first_image(album.get("images"))})
+    return out, False
+
+
 def mirror(client, playlist_id, desired):
     """Make the playlist hold exactly `desired`. Returns (added, removed) counts.
 
