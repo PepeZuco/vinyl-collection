@@ -3207,7 +3207,7 @@ select option{background:var(--surface);color:var(--text)}
           <button class="menu-item" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
           <button class="menu-item" id="backupsBtn" style="display:none" onclick="openBackups()"><i class="ti ti-history"></i><span>backups</span></button>
           <button class="menu-item" id="playlistsBtn" style="display:none" onclick="openPlaylists()"><i class="ti ti-brand-spotify"></i><span>spotify playlists</span></button>
-          <button class="menu-item" id="idleTriggerBtn"><i class="ti ti-disc"></i><span>preview screensaver</span></button>
+          <button class="menu-item" id="idleTriggerBtn" style="display:none"><i class="ti ti-disc"></i><span>preview screensaver</span></button>
           <label class="menu-item" id="importLabel" style="display:none">
             <i class="ti ti-upload"></i><span>import</span>
             <input type="file" accept=".csv" id="importInput" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
@@ -4513,6 +4513,10 @@ function setAuthed(val) {
   // Every action in there writes to the owner's Spotify account.
   document.getElementById('playlistsBtn').style.display = val ? '' : 'none';
   document.getElementById('mtabFab').style.display = val ? '' : 'none';
+  // The screensaver is an edit-mode thing: a visitor never gets it, idle or
+  // on demand. Locking takes down one already up and stops the idle clock.
+  document.getElementById('idleTriggerBtn').style.display = val ? '' : 'none';
+  if (!val && idleShowing()) closeIdleSpotlight(); else scheduleIdleTimer();
   // The playlists tab differs by mode (links only vs. sync and the form).
   if (currentTab === 'playlists') loadPlaylists();
   // Re-render cards to show/hide play count editors
@@ -13504,10 +13508,12 @@ function idleUnref(t) { if (t && typeof t.unref === 'function') t.unref(); retur
 
 function scheduleIdleTimer() {
   clearTimeout(idleTimer);
+  if (!authed) return;
   idleTimer = idleUnref(setTimeout(fireIdleSpotlight, IDLE_DELAY_MS));
 }
 
 function fireIdleSpotlight() {
+  if (!authed) return;
   if (idleOtherOverlayOpen()) { idleTimer = idleUnref(setTimeout(fireIdleSpotlight, 5000)); return; }
   const pool = VinylIdleSpotlight.ownedPool(records);
   if (!pool.length) { scheduleIdleTimer(); return; }

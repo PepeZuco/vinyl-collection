@@ -1762,6 +1762,27 @@ test('moving the mouse leaves the spotlight up, so the record stays reachable', 
     'movement dismissed the screensaver');
 });
 
+/* The screensaver is edit-mode only: a visitor is never offered the preview
+ * and the idle clock never brings it up for them. */
+test('a visitor gets no screensaver, on demand or idle', async () => {
+  const { win, doc } = await boot();
+  win.setAuthed(false);
+  assert.strictEqual($(doc, '#idleTriggerBtn').style.display, 'none',
+    'a visitor is offered the screensaver preview');
+  win.fireIdleSpotlight();
+  assert.ok($(doc, '#idleOverlay').classList.contains('hidden'),
+    'the screensaver came up for a visitor');
+  win.setAuthed(true);
+  assert.notStrictEqual($(doc, '#idleTriggerBtn').style.display, 'none');
+});
+
+test('locking takes down a screensaver that is already up', async () => {
+  const { win, doc } = await spotlight();
+  win.setAuthed(false);
+  assert.ok($(doc, '#idleOverlay').classList.contains('hidden'),
+    'the screensaver stayed up after locking');
+});
+
 test('the form offers a third way in, and it needs nothing handed over', async () => {
   const { win } = await boot();
   win.openAdd();
