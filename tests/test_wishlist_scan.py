@@ -246,7 +246,7 @@ def test_resolve_falls_back_to_the_spotify_image(client, offline_resolve):
     with patch.object(scan, "search_covers",
                       side_effect=lambda rows: [r.__setitem__("cover_data", None) for r in rows]):
         a = client.post("/api/spotify/wishlist-scan/resolve",
-                        json={"albums": [_album("X", "Y")]}).get_json()["albums"][0]
+                        json={"albums": [_album("X", "Y", spotify_image="https://i.scdn.co/image/s")]}).get_json()["albums"][0]
     assert a["cover_data"] == "data:spotify"
 
 
@@ -277,3 +277,49 @@ def test_resolve_banks_vinyl_spend_as_playlist(client, offline_resolve):
     client.post("/api/spotify/wishlist-scan/resolve", json={"albums": [_album("X", "Y")]})
     with app_module.app.app_context():
         assert [r.source for r in app_module.ScanSpend.query.all()] == ["playlist"]
+
+
+# ── URL validation for Spotify image fallback ───────────────────────────────
+
+def test_resolve_rejects_metadata_ssrf_url(client, offline_resolve):
+    """Prevent SSRF via metadata endpoint."""
+    with patch.object(scan, "search_covers",
+                      side_effect=lambda rows: [r.__setitem__("cover_data", None) for r in rows]) as sc, \
+         patch.object(scan, "_download_image") as di:
+        a = client.post("/api/spotify/wishlist-scan/resolve",
+                        json={"albums": [_album("X", "Y", spotify_image="http://169.254.169.254/latest/meta-data")]}).get_json()["albums"][0]
+    assert a["cover_data"] is None
+    assert di.call_count == 0
+
+
+def test_resolve_rejects_https_evil_domain(client, offline_resolve):
+    """Reject arbitrary HTTPS domains."""
+    with patch.object(scan, "search_covers",
+                      side_effect=lambda rows: [r.__setitem__("cover_data", None) for r in rows]) as sc, \
+         patch.object(scan, "_download_image") as di:
+        a = client.post("/api/spotify/wishlist-scan/resolve",
+                        json={"albums": [_album("X", "Y", spotify_image="https://evil.example.com/x.jpg")]}).get_json()["albums"][0]
+    assert a["cover_data"] is None
+    assert di.call_count == 0
+
+
+def test_resolve_allows_i_scdn_co(client, offline_resolve):
+    """Allow Spotify CDN domain i.scdn.co."""
+    with patch.object(scan, "search_covers",
+                      side_effect=lambda rows: [r.__setitem__("cover_data", None) for r in rows]), \
+         patch.object(scan, "_download_image", return_value="data:spotify") as di:
+        a = client.post("/api/spotify/wishlist-scan/resolve",
+                        json={"albums": [_album("X", "Y", spotify_image="https://i.scdn.co/image/abc")]}).get_json()["albums"][0]
+    assert a["cover_data"] == "data:spotify"
+    assert di.call_count == 1
+
+
+def test_resolve_allows_mosaic_scdn_co(client, offline_resolve):
+    """Allow Spotify CDN subdomain *.scdn.co."""
+    with patch.object(scan, "search_covers",
+                      side_effect=lambda rows: [r.__setitem__("cover_data", None) for r in rows]), \
+         patch.object(scan, "_download_image", return_value="data:spotify") as di:
+        a = client.post("/api/spotify/wishlist-scan/resolve",
+                        json={"albums": [_album("X", "Y", spotify_image="https://mosaic.scdn.co/640/abc")]}).get_json()["albums"][0]
+    assert a["cover_data"] == "data:spotify"
+    assert di.call_count == 1

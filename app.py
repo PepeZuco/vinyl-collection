@@ -1,4 +1,4 @@
-import os, io, base64, csv, json, re, time, uuid, hashlib, hmac, threading
+import os, io, base64, csv, json, re, time, uuid, hashlib, hmac, threading, urllib.parse
 # 64MB per field, not 10: note_images packs every photo on one record into a
 # single field, where the old ceiling (sized for one cover) would reject a
 # photo-heavy row on import — an export that cannot be restored. The whole-upload
@@ -2412,6 +2412,17 @@ def spotify_wishlist_scan():
 RESOLVE_CHUNK = scan.COVER_FETCH_LIMIT
 
 
+def _spotify_image_url_ok(url):
+    """Check if URL is safe to fetch as Spotify CDN fallback — client input must be validated."""
+    if not url or not isinstance(url, str):
+        return False
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https":
+        return False
+    hostname = parsed.hostname or ""
+    return hostname == "i.scdn.co" or hostname.endswith(".scdn.co") or hostname.endswith(".spotifycdn.com")
+
+
 @app.route("/api/spotify/wishlist-scan/resolve", methods=["POST"])
 @require_auth
 def spotify_wishlist_resolve():
@@ -2440,7 +2451,7 @@ def spotify_wishlist_resolve():
         # which is exactly what these rows carry.
         scan.search_covers(todo)
         for row in todo:
-            if not row.get("cover_data") and row.get("spotify_image"):
+            if not row.get("cover_data") and _spotify_image_url_ok(row.get("spotify_image")):
                 row["cover_data"] = scan._download_image(row["spotify_image"])
         scan.flag_vinyl(todo, usage_out=spent)
         return jsonify({"albums": rows})
