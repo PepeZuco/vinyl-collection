@@ -1181,9 +1181,27 @@ def _identify_batch(batch: list, usage_out: list | None) -> list:
         if a is None or not isinstance(a.get("artist"), str):
             out.append(_spotify_fallback(track))
             continue
+        # Guard against non-string album or year values that would raise on .strip()
+        album = a.get("album")
+        if not isinstance(album, str):
+            # Non-string album is a bad answer; fall back to Spotify for this song
+            if album is not None:
+                out.append(_spotify_fallback(track))
+                continue
+            # Else: album is None (explicitly), which is valid (unplaced song)
+        album_str = (album or "").strip() if isinstance(album, str) else None
+
+        year = a.get("year")
+        year_str = None
+        if isinstance(year, str):
+            year_str = year.strip()[:4] or None
+        elif year is not None:
+            # Non-string year is invalid; treat as None but keep the album
+            year_str = None
+
         out.append({"artist": a["artist"].strip(),
-                    "album": (a.get("album") or "").strip() or None,
-                    "year": (a.get("year") or "").strip()[:4] or None,
+                    "album": album_str,
+                    "year": year_str,
                     "unverified": False})
     return out
 

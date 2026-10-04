@@ -106,3 +106,21 @@ def test_no_songs_asks_nothing(monkeypatch):
     _patch(monkeypatch, fake)
     assert scan.identify_albums([]) == []
     assert fake.calls == []
+
+
+def test_non_string_album_falls_back_to_spotify(monkeypatch):
+    _patch(monkeypatch, FakeClaude(lambda lines: {"albums": [
+        {"artist": "The Beatles", "album": 42, "year": "1969"}]}))
+    out = scan.identify_albums([_song(1, album="Help!")])
+    # Non-string album is invalid; should fall back to Spotify with unverified=True
+    assert out == [{"artist": "The Beatles", "album": "Help!", "year": "2000",
+                    "unverified": True}]
+
+
+def test_non_string_year_becomes_none(monkeypatch):
+    _patch(monkeypatch, FakeClaude(lambda lines: {"albums": [
+        {"artist": "The Beatles", "album": "Abbey Road", "year": 1969}]}))
+    out = scan.identify_albums([_song(1)])
+    # Non-string year should become None, but album is valid so unverified=False
+    assert out == [{"artist": "The Beatles", "album": "Abbey Road", "year": None,
+                    "unverified": False}]
