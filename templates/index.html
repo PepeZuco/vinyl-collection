@@ -1542,6 +1542,15 @@ select option{background:var(--surface);color:var(--text)}
 /* spotify playlists page — what was the header menu's modal, now a tab */
 .playlists-page{display:none;max-width:640px}
 .playlists-page.visible{display:block}
+.admin-page{display:none;max-width:640px}
+.admin-page.visible{display:block}
+.admin-section{margin:0 0 28px}
+.admin-h{font-size:13px;font-weight:600;text-transform:lowercase;letter-spacing:.02em;
+  display:flex;align-items:center;gap:6px;margin:0 0 10px;color:var(--text)}
+.admin-sub{font-size:12px;color:var(--muted);margin:14px 0 6px}
+.admin-data-row{display:flex;gap:8px;flex-wrap:wrap}
+.admin-import{position:relative;overflow:hidden;cursor:pointer}
+.admin-import input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 
 /* features page — the tab is public: no login shows visitors what the admin
    tools above (Claude photo scan, Spotify matching, MusicBrainz search) do,
@@ -2156,7 +2165,7 @@ select option{background:var(--surface);color:var(--text)}
   .facet-foot{padding:12px 14px 20px}
 }
 
-/* more menu — groups export / import / edit-mode behind the header */
+/* more menu — edit mode, admin, playlists, screensaver */
 .more-menu{position:relative;flex-shrink:0}
 .more-panel{position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-width:180px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden;padding:4px;display:flex;flex-direction:column;gap:1px}
 .more-panel.hidden{display:none}
@@ -3203,15 +3212,9 @@ select option{background:var(--surface);color:var(--text)}
         <button class="btn btn-icon" id="moreMenuBtn" title="more actions" onclick="toggleMoreMenu()"><i class="ti ti-dots"></i></button>
         <div class="more-panel hidden" id="morePanel">
           <button class="menu-item" id="loginBtn"><i class="ti ti-login"></i><span>edit mode</span></button>
-          <button class="menu-item" id="placesBtn" style="display:none" onclick="openPlaces()"><i class="ti ti-map-pin"></i><span>places</span></button>
-          <button class="menu-item" id="exportBtn"><i class="ti ti-download"></i><span>export</span></button>
-          <button class="menu-item" id="backupsBtn" style="display:none" onclick="openBackups()"><i class="ti ti-history"></i><span>backups</span></button>
+          <button class="menu-item" id="adminBtn" style="display:none" onclick="openAdmin()"><i class="ti ti-settings"></i><span>admin</span></button>
           <button class="menu-item" id="playlistsBtn" style="display:none" onclick="openPlaylists()"><i class="ti ti-brand-spotify"></i><span>spotify playlists</span></button>
           <button class="menu-item" id="idleTriggerBtn" style="display:none"><i class="ti ti-disc"></i><span>preview screensaver</span></button>
-          <label class="menu-item" id="importLabel" style="display:none">
-            <i class="ti ti-upload"></i><span>import</span>
-            <input type="file" accept=".csv" id="importInput" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
-          </label>
         </div>
       </div>
       <button class="btn btn-primary" id="addBtn" style="display:none">
@@ -3448,6 +3451,33 @@ select option{background:var(--surface);color:var(--text)}
        sync/delete and the new-playlist form. See the playlists script. -->
   <div class="playlists-page" id="playlistsPage">
     <div id="playlistsBody"></div>
+  </div>
+
+  <!-- admin page: the owner's housekeeping in one place — places, the data
+       (export / import / snapshots) and the Spotify playlist → wishlist tool.
+       Edit mode only; the ⋯ menu's admin item is the only door. The ids
+       inside are the ones the old modals used, so their code moved unchanged. -->
+  <div class="admin-page" id="adminPage">
+    <section class="admin-section">
+      <h2 class="admin-h"><i class="ti ti-map-pin"></i> places</h2>
+      <div id="placesBody"></div>
+    </section>
+    <section class="admin-section">
+      <h2 class="admin-h"><i class="ti ti-database"></i> data</h2>
+      <div class="admin-data-row">
+        <button class="btn" id="exportBtn"><i class="ti ti-download"></i> export CSV</button>
+        <label class="btn admin-import" id="importLabel">
+          <i class="ti ti-upload"></i> import CSV
+          <input type="file" accept=".csv" id="importInput">
+        </label>
+      </div>
+      <div class="admin-sub">backups</div>
+      <div id="backupsBody"></div>
+    </section>
+    <section class="admin-section">
+      <h2 class="admin-h"><i class="ti ti-brand-spotify"></i> spotify → wishlist</h2>
+      <div id="adminSpotifyBody"></div>
+    </section>
   </div>
 
   <!-- stats page -->
@@ -4204,33 +4234,6 @@ select option{background:var(--surface);color:var(--text)}
 </div>
 
 <!-- Login modal -->
-<!-- Places — the list behind "bought at", and the one screen where a place's
-     link is set. The record form still takes the name as free text; this is
-     where a name already in use gets its link, its spelling fixed, or is merged
-     into another by being renamed onto it. -->
-<div class="overlay hidden" id="placesOverlay">
-  <div class="modal" style="max-width:440px">
-    <div class="modal-head">
-      <span class="modal-title">places</span>
-      <button class="btn btn-ghost btn-sm" onclick="closePlaces()"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-body" id="placesBody"></div>
-  </div>
-</div>
-
-<!-- The daily snapshots of the database, newest first. Download only: there
-     is deliberately no restore button here, because the one thing a backup
-     panel must never do is overwrite the live collection by mistake. -->
-<div class="overlay hidden" id="backupsOverlay">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-head">
-      <span class="modal-title">backups</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeBackups()"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="modal-body" id="backupsBody"></div>
-  </div>
-</div>
-
 <!-- spotify playlists: now the #playlistsPage tab. The playlists this app made on the owner's Spotify,
      each defined by filters (liked/every track, year, genre, ratings, bought
      at, bought dates), plus a form to make another. Each sync creates the
@@ -4347,6 +4350,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/tracks.js"></script>
 <script src="/static/playlist_filters.js"></script>
 <script src="/static/spend.js"></script>
+<script src="/static/admin.js"></script>
 <script src="/static/scanstream.js"></script>
 <script src="/static/queue.js"></script>
 <script src="/static/idle-spotlight.js"></script>
@@ -4499,17 +4503,11 @@ function setAuthed(val) {
     ? '<i class="ti ti-logout"></i><span>lock</span>'
     : '<i class="ti ti-login"></i><span>edit mode</span>';
   document.getElementById('addBtn').style.display = val ? '' : 'none';
-  document.getElementById('importLabel').style.display = val ? '' : 'none';
-  // Behind auth for the same reason the record form is: every row in it writes,
-  // and a rename rewrites bought_where on every record pointing at the place.
-  document.getElementById('placesBtn').style.display = val ? '' : 'none';
-  // Export goes with import now: it carries the private notes, so it is behind
-  // auth, and the button navigates rather than fetches — a visitor pressing it
-  // would land on a bare {"error":"Unauthorized"} page with the app gone.
-  document.getElementById('exportBtn').style.display = val ? '' : 'none';
-  // Same door as export: a snapshot is the whole database, private notes and
-  // photos included, and the rows download by navigation like export does.
-  document.getElementById('backupsBtn').style.display = val ? '' : 'none';
+  // The admin page holds export (the private notes), the snapshots (the whole
+  // database) and places (a rename rewrites every record) — all behind auth,
+  // and this item is the only way in.
+  document.getElementById('adminBtn').style.display = val ? '' : 'none';
+  if (!val && currentTab === 'admin') switchTab('collection');
   // Every action in there writes to the owner's Spotify account.
   document.getElementById('playlistsBtn').style.display = val ? '' : 'none';
   document.getElementById('mtabFab').style.display = val ? '' : 'none';
@@ -9988,18 +9986,6 @@ function showSpotifyError(message){
 let placeEditingId = null;   // the place the inline form is editing
 let placeFormOpen = false;   // ...or, when this is on with no id, a new one
 
-function openPlaces() {
-  placeEditingId = null;
-  placeFormOpen = false;
-  document.getElementById('placesOverlay').classList.remove('hidden');
-  renderPlaces();
-  loadPlaces().then(renderPlaces);
-}
-
-function closePlaces() {
-  document.getElementById('placesOverlay').classList.add('hidden');
-}
-
 // How many records this place's name is on right now — what a merge is about
 // to move, and worth naming before it happens rather than after.
 function placeRecordCount(name) {
@@ -10181,16 +10167,24 @@ document.getElementById('exportBtn').addEventListener('click',()=>{window.locati
 // panel is the way to get one back: it lists what is on the volume and hands
 // the file over. Restoring is a deliberate, manual act on the server — see
 // the README — so nothing in here writes.
-function openBackups(){
-  document.getElementById('backupsOverlay').classList.remove('hidden');
+// ── admin page ─────────────────────────────────────────────────────────────
+function openAdmin(){
   document.getElementById('morePanel').classList.add('hidden');
-  renderBackups(null);
-  loadBackups();
+  switchTab('admin');
 }
 
-function closeBackups(){
-  document.getElementById('backupsOverlay').classList.add('hidden');
+function loadAdmin(){
+  placeEditingId = null;
+  placeFormOpen = false;
+  renderPlaces();
+  loadPlaces().then(renderPlaces);
+  renderBackups(null);
+  loadBackups();
+  loadAdminSpotify();
 }
+
+// Filled in by the Spotify → wishlist tool; a placeholder until then.
+function loadAdminSpotify(){}
 
 async function loadBackups(){
   try{
@@ -10212,6 +10206,9 @@ function backupSize(bytes){
 // A fresh volume honestly has no snapshots yet; a server that refused to
 // answer must never be dressed up as one, or a broken backup job would read
 // as a brand new install.
+// Download only: there is deliberately no restore button here, because the
+// one thing a backup panel must never do is overwrite the live collection by
+// mistake.
 function renderBackups(list, keepDays){
   const body=document.getElementById('backupsBody');
   if(list===null){body.innerHTML='<div class="backup-note">loading…</div>';return;}
@@ -11556,7 +11553,7 @@ document.addEventListener('click', e => {
 
 
 
-// ── header "more actions" menu — export / import / edit mode ───────────────
+// ── header "more actions" menu ───────────────
 function toggleMoreMenu() {
   document.getElementById('morePanel').classList.toggle('hidden');
 }
@@ -11581,6 +11578,7 @@ function switchTab(tab) {
   document.getElementById('timelinePage').classList.toggle('visible', tab === 'timeline');
   document.getElementById('featuresPage').classList.toggle('visible', tab === 'features');
   document.getElementById('playlistsPage').classList.toggle('visible', tab === 'playlists');
+  document.getElementById('adminPage').classList.toggle('visible', tab === 'admin');
   document.getElementById('tabPlaylists').classList.toggle('active', tab === 'playlists');
   document.getElementById('tabCollection').classList.toggle('active', tab === 'collection');
   document.getElementById('tabStats').classList.toggle('active', tab === 'stats');
@@ -11591,7 +11589,7 @@ function switchTab(tab) {
   // query, so the whole bar (not just Arrange) is out of place there.
   // Same for the playlists: each one carries its own filters.
   document.getElementById('filterBar').style.display =
-    tab === 'features' || tab === 'playlists' ? 'none' : '';
+    tab === 'features' || tab === 'playlists' || tab === 'admin' ? 'none' : '';
   document.getElementById('arrangeRow').style.display = tab === 'collection' ? '' : 'none';
   closeFacetPop();
   syncMobileTabbar();
@@ -11604,6 +11602,7 @@ function switchTab(tab) {
   if (tab === 'timeline') renderTimeline();
   if (tab === 'features') renderFeatures();
   if (tab === 'playlists') loadPlaylists();
+  if (tab === 'admin') loadAdmin();
   syncUrl(true);
 }
 

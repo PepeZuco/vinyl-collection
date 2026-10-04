@@ -2652,16 +2652,16 @@ test('Escape closes the record picker first, and the modal on the next press', a
   assert.ok($(doc, '#noteMdOverlay').classList.contains('hidden'), 'Escape did not close the modal on the next press');
 });
 
-/* Export carries the private notes, so it is behind auth now. The button has
- * to go with it: it navigates rather than fetches, so a visitor pressing it
- * would leave the app standing on a bare {"error":"Unauthorized"} page. */
-test('export is offered only in edit mode, like import', async () => {
+/* Export, import, backups and places live on the admin page now, and the only
+ * door to it is the ⋯ menu's admin item — so that item is what must hide from
+ * a visitor (export navigates, and would land them on a bare 401 page). */
+test('the admin item is offered only in edit mode', async () => {
   const { win, doc } = await boot();
   win.setAuthed(false);
-  assert.strictEqual($(doc, '#exportBtn').style.display, 'none',
-    'a visitor is offered an export that will refuse them');
+  assert.strictEqual($(doc, '#adminBtn').style.display, 'none',
+    'a visitor is offered an admin page that will refuse them');
   win.setAuthed(true);
-  assert.notStrictEqual($(doc, '#exportBtn').style.display, 'none');
+  assert.notStrictEqual($(doc, '#adminBtn').style.display, 'none');
 });
 
 // ── walking a record's photos from the lightbox ─────────────────────────────

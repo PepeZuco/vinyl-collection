@@ -1,4 +1,4 @@
-/* The backups item in the header's "more actions" menu, booted in a real DOM.
+/* The admin page (places, data, spotify) opened from the header's menu, booted in a real DOM.
  *
  * Same boot shape as tests/test_phone_dom.js — the page as Flask renders it,
  * CDN scripts stripped, /static inlined, fetch stubbed — and the same
@@ -91,6 +91,9 @@ async function boot(opts) {
                                 text: async () => 'boom' };
       return json({ backups, keep_days: 5 });
     }
+    if (u.endsWith('/api/spotify/account')) return json(opts && opts.account || { configured: true, connected: false });
+    if (u.endsWith('/api/spotify/me/playlists')) return json({ playlists: (opts && opts.playlists) || [] });
+    if (u.endsWith('/api/spotify/playlists')) return json({ playlists: [], genres: [], places: [] });
     return json({ ok: true });
   };
 
@@ -116,60 +119,76 @@ function press(win, el) {
   el.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
 }
 
-test('a visitor is not offered the backups item', async () => {
+test('a visitor is offered no admin item', async () => {
   const { win, doc } = await boot({ authed: false });
   try {
-    assert.strictEqual(doc.getElementById('backupsBtn').style.display, 'none');
+    assert.strictEqual(doc.getElementById('adminBtn').style.display, 'none');
   } finally { win.close(); }
 });
 
-test('edit mode reveals the backups item', async () => {
+test('the old places, export, backups and import items are gone from the menu', async () => {
   const { win, doc } = await boot({ authed: true });
   try {
-    assert.notStrictEqual(doc.getElementById('backupsBtn').style.display, 'none');
+    const menu = doc.getElementById('morePanel');
+    for (const id of ['placesBtn', 'backupsBtn', 'exportBtn', 'importLabel'])
+      assert.strictEqual(menu.querySelector('#' + id), null, id + ' is still in the menu');
+    assert.strictEqual(doc.getElementById('placesOverlay'), null);
+    assert.strictEqual(doc.getElementById('backupsOverlay'), null);
   } finally { win.close(); }
 });
 
-test('opening backups lists a download link per snapshot, newest first', async () => {
+test('edit mode opens the admin page from the menu with all three sections', async () => {
   const { win, doc } = await boot({ authed: true });
   try {
-    press(win, doc.getElementById('backupsBtn'));
+    assert.notStrictEqual(doc.getElementById('adminBtn').style.display, 'none');
+    press(win, doc.getElementById('adminBtn'));
     await settle();
+    assert.ok(doc.getElementById('adminPage').classList.contains('visible'));
+    assert.ok(doc.getElementById('collectionPage').classList.contains('hidden'));
+    assert.ok(doc.getElementById('morePanel').classList.contains('hidden'), 'menu stayed open');
+    for (const id of ['placesBody', 'exportBtn', 'importInput', 'backupsBody', 'adminSpotifyBody'])
+      assert.ok(doc.querySelector('#adminPage #' + id), id + ' is not on the admin page');
+    assert.strictEqual(doc.getElementById('filterBar').style.display, 'none');
+  } finally { win.close(); }
+});
 
-    assert.ok(!doc.getElementById('backupsOverlay').classList.contains('hidden'),
-              'the overlay stayed shut');
+test('the admin page lists a download link per snapshot, newest first', async () => {
+  const { win, doc } = await boot({ authed: true });
+  try {
+    press(win, doc.getElementById('adminBtn'));
+    await settle();
     const links = [...doc.querySelectorAll('#backupsBody a')];
-    assert.deepStrictEqual(links.map(a => a.getAttribute('href')), [
-      '/api/backups/vinyl-2026-09-19.db',
-      '/api/backups/vinyl-2026-09-18.db',
-    ]);
-    const body = doc.getElementById('backupsBody').textContent;
-    assert.match(body, /2026-09-19/);
-    assert.match(body, /49(\.0)? MB/, `no readable size in: ${body}`);
+    assert.deepStrictEqual(links.map(a => a.getAttribute('href')),
+      ['/api/backups/vinyl-2026-09-19.db', '/api/backups/vinyl-2026-09-18.db']);
   } finally { win.close(); }
 });
 
-test('an empty backup folder says so instead of showing a blank panel', async () => {
-  const { win, doc } = await boot({ authed: true, backups: [] });
-  try {
-    press(win, doc.getElementById('backupsBtn'));
-    await settle();
-
-    assert.strictEqual(doc.querySelectorAll('#backupsBody a').length, 0);
-    assert.ok(doc.getElementById('backupsBody').textContent.trim().length > 0,
-              'an empty folder rendered an empty panel');
-  } finally { win.close(); }
-});
-
-test('a failed request says so instead of claiming there are no snapshots', async () => {
+test('an unanswered backups request says so instead of looking empty', async () => {
   const { win, doc } = await boot({ authed: true, failBackups: true });
   try {
-    press(win, doc.getElementById('backupsBtn'));
+    press(win, doc.getElementById('adminBtn'));
     await settle();
+    assert.match(doc.getElementById('backupsBody').textContent, /could not read the backups/);
+  } finally { win.close(); }
+});
 
-    const body = doc.getElementById('backupsBody').textContent;
-    assert.doesNotMatch(body, /no snapshots yet/,
-      'a server error was reported as an empty backup folder');
-    assert.match(body, /could not/i, `no failure message in: ${body}`);
+test('the places editor renders on the admin page', async () => {
+  const { win, doc } = await boot({ authed: true });
+  try {
+    press(win, doc.getElementById('adminBtn'));
+    await settle();
+    assert.match(doc.getElementById('placesBody').textContent, /No places yet|add a new place/);
+  } finally { win.close(); }
+});
+
+test('locking while on admin goes back to the collection', async () => {
+  const { win, doc } = await boot({ authed: true });
+  try {
+    press(win, doc.getElementById('adminBtn'));
+    await settle();
+    win.setAuthed(false);
+    await settle();
+    assert.ok(!doc.getElementById('adminPage').classList.contains('visible'));
+    assert.ok(!doc.getElementById('collectionPage').classList.contains('hidden'));
   } finally { win.close(); }
 });

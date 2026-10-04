@@ -1,4 +1,4 @@
-"""Run tests/test_backups_dom.js under pytest.
+"""Run tests/test_admin_dom.js under pytest.
 
 Same harness as tests/test_phone_dom.py — the real page rendered by Flask, a
 scratch jsdom install shared with tests/test_boot.py, and a skip rather than a
@@ -37,7 +37,7 @@ def _jsdom_path():
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
-def test_backups_dom_js(tmp_path):
+def test_admin_dom_js(tmp_path):
     modules = _jsdom_path()
     if modules is None:
         pytest.skip("jsdom is unavailable (no npm, or no network to install it)")
@@ -49,7 +49,7 @@ def test_backups_dom_js(tmp_path):
                     encoding="utf-8")
 
     env = dict(os.environ, VINYL_JSDOM_PATH=str(modules), VINYL_PAGE_HTML=str(page))
-    result = subprocess.run(["node", "--test", "tests/test_backups_dom.js"],
+    result = subprocess.run(["node", "--test", "tests/test_admin_dom.js"],
                             cwd=REPO_ROOT, capture_output=True, text=True,
                             timeout=60, env=env)
     assert result.returncode == 0, result.stdout + result.stderr
