@@ -259,7 +259,7 @@ body.embed .side{width:330px}
 /* ── side panel: the app preview ───────────────────────────────────────── */
 .side{width:400px;flex-shrink:0;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-height:0}
 .side-scroll{flex:1;overflow:auto;padding:16px}
-/* desktop: the app preview is opt-in, so the diagram gets the full width */
+/* desktop: the step-by-step panel starts open; the button folds it away to give the diagram the full width */
 @media (min-width:901px){ .side{display:none} body.app-on .side{display:flex} }
 #appBtn.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 55%,transparent)}
 .sec-h{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700;
@@ -344,7 +344,7 @@ body.embed .side{width:330px}
 }
 </style>
 </head>
-<body>
+<body class="app-on">
 
 <header class="top">
   <div class="brand">
@@ -357,7 +357,7 @@ body.embed .side{width:330px}
     <button class="btn icon" id="stepBtn" title="Step one event"><i class="ti ti-player-track-next"></i></button>
     <button class="btn icon" id="resetBtn" title="Reset"><i class="ti ti-refresh"></i></button>
     <button class="btn primary" id="playBtn"><i class="ti ti-player-play-filled"></i><span>Run flow</span></button>
-    <button class="btn" id="appBtn" title="Explain each step of the run"><i class="ti ti-layout-sidebar-right"></i><span>Step by step</span></button>
+    <button class="btn on" id="appBtn" title="Explain each step of the run"><i class="ti ti-layout-sidebar-right"></i><span>Step by step</span></button>
     <button class="btn icon" id="themeBtn" title="Toggle theme"><i class="ti ti-sun"></i></button>
   </div>
 </header>
