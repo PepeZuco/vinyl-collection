@@ -2405,6 +2405,48 @@ def spotify_wishlist_scan():
     finally:
         _record_scan_spend("playlist", spent)
 
+
+# One chunk is at most what search_covers will fetch artwork for, so no row
+# in a chunk comes back without a cover for want of budget — and 24 throttled
+# MusicBrainz calls is about 25 s, far inside the worker timeout.
+RESOLVE_CHUNK = scan.COVER_FETCH_LIMIT
+
+
+@app.route("/api/spotify/wishlist-scan/resolve", methods=["POST"])
+@require_auth
+def spotify_wishlist_resolve():
+    d = request.get_json(silent=True) or {}
+    albums = d.get("albums")
+    if not isinstance(albums, list) or not albums:
+        return jsonify({"error": "no albums to check"}), 400
+    if len(albums) > RESOLVE_CHUNK:
+        return jsonify({"error": f"at most {RESOLVE_CHUNK} albums per call"}), 400
+
+    rows = [dict(a) for a in albums if isinstance(a, dict)]
+    todo = [r for r in rows if not r.get("duplicate_of")]
+    spent = []
+    try:
+        try:
+            for row in todo:
+                found = scan.resolve_album(row.get("artist") or "", row.get("album_name") or "")
+                row["mbid"] = found["mbid"] if found else None
+                if found and found.get("year"):
+                    row["year"] = found["year"]
+        except scan.MusicBrainzUnavailable:
+            app.logger.warning("MusicBrainz unavailable for the wishlist scan")
+            return jsonify({"error": "Couldn't reach MusicBrainz — try again in a moment"}), 502
+
+        # search_covers and flag_vinyl both read artist / album_name / mbid,
+        # which is exactly what these rows carry.
+        scan.search_covers(todo)
+        for row in todo:
+            if not row.get("cover_data") and row.get("spotify_image"):
+                row["cover_data"] = scan._download_image(row["spotify_image"])
+        scan.flag_vinyl(todo, usage_out=spent)
+        return jsonify({"albums": rows})
+    finally:
+        _record_scan_spend("playlist", spent)
+
 # ── daily backups ─────────────────────────────────────────────────────────────
 
 @app.route("/api/backups")

@@ -183,3 +183,97 @@ def test_scan_banks_claude_spend_as_playlist(client):
     with app_module.app.app_context():
         rows = app_module.ScanSpend.query.all()
         assert [r.source for r in rows] == ["playlist"]
+
+
+# ── POST /api/spotify/wishlist-scan/resolve ─────────────────────────────────
+
+def _album(artist, album, **extra):
+    row = {"key": f"{artist}|{album}".lower(), "artist": artist, "album_name": album,
+           "year": "1969", "songs": ["x"], "spotify_image": "https://i/s.jpg",
+           "unverified": False, "duplicate_of": None, "have_it": None}
+    row.update(extra)
+    return row
+
+
+@pytest.fixture
+def offline_resolve():
+    """resolve / covers / vinyl stubbed; tests override what they care about."""
+    with patch.object(scan, "resolve_album",
+                      side_effect=lambda a, b: {"mbid": f"rg-{b}", "year": "1970",
+                                                "artist": a, "album_name": b}) as ra, \
+         patch.object(scan, "search_covers",
+                      side_effect=lambda rows: [r.__setitem__("cover_data", "data:c") for r in rows]), \
+         patch.object(scan, "flag_vinyl",
+                      side_effect=lambda rows, **kw: [r.__setitem__("vinyl", "confirmed") for r in rows]) as fv, \
+         patch.object(scan, "_download_image", return_value="data:spotify"):
+        yield ra, fv
+
+
+def test_resolve_needs_edit_mode():
+    c = app_module.app.test_client()
+    r = c.post("/api/spotify/wishlist-scan/resolve", json={"albums": [_album("A", "B")]})
+    assert r.status_code == 401
+
+
+def test_resolve_refuses_empty_and_oversized_chunks(client):
+    assert client.post("/api/spotify/wishlist-scan/resolve", json={"albums": []}).status_code == 400
+    too_many = [_album("A", f"B{i}") for i in range(app_module.RESOLVE_CHUNK + 1)]
+    assert app_module.RESOLVE_CHUNK == 24
+    assert client.post("/api/spotify/wishlist-scan/resolve",
+                       json={"albums": too_many}).status_code == 400
+
+
+def test_resolve_fills_mbid_year_cover_and_vinyl_in_order(client, offline_resolve):
+    r = client.post("/api/spotify/wishlist-scan/resolve",
+                    json={"albums": [_album("The Beatles", "Abbey Road"),
+                                     _album("Bill Withers", "Menagerie")]})
+    assert r.status_code == 200
+    a, b = r.get_json()["albums"]
+    assert (a["album_name"], a["mbid"], a["year"], a["cover_data"], a["vinyl"]) == \
+           ("Abbey Road", "rg-Abbey Road", "1970", "data:c", "confirmed")
+    assert b["album_name"] == "Menagerie" and b["songs"] == ["x"]
+
+
+def test_resolve_keeps_claudes_name_when_musicbrainz_has_none(client, offline_resolve):
+    ra, _ = offline_resolve
+    ra.side_effect = lambda a, b: None
+    a = client.post("/api/spotify/wishlist-scan/resolve",
+                    json={"albums": [_album("X", "Obscure")]}).get_json()["albums"][0]
+    assert a["mbid"] is None and a["album_name"] == "Obscure" and a["year"] == "1969"
+
+
+def test_resolve_falls_back_to_the_spotify_image(client, offline_resolve):
+    with patch.object(scan, "search_covers",
+                      side_effect=lambda rows: [r.__setitem__("cover_data", None) for r in rows]):
+        a = client.post("/api/spotify/wishlist-scan/resolve",
+                        json={"albums": [_album("X", "Y")]}).get_json()["albums"][0]
+    assert a["cover_data"] == "data:spotify"
+
+
+def test_resolve_skips_rows_already_owned(client, offline_resolve):
+    ra, fv = offline_resolve
+    owned = _album("X", "Y", duplicate_of={"id": 1, "artist": "X", "album_name": "Y"}, have_it=True)
+    a = client.post("/api/spotify/wishlist-scan/resolve",
+                    json={"albums": [owned]}).get_json()["albums"][0]
+    assert ra.call_count == 0 and a["duplicate_of"]["id"] == 1
+
+
+def test_resolve_maps_musicbrainz_down_to_502(client, offline_resolve):
+    ra, _ = offline_resolve
+    ra.side_effect = scan.MusicBrainzUnavailable("down")
+    r = client.post("/api/spotify/wishlist-scan/resolve", json={"albums": [_album("X", "Y")]})
+    assert r.status_code == 502 and "MusicBrainz" in r.get_json()["error"]
+
+
+def test_resolve_banks_vinyl_spend_as_playlist(client, offline_resolve):
+    _, fv = offline_resolve
+
+    def flag(rows, usage_out=None, **kw):
+        usage_out.append({"model": "claude-haiku-4-5", "input_tokens": 1, "output_tokens": 1})
+        for r in rows:
+            r["vinyl"] = "likely"
+
+    fv.side_effect = flag
+    client.post("/api/spotify/wishlist-scan/resolve", json={"albums": [_album("X", "Y")]})
+    with app_module.app.app_context():
+        assert [r.source for r in app_module.ScanSpend.query.all()] == ["playlist"]
