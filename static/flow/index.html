@@ -215,27 +215,6 @@ svg.edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 .group b{position:absolute;top:-10px;left:14px;background:var(--bg);padding:0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--accent)}
 .group b small{text-transform:none;letter-spacing:0;color:var(--label);font-weight:500;margin-left:5px}
 .canvas.choose .group{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
-/* search results — a real discography, loaded by default as demo data */
-.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 8px;margin-top:2px}
-.tile{min-width:0;position:relative}
-.tile .art{position:relative;aspect-ratio:1;border-radius:4px;overflow:hidden;background:var(--bg);border:1px solid var(--border);
-  box-shadow:0 6px 14px -8px rgba(0,0,0,.7);transition:outline-color .2s}
-.tile .art img{width:100%;height:100%;object-fit:cover;display:block;animation:artin .45s ease}
-@keyframes artin{from{opacity:0;transform:scale(1.06)}}
-.tile .art .none{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  color:var(--muted);font-size:9px;text-align:center;border:1px dashed var(--border);border-radius:4px}
-.tile .art .none i{font-size:22px}
-.tile.skel .art{background:linear-gradient(90deg,var(--card) 25%,var(--card-hover) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.2s linear infinite}
-@keyframes shimmer{to{background-position:-200% 0}}
-.tile b{display:block;font-size:10.5px;font-weight:600;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile span.y{display:block;font:10px var(--font-mono);color:var(--muted)}
-.tile .tag{position:absolute;left:4px;top:4px;font:700 8.5px var(--font);padding:1px 5px;border-radius:10px;z-index:1;
-  background:rgba(12,12,12,.8);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);display:none}
-.tile.vinyl .tag.v{display:block}
-.tile .tag.o{left:auto;right:4px;color:#141414;background:var(--accent);border-color:var(--accent)}
-.tile.owned .tag.o{display:block}
-.tile.picked .art{outline:2px solid var(--accent);outline-offset:2px}
-.sgrid-note{font-size:11px;color:var(--muted);margin-top:8px}
 /* embedded in the app's Readme */
 body.embed .brand,body.embed #flowTabs,body.embed #themeBtn{display:none}
 body.embed .top{padding:8px 12px}
@@ -287,107 +266,56 @@ body.embed .side{width:330px}
   margin:4px 0 10px;display:flex;align-items:center;gap:8px}
 .sec-h::after{content:'';flex:1;height:1px;background:var(--border)}
 
-/* the sleeve / input card shown before a run */
-.input{display:flex;gap:12px;align-items:center;border:1px dashed var(--border);border-radius:9px;padding:12px;background:var(--card)}
-.input img{width:64px;height:64px;border-radius:4px;object-fit:cover;box-shadow:0 4px 14px rgba(0,0,0,.5)}
-.input .cam{position:relative;flex:none;line-height:0}
-.input .cam::after{content:'';position:absolute;inset:-4px;border-radius:7px;pointer-events:none;
-  background:linear-gradient(var(--accent),var(--accent)) 0 0/12px 2px no-repeat,linear-gradient(var(--accent),var(--accent)) 0 0/2px 12px no-repeat,
-    linear-gradient(var(--accent),var(--accent)) 100% 0/12px 2px no-repeat,linear-gradient(var(--accent),var(--accent)) 100% 0/2px 12px no-repeat,
-    linear-gradient(var(--accent),var(--accent)) 0 100%/12px 2px no-repeat,linear-gradient(var(--accent),var(--accent)) 0 100%/2px 12px no-repeat,
-    linear-gradient(var(--accent),var(--accent)) 100% 100%/12px 2px no-repeat,linear-gradient(var(--accent),var(--accent)) 100% 100%/2px 12px no-repeat}
-.input .cam i{position:absolute;right:3px;bottom:3px;font-size:13px;line-height:1;color:#fff;background:rgba(0,0,0,.55);border-radius:4px;padding:2px}
-.input .ph{width:64px;height:64px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--bg);color:var(--c,var(--accent))}
-.input .t b{display:block;font-size:13px}
-.input .t span{display:block;font-family:var(--font-mono);font-size:11px;color:var(--label);margin-top:3px;word-break:break-all}
-.analyse-btn{margin-top:10px;width:100%;height:46px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:10px;
-  border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent);
-  color:var(--accent);font-size:13.5px;font-weight:700;cursor:pointer;transition:all .12s}
-.analyse-btn:hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
-.analyse-btn:disabled{opacity:.45;cursor:not-allowed}
-.analyse-btn .face{--face:34px;background-image:url('../analyse-sprite.png')}
-.scan-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:6px}
-
-/* replica of .analysing */
-.analysing{--face:76px;margin-top:14px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:9px;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--card)),var(--card));overflow:hidden;
-  opacity:.45;transition:opacity .3s}
-.analysing.live{opacity:1}
-.an-head{display:flex;align-items:center;gap:14px;padding:14px 15px 12px}
-.an-head-main{min-width:0;flex:1}
-.an-title{font-size:15px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:baseline;gap:7px}
-.an-title em{font-style:normal;color:var(--accent)}
-.an-sub{font-size:11.5px;color:var(--label);margin-top:3px;font-variant-numeric:tabular-nums}
-.an-sub .dot{opacity:.4;margin:0 5px}
-.an-bar{height:3px;background:color-mix(in srgb,var(--border) 60%,transparent);margin-top:9px;border-radius:2px;overflow:hidden}
-.an-bar i{display:block;height:100%;width:0;background:var(--accent);border-radius:2px;transition:width .45s cubic-bezier(.4,0,.2,1)}
-.an-steps{border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent);padding:6px 0 8px}
-.an-step{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:7px 15px;position:relative;transition:background .2s}
-.an-step.run{background:color-mix(in srgb,var(--accent) 7%,transparent)}
-.an-step::before{content:'';position:absolute;left:27px;top:0;bottom:0;width:1px;background:color-mix(in srgb,var(--border) 70%,transparent)}
-.an-step:first-child::before{top:50%}
-.an-step:last-child::before{bottom:50%}
-.an-badge{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;position:relative;z-index:1;
-  border:1px solid var(--bdr,var(--border));background:var(--bgc,var(--card));color:var(--fg,var(--muted));transition:all .25s}
-.an-step[data-src="spotify"]{--fg:#1DB954;--bdr:rgba(30,215,96,.45);--bgc:rgba(30,215,96,.10)}
-.an-step[data-src="mb"]{--fg:#EB743B;--bdr:rgba(235,116,59,.45);--bgc:rgba(235,116,59,.10)}
-.an-step[data-src="claude"]{--fg:#D97757;--bdr:rgba(217,119,87,.45);--bgc:rgba(217,119,87,.10)}
-.an-step[data-src="shelf"]{--fg:var(--accent);--bdr:color-mix(in srgb,var(--accent) 45%,transparent);--bgc:color-mix(in srgb,var(--accent) 10%,transparent)}
-.an-step.wait .an-badge{--fg:var(--muted);--bdr:var(--border);--bgc:transparent;opacity:.5}
-.an-step.run .an-badge{animation:an-pulse 1.5s ease-in-out infinite}
-.an-step.skip .an-badge{--fg:var(--label);--bdr:var(--border);--bgc:transparent;border-style:dashed}
-.an-step.err .an-badge{--fg:var(--danger);--bdr:var(--danger);--bgc:transparent}
-@keyframes an-pulse{0%,100%{box-shadow:0 0 0 0 var(--bdr)}50%{box-shadow:0 0 0 4px transparent}}
-.an-body{min-width:0;padding-top:2px}
-.an-label{font-size:12.5px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px}
-.an-label small{font-weight:500;color:var(--muted);font-size:10.5px}
-.an-step.wait .an-label{color:var(--label);font-weight:500}
-.an-label .tick{font-size:14px;color:var(--accent);margin-left:auto;flex-shrink:0}
-.an-step.skip .an-label .tick{color:var(--label)}
-.an-step.err .an-label .tick{color:var(--danger)}
-.an-detail{font-size:11.5px;color:var(--label);margin-top:2px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.an-step.err .an-detail{color:var(--danger)}
-.an-step.wait .an-detail{display:none}
-.an-pips{display:flex;gap:3px;margin-top:5px}
-.an-pips i{width:14px;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
-.an-pips i.on{background:var(--fg)}
-.an-foot{display:flex;align-items:center;gap:8px;padding:9px 15px;border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
-.an-cost{font-size:10.5px;color:var(--muted);flex:1;min-width:0;line-height:1.35}
-
-/* the filled form */
-.result{margin-top:14px;border:1px solid var(--border);border-radius:9px;background:var(--card);padding:14px;display:none}
-.result.on{display:block;animation:rise .4s cubic-bezier(.2,.8,.3,1)}
+/* the story: each stage of the run as a short paragraph, with the records it found */
+.sec-h small{text-transform:none;letter-spacing:0;font:400 11px var(--font-mono);color:var(--label)}
+.story{display:flex;flex-direction:column;gap:12px}
+.st{--c:var(--edge);display:grid;grid-template-columns:22px 1fr;gap:9px;transition:opacity .3s}
+.st[data-src="claude"]{--c:var(--claude)}
+.st[data-src="mb"]{--c:var(--mb)}
+.st[data-src="spotify"]{--c:var(--spotify)}
+.st[data-src="shelf"]{--c:var(--accent)}
+.st-n{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font:700 11px var(--font-mono);
+  color:var(--c);border:1px solid color-mix(in srgb,var(--c) 50%,transparent);background:color-mix(in srgb,var(--c) 10%,transparent);transition:all .25s}
+.st-b{min-width:0}
+.st-h{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12.5px;font-weight:600;line-height:22px}
+.st-h small{font:400 10.5px var(--font-mono);color:var(--muted)}
+.st p{margin:1px 0 0;color:var(--label);font-size:12px;line-height:1.55}
+.st p b{color:var(--text);font-weight:600}
+.st p code{font-family:var(--font-mono);font-size:11.5px;color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);padding:0 4px;border-radius:4px}
+.st.wait{opacity:.55}
+.st.run .st-n{background:var(--c);color:#111;animation:an-pulse 1.5s ease-in-out infinite}
+.st.run .st-h{color:var(--c)}
+.st.skip .st-n{border-style:dashed;color:var(--label);border-color:var(--border);background:transparent}
+.st.err .st-n{color:var(--danger);border-color:var(--danger);background:transparent}
+.st.err p{color:var(--danger)}
+@keyframes an-pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 55%,transparent)}50%{box-shadow:0 0 0 4px transparent}}
+.chip{display:inline-flex;align-items:center;font:700 10px/16px var(--font-mono);color:var(--claude);white-space:nowrap;border-radius:20px;padding:0 7px;
+  background:color-mix(in srgb,var(--claude) 10%,transparent);border:1px solid color-mix(in srgb,var(--claude) 40%,transparent)}
+.chip.est{font-weight:400;color:var(--label);background:transparent;border-color:var(--border)}
+.chip.fresh{animation:billflash .7s ease}
+/* the records a step found: one tile per album, filling in as the run goes */
+/* twelve columns always: a full discography fits one row, and a few pressings stay the same size */
+.strip{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-top:7px}
+.cv{aspect-ratio:1;border-radius:3px;overflow:hidden;position:relative;background:linear-gradient(135deg,var(--card),var(--node));border:1px solid var(--border)}
+.cv img{width:100%;height:100%;object-fit:cover;display:block;animation:artin .45s ease}
+@keyframes artin{from{opacity:0;transform:scale(1.06)}}
+.cv .none{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
+.cv.vinyl::after{content:'';position:absolute;left:2px;bottom:2px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1.5px rgba(12,12,12,.8)}
+.cv.owned{outline:2px solid var(--accent);outline-offset:1px}
+.cv.picked{outline:2px solid var(--text);outline-offset:1px}
+.strip-key{font-size:10.5px;color:var(--muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+.strip-key span{display:flex;align-items:center;gap:4px}
+.strip-key i{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block}
+.strip-key i.o{width:9px;height:9px;border-radius:2px;background:transparent;outline:2px solid var(--accent);outline-offset:-1px}
+.why{margin-top:14px;padding:10px 12px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:0 8px 8px 0}
+.why b{display:block;font-size:12px;margin-bottom:2px}
+.why p{margin:0;color:var(--label);font-size:12px;line-height:1.55}
+.story-err{margin-top:12px;padding:9px 11px;border-radius:7px;font-size:12px;line-height:1.45;display:none;gap:8px;align-items:flex-start;
+  background:color-mix(in srgb,var(--danger) 10%,transparent);border:1px solid color-mix(in srgb,var(--danger) 45%,transparent)}
+.story-err.on{display:flex}
+.story-err i{font-size:16px;flex-shrink:0;margin-top:1px;color:var(--danger)}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}}
-.r-top{display:flex;gap:14px}
-.r-cover{width:96px;height:96px;border-radius:4px;object-fit:cover;box-shadow:0 8px 20px rgba(0,0,0,.55);flex-shrink:0}
-.r-cover.none{display:flex;align-items:center;justify-content:center;background:var(--bg);font-size:38px;color:var(--muted);box-shadow:none;border:1px dashed var(--border)}
-.r-fields{flex:1;min-width:0;display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12px;align-content:start}
-.r-fields dt{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.07em;padding-top:2px}
-.r-fields dd{margin:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.r-fields dd.empty{color:var(--muted);font-weight:400;font-style:italic}
-.fill{animation:fill .6s ease}
-@keyframes fill{0%{background:color-mix(in srgb,var(--accent) 30%,transparent)}100%{background:transparent}}
-.pill{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;
-  border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.pill.muted{border-color:var(--border);color:var(--label);background:transparent}
-.alts{display:flex;gap:6px;margin-top:12px}
-.alts div{width:38px;height:38px;border-radius:3px;background:var(--bg) center/cover;opacity:.85;border:1px solid var(--border)}
-.alts div:first-child{outline:2px solid var(--accent);outline-offset:1px;opacity:1}
-.alts span{font-size:11px;color:var(--label);align-self:center;margin-left:4px}
-.notice{margin-top:12px;padding:9px 11px;border-radius:7px;font-size:12px;line-height:1.45;display:none;gap:8px;align-items:flex-start}
-.notice.on{display:flex}
-.notice i{font-size:16px;flex-shrink:0;margin-top:1px}
-.notice.warn{background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);color:var(--text)}
-.notice.warn i{color:var(--accent)}
-.notice.err{background:color-mix(in srgb,var(--danger) 10%,transparent);border:1px solid color-mix(in srgb,var(--danger) 45%,transparent)}
-.notice.err i{color:var(--danger)}
-.notice.ok{background:color-mix(in srgb,#5FBF7A 10%,transparent);border:1px solid color-mix(in srgb,#5FBF7A 45%,transparent)}
-.notice.ok i{color:#5FBF7A}
-.save-btn{margin-top:12px;width:100%;height:40px;border-radius:7px;border:0;background:var(--accent);color:#141414;font-weight:700;font-size:13px;
-  display:flex;align-items:center;justify-content:center;gap:7px;transition:transform .12s,filter .2s}
-.save-btn.press{transform:scale(.97);filter:brightness(1.15)}
-.save-btn.hide{display:none}
-:root[data-theme="light"] .save-btn,:root[data-theme="light"] .btn.primary{color:#fff}
+:root[data-theme="light"] .btn.primary{color:#fff}
 
 
 /* touch: a vertical swipe scrolls the page, a sideways drag pans the diagram */
@@ -429,7 +357,7 @@ body.embed .side{width:330px}
     <button class="btn icon" id="stepBtn" title="Step one event"><i class="ti ti-player-track-next"></i></button>
     <button class="btn icon" id="resetBtn" title="Reset"><i class="ti ti-refresh"></i></button>
     <button class="btn primary" id="playBtn"><i class="ti ti-player-play-filled"></i><span>Run flow</span></button>
-    <button class="btn" id="appBtn" title="Show what the app shows during the run"><i class="ti ti-layout-sidebar-right"></i><span>In the app</span></button>
+    <button class="btn" id="appBtn" title="Explain each step of the run"><i class="ti ti-layout-sidebar-right"></i><span>Step by step</span></button>
     <button class="btn icon" id="themeBtn" title="Toggle theme"><i class="ti ti-sun"></i></button>
   </div>
 </header>
@@ -466,41 +394,10 @@ body.embed .side{width:330px}
 
   <aside class="side">
     <div class="side-scroll">
-      <div class="sec-h">In the app</div>
-      <div class="input" id="inputCard"></div>
-      <button class="analyse-btn" id="analyseBtn"><span class="face" id="btnFace"></span><span id="analyseLabel">analyse</span></button>
-      <div class="scan-hint" id="scanHint"></div>
-
-      <div class="analysing" id="panel">
-        <div class="an-head">
-          <div class="face" id="panelFace"></div>
-          <div class="an-head-main">
-            <div class="an-title">analysing<em id="anWhat"></em></div>
-            <div class="an-sub"><span id="anStage">idle</span><span class="dot">·</span><span id="anClock">0.0s</span></div>
-            <div class="an-bar"><i id="anBar"></i></div>
-          </div>
-        </div>
-        <div class="an-steps" id="anSteps"></div>
-        <div class="an-foot"><div class="an-cost" id="anCost"></div></div>
-      </div>
-
-      <div class="result" id="result">
-        <div class="r-top">
-          <div id="rCoverWrap"></div>
-          <dl class="r-fields" id="rFields"></dl>
-        </div>
-        <div class="alts" id="rAlts"></div>
-        <div class="notice warn" id="nDup"><i class="ti ti-copy"></i><div></div></div>
-        <div class="notice warn" id="nMb"><i class="ti ti-cloud-off"></i><div>MusicBrainz couldn't be reached — no year, country or alternate pressings. Retrying is worth it.</div></div>
-        <button class="save-btn" id="saveBtn"><i class="ti ti-device-floppy"></i>save record</button>
-        <div class="notice ok" id="nSaved"><i class="ti ti-circle-check"></i><div></div></div>
-      </div>
-      <div class="notice err" id="nErr"><i class="ti ti-alert-triangle"></i><div></div></div>
-
-      <div class="sec-h" style="margin-top:20px">Search results <span style="text-transform:none;letter-spacing:0;font-weight:500;font-family:var(--font-mono)" id="sgridTag">demo · "thriller mj"</span></div>
-      <div class="sgrid" id="sgrid"></div>
-      <div class="sgrid-note" id="sgridNote"></div>
-
+      <div class="sec-h">Step by step <small id="storyWhat"></small></div>
+      <div class="story" id="story"></div>
+      <div class="story-err" id="storyErr"><i class="ti ti-alert-triangle"></i><div></div></div>
+      <div class="why" id="why"></div>
     </div>
   </aside>
 </div>
@@ -1212,56 +1109,82 @@ setInterval(()=>{ frame=(frame+1)%30;
 /* ═══════════════════════════════════════════════════════════════════════
    The app-side panel
    ═══════════════════════════════════════════════════════════════════════ */
-function renderPanel(){
-  const F=FLOWS[cur], kind=K();
-  const stages = kind==='photo'?['vision','mb','cover','vinyl','shelf']:kind==='spotify'?['spotify','genre','mb','cover','vinyl','shelf']:['parse','artist','discography','covers','vinyl','shelf'];
-  $('anSteps').innerHTML=stages.map(id=>{const m=STAGE_META[id]; return `<div class="an-step wait" data-src="${m.src}" data-id="${id}">
-    <div class="an-badge"><i class="ti ${m.icon}"></i></div>
-    <div class="an-body"><div class="an-label">${m.label} <small>${m.sub}</small><span class="tick"></span></div><div class="an-detail"></div><div class="an-pips"></div></div></div>`;}).join('');
-  $('anWhat').textContent=' '+(kind==='search'?'search':kind==='spotify'?'album':'sleeve');
-  $('anStage').textContent='idle'; $('anClock').textContent='0.0s'; $('anBar').style.width='0';
-  $('panel').classList.remove('live');
-  $('anCost').innerHTML=`avg ${usd(AVG[kind])} per ${kind==='search'?'search':'scan'} · billed to <span style="font-family:var(--font-mono)">ANTHROPIC_API_KEY</span>`;
-  // the photo is of this run's album, so the sleeve in the card is the one the diagram reads
-  const shot=cover(P,A);
-  const card = kind==='photo' && inp==='camera' ? `<div class="cam"><img src="${shot}" alt=""><i class="ti ti-camera"></i></div><div class="t"><b>live camera</b><span>rear camera · frame captured</span></div>`
-    : kind==='photo' ? `<img src="${shot}" alt=""><div class="t"><b>sleeve photo</b><span>${photoName} · 1.2 MB</span></div>`
-    : kind==='spotify' ? `<div class="ph" style="--c:var(--spotify)"><img src="../spotify-logo.png" style="width:30px;height:30px;box-shadow:none" alt=""></div><div class="t"><b>spotify link</b><span>open.spotify.com/album/…?si=8f2c</span></div>`
-    : `<div class="ph"><i class="ti ti-search"></i></div><div class="t"><b>search artists</b><span>"${typed()}"</span></div>`;
-  $('inputCard').innerHTML=card;
-  $('analyseLabel').textContent = kind==='search'?'search':'analyse';
-  $('scanHint').textContent='nothing is sent until you press it';
-  $('analyseBtn').disabled=false;
-  ['result','nErr','nDup','nMb','nSaved'].forEach(id=>$(id).classList.remove('on'));
-  $('saveBtn').classList.remove('hide','press');
-  $('rFields').innerHTML=''; $('rAlts').innerHTML=''; $('rCoverWrap').innerHTML='<div class="r-cover none"><i class="ti ti-vinyl"></i></div>';
-  document.querySelectorAll('.face').forEach(f=>{f.classList.remove('on'); f.style.backgroundPositionX='0';});
-  formState={};
-  resetBill(); renderGrid('demo');
-}
-let formState={};
+// One paragraph per stage. `pre` says what the stage will do; `done` what it did on this run.
+// Text reads this run's record (P, A, ART, ALB), so every run tells its own story.
+const list = xs => xs.length>1 ? xs.slice(0,-1).join(', ')+' and '+xs[xs.length-1] : xs[0];
+const STORY = {
+  vision:  {pre:()=>`Claude's vision model reads the photo: artist, album, label and catalog number, straight off the sleeve.`,
+            done:()=>`Claude read the sleeve as <b>${ART} — ${ALB}</b>${A[3]?`, ${A[3]}${A[4]&&A[4]!=='[none]'?' '+A[4]:''}`:''}. Angles and glare are fine; it reads it like a person would.`},
+  spotify: {pre:()=>`Spotify's API turns the pasted link, short share links included, into an artist, an album and its tracks.`,
+            done:()=>`The link is <b>${ALB}</b> by <b>${ART}</b>.`},
+  genre:   {pre:()=>`Claude places the album in one of the collection's genres.`,
+            done:()=>`Claude files it under <b>${P.genre}</b>.`},
+  mb:      {pre:()=>`MusicBrainz, the open music encyclopedia, is searched for every release of this album.`,
+            done:()=>{ const k=pressings(); return `<b>${k} pressing${k>1?'s':''}</b> found, first released in <b>${A[1]}</b> (${P.country})${k>1?'. Each is a different copy you could find in a shop':''}.`; },
+            skip:()=>`MusicBrainz couldn't be reached, so there's no year and no other pressings. Retrying is worth it.`},
+  cover:   {pre:()=>`Each pressing gets its sleeve from the Cover Art Archive, with iTunes as a fallback.`,
+            done:()=>pressings()>1 ? `The sleeves come in, so you can compare the pressings side by side.` : `The sleeve comes in and fills the form.`,
+            skip:()=>`Nothing to fetch artwork for.`},
+  parse:   {pre:()=>`Claude reads what you typed like a person would: typos, nicknames and half-remembered titles all work.`,
+            done:()=>`<code>${typed()}</code> becomes <b>${ART}</b>, with <b>${ALB}</b> as the album hint.`},
+  artist:  {pre:()=>`The name goes to MusicBrainz, which returns the exact artist.`,
+            done:()=>`One match: <b>${ART}</b>, ${P.country}.`},
+  discography:{pre:()=>`Every studio album of that artist comes back, oldest first.`,
+            done:()=>{ const L=P.albums; return `You asked for one album and got the whole catalog: <b>${L.length} albums, ${L[0][1]} to ${L[L.length-1][1]}</b>.`; }},
+  covers:  {pre:()=>`Each album gets its sleeve from the Cover Art Archive, with iTunes as a fallback.`,
+            done:()=>{ const L=P.albums, miss=L.filter(a=>!a[2]).map(a=>`<i>${a[0]}</i>`);
+              return `<b>${L.length-miss.length} of ${L.length}</b> sleeves found.`+(miss.length?` ${list(miss)} ${miss.length>1?'have':'has'} none, so ${miss.length>1?'they stay':'it stays'} blank instead of showing the wrong one.`:''); }},
+  vinyl:   {pre:()=>`Claude checks the record was really pressed on vinyl, not only on CD or streaming.`,
+            done:()=>{
+              if(K()==='search'){ const L=P.albums, v=L.filter(a=>a[5]).length;
+                return `<b>${v} of ${L.length}</b> confirmed on vinyl`+(v<L.length?`; the rest have no vinyl pressing listed and stay "likely".`:'.'); }
+              return verdict()==='confirmed' ? `<b>Confirmed on vinyl.</b>` : scen==='mbdown' ? `With no pressings to check against, it's marked <b>likely vinyl</b>.` : `No vinyl pressing is listed, so it's marked <b>likely vinyl</b>.`; }},
+  shelf:   {pre:()=>`Your shelf is checked so the same record isn't logged twice. Local, so no network and no cost.`,
+            done:()=>{
+              if(K()==='search'){ const L=P.albums, own=L.filter(a=>ownedRec(P,a)).map(a=>`<b>${a[0]}</b>`), left=L.length-own.length;
+                return own.length ? `${list(own)} ${own.length>1?'are':'is'} already yours. That leaves <b>${left} record${left===1?'':'s'}</b> you don't have yet.`
+                  : `None of ${ART}'s ${L.length} albums are on your shelf yet: all of them are new to explore.`; }
+              const r=ownedRec(P,A);
+              return r ? `<b>${ALB}</b> is already on your shelf (record #${r.id}). The form still fills, with a warning, so a second copy is a choice.`
+                : `Not on your shelf yet. The form fills and nothing is saved until you check it.`; }},
+};
+const WHY = {
+  search: ()=>`A search doesn't return one hit. It returns ${ART}'s whole catalog with what you already own marked, so you can see the gaps in the collection, find albums you didn't know about, and go from a song you remember to the records around it.`,
+  photo:  ()=>`One photo turns a sleeve into a full record. The year, the country and every known pressing come with it, so you can tell which copy you're holding and which other editions exist.`,
+  spotify:()=>`A song you're listening to becomes a record to look for. The link brings the album's pressings, so you know which vinyl editions exist before you go digging.`,
+};
+const STAGES = {photo:['vision','mb','cover','vinyl','shelf'], spotify:['spotify','genre','mb','cover','vinyl','shelf'], search:['parse','artist','discography','covers','vinyl','shelf']};
+// the Claude stages, with the average a call costs, shown until the real one comes back
+const EST = {vision:()=>AVG.vision, genre:()=>AVG.genre, parse:()=>AVG.parse,
+  vinyl:()=>({photo:AVG.vinylPhoto, spotify:AVG.vinylSpotify, search:AVG.vinylSearch})[K()]};
+const pressings = () => Math.max(1,Math.min(A[5]||1,4));
+const verdict = () => scen==='mbdown'||!A[5] ? 'likely' : 'confirmed';
 
-/* ── search results grid ── this run's artist; the owned tags come from your shelf */
-function renderGrid(mode){
-  const L=P.albums, n=L.length, withArt=L.filter(a=>a[2]).length, owned=L.filter(a=>ownedRec(P,a)).length;
-  // mode: 'demo' — everything loaded · 'wait' — a search is out, nothing back yet · 'rows' — titles back, art pending
-  $('sgrid').innerHTML = mode==='wait' ? Array.from({length:8},()=>'<div class="tile skel"><div class="art"></div></div>').join('')
-    : L.map((a,i)=>{ const r=ownedRec(P,a);
-        return `<div class="tile ${mode==='demo'?'vinyl'+(r?' owned':''):'skel'}" data-i="${i}"${r?` title="on your shelf · record #${r.id}"`:''}><div class="art">${mode==='demo'?art(a):''}<span class="tag v">vinyl</span><span class="tag o">owned</span></div><b>${a[0]}</b><span class="y">${a[1]}</span></div>`; }).join('');
-  $('sgridNote').textContent = mode==='demo' ? `${P.artist} · ${n} release${n>1?'s':''} · ${withArt} with artwork · ${owned} on your shelf — demo data, every run draws another artist`
-    : mode==='wait' ? 'waiting for the discography…' : 'fetching cover art…';
-  $('sgridTag').textContent = `${mode==='demo'?'demo':'live'} · "${typed()}"`;
+// the records strip: `lvl` per stage — 1 titles, 2 sleeves, 3 vinyl marks, 4 owned
+const STRIP = {search:{discography:1, covers:2, vinyl:3, shelf:4}, photo:{cover:2}, spotify:{cover:2}};
+function strip(id, shown=99){
+  const lvl=STRIP[K()][id]; if(!lvl) return '';
+  const L = K()==='search' ? P.albums : Array.from({length:pressings()},()=>A);
+  return `<div class="strip">${L.map((a,i)=>{
+    const art = lvl>=2 && i<shown ? (a[2]?`<img src="${cover(P,a)}" alt="">`:'<div class="none"><i class="ti ti-photo-off"></i></div>') : '';
+    const cls = [lvl>=3&&a[5]?'vinyl':'', lvl>=4&&ownedRec(P,a)?'owned':''].join(' ');
+    return `<div class="cv ${cls}" title="${a[0]} · ${a[1]}" data-i="${i}">${art}</div>`; }).join('')}</div>`
+    + (lvl>=3 ? `<div class="strip-key"><span><i></i>on vinyl</span>${lvl>=4?'<span><i class="o"></i>on your shelf</span>':''}</div>` : '');
 }
-const art = a => a[2] ? `<img src="${cover(P,a)}" alt="">` : '<div class="none"><i class="ti ti-photo-off"></i>no artwork</div>';
-function gridReveal(n){
-  document.querySelectorAll('#sgrid .tile').forEach((el,i)=>{ if(i<n && el.classList.contains('skel')){
-    el.classList.remove('skel'); el.querySelector('.art').insertAdjacentHTML('afterbegin',art(P.albums[i])); } });
+
+function renderPanel(){
+  const kind=K();
+  $('story').innerHTML = STAGES[kind].map((id,i)=>{ const m=STAGE_META[id], est=EST[id];
+    return `<div class="st wait" data-id="${id}" data-src="${m.src}"><span class="st-n">${i+1}</span><div class="st-b">
+      <div class="st-h">${m.label[0].toUpperCase()+m.label.slice(1)}<small>${m.sub}</small>${est?`<span class="chip est">avg ${usd(est())}</span>`:''}</div>
+      <p>${STORY[id].pre()}</p><div class="st-strip"></div></div></div>`; }).join('');
+  $('storyWhat').textContent = awaiting ? 'choose an input on the diagram'
+    : kind==='search' ? `search · "${typed()}"` : kind==='spotify' ? 'spotify link' : inp==='camera' ? 'live camera' : `photo · ${photoName}`;
+  $('why').innerHTML = `<b>Why it helps you explore</b><p>${WHY[kind]()}</p>`;
+  $('storyErr').classList.remove('on');
+  resetBill();
 }
-function gridOwned(){
-  const tiles=document.querySelectorAll('#sgrid .tile');
-  P.albums.forEach((a,i)=>{ const r=ownedRec(P,a); if(r){ tiles[i]?.classList.add('owned'); tiles[i]?.setAttribute('title',`on your shelf · record #${r.id}`); } });
-}
-function gridPick(){ document.querySelector(`#sgrid .tile[data-i="${P.albums.indexOf(A)}"]`)?.classList.add('picked'); $('sgridNote').textContent=`you picked ${ALB} (${A[1]}) — it fills the form like a scan`; }
+const stEl = id => document.querySelector(`.st[data-id="${id}"]`);
 
 /* ── the bill ── */
 let billTotal=0, billShown=0, billAnim=null;
@@ -1288,71 +1211,40 @@ function spend(c){
     <span class="what">${c[4]}<small>${c[1].toLocaleString()} in · ${c[2]} out tokens</small></span><span class="usd">${usd(c[3])}</span></div>`);
   $('billSub').innerHTML=`${$('billRows').children.length} Claude call${$('billRows').children.length>1?'s':''} so far · billed the moment each one returns.`;
 }
-function setFields(patch){
-  Object.assign(formState,patch);
-  const rows=[['artist','Artist'],['album','Album'],['year','Year'],['genre','Genre'],['country','Country'],['label','Label'],['cat','Catalog'],['vinyl','Format']];
-  $('result').classList.add('on');
-  $('rFields').innerHTML=rows.filter(([k])=>k!=='label'&&k!=='cat'||formState[k]).map(([k,l])=>{
-    let v=formState[k];
-    if(k==='vinyl'&&v) v=`<span class="pill ${v==='likely'?'muted':''}"><i class="ti ti-vinyl"></i>${v==='confirmed'?'vinyl':'likely vinyl'}</span>`;
-    return `<dt>${l}</dt><dd class="${v?'':'empty'} ${k in patch?'fill':''}">${v||'—'}</dd>`;}).join('');
-  if(patch.cover) $('rCoverWrap').innerHTML=`<img class="r-cover fill" src="${cover(P,A)}" alt="">`;
-  if(patch.alts) $('rAlts').innerHTML=Array.from({length:patch.alts},()=>`<div style="background-image:url('${cover(P,A)}')"></div>`).join('')+`<span>${patch.alts} pressing${patch.alts>1?'s':''}</span>`;
-}
-
-let t0=0, clockTimer=null;
+// the thinking face on the diagram's Analyse node runs while the stream is open
+const faceOn = on => document.querySelectorAll('.node[data-id="analyse"] .face').forEach(f=>{ f.classList.toggle('on',on); if(!on) f.style.backgroundPositionX='0'; });
 function uiOp(what,data){
-  if(what==='start'){
-    $('panel').classList.add('live'); $('anStage').textContent='starting…'; $('analyseBtn').disabled=true; $('scanHint').textContent='sent — streaming…';
-    document.querySelectorAll('#panelFace,#btnFace,.node[data-id="analyse"] .face').forEach(f=>f.classList.add('on'));
-    if(K()==='search') renderGrid('wait');
-    t0=performance.now(); clearInterval(clockTimer);
-    clockTimer=setInterval(()=>{$('anClock').textContent=((performance.now()-t0)/1000*speed).toFixed(1)+'s';},100);
-  }
-  if(what==='fill') setFields(data);
-  if(what==='pick') gridPick();
-  if(what==='mbdown') $('nMb').classList.add('on');
-  if(what==='dup'){ const n=$('nDup'); n.querySelector('div').innerHTML=`<b>${ALB}</b> by ${ART} is already on your shelf (record #${data.id}). <u style="cursor:pointer">open it</u> or save anyway.`; n.classList.add('on'); }
-  if(what==='error'){ stopClock();
-    if(!billTotal){ $('billSub').className='bill-sub'; $('billSub').innerHTML=`<b>${usd(0)}</b>: the request failed before any Claude call, so nothing was billed.`; } const n=$('nErr'); n.querySelector('div').innerHTML=`<b>${data.status}</b> · ${data.error}<br><span style="color:var(--label)">${data.status===503?'The scan stays visible; manual entry still works.':'Nothing was saved.'}</span>`; n.classList.add('on'); $('anStage').textContent='failed'; }
-  if(what==='press'){ const b=$('saveBtn'); b.classList.add('press'); setTimeout(()=>b.classList.remove('press'),250); }
-  if(what==='saved'){ $('saveBtn').classList.add('hide'); const n=$('nSaved'); n.querySelector('div').innerHTML=`Saved to your shelf — <b>record #${nextId}</b>. Daily backup picks it up tonight.`; n.classList.add('on'); }
-  if(what==='spend') spend(data);
+  if(what==='start') faceOn(true);
+  if(what==='pick'){ const s=stEl('shelf'); s?.querySelector(`.cv[data-i="${P.albums.indexOf(A)}"]`)?.classList.add('picked');
+    s?.querySelector('p').insertAdjacentHTML('beforeend',` You pick <b>${ALB}</b> (${A[1]}) and it fills the form like a scan.`); }
+  if(what==='saved'){ const p=stEl('shelf')?.querySelector('p'); p?.insertAdjacentHTML('beforeend',` Saved as <b>record #${nextId}</b>.`); }
+  if(what==='error'){
+    if(!billTotal){ $('billSub').className='bill-sub'; $('billSub').innerHTML=`<b>${usd(0)}</b>: the request failed before any Claude call, so nothing was billed.`; }
+    const n=$('storyErr'); n.querySelector('div').innerHTML=`<b>${data.status}</b> · ${data.error}<br><span style="color:var(--label)">${data.status===503?'Nothing was filled in; manual entry still works.':'Nothing was saved.'}</span>`; n.classList.add('on'); }
+  if(what==='spend'){ spend(data);
+    // the real cost replaces the average on the step that made the call
+    const id=Object.keys(STAGE_META).find(k=>STAGE_META[k].label===data[4] && stEl(k)), chip=id&&stEl(id).querySelector('.chip');
+    if(chip){ chip.className='chip fresh'; chip.textContent=usd(data[3]); } }
   if(what==='cost'){
     const avg=AVG[K()], failed=document.querySelector('.node.s-err');
     $('billSub').className='bill-sub'+(failed?' warn':'');
     $('billSub').innerHTML = failed
       ? `This ${runWord()} cost <b>${usd(data.total)}</b> even though it failed: the call had already returned, and nothing refunds it.`
-      : `This ${runWord()} cost <b>${usd(data.total)}</b> · ${Math.abs(data.total-avg)<.00005?'right on':'vs'} the ${usd(avg)} average. Written to the ScanSpend ledger.`; $('anCost').innerHTML=`this ${K()==='search'?'search':'scan'} cost <b style="color:var(--text)">$${data.total.toFixed(4)}</b> · ${data.calls.map(c=>c[0].replace('claude-','')).join(' + ')}`; }
+      : `This ${runWord()} cost <b>${usd(data.total)}</b> · ${Math.abs(data.total-avg)<.00005?'right on':'vs'} the ${usd(avg)} average. Written to the ScanSpend ledger.`; }
 }
-function stopClock(){ clearInterval(clockTimer); document.querySelectorAll('#panelFace,#btnFace,.node[data-id="analyse"] .face').forEach(f=>f.classList.remove('on')); }
 
 function onSse(ev,data){
-  if(ev==='step' && K()==='search'){
-    if(data.id==='discography' && data.state==='done') renderGrid('rows');
-    if(data.id==='covers' && data.n) gridReveal(data.n);
-    if(data.id==='covers' && data.state==='done'){ gridReveal(99);
-      const miss=P.albums.filter(a=>!a[2]).map(a=>a[0]);
-      $('sgridNote').textContent=`${P.albums.length-miss.length} of ${P.albums.length} had artwork`+(miss.length?` — ${miss.join(', ')} ${miss.length>1?'have':'has'} none on Cover Art Archive or iTunes`:''); }
-    if(data.id==='vinyl' && data.state==='done') document.querySelectorAll('#sgrid .tile').forEach(t=>t.classList.add('vinyl'));
-    if(data.id==='shelf' && data.state==='done'){ gridOwned(); const o=document.querySelectorAll('#sgrid .tile.owned').length;
-      $('sgridNote').textContent = o ? `${o} of ${P.albums.length} already on your shelf — tagged owned` : `none of ${ART}'s ${P.albums.length} releases are on your shelf yet`; }
-  }
   if(ev==='step'){
-    const row=document.querySelector(`.an-step[data-id="${data.id}"]`); if(!row) return;
-    row.className=`an-step ${data.state}`;
-    const tick=row.querySelector('.tick');
-    tick.innerHTML = data.state==='done'?'<i class="ti ti-check"></i>':data.state==='skip'?'<i class="ti ti-minus"></i>':'';
-    if(data.detail) row.querySelector('.an-detail').textContent=data.detail;
-    if(data.of){ const p=row.querySelector('.an-pips'); if(p.children.length!==data.of) p.innerHTML='<i></i>'.repeat(data.of);
-      [...p.children].forEach((c,i)=>c.classList.toggle('on',i<data.n)); }
-    if(data.state==='done'||data.state==='skip') row.querySelector('.an-pips').querySelectorAll('i').forEach(i=>i.classList.add('on'));
-    if(data.state==='run') $('anStage').textContent=STAGE_META[data.id].label+'…';
-    const all=document.querySelectorAll('.an-step').length, fin=document.querySelectorAll('.an-step.done,.an-step.skip').length;
-    $('anBar').style.width=(fin/all*100)+'%';
+    const el=stEl(data.id); if(!el) return;
+    el.className=`st ${data.state}`;
+    const p=el.querySelector('p'), box=el.querySelector('.st-strip'), S=STORY[data.id];
+    if(data.state==='done'){ p.innerHTML=S.done(); box.innerHTML=strip(data.id); }
+    if(data.state==='skip') p.innerHTML=S.skip?S.skip():data.detail||'';
+    // sleeves arrive one by one while the stage runs
+    if(data.state==='run' && data.n && STRIP[K()][data.id]>=2) box.innerHTML=strip(data.id, data.n);
   }
-  if(ev==='error'){ const row=document.querySelector('.an-step.run'); if(row){ row.className='an-step err'; row.querySelector('.tick').innerHTML='<i class="ti ti-x"></i>'; row.querySelector('.an-detail').textContent=data.error; } }
-  if(ev==='done'){ stopClock(); $('anStage').textContent='done'; $('anBar').style.width='100%'; }
+  if(ev==='done'||ev==='error') faceOn(false);
+  if(ev==='error'){ const el=document.querySelector('.st.run'); if(el){ el.className='st err'; el.querySelector('p').textContent=data.error; } }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1421,8 +1313,7 @@ let awaiting=false, pendingStep=false;
 function begin(stepping){
   if(cur!=='claude'){ roll(); reset(); stepping?step():run(); return; }
   reset(); awaiting=true; pendingStep=!!stepping; canvas.classList.add('choose');
-  $('inputCard').innerHTML='<div class="ph"><i class="ti ti-hand-click"></i></div><div class="t"><b>choose an input</b><span>upload · live camera · search artists</span></div>';
-  $('analyseBtn').disabled=true; $('scanHint').textContent='pick one of the squares on the diagram';
+  $('storyWhat').textContent='choose an input on the diagram';
   updateButtons();
 }
 function choose(id){
@@ -1432,7 +1323,7 @@ function choose(id){
 function reset(){
   if(follow) releaseCamera();
   awaiting=false; pendingStep=false; canvas.classList.remove('choose');
-  runId++; running=false; stepMode=false; stepResolve?.(); stepResolve=null; clearInterval(clockTimer);
+  runId++; running=false; stepMode=false; stepResolve?.(); stepResolve=null; faceOn(false);
   script=build(cur,scen); pc=0; closeInspector(); render(); updateButtons();
 }
 function updateButtons(){
@@ -1451,7 +1342,6 @@ function renderTabs(){
 }
 $('flowTabs').onclick=e=>{const b=e.target.closest('button'); if(!b)return; cur=b.dataset.k; renderTabs(); reset();};
 $('playBtn').onclick=()=>{ if(awaiting) return; if(running) run(); else begin(); };
-$('analyseBtn').onclick=()=>{ if(!running&&!awaiting) begin(); };
 $('stepBtn').onclick=()=>{ if(awaiting) return; if(running) step(); else begin(true); };
 $('resetBtn').onclick=reset;
 $('appBtn').onclick=()=>{ const on=document.body.classList.toggle('app-on'); $('appBtn').classList.toggle('on',on); if(!follow) fit(); };
