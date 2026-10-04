@@ -32,6 +32,9 @@ const SNAPSHOTS = [
 ];
 
 async function boot(opts) {
+  opts = opts || {};
+  let resolveCalls = 0;
+  const posted = [];
   const authed = !!(opts && opts.authed);
   const backups = (opts && opts.backups) || SNAPSHOTS;
   const failBackups = !!(opts && opts.failBackups);
@@ -78,12 +81,25 @@ async function boot(opts) {
   win.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 
   const asked = [];
-  win.fetch = async (url) => {
+  win.fetch = async (url, init) => {
     const u = String(url);
     asked.push(u);
     const json = body => ({ ok: true, status: 200, json: async () => body,
                             text: async () => JSON.stringify(body) });
     if (u.endsWith('/api/auth/status')) return json({ authed });
+    const body = init && init.body && typeof init.body === 'string' ? JSON.parse(init.body) : null;
+    if (u.endsWith('/api/spotify/wishlist-scan')) return json(opts.scanResult);
+    if (u.endsWith('/api/spotify/wishlist-scan/resolve')) {
+      if (opts.failResolveAfter !== undefined && ++resolveCalls > opts.failResolveAfter)
+        return { ok: false, status: 502, json: async () => ({ error: "Couldn't reach MusicBrainz" }) };
+      return json({ albums: body.albums.map(a => Object.assign({}, a,
+        a.duplicate_of ? {} : { vinyl: opts.vinyl ? opts.vinyl(a) : 'confirmed', cover_data: '' })) });
+    }
+    if (u.endsWith('/api/search/genres')) return json({ genres: body.releases.map(() => 'Rock') });
+    if (u.endsWith('/api/records') && init && init.method === 'POST') {
+      posted.push(body);
+      return json(Object.assign({ id: 100 + posted.length }, body));
+    }
     if (u.endsWith('/api/records')) return json([]);
     if (u.endsWith('/api/places')) return json([]);
     if (u.includes('/api/backups')) {
@@ -103,7 +119,7 @@ async function boot(opts) {
   try { win.eval(source); } catch (e) { errors.push(String(e && e.message)); }
   for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
 
-  return { win, doc: win.document, errors, asked, read: expr => win.__peek(expr) };
+  return { win, doc: win.document, errors, asked, posted, read: expr => win.__peek(expr) };
 }
 
 async function settle() {
@@ -191,4 +207,102 @@ test('locking while on admin goes back to the collection', async () => {
     assert.ok(!doc.getElementById('adminPage').classList.contains('visible'));
     assert.ok(!doc.getElementById('collectionPage').classList.contains('hidden'));
   } finally { win.close(); }
+});
+
+const CONNECTED = { configured: true, connected: true, display_name: 'Me' };
+const PLAYLISTS = [{ id: 'PL', name: 'Road trip', image_url: '', track_count: 3, owner: 'Me' }];
+const album = (name, extra) => Object.assign({ key: 'a|' + name.toLowerCase(), artist: 'A',
+  album_name: name, year: '1970', songs: ['s1'], spotify_image: '', unverified: false,
+  duplicate_of: null, have_it: null }, extra);
+
+async function openSpotifyTool(opts) {
+  const ctx = await boot(Object.assign({ authed: true, account: CONNECTED, playlists: PLAYLISTS }, opts));
+  press(ctx.win, ctx.doc.getElementById('adminBtn'));
+  await settle();
+  return ctx;
+}
+
+async function runScan(ctx) {
+  press(ctx.win, ctx.doc.querySelector('#adminSpotifyBody [data-playlist="PL"]'));
+  await settle();
+  press(ctx.win, ctx.doc.getElementById('adminScanBtn'));
+  for (let i = 0; i < 5; i++) await settle();
+}
+
+test('not connected shows the connect button and no playlists', async () => {
+  const { win, doc } = await openSpotifyTool({ account: { configured: true, connected: false } });
+  try {
+    const body = doc.getElementById('adminSpotifyBody');
+    assert.ok(body.querySelector('[onclick*="/api/spotify/connect"]'), 'no connect button');
+    assert.strictEqual(body.querySelectorAll('[data-playlist]').length, 0);
+  } finally { win.close(); }
+});
+
+test('connected lists the playlists with their song counts', async () => {
+  const { win, doc } = await openSpotifyTool();
+  try {
+    const row = doc.querySelector('#adminSpotifyBody [data-playlist="PL"]');
+    assert.ok(row, 'playlist row missing');
+    assert.match(row.textContent, /Road trip/);
+    assert.match(row.textContent, /3 songs/);
+  } finally { win.close(); }
+});
+
+test('a scan shows one row per album with the review rules applied', async () => {
+  const scanResult = { song_count: 4, unplaced: 1, truncated: false, albums: [
+    album('Confirmed'), album('Likely'), album('Never'),
+    album('Owned', { duplicate_of: { id: 7, artist: 'A', album_name: 'Owned' }, have_it: true })] };
+  const vinyl = a => ({ Confirmed: 'confirmed', Likely: 'likely', Never: 'none' })[a.album_name];
+  const { win, doc } = await openSpotifyTool({ scanResult, vinyl });
+  try {
+    await runScan({ win, doc });
+    const box = name => doc.querySelector(`#adminSpotifyBody [data-album="a|${name.toLowerCase()}"] input[type=checkbox]`);
+    assert.strictEqual(box('Confirmed').checked, true);
+    assert.strictEqual(box('Confirmed').disabled, false);
+    assert.strictEqual(box('Likely').checked, false);
+    assert.strictEqual(box('Likely').disabled, false);
+    assert.strictEqual(box('Never').disabled, true);
+    assert.strictEqual(box('Owned').disabled, true);
+    assert.match(doc.querySelector('#adminSpotifyBody [data-album="a|owned"]').textContent, /in collection/);
+    assert.match(doc.getElementById('adminSpotifyBody').textContent, /1 song.*could not be placed/);
+    assert.match(doc.getElementById('adminAddBtn').textContent, /add 1 to wishlist/);
+  } finally { win.close(); }
+});
+
+test('adding posts the ticked albums as wishlist records', async () => {
+  const scanResult = { song_count: 1, unplaced: 0, truncated: false, albums: [album('Confirmed')] };
+  const ctx = await openSpotifyTool({ scanResult });
+  try {
+    await runScan(ctx);
+    press(ctx.win, ctx.doc.getElementById('adminAddBtn'));
+    for (let i = 0; i < 5; i++) await settle();
+    assert.strictEqual(ctx.posted.length, 1);
+    assert.deepStrictEqual(
+      { artist: ctx.posted[0].artist, album_name: ctx.posted[0].album_name,
+        have_it: ctx.posted[0].have_it, genre: ctx.posted[0].genre },
+      { artist: 'A', album_name: 'Confirmed', have_it: false, genre: 'Rock' });
+    assert.match(ctx.doc.querySelector('[data-album="a|confirmed"]').textContent, /on wishlist/);
+  } finally { ctx.win.close(); }
+});
+
+test('a failed chunk keeps what was resolved and shows the error', async () => {
+  const albums = Array.from({ length: 30 }, (_, i) => album('Album ' + i));
+  const scanResult = { song_count: 30, unplaced: 0, truncated: false, albums };
+  const ctx = await openSpotifyTool({ scanResult, failResolveAfter: 1 });
+  try {
+    await runScan(ctx);
+    const body = ctx.doc.getElementById('adminSpotifyBody');
+    assert.match(body.textContent, /Couldn't reach MusicBrainz/);
+    assert.strictEqual(ctx.doc.querySelector('[data-album="a|album 0"] input').disabled, false);
+    assert.strictEqual(ctx.doc.querySelector('[data-album="a|album 29"] input').disabled, true);
+  } finally { ctx.win.close(); }
+});
+
+test('a cut playlist says how many songs were read', async () => {
+  const scanResult = { song_count: 500, unplaced: 0, truncated: true, albums: [album('X')] };
+  const ctx = await openSpotifyTool({ scanResult });
+  try {
+    await runScan(ctx);
+    assert.match(ctx.doc.getElementById('adminSpotifyBody').textContent, /first 500 songs/);
+  } finally { ctx.win.close(); }
 });

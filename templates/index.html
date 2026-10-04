@@ -1551,6 +1551,25 @@ select option{background:var(--surface);color:var(--text)}
 .admin-data-row{display:flex;gap:8px;flex-wrap:wrap}
 .admin-import{position:relative;overflow:hidden;cursor:pointer}
 .admin-import input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.asw-pls{display:flex;flex-direction:column;gap:4px;margin:0 0 10px;max-height:260px;overflow:auto}
+.asw-pl{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;border:1px solid transparent;
+  background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}
+.asw-pl:hover{background:var(--surface2,rgba(127,127,127,.08))}
+.asw-pl.on{border-color:var(--accent)}
+.asw-pl img,.asw-pl-img{width:32px;height:32px;border-radius:4px;object-fit:cover;background:rgba(127,127,127,.15);flex-shrink:0}
+.asw-pl-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asw-pl-count{font-size:12px;opacity:.6}
+.asw-list{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.asw-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer}
+.asw-row.off{opacity:.5;cursor:default}
+.asw-cover{width:44px;height:44px;border-radius:4px;object-fit:cover;background:rgba(127,127,127,.15);flex-shrink:0}
+.asw-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.asw-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asw-year,.asw-artist,.asw-songs{font-size:12px;opacity:.7}
+.asw-songs{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asw-badge{font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;background:rgba(127,127,127,.15)}
+.asw-badge.v-confirmed{color:#4CAF7D;background:rgba(76,175,125,.16)}
+.asw-badge.v-likely{color:#9B7FD4;background:rgba(155,127,212,.16)}
 
 /* features page — the tab is public: no login shows visitors what the admin
    tools above (Claude photo scan, Spotify matching, MusicBrainz search) do,
@@ -9502,11 +9521,45 @@ async function addPickedRecords(){
 }
 
 /* The wishlist's whole act is naming the record — no purchase, no condition,
- * nothing else to fill (see setHaveIt) — so a pick goes straight to
- * /api/records with the info the search already collected, one POST per
- * release. No queue, no form: unlike addPickedRecords this never opens
- * anything, which is the point of a BULK action. Duplicates are left out
- * (renderSearchFoot already excludes them from the count this reads). */
+ * nothing else to fill (see setHaveIt) — so each release goes straight to
+ * /api/records with what was already collected about it. Shared by search's
+ * bulk add and the admin page's playlist tool. One failed POST does not stop
+ * the rest; the caller gets only what was actually added. */
+async function addToWishlist(releases){
+  let genres = [];
+  try{
+    const res = await fetch('/api/search/genres', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({releases: releases.map(r => (
+        {artist: r.artist, album_name: r.album_name}))})});
+    if(res.ok) genres = (await res.json()).genres || [];
+  }catch(e){ /* a record with no genre is a record you set the genre on */ }
+
+  const added = [];
+  for (let i = 0; i < releases.length; i++) {
+    const r = releases[i];
+    const body = {
+      artist: r.artist || '', album_name: r.album_name || '',
+      year: r.year || '', genre: genres[i] || '',
+      country: r.country || '', cover_data: r.cover_data || '',
+      have_it: false,
+    };
+    try{
+      const res = await fetch('/api/records', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      if(res.ok) added.push(await res.json());
+    }catch(e){ /* one failed add should not stop the rest of the batch */ }
+  }
+  added.forEach(rec => records.push(rec));
+  if(added.length) render();
+  refreshScanUsage();
+  return added;
+}
+
+/* Search's bulk wishlist add: no queue, no form — unlike addPickedRecords this
+ * never opens anything, which is the point of a BULK action. Duplicates are
+ * left out (renderSearchFoot already excludes them from the count this
+ * reads); the POSTs themselves are addToWishlist's. */
 async function addPickedToWishlist(){
   const picked = [...searchPicked].sort((a,b) => a-b).map(i => searchResults[i])
     .filter(r => !r.duplicate_of);
@@ -9518,34 +9571,8 @@ async function addPickedToWishlist(){
   document.getElementById('searchAddStatusText').textContent = 'classifying…';
   document.getElementById('searchAddStatus').style.display = 'flex';
   try {
-    let genres = [];
-    try{
-      const res = await fetch('/api/search/genres', {method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({releases: picked.map(r => (
-          {artist: r.artist, album_name: r.album_name}))})});
-      if(res.ok) genres = (await res.json()).genres || [];
-    }catch(e){ /* a record with no genre is a record you set the genre on */ }
-
     document.getElementById('searchAddStatusText').textContent = 'adding…';
-    const added = [];
-    for (let i = 0; i < picked.length; i++) {
-      const r = picked[i];
-      const body = {
-        artist: r.artist || '', album_name: r.album_name || '',
-        year: r.year || '', genre: genres[i] || '',
-        country: r.country || '', cover_data: r.cover_data || '',
-        have_it: false,
-      };
-      try{
-        const res = await fetch('/api/records', {method:'POST',
-          headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-        if(res.ok) added.push(await res.json());
-      }catch(e){ /* one failed add should not stop the rest of the batch */ }
-    }
-
-    added.forEach(rec => records.push(rec));
-    if(added.length) render();
+    const added = await addToWishlist(picked);
     // Unlike addPickedRecords, nothing here queues a record for the form to
     // fill in — the wishlist add is already complete, so closing all the way
     // back to the collection (not just this overlay) is where it should land.
@@ -9553,7 +9580,6 @@ async function addPickedToWishlist(){
     toast(added.length
       ? `${added.length} added to the wishlist`
       : 'nothing was added — try again');
-    refreshScanUsage();
   } finally {
     wishlistPickInFlight = false;
     document.getElementById('searchAddStatus').style.display = 'none';
@@ -10183,8 +10209,165 @@ function loadAdmin(){
   loadAdminSpotify();
 }
 
-// Filled in by the Spotify → wishlist tool; a placeholder until then.
-function loadAdminSpotify(){}
+// ── admin: spotify playlist → wishlist ─────────────────────────────────────
+// The server names each song's studio album in one call, then the albums
+// come back to /resolve in chunks of RESOLVE_CHUNK — MusicBrainz is throttled
+// to a call a second, and one request for a whole playlist would outlive the
+// worker timeout. Each chunk re-renders the list, so the rows fill in as the
+// badges arrive; a failed chunk stops the loop but keeps what came back.
+const ADMIN_RESOLVE_CHUNK = 24;
+let adminSp = {account: null, playlists: [], picked: null, scan: null,
+               ticked: new Set(), busy: false, error: '', progress: ''};
+
+async function loadAdminSpotify(){
+  adminSp.error = '';
+  try{
+    const r = await fetch('/api/spotify/account');
+    adminSp.account = r.ok ? await r.json() : null;
+    if(adminSp.account && adminSp.account.connected){
+      const p = await fetch('/api/spotify/me/playlists');
+      const d = await p.json().catch(() => ({}));
+      if(p.ok) adminSp.playlists = d.playlists || [];
+      else { adminSp.error = d.error || 'could not read your playlists';
+             if(d.connect) adminSp.account.connected = false; }
+    }
+  }catch(e){ adminSp.error = 'could not reach the server'; }
+  renderAdminSpotify();
+}
+
+function pickAdminPlaylist(id){
+  if(adminSp.busy) return;
+  adminSp.picked = id; adminSp.scan = null; adminSp.ticked = new Set(); adminSp.error = '';
+  renderAdminSpotify();
+}
+
+async function scanAdminPlaylist(){
+  if(adminSp.busy || !adminSp.picked) return;
+  adminSp.busy = true; adminSp.error = ''; adminSp.scan = null; adminSp.ticked = new Set();
+  adminSp.progress = VinylAdmin.progressText('reading');
+  renderAdminSpotify();
+  try{
+    const r = await fetch('/api/spotify/wishlist-scan', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({playlist_id: adminSp.picked})});
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){
+      adminSp.error = d.error || 'the scan failed';
+      if(d.connect && adminSp.account) adminSp.account.connected = false;
+      return;
+    }
+    adminSp.scan = d;
+    const pending = d.albums.filter(a => !a.duplicate_of);
+    const chunks = VinylAdmin.chunk(pending, ADMIN_RESOLVE_CHUNK);
+    let done = 0;
+    for(const part of chunks){
+      adminSp.progress = VinylAdmin.progressText('resolving', done, pending.length);
+      renderAdminSpotify();
+      const rr = await fetch('/api/spotify/wishlist-scan/resolve', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({albums: part})});
+      const dd = await rr.json().catch(() => ({}));
+      if(!rr.ok){ adminSp.error = dd.error || 'checking vinyl failed'; break; }
+      const byKey = new Map(dd.albums.map(a => [a.key, a]));
+      adminSp.scan.albums = adminSp.scan.albums.map(a => byKey.get(a.key) || a);
+      dd.albums.forEach(a => { if(VinylAdmin.defaultTicked(a)) adminSp.ticked.add(a.key); });
+      done += part.length;
+    }
+  }catch(e){
+    adminSp.error = 'could not reach the server';
+  }finally{
+    adminSp.busy = false; adminSp.progress = '';
+    renderAdminSpotify();
+    refreshScanUsage();
+  }
+}
+
+function toggleAdminAlbum(key, on){
+  if(on) adminSp.ticked.add(key); else adminSp.ticked.delete(key);
+  renderAdminSpotify();
+}
+
+async function addAdminAlbums(){
+  if(adminSp.busy || !adminSp.scan) return;
+  const picked = adminSp.scan.albums.filter(a => adminSp.ticked.has(a.key) && VinylAdmin.canTick(a));
+  if(!picked.length) return;
+  adminSp.busy = true; adminSp.progress = 'adding…'; renderAdminSpotify();
+  try{
+    const added = await addToWishlist(picked);
+    // Matched back by name, not position: a failed POST leaves a gap.
+    const keyOf = r => (r.artist || '').toLowerCase() + '|' + (r.album_name || '').toLowerCase();
+    const addedBy = new Map(added.map(r => [keyOf(r), r]));
+    adminSp.scan.albums = adminSp.scan.albums.map(a => {
+      const rec = addedBy.get(keyOf(a));
+      if(!rec) return a;
+      adminSp.ticked.delete(a.key);
+      return Object.assign({}, a, {duplicate_of: {id: rec.id, artist: rec.artist,
+        album_name: rec.album_name}, have_it: false});
+    });
+    toast(added.length ? `${added.length} added to the wishlist` : 'nothing was added — try again');
+  }finally{
+    adminSp.busy = false; adminSp.progress = '';
+    renderAdminSpotify();
+  }
+}
+
+function adminAlbumRowHTML(a){
+  const can = VinylAdmin.canTick(a);
+  const checked = can && adminSp.ticked.has(a.key);
+  const badge = a.duplicate_of ? (a.have_it ? 'in collection' : 'on wishlist')
+    : !a.vinyl ? 'checking…'
+    : a.vinyl === 'confirmed' ? 'on vinyl' : a.vinyl === 'likely' ? 'likely on vinyl' : 'no vinyl';
+  const cover = a.cover_data || a.spotify_image;
+  return `<label class="asw-row${can ? '' : ' off'}" data-album="${esc(a.key)}">
+    <input type="checkbox" ${checked ? 'checked' : ''} ${can && !adminSp.busy ? '' : 'disabled'}
+      onchange="toggleAdminAlbum(this.closest('[data-album]').dataset.album, this.checked)">
+    ${cover ? `<img class="asw-cover" src="${esc(cover)}" alt="">` : '<span class="asw-cover"></span>'}
+    <span class="asw-text">
+      <span class="asw-title">${esc(a.album_name)}${a.year ? ` <span class="asw-year">${esc(a.year)}</span>` : ''}</span>
+      <span class="asw-artist">${esc(a.artist)}</span>
+      <span class="asw-songs">${esc(VinylAdmin.songsLabel(a.songs))}</span>
+    </span>
+    <span class="asw-badge v-${esc(a.duplicate_of ? 'owned' : (a.vinyl || 'pending'))}">${esc(badge)}${a.unverified ? ' · unverified' : ''}</span>
+  </label>`;
+}
+
+function renderAdminSpotify(){
+  const body = document.getElementById('adminSpotifyBody');
+  if(!body) return;
+  const acct = adminSp.account;
+  if(!acct){ body.innerHTML = `<div class="backup-note">${esc(adminSp.error || 'loading…')}</div>`; return; }
+  if(!acct.connected){
+    body.innerHTML = `${adminSp.error ? `<div class="place-err">${esc(adminSp.error)}</div>` : ''}
+      <button class="btn" onclick="window.location.href='/api/spotify/connect'">
+      <i class="ti ti-brand-spotify"></i> connect Spotify</button>`;
+    return;
+  }
+  const lists = adminSp.playlists.map(p => `<button class="asw-pl${p.id === adminSp.picked ? ' on' : ''}"
+      data-playlist="${esc(p.id)}" onclick="pickAdminPlaylist(this.dataset.playlist)" ${adminSp.busy ? 'disabled' : ''}>
+      ${p.image_url ? `<img src="${esc(p.image_url)}" alt="">` : '<span class="asw-pl-img"></span>'}
+      <span class="asw-pl-name">${esc(p.name)}</span>
+      <span class="asw-pl-count">${p.track_count} ${p.track_count === 1 ? 'song' : 'songs'}</span>
+    </button>`).join('') || '<div class="backup-note">no playlists on this account</div>';
+
+  let html = `<div class="asw-pls">${lists}</div>`;
+  if(adminSp.picked) html += `<button class="btn btn-primary" id="adminScanBtn"
+      onclick="scanAdminPlaylist()" ${adminSp.busy ? 'disabled' : ''}><i class="ti ti-search"></i> scan</button>`;
+  if(adminSp.progress) html += `<div class="backup-note">${esc(adminSp.progress)}</div>`;
+  if(adminSp.error) html += `<div class="place-err">${esc(adminSp.error)}</div>`;
+
+  const s = adminSp.scan;
+  if(s){
+    const notes = [];
+    if(s.truncated) notes.push(`only the first ${s.song_count} songs were read`);
+    if(s.unplaced) notes.push(`${s.unplaced} ${s.unplaced === 1 ? 'song' : 'songs'} could not be placed on an album`);
+    if(notes.length) html += `<div class="backup-note">${esc(notes.join(' · '))}</div>`;
+    if(!s.albums.length) html += '<div class="backup-note">nothing to add from this playlist</div>';
+    html += `<div class="asw-list">${s.albums.map(adminAlbumRowHTML).join('')}</div>`;
+    const n = s.albums.filter(a => adminSp.ticked.has(a.key) && VinylAdmin.canTick(a)).length;
+    if(s.albums.length) html += `<button class="btn btn-primary" id="adminAddBtn" onclick="addAdminAlbums()"
+      ${n && !adminSp.busy ? '' : 'disabled'}><i class="ti ti-shopping-cart"></i> add ${n} to wishlist</button>`;
+  }
+  body.innerHTML = html;
+}
 
 async function loadBackups(){
   try{
