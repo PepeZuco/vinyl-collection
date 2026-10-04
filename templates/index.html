@@ -2303,7 +2303,7 @@ select option{background:var(--surface);color:var(--text)}
 .playlist-actions .btn{color:var(--sp-sub);border-color:transparent;background:transparent}
 .playlist-actions .btn:hover:not(:disabled){color:var(--sp-text);background:var(--sp-hover)}
 .playlist-actions .btn .ti{font-size:18px}
-.playlist-open{height:40px;min-width:40px;padding:0 4px;justify-content:center}
+.playlist-open{height:40px;min-width:40px;padding:0 4px;justify-content:center;text-decoration:none}
 .playlist-actions .playlist-open .ti{color:var(--sp-green);font-size:30px;transition:transform .2s ease}
 .playlist-open:hover .ti{transform:scale(1.12)}
 /* filter chips under the name: they pop in one after another the first time
@@ -2367,6 +2367,9 @@ select option{background:var(--surface);color:var(--text)}
   .playlist-art{flex-basis:56px;width:56px;height:56px}
   .playlist-row>.playlist-status{padding-left:68px}
   .playlist-actions .btn{min-width:34px;padding:0 4px}
+  /* the cover and the name already open Spotify; the room goes to the name */
+  .playlist-actions .playlist-open{display:none}
+  .playlist-name{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25}
 }
 .pl-form{display:flex;flex-direction:column;gap:2px;margin-top:6px;padding:6px 12px 10px;
   background:var(--card);border:1px solid var(--border);border-radius:10px}
