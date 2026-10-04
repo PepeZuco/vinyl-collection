@@ -1561,12 +1561,33 @@ select option{background:var(--surface);color:var(--text)}
   background:var(--sp-pill);color:var(--sp-text);cursor:pointer;transition:background .15s}
 .sp-pill:hover{background:var(--sp-pill-hover)}
 .sp-pill.on{background:var(--sp-green);color:var(--sp-on-green)}
-.admin-page{display:none;max-width:640px}
-.admin-page.visible{display:block}
-.admin-section{margin:0 0 28px}
-.admin-h{font-size:13px;font-weight:600;text-transform:lowercase;letter-spacing:.02em;
-  display:flex;align-items:center;gap:6px;margin:0 0 10px;color:var(--text)}
-.admin-sub{font-size:12px;color:var(--muted);margin:14px 0 6px}
+/* admin page — a dashboard of boxes, each about half the screen wide and half
+   its height, scrolling inside itself. Places and data stack on the left;
+   the Spotify tool takes the whole right column, since its review list is
+   the one that runs long. One column on a phone, where the boxes grow to
+   their content instead. */
+.admin-page{display:none;--admin-row:max(300px,calc((100vh - 230px) / 2))}
+.admin-page.visible{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:var(--admin-row) var(--admin-row);
+  grid-template-areas:"places spotify" "data spotify";gap:20px}
+.admin-places{grid-area:places}
+.admin-data{grid-area:data}
+.admin-spotify{grid-area:spotify}
+.admin-section{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.admin-head{padding:14px 18px 12px;border-bottom:1px solid var(--border)}
+.admin-h{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+  display:flex;align-items:center;gap:6px;margin:0;color:var(--text)}
+.admin-h .ti{font-size:15px;color:var(--accent)}
+.admin-desc{font-size:12px;color:var(--muted);margin:4px 0 0;line-height:1.4}
+.admin-body{flex:1;min-height:0;overflow:auto;padding:8px 18px 16px}
+.admin-sub{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--label);margin:18px 0 2px}
+@media(max-width:760px){
+  .admin-page.visible{grid-template-columns:1fr;grid-template-rows:none;
+    grid-template-areas:"places" "data" "spotify";gap:14px}
+  .admin-section{overflow:visible}
+  .admin-body{overflow:visible}
+  .admin-page .asw-foot{position:static}
+}
 .admin-data-row{display:flex;gap:8px;flex-wrap:wrap}
 .admin-import{position:relative;overflow:hidden;cursor:pointer}
 .admin-import input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
@@ -1579,6 +1600,9 @@ select option{background:var(--surface);color:var(--text)}
 .asw-pl-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .asw-pl-count{font-size:12px;opacity:.6}
 .asw-list{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+/* the add button rides the bottom of the Spotify box while the review list scrolls under it */
+.asw-foot{position:sticky;bottom:-16px;margin:0 -18px -16px;padding:12px 18px 16px;
+  background:var(--surface);border-top:1px solid var(--border)}
 .asw-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer}
 .asw-row.off{opacity:.5;cursor:default}
 .asw-cover{width:44px;height:44px;border-radius:4px;object-fit:cover;background:rgba(127,127,127,.15);flex-shrink:0}
@@ -3545,25 +3569,36 @@ select option{background:var(--surface);color:var(--text)}
        Edit mode only; the ⋯ menu's admin item is the only door. The ids
        inside are the ones the old modals used, so their code moved unchanged. -->
   <div class="admin-page" id="adminPage">
-    <section class="admin-section">
-      <h2 class="admin-h"><i class="ti ti-map-pin"></i> places</h2>
-      <div id="placesBody"></div>
-    </section>
-    <section class="admin-section">
-      <h2 class="admin-h"><i class="ti ti-database"></i> data</h2>
-      <div class="admin-data-row">
-        <button class="btn" id="exportBtn"><i class="ti ti-download"></i> export CSV</button>
-        <label class="btn admin-import" id="importLabel">
-          <i class="ti ti-upload"></i> import CSV
-          <input type="file" accept=".csv" id="importInput">
-        </label>
+    <section class="admin-section admin-places">
+      <div class="admin-head">
+        <h2 class="admin-h"><i class="ti ti-map-pin"></i> places</h2>
+        <p class="admin-desc">where records were bought — rename, merge or delete</p>
       </div>
-      <div class="admin-sub">backups</div>
-      <div id="backupsBody"></div>
+      <div class="admin-body" id="placesBody"></div>
     </section>
-    <section class="admin-section">
-      <h2 class="admin-h"><i class="ti ti-brand-spotify"></i> spotify → wishlist</h2>
-      <div id="adminSpotifyBody"></div>
+    <section class="admin-section admin-data">
+      <div class="admin-head">
+        <h2 class="admin-h"><i class="ti ti-database"></i> data</h2>
+        <p class="admin-desc">the collection as CSV, and the daily database snapshots</p>
+      </div>
+      <div class="admin-body">
+        <div class="admin-data-row">
+          <button class="btn" id="exportBtn"><i class="ti ti-download"></i> export CSV</button>
+          <label class="btn admin-import" id="importLabel">
+            <i class="ti ti-upload"></i> import CSV
+            <input type="file" accept=".csv" id="importInput">
+          </label>
+        </div>
+        <div class="admin-sub">backups</div>
+        <div id="backupsBody"></div>
+      </div>
+    </section>
+    <section class="admin-section admin-spotify">
+      <div class="admin-head">
+        <h2 class="admin-h"><i class="ti ti-brand-spotify"></i> spotify → wishlist</h2>
+        <p class="admin-desc">pick a playlist, find its albums on vinyl, add them to the wishlist</p>
+      </div>
+      <div class="admin-body" id="adminSpotifyBody"></div>
     </section>
   </div>
 
@@ -10433,8 +10468,8 @@ function renderAdminSpotify(){
     if(!s.albums.length) html += '<div class="backup-note">nothing to add from this playlist</div>';
     html += `<div class="asw-list">${s.albums.map(adminAlbumRowHTML).join('')}</div>`;
     const n = s.albums.filter(a => adminSp.ticked.has(a.key) && VinylAdmin.canTick(a)).length;
-    if(s.albums.length) html += `<button class="btn btn-primary" id="adminAddBtn" onclick="addAdminAlbums()"
-      ${n && !adminSp.busy ? '' : 'disabled'}><i class="ti ti-shopping-cart"></i> add ${n} to wishlist</button>`;
+    if(s.albums.length) html += `<div class="asw-foot"><button class="btn btn-primary" id="adminAddBtn" onclick="addAdminAlbums()"
+      ${n && !adminSp.busy ? '' : 'disabled'}><i class="ti ti-shopping-cart"></i> add ${n} to wishlist</button></div>`;
   }
   body.innerHTML = html;
 }
