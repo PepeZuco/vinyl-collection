@@ -215,9 +215,9 @@ test('search is case insensitive', () => {
 });
 
 test('search ignores genre unless the genre field is enabled', () => {
-  const records = [rec({ artist: 'Elis', genre: 'MPB & Samba' })];
-  assert.strictEqual(keep(records, { text: 'samba' }).length, 0);
-  assert.strictEqual(keep(records, { text: 'samba', fields: { genre: true } }).length, 1);
+  const records = [rec({ artist: 'Elis', genre: 'Bossa Nova' })];
+  assert.strictEqual(keep(records, { text: 'bossa' }).length, 0);
+  assert.strictEqual(keep(records, { text: 'bossa', fields: { genre: true } }).length, 1);
 });
 
 test('search reads where a record was bought when that field is enabled', () => {

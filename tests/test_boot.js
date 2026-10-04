@@ -2025,7 +2025,7 @@ test('a scan of a real pressing says nothing about vinyl', async () => {
   win.openAdd();
   win.applyScanResult({
     source: 'photo', artist: 'Jorge Ben', album_name: 'Força bruta',
-    genre: 'MPB & Samba', vinyl: 'confirmed', candidates: [], lookup_failed: false,
+    genre: 'Samba', vinyl: 'confirmed', candidates: [], lookup_failed: false,
     duplicate_of: null, search_string: 'Jorge Ben Força bruta vinyl cover',
   });
 
@@ -2049,7 +2049,7 @@ async function queued(win) {
   await searched(win);
   win.toggleSearchPick(0);
   win.toggleSearchPick(1);
-  win.fetch = async () => ({ ok: true, json: async () => ({ genres: ['MPB & Samba', 'MPB & Samba'] }) });
+  win.fetch = async () => ({ ok: true, json: async () => ({ genres: ['Samba', 'Samba'] }) });
   await win.addPickedRecords();
   return win;
 }
@@ -2226,7 +2226,7 @@ test('adding picked records to the wishlist creates them without opening the for
   const posted = [];
   win.fetch = async (url, opts) => {
     if (url === '/api/search/genres') {
-      return { ok: true, json: async () => ({ genres: ['MPB & Samba', 'MPB & Samba'] }) };
+      return { ok: true, json: async () => ({ genres: ['Samba', 'Samba'] }) };
     }
     assert.strictEqual(url, '/api/records');
     const body = JSON.parse(opts.body);
@@ -2239,7 +2239,7 @@ test('adding picked records to the wishlist creates them without opening the for
   assert.strictEqual(posted.length, 2);
   assert.ok(posted.every(b => b.have_it === false), 'a wishlist entry must not read as owned');
   assert.deepStrictEqual(posted.map(b => b.album_name), ['Força bruta', 'Negro é lindo']);
-  assert.ok(posted.every(b => b.genre === 'MPB & Samba'));
+  assert.ok(posted.every(b => b.genre === 'Samba'));
 
   assert.ok(win.document.getElementById('scanOverlay').classList.contains('hidden'));
   // No queue was ever started: unlike addPickedRecords, this never routes a

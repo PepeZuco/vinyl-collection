@@ -7,7 +7,7 @@ import pytest
 
 import scan
 
-GENRES = ["Rock", "MPB & Samba", "Jazz", "Soul & Funk"]
+GENRES = ["Rock", "Samba", "Jazz", "Soul & Funk"]
 
 
 def _claude_response(payload: dict):

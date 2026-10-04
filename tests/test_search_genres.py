@@ -25,13 +25,13 @@ def client():
 
 def test_genres_line_up_with_the_releases_sent(client):
     with patch.object(scan, "classify_genre",
-                      side_effect=["MPB & Samba", "Soul & Funk"]):
+                      side_effect=["Samba", "Soul & Funk"]):
         body = client.post("/api/search/genres", json={"releases": [
             {"artist": "Jorge Ben", "album_name": "Força bruta"},
             {"artist": "Tim Maia", "album_name": "Racional"},
         ]}).get_json()
 
-    assert body["genres"] == ["MPB & Samba", "Soul & Funk"]
+    assert body["genres"] == ["Samba", "Soul & Funk"]
 
 
 def test_an_unclassifiable_record_comes_back_as_null(client):

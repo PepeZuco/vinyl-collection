@@ -4520,24 +4520,40 @@ function applyTheme(t) {
 applyTheme(theme);
 document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
 
+// ── genres ─────────────────────────────────────────────────────────────────
+// The genre vocabulary (genres.py), rendered in by the index route. The form's
+// dropdown offers exactly these; the server refuses anything else.
+const GENRES = {{ genres|tojson }};
+
 // ── genre colours ──────────────────────────────────────────────────────────
 // One hue per genre, used for the card shadow and every genre-coloured chart,
 // so a genre reads the same everywhere. Two values per genre: the dark-theme
 // hue and a deeper one for light, where the pale ones would wash out on the
 // light background. A genre missing from the map (a new one, or a typo) falls
 // back to a stable hash pick, so it still gets a consistent colour.
+// Samba keeps the green the retired "MPB & Samba" wore. The eight genres added
+// with it were picked to sit as far (OKLab) from every other entry as possible,
+// and their light-theme hues clear 3:1 on the light surface.
 const GENRE_PALETTE = {
-  'Rock':           ['#E0453C', '#C0271F'],
-  'MPB & Samba':    ['#2FB673', '#1B8E55'],
-  'Soul & Funk':    ['#F08A2E', '#C86A10'],
-  'Pop':            ['#E45FA0', '#BE3D7C'],
-  'Jazz':           ['#D9A441', '#A87A18'],
-  'Hip Hop':        ['#9B7FD4', '#7255B4'],
-  'Reggae':         ['#8FBF3F', '#688F1E'],
-  'Easy Listening': ['#3DBFA0', '#1E9078'],
-  'Blues':          ['#4A90D9', '#2568B0'],
-  'Classical':      ['#C8B99C', '#9A8A6C'],
-  'Folk':           ['#B5714A', '#8C4F2B'],
+  'Alternative & Indie':        ['#578C19', '#3E6905'],
+  'Blues':                      ['#4A90D9', '#2568B0'],
+  'Bossa Nova':                 ['#FB979A', '#C8696D'],
+  'Classical':                  ['#C8B99C', '#9A8A6C'],
+  'Compilations & Soundtracks': ['#659DA3', '#447C82'],
+  'Country':                    ['#919956', '#717835'],
+  'Easy Listening':             ['#3DBFA0', '#1E9078'],
+  'Folk':                       ['#B5714A', '#8C4F2B'],
+  'Hip Hop':                    ['#9B7FD4', '#7255B4'],
+  'Jazz':                       ['#D9A441', '#A87A18'],
+  'Pop':                        ['#E45FA0', '#BE3D7C'],
+  'R&B & Neo-Soul':             ['#E694ED', '#B869BF'],
+  'Reggae':                     ['#8FBF3F', '#688F1E'],
+  'Rock':                       ['#E0453C', '#C0271F'],
+  'Salsa':                      ['#A65D95', '#833D74'],
+  'Samba':                      ['#2FB673', '#1B8E55'],
+  'Singer-Songwriter':          ['#BF8F9D', '#9C6E7C'],
+  'Soft Rock':                  ['#69C1FC', '#338EC6'],
+  'Soul & Funk':                ['#F08A2E', '#C86A10'],
 };
 const GENRE_FALLBACK = ['#7A7A72', '#8A8A82'];   // no genre set
 // Spare hues for a genre added after this map was written
@@ -6828,7 +6844,9 @@ function pickPlace(name){
 }
 
 function populateGenreSelect(current='') {
-  const genres = [...new Set(records.map(r=>r.genre).filter(Boolean))].sort();
+  // The fixed list, plus the record's own genre if it is a retired one, so
+  // opening an unmigrated record shows what it has instead of blanking it.
+  const genres = current && !GENRES.includes(current) ? [...GENRES, current] : GENRES;
   const sel = document.getElementById('fGenre');
   sel.innerHTML = '<option value="">select genre</option>'
     + genres.map(g=>`<option${g===current?' selected':''}>${esc(g)}</option>`).join('');
@@ -10731,6 +10749,7 @@ function playlistFilterChips(p){
   if(f.owned==='wishlist')chip('ti-heart-plus','wishlist');
   else if(f.owned==='all')chip('ti-heart-plus','+ wishlist');
   (f.genres||[]).forEach(g=>chip('ti-tag',g));
+  if(f.decades&&f.decades.length)chip('ti-calendar',f.decades.map(d=>d+'s').join(', '));
   if(f.year_from!=null||f.year_to!=null)chip('ti-calendar',span(f.year_from,f.year_to));
   const rate=[];
   if(f.pepe_min!=null)rate.push('Pepe ≥ '+Number(f.pepe_min));
@@ -10749,7 +10768,6 @@ function renderPlaylistForm(){
   const el=document.getElementById('playlistFormBody');
   if(!el)return;
   const f=playlistForm;
-  if(f.decades&&f.decades.length)chip('ti-calendar',f.decades.map(d=>d+'s').join(', '));
   const chips=(field,choices)=>{
     const taken=new Set(f[field].map(x=>x.toLowerCase()));
     const left=choices.filter(c=>!taken.has(c.toLowerCase()));
@@ -10759,6 +10777,7 @@ function renderPlaylistForm(){
         <option value="">+ add</option>${left.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
         </select>`:'');
   };
+  // "70s" reads best; the full "1970s" only where two centuries would share a label.
   const decades=playlistDecades();
   const decadeLabel=d=>decades.some(o=>o!==d&&o%100===d%100)?d+'s':String(d).slice(2)+'s';
   const decadePills=()=>`<span class="pl-seg pl-decades">${decades.map(d=>`<label title="${d}s">
@@ -10778,7 +10797,6 @@ function renderPlaylistForm(){
     <div class="pl-field">${label('ti-brand-spotify','from')}<span class="pl-seg">
       ${radio('plSource','source','albums','albums',f.source==='albums','ti-vinyl')}${radio('plSource','source','compilations','compilations',f.source==='compilations','ti-playlist')}${radio('plSource','source','all','both',f.source==='all')}</span></div>
     <div class="pl-field">${label('ti-books','records')}<span class="pl-seg">
-  // "70s" reads best; the full "1970s" only where two centuries would share a label.
       ${radio('plOwned','owned','owned','owned',f.owned==='owned','ti-check')}${radio('plOwned','owned','wishlist','wishlist',f.owned==='wishlist','ti-heart-plus')}${radio('plOwned','owned','all','both',f.owned==='all')}</span></div>
     <div class="pl-field">${label('ti-calendar','decade')}${decadePills()}</div>
     <div class="pl-field">${label('ti-tag','genre')}${chips('genres',playlistChoices.genres)}</div>
@@ -10885,6 +10903,14 @@ function playlistFormInput(el){
   updatePlaylistPreview();
 }
 
+// Toggled in place, like the radios, so the pill keeps focus.
+function playlistDecadeToggle(box){
+  const d=Number(box.value);
+  const left=playlistForm.decades.filter(x=>x!==d);
+  playlistForm.decades=box.checked?left.concat(d):left;
+  updatePlaylistPreview();
+}
+
 function playlistChipAdd(sel){
   if(sel.value)playlistForm[sel.dataset.field].push(sel.value);
   renderPlaylistForm();
@@ -10903,14 +10929,6 @@ async function createPlaylist(){
   try{
     const r=await fetch('/api/spotify/playlists',{method:'POST',
       headers:{'Content-Type':'application/json'},
-// Toggled in place, like the radios, so the pill keeps focus.
-function playlistDecadeToggle(box){
-  const d=Number(box.value);
-  const left=playlistForm.decades.filter(x=>x!==d);
-  playlistForm.decades=box.checked?left.concat(d):left;
-  updatePlaylistPreview();
-}
-
       body:JSON.stringify({filters:playlistFilters(),name:playlistForm.name})});
     d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.error||('HTTP '+r.status));

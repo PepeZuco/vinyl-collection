@@ -23,6 +23,7 @@ import pricing
 import scan
 import playlist_filters
 import spotify_sync
+from genres import GENRES, canonical_genre
 
 
 def _on_railway():
@@ -794,6 +795,7 @@ def index():
         "index.html",
         umami_website_id=os.environ.get("UMAMI_WEBSITE_ID", ""),
         umami_script_url=os.environ.get("UMAMI_SCRIPT_URL") or "https://cloud.umami.is/script.js",
+        genres=GENRES,
     )
 
 # ── auth endpoints ────────────────────────────────────────────────────────────
@@ -983,6 +985,23 @@ def get_record_or_404(rid):
     return record
 
 
+def _genre(value, current=None):
+    """The GENRES spelling of value, or ValueError if it is not on the list.
+
+    Blank is allowed. So is a record's own current genre (current), so a
+    record still on a retired genre can have its other fields saved without
+    being forced onto a new one in the same edit.
+    """
+    if current and value == current:
+        return current
+    if value is not None and not isinstance(value, str):
+        raise ValueError("genre must be a string")
+    genre = canonical_genre(value)
+    if genre is None:
+        raise ValueError(f"unknown genre {value!r}; pick one of the {len(GENRES)} genres")
+    return genre
+
+
 @app.route("/api/records", methods=["POST"])
 @require_auth
 def create_record():
@@ -990,13 +1009,14 @@ def create_record():
     disc_count = _disc_count(d.get("disc_count"))
     try:
         tracks = _clean_tracks(d.get("tracks", ""), disc_count)
+        genre = _genre(d.get("genre", ""))
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     r = Record(
         artist      = d.get("artist",""),
         album_name  = d.get("album_name",""),
         year        = d.get("year",""),
-        genre       = d.get("genre",""),
+        genre       = genre,
         bought_date = d.get("bought_date",""),
         bought_where= (d.get("bought_where","") or "").strip(),
         bought_by   = d.get("bought_by",""),
@@ -1033,7 +1053,12 @@ def update_record(rid):
     # Read before the assignment below overwrites it: what the record used to
     # point at is the only way to know what it just stopped pointing at.
     images_before = _note_image_ids(r.notes) if "notes" in d else set()
-    for field in ["artist","album_name","year","genre","bought_date","bought_by","condition"]:
+    if "genre" in d:
+        try:
+            r.genre = _genre(d["genre"], current=r.genre)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+    for field in ["artist","album_name","year","bought_date","bought_by","condition"]:
         if field in d:
             setattr(r, field, d[field])
     # Trimmed, not passed through: the place table joins to this column by
@@ -1324,7 +1349,9 @@ def scan_record():
     rows = db.session.query(
         Record.id, Record.artist, Record.album_name, Record.genre
     ).all()
-    genres = sorted({r.genre for r in rows if r.genre})
+    # The fixed list, not the shelf's distinct genres: a record the migration
+    # did not reach would otherwise keep a retired genre on offer to Claude.
+    genres = GENRES
 
     source = "photo" if image else "spotify"
     # Filled by the Claude calls below and banked in the finally, so a scan
@@ -1773,8 +1800,7 @@ def search_genres():
     if not releases:
         return jsonify({"genres": []})
 
-    vocabulary = sorted({g for (g,) in db.session.query(Record.genre).distinct()
-                         if g})
+    vocabulary = GENRES
 
     spent = []
     try:

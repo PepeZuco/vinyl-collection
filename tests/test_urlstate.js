@@ -127,7 +127,7 @@ test('a malformed hash decodes to the defaults rather than throwing', () => {
 test('a fully loaded state survives the round trip intact', () => {
   const full = state({
     tab: 'stats', text: 'tim maia', ownership: 'wishlist',
-    facets: { genre: ['Soul & Funk', 'MPB & Samba'], cleaning: ['never'] },
+    facets: { genre: ['Soul & Funk', 'R&B & Neo-Soul'], cleaning: ['never'] },
     crate: 'country', sort: 'plays', dir: 'asc', view: 'list', recordId: 7,
   });
   assert.deepStrictEqual(decode(encode(full)), full);

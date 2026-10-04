@@ -104,6 +104,26 @@ O primeiro sync lê um álbum por request (o Spotify não tem mais endpoint em
 lote), então pode levar alguns minutos; o painel mostra o progresso. Os
 tracklists ficam em cache, e os syncs seguintes só leem os discos novos.
 
+## Gêneros
+
+A lista de gêneros fica em `genres.py` (19 gêneros por estilo; o antigo
+"MPB & Samba" foi aposentado). O formulário só oferece esses, o servidor recusa
+qualquer outro ao criar/editar, e o scan/busca só deixa o Claude responder com
+eles. Cada gênero tem uma cor em `GENRE_PALETTE` (`templates/index.html`); o
+`tests/test_genres.py` falha se as duas listas divergirem.
+
+Para mover um banco existente para a lista nova, gere o `genre_mapping.csv` a
+partir de um export completo e rode:
+
+```bash
+python scripts/migrate_genres.py genre_mapping.csv --dry-run   # só mostra
+python scripts/migrate_genres.py genre_mapping.csv --apply     # backup + grava
+```
+
+Só a coluna `genre` é alterada, casando por `id` e conferindo artista e álbum.
+Um banco restaurado de CSV tem ids novos (o import renumera); nesse caso use
+`--fallback-by-name`. Sem `--db`, usa o mesmo banco do app (`$DATA_DIR/vinyl.db`).
+
 ## Backup diário
 
 O servidor tira um snapshot do banco uma vez por dia e guarda **os últimos 5**.

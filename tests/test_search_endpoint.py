@@ -50,7 +50,7 @@ def _vinyl_offline():
 def _seed(artist, album):
     with app_module.app.app_context():
         app_module.db.session.add(
-            app_module.Record(artist=artist, album_name=album, genre="MPB & Samba"))
+            app_module.Record(artist=artist, album_name=album, genre="Samba"))
         app_module.db.session.commit()
 
 

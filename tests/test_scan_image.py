@@ -6,7 +6,7 @@ import pytest
 
 import scan
 
-GENRES = ["Rock", "MPB & Samba", "Jazz", "Soul & Funk"]
+GENRES = ["Rock", "Samba", "Jazz", "Soul & Funk"]
 DATA_URI = "data:image/jpeg;base64,/9j/4AAQSkZJRg=="
 
 

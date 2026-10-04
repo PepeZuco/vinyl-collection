@@ -463,8 +463,8 @@ const ledger = (x) => ({id:'ledger', k:'sub', x, y:480, src:'shelf', icon:'ti-re
   info:{where:'app.py · _record_scan_spend()', does:'Runs in the generator\'s finally: every Claude call is billed the moment it returns, so even a cancelled scan writes its rows. Feeds the "≈ $ per scan" estimate.', io:{in:'spent[] {model, tokens}', out:'one row per call'}}});
 const haiku = (id,x,title) => ({id, k:'sub', x, y:480, src:'claude', icon:'claude', title:title||'Haiku 4.5', sub:'claude-haiku-4-5',
   info:{where:'Anthropic Messages API', does:'Small, fast model used for the cheap text judgements: genre, search parsing and the vinyl verdict.', io:{in:'short prompt + json_schema', out:'structured JSON'}}});
-const genresSub = (id,x) => ({id, k:'sub', x, y:480, src:'shelf', icon:'ti-tag', title:'Your genres', sub:'enum from shelf',
-  info:{where:'app.py · scan_record()', does:'The distinct genres already on your shelf become a JSON-schema enum, so Claude can only answer with a genre you already use (or null).', io:{in:'SELECT DISTINCT genre', out:'enum[]'}}});
+const genresSub = (id,x) => ({id, k:'sub', x, y:480, src:'shelf', icon:'ti-tag', title:'Your genres', sub:'enum from genres.py',
+  info:{where:'app.py · scan_record()', does:'The app\'s fixed genre list (genres.py) becomes a JSON-schema enum, so Claude can only answer with one of your genres (or null).', io:{in:'GENRES', out:'enum[]'}}});
 const coverSubs = (x) => ([
   {id:'caa', k:'sub', x, y:480, src:'mb', icon:'ti-photo', title:'Cover Art Archive', sub:'front-500',
     info:{where:'scan.py · fetch_cover()', does:'First stop for artwork: coverartarchive.org/release-group/{mbid}/front-500.', io:{in:'mbid', out:'data URI | miss'}}},
@@ -525,7 +525,7 @@ const FLOWS = {
       {id:'spotify', k:'main', x:360, y:280, src:'spotify', icon:'spotify', title:'Spotify API', sub:'extract_from_spotify',
         info:{where:'scan.py · extract_from_spotify()', does:'Client-credentials token, then /albums or /tracks → album. Gives artist, album and the artwork URL used as a last-resort cover.', io:{in:'kind, spotify_id', out:'{artist, album_name, image_url}'}}},
       {id:'genre', k:'agent', x:520, y:280, src:'claude', icon:'claude', title:'Genre', sub:'classify_genre', ports:['Model','Genres'],
-        info:{where:'scan.py · classify_genre()', does:'Spotify has no album genres, so Haiku places the record into one of the genres already on your shelf.', io:{in:'artist, album, genres[]', out:'genre | null'}}},
+        info:{where:'scan.py · classify_genre()', does:'Spotify has no album genres, so Haiku places the record into one of your genres.', io:{in:'artist, album, genres[]', out:'genre | null'}}},
       haiku('haiku1', 541), genresSub('genres', 641),
       {id:'mb', k:'main', x:830, y:280, src:'mb', icon:'ti-database-search', title:'MusicBrainz', sub:'release groups',
         info:{where:'scan.py · lookup_musicbrainz()', does:'Same ranked lookup as the photo scan: year, country, alternates.', io:{in:'artist, album', out:'candidates[]'}}},
@@ -643,7 +643,7 @@ const K = () => cur==='claude' ? (inp==='search'?'search':'photo') : FLOWS[cur].
    Each album: [title, year, cover file, label, catalog no., vinyl pressings on MusicBrainz].
    Every run draws another artist (and, for a photo, one of their sleeves); ?artist=<slug> pins one. */
 const PRESETS=[
-  {slug:"john-mayer", artist:"John Mayer", alias:"jon mayer", genre:"Rock", country:"US", albums:[
+  {slug:"john-mayer", artist:"John Mayer", alias:"jon mayer", genre:"Soft Rock", country:"US", albums:[
     ["Room for Squares","2001","2001","Aware Records","MOVLP364",1],
     ["Heavier Things","2003","2003","Aware Records","MOVLP206",2],
     ["Continuum","2006","2006","Columbia","82876 79019 1",4],
@@ -701,7 +701,7 @@ const PRESETS=[
     ["Midnights","2022","2022","Republic Records","2445832613",14],
     ["THE TORTURED POETS DEPARTMENT","2024","2024","Republic Records","602458933369",10],
     ["The Life of a Showgirl","2025","2025","Republic Records","602478225307",9]]},
-  {slug:"chico-buarque", artist:"Chico Buarque", alias:"chico barque", genre:"MPB & Samba", country:"BR", albums:[
+  {slug:"chico-buarque", artist:"Chico Buarque", alias:"chico barque", genre:"Singer-Songwriter", country:"BR", albums:[
     ["Chico Buarque de Hollanda","1966","1966","RGE","XRLP-5.303",1],
     ["Chico Buarque de Hollanda, Volume 3","1968","1968","RGE","XRLP-5.320",1],
     ["Chico Buarque de Hollanda, Nº 4","1970","1970","Philips","765.106",1],
@@ -714,7 +714,7 @@ const PRESETS=[
     ["As cidades","1998","1998",null,null,0],
     ["Carioca","2006","2006",null,null,0],
     ["Caravanas","2017","2017",null,null,0]]},
-  {slug:"cartola", artist:"Cartola", alias:"cartola", genre:"MPB & Samba", country:"BR", albums:[
+  {slug:"cartola", artist:"Cartola", alias:"cartola", genre:"Samba", country:"BR", albums:[
     ["Cartola","1974","1974","Discos Marcus Pereira","MPL 9302",2],
     ["Cartola","1976","1976","Discos Marcus Pereira","MPL 9325",1],
     ["Verde que te quero rosa","1977","1977",null,null,1],
@@ -733,14 +733,14 @@ const PRESETS=[
     ["Nuvens","1982","1982","Seroma","LP-TM 009",1],
     ["O descobridor dos sete mares","1983","1983","Lança","812.714-1/0",1],
     ["Sufocante","1984","1984","PolyGram",null,1]]},
-  {slug:"olivia-dean", artist:"Olivia Dean", alias:"olivia dean", genre:"Pop", country:"GB", albums:[
+  {slug:"olivia-dean", artist:"Olivia Dean", alias:"olivia dean", genre:"R&B & Neo-Soul", country:"GB", albums:[
     ["Messy","2023","2023",null,null,0],
     ["The Art of Loving","2025","2025","Polydor","5763820",1]]},
-  {slug:"nirvana", artist:"Nirvana", alias:"nirvana", genre:"Rock", country:"US", albums:[
+  {slug:"nirvana", artist:"Nirvana", alias:"nirvana", genre:"Alternative & Indie", country:"US", albums:[
     ["Bleach","1989","1989","Tupelo Recording Company","TUPLP6",8],
     ["Nevermind","1991","1991","DGC Records","424 425-1",20],
     ["In Utero","1993","1993","DGC Records","DGC-24607",12]]},
-  {slug:"rage-against-the-machine", artist:"Rage Against the Machine", alias:"ratm", genre:"Rock", country:"US", albums:[
+  {slug:"rage-against-the-machine", artist:"Rage Against the Machine", alias:"ratm", genre:"Alternative & Indie", country:"US", albums:[
     ["Rage Against the Machine","1992","1992","Epic","472224 1",7],
     ["Evil Empire","1996","1996","Epic","481026 1",3],
     ["The Battle of Los Angeles","1999","1999","Epic","E 69630",3],

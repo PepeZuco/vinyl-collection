@@ -801,7 +801,7 @@ def _genre_schema(genres: list[str]) -> dict:
 
 def classify_genre(artist: str, album: str, genres: list[str],
                    usage_out: list | None = None) -> str | None:
-    """Pick the best-fitting genre from the collection's own vocabulary.
+    """Pick the best-fitting genre from the app's genre list (genres.GENRES).
 
     Pass ``usage_out`` to have this call's token counts appended to it.
     """
