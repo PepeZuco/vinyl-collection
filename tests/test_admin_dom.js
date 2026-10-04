@@ -107,6 +107,8 @@ async function boot(opts) {
                                 text: async () => 'boom' };
       return json({ backups, keep_days: 5 });
     }
+    if (u.endsWith('/api/spotify/account') && opts.failAccount)
+      return { ok: false, status: 500, json: async () => ({}), text: async () => '' };
     if (u.endsWith('/api/spotify/account')) return json(opts && opts.account || { configured: true, connected: false });
     if (u.endsWith('/api/spotify/me/playlists')) return json({ playlists: (opts && opts.playlists) || [] });
     if (u.endsWith('/api/spotify/playlists')) return json({ playlists: [], genres: [], places: [] });
@@ -305,4 +307,26 @@ test('a cut playlist says how many songs were read', async () => {
     await runScan(ctx);
     assert.match(ctx.doc.getElementById('adminSpotifyBody').textContent, /first 500 songs/);
   } finally { ctx.win.close(); }
+});
+
+test('an unreadable Spotify account says so instead of loading forever', async () => {
+  const ctx = await openSpotifyTool({ failAccount: true });
+  try {
+    const text = ctx.doc.getElementById('adminSpotifyBody').textContent;
+    assert.match(text, /could not read the Spotify account/);
+    assert.doesNotMatch(text, /loading/);
+  } finally { ctx.win.close(); }
+});
+
+test('the mobile More sheet opens the admin page in edit mode', async () => {
+  const { win, doc } = await boot({ authed: true });
+  try {
+    const btn = doc.querySelector('#mtabMorePanel #mtabAdmin');
+    assert.ok(btn, 'no Admin item in the More sheet');
+    press(win, btn);
+    await settle();
+    assert.ok(doc.getElementById('adminPage').classList.contains('visible'));
+    assert.ok(doc.getElementById('mtabAdmin').classList.contains('active'));
+    assert.ok(doc.getElementById('mtabMoreBtn').classList.contains('active'));
+  } finally { win.close(); }
 });

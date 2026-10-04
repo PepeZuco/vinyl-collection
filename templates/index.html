@@ -3607,6 +3607,7 @@ select option{background:var(--surface);color:var(--text)}
       <button class="menu-item" id="mtabMoreStats" onclick="closeMobileMore();switchTab('stats')"><i class="ti ti-chart-bar"></i><span>Stats</span></button>
       <button class="menu-item" id="mtabFeatures" onclick="closeMobileMore();switchTab('features')"><i class="ti ti-user"></i><span>Readme</span></button>
       <button class="menu-item" onclick="closeMobileMore();focusSearch()"><i class="ti ti-search"></i><span>Search</span></button>
+      <button class="menu-item" id="mtabAdmin" onclick="closeMobileMore();switchTab('admin')"><i class="ti ti-settings"></i><span>Admin</span></button>
     </div>
   </div>
 </nav>
@@ -10224,6 +10225,7 @@ async function loadAdminSpotify(){
   try{
     const r = await fetch('/api/spotify/account');
     adminSp.account = r.ok ? await r.json() : null;
+    if(!r.ok) adminSp.error = 'could not read the Spotify account';
     if(adminSp.account && adminSp.account.connected){
       const p = await fetch('/api/spotify/me/playlists');
       const d = await p.json().catch(() => ({}));
@@ -11799,10 +11801,11 @@ function syncMobileTabbar() {
   document.getElementById('mtabReadme').classList.toggle('active', currentTab === 'features');
   // In edit mode Stats and Readme live behind "More", so the bar button that
   // lights up is the one the finger actually sees, not a hidden one.
-  const behindMore = currentTab === 'stats' || currentTab === 'features';
+  const behindMore = currentTab === 'stats' || currentTab === 'features' || currentTab === 'admin';
   document.getElementById('mtabMoreBtn').classList.toggle('active', behindMore);
   document.getElementById('mtabMoreStats').classList.toggle('active', currentTab === 'stats');
   document.getElementById('mtabFeatures').classList.toggle('active', currentTab === 'features');
+  document.getElementById('mtabAdmin').classList.toggle('active', currentTab === 'admin');
   document.getElementById('mtabSpotify').classList.toggle('active', currentTab === 'playlists');
 }
 
