@@ -64,6 +64,8 @@ Com o volume montado em `/data` e `DATA_DIR=/data`, o banco (`/data/vinyl.db`) p
 
 ## Playlists no Spotify
 
+- **Admin page** (⋯ → admin, edit mode): places, CSV export/import, backups, and a Spotify playlist → wishlist tool that names each song's studio album with Claude and checks MusicBrainz for a vinyl pressing.
+
 Em modo de edição, menu **⋯ → spotify playlists** lista as playlists que o app
 criou na sua conta e permite criar novas a partir de filtros. Todas usam só os
 discos que você tem (não a wishlist) e que têm link do Spotify, na ordem de
