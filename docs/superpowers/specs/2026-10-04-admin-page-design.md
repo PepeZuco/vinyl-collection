@@ -77,46 +77,67 @@ owner's housekeeping tools in one place:
 `{playlists: [{id, name, image_url, track_count, owner}]}`. 409 with
 `{error: "not_connected"}` when there is no `SpotifyAccount`.
 
+**Why two routes, not one stream.** Production runs gunicorn with
+`--timeout 120` and MusicBrainz is throttled to one call a second, so a
+500-song playlist (a few hundred albums) cannot be resolved inside one
+request. The work is split the way the playlist sync already splits its
+long reads: the server does the fast part in one call, and the browser feeds
+the slow part back in chunks, showing progress between them.
+
 **`POST /api/spotify/wishlist-scan`** `{playlist_id}` — `@require_auth`.
-Streams NDJSON frames in the same style as `/api/search`
-(`{stage, done, total}` progress frames, then one `{result: …}` or
-`{error: …}` frame). Pipeline:
+The fast part, one JSON response:
 
 1. **Read tracks** — `spotify_sync.playlist_tracks(client, playlist_id)`
-   (new): `[{title, artists, album, album_type, release_year, image_url}]`,
-   skipping local files, episodes and null tracks. Capped at **500** songs;
-   `truncated: true` in the result when cut.
+   (new): `[{title, artists, album, release_year, image_url}]`, skipping
+   local files, episodes and null tracks. Capped at **500** songs
+   (`PLAYLIST_SCAN_CAP`); `truncated: true` in the result when cut.
 2. **Identify albums** — `scan.identify_albums(tracks, usage_out)` (new):
-   Claude Haiku (`IDENTIFY_MODEL = "claude-haiku-4-5"`), batches of 50 songs,
-   structured JSON output. Per song returns
-   `{artist, album, year, confidence}` = the song's **original studio album**
-   by that artist (not a compilation, single, deluxe or remaster edition).
-   A song Claude cannot place returns `album: null` and is dropped from the
-   result with a count (`unplaced`).
-3. **Group** — songs collapse by normalized `(artist, album)`; each album
-   keeps its list of song titles.
-4. **Skip what's owned** — each album goes through `_search_duplicate(row,
-   existing)`, the check `/api/search` uses; a match carries the same
-   `duplicate_of: {id, artist, …}` object plus that record's `have_it`, and
-   skips the remaining steps.
-5. **Resolve** — `scan.lookup_musicbrainz(artist, album)` for each remaining
-   album → release-group `mbid`, year, country; `search_covers(rows)` fills
-   `cover_data`, falling back to the Spotify album image.
-6. **Vinyl check** — `scan.flag_vinyl(rows, usage_out=spent)` stamps
-   `vinyl: confirmed | likely | none`.
+   Claude Haiku (`IDENTIFY_MODEL = "claude-haiku-4-5"`), batches of 50
+   songs run in parallel (4 workers), structured JSON output. Per song:
+   `{artist, album, year}` = the song's **original studio album** by that
+   artist (not a compilation, single, deluxe or remaster edition), or
+   `album: null` when Claude cannot place it — those are dropped and counted
+   (`unplaced`). A batch whose call fails falls back to each song's Spotify
+   album, marked `unverified: true`.
+3. **Group** — songs collapse by `(scan._normalise(artist),
+   scan._normalise(album))`; each album keeps its song titles and the first
+   Spotify image as `spotify_image`.
+4. **Skip what's owned** — `_search_duplicate` against the collection; a
+   match carries `duplicate_of: {id, artist, album_name}` and `have_it`.
 
-Result: `{albums: [{artist, album_name, year, country, mbid, cover_data,
-vinyl, songs, duplicate_of, have_it, unverified}], truncated, unplaced}`.
+Result: `{albums: [{key, artist, album_name, year, songs, spotify_image,
+unverified, duplicate_of, have_it}], truncated, unplaced, song_count}`.
+Claude spend banked with `_record_scan_spend("playlist", spent)` in a
+`finally`.
 
-Claude spend is banked with `_record_scan_spend("playlist", spent)` in a
-`finally`, exactly as `/api/search` does, so it shows in the spend
-stats and a client hanging up mid-stream does not lose it.
+**`POST /api/spotify/wishlist-scan/resolve`** `{albums: [...]}` —
+`@require_auth`. The slow part, at most **24** albums per call
+(`RESOLVE_CHUNK`, = `scan.COVER_FETCH_LIMIT` so every row gets artwork);
+more is a 400. For each album:
+
+1. `scan.resolve_album(artist, album)` (new) — one MusicBrainz release-group
+   query ranked with `_rank_candidates`; returns `{mbid, year, artist,
+   album_name}` or `None`. No country lookup: that would be three more
+   throttled calls per album for a field the wishlist does not need.
+2. `scan.search_covers(rows)`, then the Spotify image for any row still
+   without one.
+3. `scan.flag_vinyl(rows, usage_out=spent)` → `vinyl`.
+
+Returns `{albums: [... the same rows plus mbid, year, cover_data, vinyl]}`
+in input order, keyed by `key`. An album MusicBrainz does not know keeps
+Claude's name and year and goes through `flag_vinyl` with no mbid (Claude's
+verdict alone decides likely / none). `MusicBrainzUnavailable` → 502
+`{error}`; the client stops and shows it, keeping the chunks already
+resolved. Spend banked as `"playlist"`.
 
 ### Client
 
-- `static/admin.js` (new): page rendering, playlists list, scan stream
-  reader, review list. Pure helpers exported for tests:
-  `defaultTicked(album)` and `canTick(album)` implement the rules above.
+- `static/admin.js` (new): pure helpers exported for tests —
+  `canTick(album)`, `defaultTicked(album)`, `chunk(list, size)`,
+  `songsLabel(songs)`, `progressText(stage, done, total)`.
+- `index.html`: the admin page markup, and the scan loop — POST the scan,
+  render the albums as "checking…", then POST `/resolve` one chunk at a time
+  and re-render after each (`checking vinyl 48 / 140`).
 - `addToWishlist(releases)` (new shared helper, extracted from
   `addPickedToWishlist` in `index.html`): `/api/search/genres` then one
   `POST /api/records` per release with `have_it: false`; returns the added
@@ -128,9 +149,9 @@ stats and a client hanging up mid-stream does not lose it.
 |------------------------------------|-----------------------------------------------------------------|
 | not in edit mode                   | 401 (`require_auth`); admin item is hidden anyway               |
 | Spotify not connected              | section shows the connect button                                |
-| Spotify error / long rate limit    | `{error}` frame; the message is shown above the scan button     |
+| Spotify error / long rate limit    | 502 `{error}`; the message is shown above the scan button       |
 | a Claude batch fails               | those songs use their Spotify album, rows marked `unverified`   |
-| MusicBrainz unreachable            | fatal `{error}` frame — same rule as `/api/search`              |
+| MusicBrainz unreachable            | resolve 502; scan stops, chunks already resolved stay shown     |
 | empty playlist / nothing placeable | result with no albums; "nothing to add from this playlist"     |
 | one `POST /api/records` fails      | the rest still go in; toast counts only what was added         |
 
@@ -138,8 +159,8 @@ stats and a client hanging up mid-stream does not lose it.
 
 - `tests/test_admin_page.py` — routes with Spotify and Anthropic mocked as
   `conftest.py` does: playlists list, not-connected 409, auth 401, scan
-  stream frames, grouping, owned-album skip, 500 cap, Claude-batch fallback
-  to `unverified`, MusicBrainz-down fatal frame, usage banked with
+  grouping, owned-album skip, 500 cap, Claude-batch fallback to
+  `unverified`, resolve chunk limit, MusicBrainz-down 502, usage banked with
   `source='playlist'`.
 - `tests/test_identify_albums.py` — batching (120 songs → 3 calls), parsing,
   `album: null` handling.
