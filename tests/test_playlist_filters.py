@@ -92,3 +92,11 @@ def test_source_defaults_to_albums_and_keeps_old_keys():
     with pytest.raises(pf.FilterError) as e:
         pf.normalize_filters({"source": "singles"})
     assert e.value.field == "source"
+
+
+def test_owned_defaults_to_owned_and_keeps_old_keys():
+    assert pf.normalize_filters({"owned": "owned"}) == {"liked": True}
+    assert pf.normalize_filters({"owned": "wishlist"})["owned"] == "wishlist"
+    with pytest.raises(pf.FilterError) as e:
+        pf.normalize_filters({"owned": "borrowed"})
+    assert e.value.field == "owned"

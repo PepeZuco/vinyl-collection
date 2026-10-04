@@ -1540,8 +1540,27 @@ select option{background:var(--surface);color:var(--text)}
   background:color-mix(in srgb, #1DB954 12%, transparent)}
 
 /* spotify playlists page — what was the header menu's modal, now a tab */
-.playlists-page{display:none;max-width:640px}
-.playlists-page.visible{display:block}
+.playlists-page{display:none;max-width:720px;
+  /* Spotify's own palette for this page, whatever the app theme */
+  --sp-bg:#121212;--sp-raise:#1f1f1f;--sp-hover:#2a2a2a;--sp-text:#fff;--sp-sub:#b3b3b3;
+  --sp-pill:#2a2a2a;--sp-pill-hover:#333;--sp-green:#1DB954;--sp-on-green:#000}
+[data-theme="light"] .playlists-page{--sp-bg:#fff;--sp-raise:#f2f2f2;--sp-hover:#ececec;
+  --sp-text:#000;--sp-sub:#6a6a6a;--sp-pill:#ededed;--sp-pill-hover:#e2e2e2;--sp-green:#1aa34a;--sp-on-green:#fff}
+.playlists-page.visible{display:block;background:var(--sp-bg);color:var(--sp-text);
+  border-radius:12px;padding:16px 16px 20px;font-family:'Inter',system-ui,sans-serif}
+.sp-lib-head{display:flex;align-items:center;gap:12px;padding:4px 0 14px}
+.sp-lib-avatar{flex:0 0 36px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;background:var(--sp-green);color:var(--sp-on-green);font-size:22px}
+.sp-lib-title{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--sp-text);flex:1;min-width:0}
+.sp-lib-icon{width:40px;height:40px;border:none;border-radius:50%;background:transparent;color:var(--sp-text);
+  font-size:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,transform .15s}
+.sp-lib-icon:hover{background:var(--sp-hover);transform:scale(1.05)}
+.sp-pills{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 0 12px}
+.sp-pills::-webkit-scrollbar{display:none}
+.sp-pill{flex:0 0 auto;border:none;border-radius:999px;padding:8px 16px;font:inherit;font-size:14px;font-weight:600;
+  background:var(--sp-pill);color:var(--sp-text);cursor:pointer;transition:background .15s}
+.sp-pill:hover{background:var(--sp-pill-hover)}
+.sp-pill.on{background:var(--sp-green);color:var(--sp-on-green)}
 .admin-page{display:none;max-width:640px}
 .admin-page.visible{display:block}
 .admin-section{margin:0 0 28px}
@@ -2077,6 +2096,19 @@ select option{background:var(--surface);color:var(--text)}
     padding:4px;display:flex;flex-direction:column;gap:1px}
   .mtab-more-panel.hidden{display:none}
   .mtab-more-panel .menu-item{text-transform:none;letter-spacing:normal;font-size:13px}
+  /* on the Spotify tab the bar turns into Spotify's: a fade to black, no
+     border, white for the current tab and grey for the rest, no pill */
+  body.on-spotify .mobile-tabbar{border-top:none;background:linear-gradient(to bottom,rgba(0,0,0,.72),#000 55%);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  body.on-spotify .mtab-item{color:#b3b3b3;text-transform:none;letter-spacing:0;font-size:10.5px;font-weight:500}
+  body.on-spotify .mtab-item i{font-size:24px}
+  body.on-spotify .mtab-item.active{color:#fff;font-weight:700}
+  body.on-spotify .mtab-item.active .mtab-icon-wrap{background:transparent}
+  body.on-spotify .mtab-fab{background:#fff;color:#000;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+  [data-theme="light"] body.on-spotify .mobile-tabbar{background:linear-gradient(to bottom,rgba(255,255,255,.75),#fff 55%)}
+  [data-theme="light"] body.on-spotify .mtab-item{color:#6a6a6a}
+  [data-theme="light"] body.on-spotify .mtab-item.active{color:#000}
+  [data-theme="light"] body.on-spotify .mtab-fab{background:#000;color:#fff}
   /* which set of slots shows — same body.is-authed switch the grid pencil uses */
   body:not(.is-authed) .mtab-owner,
   body.is-authed .mtab-visitor{display:none}
@@ -2255,24 +2287,33 @@ select option{background:var(--surface);color:var(--text)}
 .place-edit:hover{color:var(--accent)}
 .place-delete:hover{color:var(--danger)}
 .place-empty{font-size:12px;color:var(--muted);padding:10px 2px 14px;line-height:1.5}
-.playlist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:12px 2px;border-bottom:1px solid var(--border)}
-.playlist-name{font-size:13px;font-weight:600;min-width:0;flex:1 1 0}
+.playlist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px;margin:0 -8px;
+  border-radius:6px;transition:background .15s}
+.playlist-row:hover{background:var(--sp-raise)}
+.playlist-main{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:3px}
+.playlist-name{font-size:16px;font-weight:700;color:var(--sp-text);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .playlist-name a{color:inherit;text-decoration:none}
-.playlist-name a:hover{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
-.playlist-art{flex:0 0 44px;width:44px;height:44px;border-radius:6px;overflow:hidden;background:var(--border);
-  display:flex;align-items:center;justify-content:center;color:var(--label);font-size:18px}
+.playlist-name a:hover{text-decoration:underline;text-underline-offset:2px}
+.playlist-art{flex:0 0 64px;width:64px;height:64px;border-radius:4px;overflow:hidden;background:var(--sp-hover);
+  display:flex;align-items:center;justify-content:center;color:var(--sp-sub);font-size:26px;
+  box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .playlist-art img{width:100%;height:100%;object-fit:cover;display:block}
+.playlist-actions{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.playlist-actions .btn{color:var(--sp-sub);border-color:transparent;background:transparent}
+.playlist-actions .btn:hover:not(:disabled){color:var(--sp-text);background:var(--sp-hover)}
+.playlist-actions .btn .ti{font-size:18px}
 .playlist-open{height:40px;min-width:40px;padding:0 4px;justify-content:center}
-.playlist-open .ti{color:#1DB954;font-size:28px;transition:transform .2s ease}
+.playlist-actions .playlist-open .ti{color:var(--sp-green);font-size:30px;transition:transform .2s ease}
 .playlist-open:hover .ti{transform:scale(1.12)}
 /* filter chips under the name: they pop in one after another the first time
    a row is drawn, and the liked heart keeps a slow beat */
 .playlist-tags{display:flex;flex-wrap:wrap;gap:5px}
 .pl-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 9px 2px 7px;border-radius:999px;
-  font-size:11px;color:var(--label);background:color-mix(in srgb,var(--accent) 8%,transparent);
-  border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);transition:transform .15s ease,background .15s ease}
-.pl-tag:hover{transform:translateY(-1px);background:color-mix(in srgb,var(--accent) 15%,transparent)}
-.pl-tag .ti{font-size:13px;color:var(--accent)}
+  font-size:11px;color:var(--sp-sub);background:var(--sp-pill);
+  border:1px solid transparent;transition:transform .15s ease,background .15s ease}
+.pl-tag:hover{transform:translateY(-1px);background:var(--sp-pill-hover)}
+.pl-tag .ti{font-size:13px;color:var(--sp-sub)}
 .pl-tag.liked{color:var(--ev-liked);background:color-mix(in srgb,var(--ev-liked) 10%,transparent);
   border-color:color-mix(in srgb,var(--ev-liked) 28%,transparent)}
 .pl-tag.liked .ti{color:var(--ev-liked);animation:pl-beat 2.4s ease-in-out infinite}
@@ -2281,10 +2322,12 @@ select option{background:var(--surface);color:var(--text)}
 @keyframes pl-pop{from{opacity:0;transform:translateY(6px) scale(.8)}to{opacity:1;transform:none}}
 @keyframes pl-beat{0%,40%,100%{transform:scale(1)}10%{transform:scale(1.28)}20%{transform:scale(.95)}30%{transform:scale(1.15)}}
 @media (prefers-reduced-motion:reduce){.pl-tag .ti,.playlist-tags.enter .pl-tag{animation:none}}
-/* sub-lines and status sit under the name, past the cover */
-.playlist-row>.playlist-sub,.playlist-row>.playlist-status{padding-left:54px}
-.playlist-sub{font-size:11px;color:var(--muted);flex:1 0 100%;line-height:1.5}
-.playlist-status{font-size:12px;color:var(--muted);flex:1 0 100%;line-height:1.5}
+/* status sits under the name, past the cover */
+.playlist-row>.playlist-status{padding-left:76px}
+.playlist-sub{font-size:13px;color:var(--sp-sub);line-height:1.4;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.playlist-sub.playlist-tags{white-space:normal;padding-top:2px}
+.playlist-status{font-size:12px;color:var(--sp-sub);flex:1 0 100%;line-height:1.5}
 .playlist-status a{color:var(--accent)}
 .playlist-status.err{color:var(--danger)}
 .playlist-status details{margin-top:4px}
@@ -2296,13 +2339,35 @@ select option{background:var(--surface);color:var(--text)}
   display:inline-flex;align-items:center;justify-content:center;background:var(--border);color:var(--muted)}
 .skipped-text{display:flex;flex-direction:column;min-width:0}
 .skipped-songs{opacity:.8}
-.playlist-account{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:2px 2px 6px}
-.playlist-account .btn{margin-left:auto}
-.playlist-heading{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--label);padding:10px 2px 0}
-.playlist-row.hl{background:color-mix(in srgb,var(--accent) 10%,transparent);border-radius:6px}
-.playlist-last a{color:var(--accent)}
-.playlist-new{margin-top:12px;border-top:1px solid var(--border);padding-top:8px}
-.playlist-new summary{cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--label);padding:6px 2px}
+.playlist-account{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sp-sub);padding:0 0 10px}
+.playlist-account .ti-brand-spotify{color:var(--sp-green);font-size:16px}
+.playlist-account .btn{margin-left:auto;color:var(--sp-sub);border-color:var(--sp-hover);border-radius:999px}
+.playlist-heading{font-size:16px;font-weight:700;color:var(--sp-text);padding:16px 0 6px}
+.playlist-row.hl{background:color-mix(in srgb,var(--sp-green) 16%,transparent)}
+.playlist-last a{color:var(--sp-green)}
+.playlists-page .place-empty,.playlists-page .backup-note{color:var(--sp-sub)}
+.playlist-new{margin-top:16px;padding-top:4px}
+.playlist-new summary{cursor:pointer;font-size:16px;font-weight:700;color:var(--sp-text);padding:8px 0;list-style:none;
+  display:flex;align-items:center;gap:8px}
+.playlist-new summary::-webkit-details-marker{display:none}
+.playlist-new summary::before{content:'+';display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;
+  border-radius:4px;background:var(--sp-pill);font-size:18px;font-weight:400}
+.playlist-new[open] summary::before{content:'−'}
+.playlists-page .pl-form{background:var(--sp-raise);border-color:transparent;border-radius:8px}
+.playlists-page .pl-label .ti,.playlists-page .pl-rate .ti{color:var(--sp-green)}
+.playlists-page .pl-seg label:has(input:checked){background:var(--sp-green);color:var(--sp-on-green)}
+.playlists-page .pl-seg label:has(input:checked) .ti{color:inherit}
+.playlists-page .pl-chip{background:var(--sp-green);color:var(--sp-on-green)}
+.playlists-page .pl-field input:focus,.playlists-page .pl-field select:focus{border-color:var(--sp-green);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--sp-green) 18%,transparent)}
+.playlists-page .btn-primary{background:var(--sp-green);border-color:var(--sp-green);color:var(--sp-on-green);
+  border-radius:999px;font-weight:700}
+@media(max-width:760px){
+  .playlists-page.visible{border-radius:0;margin:0 -24px;padding:12px 16px 20px}
+  .playlist-art{flex-basis:56px;width:56px;height:56px}
+  .playlist-row>.playlist-status{padding-left:68px}
+  .playlist-actions .btn{min-width:34px;padding:0 4px}
+}
 .pl-form{display:flex;flex-direction:column;gap:2px;margin-top:6px;padding:6px 12px 10px;
   background:var(--card);border:1px solid var(--border);border-radius:10px}
 .pl-field{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 0;font-size:12px;
@@ -10439,7 +10504,7 @@ function setPlaylistBusy(busy){
 
 function blankPlaylistForm(){
   return {liked: true, year_from: '', year_to: '', genres: [], pepe_min: '', jenni_min: '',
-          rating_mode: 'and', places: [], bought_from: '', bought_to: '', source: 'albums', name: '', nameTouched: false};
+          rating_mode: 'and', places: [], bought_from: '', bought_to: '', source: 'albums', owned: 'owned', name: '', nameTouched: false};
 }
 let playlistForm = blankPlaylistForm();
 
@@ -10485,7 +10550,7 @@ function renderPlaylists(acct){
     return;
   }
   if(acct==='visitor'){
-    body.innerHTML=`<div class="playlist-heading">playlists</div><div id="playlistList"></div>`;
+    body.innerHTML=`${playlistLibraryHead(false)}<div id="playlistList"></div>`;
     renderPlaylistList();
     return;
   }
@@ -10506,10 +10571,10 @@ function renderPlaylists(acct){
   // Kept across re-renders: a sync finishing must not snap the form shut.
   const prev=document.getElementById('playlistNew');
   const open=prev?prev.open:!savedPlaylists.length;
-  body.innerHTML=`<div class="playlist-account"><i class="ti ti-brand-spotify"></i>
+  body.innerHTML=`${playlistLibraryHead(true)}
+    <div class="playlist-account"><i class="ti ti-brand-spotify"></i>
       <span>connected as <b>${esc(acct.display_name||'Spotify')}</b></span>
       <button class="btn btn-ghost btn-sm" onclick="disconnectSpotify()">disconnect</button></div>
-    <div class="playlist-heading">your playlists</div>
     <div id="playlistList"></div>
     <details class="playlist-new" id="playlistNew" ${open?'open':''}>
       <summary>new playlist</summary><div id="playlistFormBody"></div></details>
@@ -10517,6 +10582,48 @@ function renderPlaylists(acct){
       removes what no longer belongs — the playlist always mirrors the collection.</div>`;
   renderPlaylistList();
   renderPlaylistForm();
+}
+
+// Spotify's "Your Library" header: a big title, a "+" that opens the
+// new-playlist form (edit mode only), and pills that narrow the list.
+let playlistPill = '';           // '' | 'liked' | 'every' | 'wishlist'
+const PLAYLIST_PILLS = [['liked','Liked songs'],['every','Every track'],['wishlist','Wishlist']];
+
+function playlistLibraryHead(canCreate){
+  return `<div class="sp-lib-head">
+      <span class="sp-lib-avatar"><i class="ti ti-brand-spotify"></i></span>
+      <h2 class="sp-lib-title">Your Library</h2>
+      ${canCreate?`<button class="sp-lib-icon" title="new playlist" aria-label="new playlist"
+        onclick="openNewPlaylist()"><i class="ti ti-plus"></i></button>`:''}
+    </div>
+    <div class="sp-pills" id="playlistPills">${playlistPillsHtml()}</div>`;
+}
+
+function playlistPillsHtml(){
+  return PLAYLIST_PILLS.map(([k,t])=>`<button class="sp-pill${playlistPill===k?' on':''}"
+      aria-pressed="${playlistPill===k}" onclick="setPlaylistPill('${k}')">${t}</button>`).join('');
+}
+
+function setPlaylistPill(k){
+  playlistPill=playlistPill===k?'':k;
+  const pills=document.getElementById('playlistPills');
+  if(pills)pills.innerHTML=playlistPillsHtml();
+  renderPlaylistList();
+}
+
+function playlistPillKeeps(p){
+  const f=p.filters&&typeof p.filters==='object'?p.filters:{};
+  if(playlistPill==='liked')return f.liked!==false;
+  if(playlistPill==='every')return f.liked===false;
+  if(playlistPill==='wishlist')return f.owned==='wishlist'||f.owned==='all';
+  return true;
+}
+
+function openNewPlaylist(){
+  const d=document.getElementById('playlistNew');
+  if(!d)return;
+  d.open=true;
+  d.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 // "today", "yesterday", "3 days ago" — from a local stamp's calendar day.
@@ -10533,7 +10640,12 @@ function renderPlaylistList(){
     list.innerHTML=`<div class="place-empty">no playlists yet${authed?' — make one below':''}.</div>`;
     return;
   }
-  list.innerHTML=savedPlaylists.map(p=>{
+  const shown=savedPlaylists.filter(playlistPillKeeps);
+  if(!shown.length){
+    list.innerHTML='<div class="place-empty">no playlists match this filter.</div>';
+    return;
+  }
+  list.innerHTML=shown.map(p=>{
     const st=playlistStatus[p.id]||{};
     const last=!authed?(p.last_total!=null?`${p.last_total} tracks`:'')
       :p.last_synced_at
@@ -10547,14 +10659,18 @@ function renderPlaylistList(){
     return `<div class="playlist-row${playlistHighlight===p.id?' hl':''}" data-id="${p.id}">
       ${p.url?`<a class="playlist-art" href="${esc(p.url)}" target="_blank" rel="noopener" tabindex="-1">${art}</a>`
         :`<span class="playlist-art">${art}</span>`}
-      <span class="playlist-name">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`:esc(p.name)}</span>
-      ${open}
-      ${authed?`<button class="btn btn-primary btn-sm playlist-sync" ${playlistBusy?'disabled':''}
-        onclick="syncPlaylist(${p.id})"><i class="ti ti-refresh"></i><span>sync</span></button>
-      <button class="btn btn-ghost btn-sm playlist-delete" ${playlistBusy?'disabled':''}
-        title="delete" aria-label="delete" onclick="deletePlaylist(${p.id})"><i class="ti ti-trash"></i></button>`:''}
-      ${playlistFilterChips(p)}
-      <span class="playlist-sub playlist-last">${last}</span>
+      <div class="playlist-main">
+        <span class="playlist-name">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`:esc(p.name)}</span>
+        <span class="playlist-sub playlist-last">Playlist${last?' • '+last:''}</span>
+        ${playlistFilterChips(p)}
+      </div>
+      <div class="playlist-actions">
+        ${authed?`<button class="btn btn-ghost btn-sm playlist-sync" ${playlistBusy?'disabled':''}
+          title="sync" aria-label="sync" onclick="syncPlaylist(${p.id})"><i class="ti ti-refresh"></i></button>
+        <button class="btn btn-ghost btn-sm playlist-delete" ${playlistBusy?'disabled':''}
+          title="delete" aria-label="delete" onclick="deletePlaylist(${p.id})"><i class="ti ti-trash"></i></button>`:''}
+        ${open}
+      </div>
       ${st.html?`<div class="playlist-status${st.err?' err':''}">${st.html}</div>`:''}
     </div>`;
   }).join('');
@@ -10574,6 +10690,8 @@ function playlistFilterChips(p){
   else chip('ti-list','every track');
   if(f.source==='compilations')chip('ti-playlist','compilations only');
   else if(f.source==='all')chip('ti-playlist','+ compilations');
+  if(f.owned==='wishlist')chip('ti-heart-plus','wishlist');
+  else if(f.owned==='all')chip('ti-heart-plus','+ wishlist');
   (f.genres||[]).forEach(g=>chip('ti-tag',g));
   if(f.year_from!=null||f.year_to!=null)chip('ti-calendar',span(f.year_from,f.year_to));
   const rate=[];
@@ -10619,6 +10737,8 @@ function renderPlaylistForm(){
       ${radio('plLiked','liked','1','liked',f.liked,'ti-heart-filled')}${radio('plLiked','liked','0','every track',!f.liked,'ti-list')}</span></div>
     <div class="pl-field">${label('ti-brand-spotify','from')}<span class="pl-seg">
       ${radio('plSource','source','albums','albums',f.source==='albums','ti-vinyl')}${radio('plSource','source','compilations','compilations',f.source==='compilations','ti-playlist')}${radio('plSource','source','all','both',f.source==='all')}</span></div>
+    <div class="pl-field">${label('ti-books','records')}<span class="pl-seg">
+      ${radio('plOwned','owned','owned','owned',f.owned==='owned','ti-check')}${radio('plOwned','owned','wishlist','wishlist',f.owned==='wishlist','ti-heart-plus')}${radio('plOwned','owned','all','both',f.owned==='all')}</span></div>
     <div class="pl-field">${label('ti-calendar','decade')}
       ${decade('year_from','any',0)} <span class="pl-sep">to</span> ${decade('year_to','any',9)}</div>
     <div class="pl-field">${label('ti-tag','genre')}${chips('genres',playlistChoices.genres)}</div>
@@ -10654,7 +10774,7 @@ function playlistFilters(){
   const f=playlistForm;
   return VinylPlaylistFilters.normalize({liked:f.liked,year_from:f.year_from,year_to:f.year_to,
     genres:f.genres,pepe_min:f.pepe_min,jenni_min:f.jenni_min,rating_mode:f.rating_mode,
-    places:f.places,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source});
+    places:f.places,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source,owned:f.owned});
 }
 
 // Updated in place rather than re-rendered, so typing in a field keeps focus.
@@ -11807,6 +11927,7 @@ function syncMobileTabbar() {
   document.getElementById('mtabFeatures').classList.toggle('active', currentTab === 'features');
   document.getElementById('mtabAdmin').classList.toggle('active', currentTab === 'admin');
   document.getElementById('mtabSpotify').classList.toggle('active', currentTab === 'playlists');
+  document.body.classList.toggle('on-spotify', currentTab === 'playlists');
 }
 
 // ── mobile bottom bar's "more" popover — Search and Features share the slot

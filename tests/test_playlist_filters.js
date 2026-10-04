@@ -45,6 +45,14 @@ test('the count is owned records with a link that pass the filters', () => {
   assert.strictEqual(F.countMatching(records, F.normalize({ liked: false, genres: ['rock'] })), 1);
 });
 
+test('the owned filter picks owned, wishlist or both', () => {
+  const records = [REC({}), REC({ have_it: false }), REC({ have_it: false, spotify_url: '' })];
+  assert.strictEqual(F.countMatching(records, F.normalize({ liked: false })), 1);
+  assert.strictEqual(F.countMatching(records, F.normalize({ liked: false, owned: 'wishlist' })), 1);
+  assert.strictEqual(F.countMatching(records, F.normalize({ liked: false, owned: 'all' })), 2);
+  assert.deepStrictEqual(F.normalize({ owned: 'owned' }), { liked: true });
+});
+
 test('liked also needs a hearted song', () => {
   const records = [REC({}), REC({ tracks: JSON.stringify([{ side: 'A', title: 's' }]) }),
                    REC({ tracks: '' }), REC({ tracks: 'not json' })];

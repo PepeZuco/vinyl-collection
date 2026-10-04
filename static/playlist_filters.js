@@ -15,6 +15,7 @@ const VinylPlaylistFilters = (function () {
   const YEAR = /\d{4}/;
   const PLAYLIST_LINK = /^(?:https?:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?playlist\/|spotify:playlist:)/i;
   const SOURCES = ['albums', 'compilations', 'all'];
+  const OWNED = ['owned', 'wishlist', 'all'];
 
   const tidy = s => String(s === undefined || s === null ? '' : s).split(/\s+/).filter(Boolean).join(' ');
   const fold = s => tidy(s).toLowerCase();
@@ -71,6 +72,7 @@ const VinylPlaylistFilters = (function () {
     if (j !== null) f.jenni_min = j;
     if (p !== null && j !== null) f.rating_mode = raw.rating_mode === 'or' ? 'or' : 'and';
     if (SOURCES.includes(raw.source) && raw.source !== 'albums') f.source = raw.source;
+    if (OWNED.includes(raw.owned) && raw.owned !== 'owned') f.owned = raw.owned;
     const [bf, bt] = ordered(day(raw.bought_from), day(raw.bought_to));
     if (bf !== null) f.bought_from = bf;
     if (bt !== null) f.bought_to = bt;
@@ -87,6 +89,8 @@ const VinylPlaylistFilters = (function () {
   }
 
   function matches(r, f) {
+    const owned = f.owned || 'owned';
+    if (owned !== 'all' && (r.have_it !== false) !== (owned === 'owned')) return false;
     const source = f.source || 'albums';
     if (source !== 'all' && linkKind(r.spotify_url) !== (source === 'compilations' ? 'playlist' : 'album')) return false;
     if ('year_from' in f || 'year_to' in f) {
@@ -119,7 +123,7 @@ const VinylPlaylistFilters = (function () {
   }
 
   function matching(records, f) {
-    return (records || []).filter(r => r && r.have_it && tidy(r.spotify_url)
+    return (records || []).filter(r => r && tidy(r.spotify_url)
       && matches(r, f) && (!f.liked || hasLiked(r)));
   }
 
@@ -147,6 +151,8 @@ const VinylPlaylistFilters = (function () {
     if ('bought_from' in f || 'bought_to' in f) out.push('bought ' + span(f.bought_from, f.bought_to));
     if (f.source === 'compilations') out.push('compilations only');
     else if (f.source === 'all') out.push('+ compilations');
+    if (f.owned === 'wishlist') out.push('wishlist');
+    else if (f.owned === 'all') out.push('+ wishlist');
     return out;
   }
 

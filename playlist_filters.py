@@ -17,6 +17,8 @@ Filters (all optional; absent means "does not filter"; they combine with AND):
   source                   "albums" (default) | "compilations" | "all" — which kind of
                            Spotify link counts: an album (or track) link, or a playlist
                            someone made for a compilation that is not an album on Spotify
+  owned                    "owned" (default) | "wishlist" | "all" — records you have,
+                           records on the wishlist, or both
 
 `filter_key` is what makes "same filters" mean "same playlist": two filter
 sets that select the same records produce the same key, whatever the order,
@@ -36,6 +38,7 @@ _PLAYLIST_LINK = re.compile(r"^(?:https?://open\.spotify\.com/(?:intl-[a-z]+/)?p
                             re.IGNORECASE)
 
 SOURCES = ("albums", "compilations", "all")
+OWNED = ("owned", "wishlist", "all")
 
 
 class FilterError(ValueError):
@@ -149,6 +152,13 @@ def normalize_filters(raw):
     if source != "albums":
         f["source"] = source
 
+    owned = raw.get("owned") or "owned"
+    if owned not in OWNED:
+        raise FilterError("owned", "must be owned, wishlist or all")
+    # Same as source: the default stays out, so older playlists keep their key.
+    if owned != "owned":
+        f["owned"] = owned
+
     lo = None if _blank(raw.get("bought_from")) else _day("bought_from", raw["bought_from"])
     hi = None if _blank(raw.get("bought_to")) else _day("bought_to", raw["bought_to"])
     lo, hi = _ordered(lo, hi)
@@ -197,6 +207,10 @@ def _parts(f):
         out.append("compilations only")
     elif f.get("source") == "all":
         out.append("+ compilations")
+    if f.get("owned") == "wishlist":
+        out.append("wishlist")
+    elif f.get("owned") == "all":
+        out.append("+ wishlist")
     return out
 
 
@@ -224,6 +238,11 @@ def link_kind(link):
 
 
 def _matches(r, f):
+    # A record without the flag counts as owned, like the column's default.
+    have = r.get("have_it", True) is not False
+    owned = f.get("owned", "owned")
+    if owned != "all" and have != (owned == "owned"):
+        return False
     source = f.get("source", "albums")
     if source != "all" and link_kind(r.get("spotify_url")) != ("playlist" if source == "compilations" else "album"):
         return False

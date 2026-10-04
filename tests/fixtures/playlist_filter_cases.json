@@ -29,7 +29,12 @@
     {"why": "compilations drop album links", "filters": {"source": "compilations"}, "record": {"spotify_url": "https://open.spotify.com/album/X"}, "match": false},
     {"why": "a locale segment is still a playlist", "filters": {"source": "compilations"}, "record": {"spotify_url": "https://open.spotify.com/intl-pt/playlist/Y?si=1"}, "match": true},
     {"why": "a spotify: playlist URI is a playlist", "filters": {"source": "compilations"}, "record": {"spotify_url": "spotify:playlist:Y"}, "match": true},
-    {"why": "all keeps both kinds", "filters": {"source": "all"}, "record": {"spotify_url": "https://open.spotify.com/playlist/Y"}, "match": true}
+    {"why": "all keeps both kinds", "filters": {"source": "all"}, "record": {"spotify_url": "https://open.spotify.com/playlist/Y"}, "match": true},
+    {"why": "owned is the default, so a wishlist record is out", "filters": {}, "record": {"have_it": false}, "match": false},
+    {"why": "a record without the flag counts as owned", "filters": {}, "record": {}, "match": true},
+    {"why": "wishlist keeps wishlist records", "filters": {"owned": "wishlist"}, "record": {"have_it": false}, "match": true},
+    {"why": "wishlist drops owned records", "filters": {"owned": "wishlist"}, "record": {"have_it": true}, "match": false},
+    {"why": "all keeps owned and wishlist", "filters": {"owned": "all"}, "record": {"have_it": false}, "match": true}
   ],
   "names": [
     {"filters": {"liked": true}, "name": "Zucoloto Vinyl — Liked"},
@@ -42,6 +47,9 @@
     {"filters": {"liked": false, "bought_from": "2024-01-31", "bought_to": "2024-01-31"}, "name": "Zucoloto Vinyl · bought 2024-01-31"},
     {"filters": {"liked": false, "source": "compilations"}, "name": "Zucoloto Vinyl · compilations only"},
     {"filters": {"liked": true, "source": "all"}, "name": "Zucoloto Vinyl — Liked · + compilations"},
-    {"filters": {"liked": true, "source": "albums"}, "name": "Zucoloto Vinyl — Liked"}
+    {"filters": {"liked": true, "source": "albums"}, "name": "Zucoloto Vinyl — Liked"},
+    {"filters": {"liked": false, "owned": "wishlist"}, "name": "Zucoloto Vinyl · wishlist"},
+    {"filters": {"liked": true, "owned": "all"}, "name": "Zucoloto Vinyl — Liked · + wishlist"},
+    {"filters": {"liked": true, "owned": "owned"}, "name": "Zucoloto Vinyl — Liked"}
   ]
 }

@@ -2111,7 +2111,7 @@ class _AlbumCache:
 
 
 def _playlist_has_records(f):
-    """Whether any owned record passes `f` — with a hearted song, for a liked
+    """Whether any record passes `f` — with a hearted song, for a liked
     playlist. The same count the form's preview shows (playlist_filters.js)."""
     for r in playlist_filters.select(_playlist_records(), f):
         if not f.get("liked", True) or any(t.get("liked_at") for t in r["tracks"] if isinstance(t, dict)):
@@ -2120,19 +2120,18 @@ def _playlist_has_records(f):
 
 
 def _playlist_records():
-    """Owned records with a Spotify link, oldest purchase first — so the
+    """Records with a Spotify link, owned or wishlist, oldest purchase first — so the
     playlist reads as the collection's own history and a new record's
     tracks land at the end, where a sync appends them anyway."""
     rows = (db.session.query(Record.id, Record.cover_hash, Record.artist, Record.album_name,
                              Record.spotify_url, Record.tracks, Record.year, Record.genre,
                              Record.my_rating, Record.wife_rating, Record.bought_where,
-                             Record.bought_date)
-            .filter(Record.have_it.is_(True),
-                    Record.spotify_url.isnot(None), Record.spotify_url != "")
+                             Record.bought_date, Record.have_it)
+            .filter(Record.spotify_url.isnot(None), Record.spotify_url != "")
             .order_by(Record.bought_date, Record.id).all())
     out = []
     for (rid, cover_hash, artist, album, link, tracks, year, genre,
-         my_rating, wife_rating, bought_where, bought_date) in rows:
+         my_rating, wife_rating, bought_where, bought_date, have_it) in rows:
         try:
             parsed = json.loads(tracks) if tracks else []
         except ValueError:
@@ -2143,7 +2142,7 @@ def _playlist_records():
                     "tracks": parsed if isinstance(parsed, list) else [],
                     "year": year, "genre": genre, "my_rating": my_rating,
                     "wife_rating": wife_rating, "bought_where": bought_where,
-                    "bought_date": bought_date})
+                    "bought_date": bought_date, "have_it": bool(have_it)})
     return out
 
 
@@ -2176,9 +2175,9 @@ def _playlist_by_key(key):
 
 
 def _distinct_names(column):
-    """Non-empty values of a Record column among owned records, one per spelling-insensitive name."""
+    """Non-empty values of a Record column, owned or wishlist, one per spelling-insensitive name."""
     seen = {}
-    for (v,) in db.session.query(column).filter(Record.have_it.is_(True)).distinct().all():
+    for (v,) in db.session.query(column).distinct().all():
         t = " ".join((v or "").split())
         if t and t.lower() not in seen:
             seen[t.lower()] = t
