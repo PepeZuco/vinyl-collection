@@ -453,6 +453,30 @@ def lookup_musicbrainz(artist: str, album: str, on_progress=None) -> list[dict]:
     return candidates
 
 
+def resolve_album(artist: str, album: str) -> dict | None:
+    """The release group an artist + album names, or None. One MusicBrainz call.
+
+    The wishlist scan's lookup: same query and ranking as lookup_musicbrainz,
+    but only the top hit and no artist-country call, because a playlist can
+    name a hundred albums and every call here waits a second on the throttle.
+    Raises MusicBrainzUnavailable like lookup_musicbrainz does.
+    """
+    if not artist or not album:
+        return None
+    payload = _mb_get("/release-group/", {"query": _mb_query(artist, album), "limit": 5})
+    groups = (payload or {}).get("release-groups") or []
+    ranked = _rank_candidates(groups, album, artist)[:1]
+    if not ranked:
+        return None
+    group = ranked[0]
+    credit = (group.get("artist-credit") or [{}])[0].get("artist") or {}
+    released = group.get("first-release-date") or ""
+    return {"mbid": group.get("id"),
+            "year": released[:4] if len(released) >= 4 else None,
+            "artist": credit.get("name") or artist,
+            "album_name": group.get("title") or album}
+
+
 # A full discography for a prolific artist is about thirty release groups;
 # forty leaves headroom without turning the results grid into a scroll marathon.
 MB_SEARCH_LIMIT = 40
