@@ -1164,9 +1164,17 @@ _IDENTIFY_SCHEMA = {
 }
 
 
+def _spotify_fallback_album(raw):
+    """The Spotify album name without its edition tail, display case kept."""
+    if not raw:
+        return None
+    name = _SPOTIFY_TITLE_DASH.sub("", _TITLE_TAIL.sub(" ", raw))
+    return re.sub(r"\s+", " ", name).strip() or raw
+
+
 def _spotify_fallback(track: dict) -> dict:
     return {"artist": (track.get("artists") or [""])[0],
-            "album": track.get("album") or None,
+            "album": _spotify_fallback_album(track.get("album")),
             "year": track.get("release_year") or None,
             "unverified": True}
 

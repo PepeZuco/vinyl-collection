@@ -26,7 +26,7 @@
 ## Review Focus
 
 1. **A playlist with the same album many times, spelled differently** ("Abbey Road" vs "Abbey Road (Remastered 2009)" from Claude's fallback path) — expect one row per album after `_normalise`, not duplicates. Pinned in Task 4 (`test_scan_groups_songs_by_normalised_album`).
-2. **A playlist whose songs are all already owned or wishlisted** — expect every row greyed "in collection"/"on wishlist", the add button disabled, and no resolve calls for them. Pinned in Task 4 (`test_owned_albums_are_marked_and_not_resolved`) and Task 6 (`canTick` tests).
+2. **A playlist whose songs are all already owned or wishlisted** — expect every row greyed "in collection"/"on wishlist", the add button disabled, and no resolve calls for them. Pinned in Task 4 (`test_owned_albums_are_marked_as_duplicates`) and Task 6 (`canTick` tests).
 3. **MusicBrainz goes down halfway through the chunks** — expect the scan to stop with the error shown and the already-resolved rows still tickable. Pinned in Task 5 (`test_resolve_maps_musicbrainz_down_to_502`) and Task 8 (DOM test `a failed chunk keeps what was resolved`).
 4. **A Spotify login that expired** (refresh token revoked) — expect the "connect again" path (409 `connect: true`), not a 502. Pinned in Task 4 (`test_scan_login_expired_is_409_connect`).
 5. **Locking edit mode while on the admin page** — expect a return to the collection tab, with no admin content left visible. Pinned in Task 7 (DOM test `locking while on admin goes back to the collection`).

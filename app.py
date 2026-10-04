@@ -2347,6 +2347,7 @@ def spotify_my_playlists():
     except spotify_sync.NotConnected:
         return _login_expired(acct)
     except (spotify_sync.SpotifyError, requests.RequestException) as e:
+        app.logger.warning("Spotify playlists could not be read", exc_info=True)
         return jsonify({"error": str(e)}), 502
 
 

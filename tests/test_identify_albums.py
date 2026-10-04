@@ -84,6 +84,14 @@ def test_a_failed_batch_falls_back_to_the_spotify_album(monkeypatch):
         {"artist": "The Beatles", "album": "Menagerie", "year": "2000", "unverified": True}]
 
 
+def test_fallback_strips_spotify_edition_tails(monkeypatch):
+    _patch(monkeypatch, FakeClaude(lambda lines: RuntimeError("overloaded")))
+    out = scan.identify_albums([_song(1, album="Abbey Road (Remastered 2009)"),
+                                _song(2, album="Help! - Remastered 2009")])
+    assert [(o["album"], o["unverified"]) for o in out] == [
+        ("Abbey Road", True), ("Help!", True)]
+
+
 def test_a_short_answer_falls_back_only_for_the_missing_songs(monkeypatch):
     _patch(monkeypatch, FakeClaude(lambda lines: {"albums": [
         {"artist": "The Beatles", "album": "Abbey Road", "year": "1969"}]}))

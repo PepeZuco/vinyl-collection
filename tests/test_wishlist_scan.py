@@ -14,6 +14,9 @@ import spotify_sync
 @pytest.fixture
 def client():
     with app_module.app.app_context():
+        # Another test file may have repointed the app at a temp DB and
+        # dropped tables (test_tracks_endpoint.py); make sure they exist.
+        app_module.db.create_all()
         app_module.SpotifyAccount.query.delete()
         app_module.Record.query.delete()
         app_module.ScanSpend.query.delete()
@@ -150,7 +153,7 @@ def test_scan_keeps_the_unverified_flag(client):
     assert r.get_json()["albums"][0]["unverified"] is True
 
 
-def test_owned_albums_are_marked_and_not_resolved(client):
+def test_owned_albums_are_marked_as_duplicates(client):
     _connect()
     owned = _record("The Beatles", "Abbey Road", have_it=True)
     wished = _record("Bill Withers", "Menagerie", have_it=False)
@@ -162,6 +165,23 @@ def test_owned_albums_are_marked_and_not_resolved(client):
     a, b = r.get_json()["albums"]
     assert a["duplicate_of"]["id"] == owned and a["have_it"] is True
     assert b["duplicate_of"]["id"] == wished and b["have_it"] is False
+
+
+def test_fallback_albums_group_and_match_owned_records(client):
+    _connect()
+    owned = _record("The Beatles", "Abbey Road", have_it=True)
+    tracks = [_track("Come Together", "The Beatles", "Abbey Road (Remastered 2009)"),
+              _track("Something", "The Beatles", "Abbey Road")]
+
+    def no_claude():
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+
+    with patch.object(spotify_sync, "playlist_tracks", return_value=(tracks, False)), \
+         patch.object(scan, "_anthropic_client", no_claude):
+        r = client.post("/api/spotify/wishlist-scan", json={"playlist_id": "PL"})
+    albums = r.get_json()["albums"]
+    assert len(albums) == 1
+    assert albums[0]["duplicate_of"]["id"] == owned
 
 
 def test_scan_reports_truncation(client):
