@@ -28,6 +28,12 @@ test('form strings become numbers and blanks disappear', () => {
     { liked: true, year_from: 1970, pepe_min: 4 });
 });
 
+test('decades become sorted unique years', () => {
+  assert.deepStrictEqual(F.normalize({ decades: ['1980', 1960, 1960, 1975, 'x'] }),
+    { liked: true, decades: [1960, 1980] });
+  assert.deepStrictEqual(F.normalize({ decades: [] }), { liked: true });
+});
+
 test('a bad value is dropped, not thrown', () => {
   assert.deepStrictEqual(F.normalize({ year_from: 'abc', bought_to: '2024-1-1' }), { liked: true });
 });

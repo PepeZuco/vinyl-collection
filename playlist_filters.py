@@ -8,7 +8,9 @@ held to tests/fixtures/playlist_filter_cases.json.
 Filters (all optional; absent means "does not filter"; they combine with AND):
 
   liked                    bool, default True — hearted songs only, else every track
-  year_from, year_to       release year range, inclusive
+  decades                  any of these release decades, as their first year (1970 = 1970s)
+  year_from, year_to       release year range, inclusive (older playlists; the form now
+                           picks decades)
   genres                   any of these genres
   pepe_min, jenni_min      minimum stars, 0.5–5 in halves
   rating_mode              "and" | "or" — only kept when both minimums are set
@@ -106,6 +108,18 @@ def _names(field, v):
     return sorted(out, key=str.lower)
 
 
+def _decades(v):
+    if not isinstance(v, (list, tuple)):
+        v = [v]
+    out = set()
+    for x in v:
+        d = _year("decades", x)
+        if d % 10:
+            raise FilterError("decades", "must be the first year of a decade, like 1970")
+        out.add(d)
+    return sorted(out)
+
+
 def _ordered(lo, hi):
     return (hi, lo) if lo is not None and hi is not None and lo > hi else (lo, hi)
 
@@ -128,6 +142,8 @@ def normalize_filters(raw):
         f["year_from"] = lo
     if hi is not None:
         f["year_to"] = hi
+    if not _blank(raw.get("decades")):
+        f["decades"] = _decades(raw["decades"])
 
     for field in ("genres", "places"):
         if not _blank(raw.get(field)):
@@ -171,7 +187,7 @@ def normalize_filters(raw):
 
 def filter_key(filters):
     """A string equal for every filter set that selects the same records."""
-    keyed = {k: ([x.lower() for x in v] if isinstance(v, list) else v)
+    keyed = {k: ([x.lower() if isinstance(x, str) else x for x in v] if isinstance(v, list) else v)
              for k, v in filters.items()}
     return json.dumps(keyed, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -186,10 +202,16 @@ def _span(lo, hi):
     return f"≥{lo}" if lo is not None else f"≤{hi}"
 
 
+def decade_names(decades):
+    return [f"{d}s" for d in decades]
+
+
 def _parts(f):
     out = []
     if f.get("genres"):
         out.append(", ".join(f["genres"]))
+    if f.get("decades"):
+        out.append(", ".join(decade_names(f["decades"])))
     if "year_from" in f or "year_to" in f:
         out.append(_span(f.get("year_from"), f.get("year_to")))
     ratings = []
@@ -249,6 +271,10 @@ def _matches(r, f):
     if "year_from" in f or "year_to" in f:
         y = record_year(r.get("year"))
         if y is None or y < f.get("year_from", y) or y > f.get("year_to", y):
+            return False
+    if f.get("decades"):
+        y = record_year(r.get("year"))
+        if y is None or y // 10 * 10 not in f["decades"]:
             return False
     if f.get("genres") and _fold(r.get("genre")) not in {g.lower() for g in f["genres"]}:
         return False

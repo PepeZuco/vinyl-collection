@@ -49,7 +49,16 @@ def test_key_does_not_care_about_number_spelling():
            pf.filter_key(pf.normalize_filters({"year_from": 1970, "pepe_min": 4.0}))
 
 
+def test_decades_are_sorted_unique_years():
+    assert pf.normalize_filters({"decades": ["1980", 1960, 1960]})["decades"] == [1960, 1980]
+    assert "decades" not in pf.normalize_filters({"decades": []})
+    assert pf.filter_key(pf.normalize_filters({"decades": [1980, 1960]})) == \
+           pf.filter_key(pf.normalize_filters({"decades": ["1960", "1980"]}))
+
+
 @pytest.mark.parametrize("raw, field", [
+    ({"decades": [1975]}, "decades"),
+    ({"decades": ["sixties"]}, "decades"),
     ({"year_from": "seventies"}, "year_from"),
     ({"year_to": 99}, "year_to"),
     ({"pepe_min": 6}, "pepe_min"),

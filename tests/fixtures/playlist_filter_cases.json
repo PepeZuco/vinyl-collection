@@ -34,7 +34,11 @@
     {"why": "a record without the flag counts as owned", "filters": {}, "record": {}, "match": true},
     {"why": "wishlist keeps wishlist records", "filters": {"owned": "wishlist"}, "record": {"have_it": false}, "match": true},
     {"why": "wishlist drops owned records", "filters": {"owned": "wishlist"}, "record": {"have_it": true}, "match": false},
-    {"why": "all keeps owned and wishlist", "filters": {"owned": "all"}, "record": {"have_it": false}, "match": true}
+    {"why": "all keeps owned and wishlist", "filters": {"owned": "all"}, "record": {"have_it": false}, "match": true},
+    {"why": "decades pick any of the listed decades", "filters": {"decades": [1960, 1980]}, "record": {"year": "1984"}, "match": true},
+    {"why": "a decade between picked ones is left out", "filters": {"decades": [1960, 1980]}, "record": {"year": "1975"}, "match": false},
+    {"why": "decades read the year inside the text", "filters": {"decades": ["1970"]}, "record": {"year": "c.1979"}, "match": true},
+    {"why": "decades skip a record without a year", "filters": {"decades": [1970]}, "record": {"year": ""}, "match": false}
   ],
   "names": [
     {"filters": {"liked": true}, "name": "Zucoloto Vinyl — Liked"},
@@ -50,6 +54,7 @@
     {"filters": {"liked": true, "source": "albums"}, "name": "Zucoloto Vinyl — Liked"},
     {"filters": {"liked": false, "owned": "wishlist"}, "name": "Zucoloto Vinyl · wishlist"},
     {"filters": {"liked": true, "owned": "all"}, "name": "Zucoloto Vinyl — Liked · + wishlist"},
-    {"filters": {"liked": true, "owned": "owned"}, "name": "Zucoloto Vinyl — Liked"}
+    {"filters": {"liked": true, "owned": "owned"}, "name": "Zucoloto Vinyl — Liked"},
+    {"filters": {"liked": false, "decades": [1980, 1960, 1960], "genres": ["Jazz"]}, "name": "Zucoloto Vinyl · Jazz · 1960s, 1980s"}
   ]
 }

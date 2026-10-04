@@ -219,13 +219,13 @@ test('a synced playlist links to Spotify and shows its cover', async () => {
 
 test('each filter gets its own chip, and only the first draw pops in', async () => {
   const PICKY = Object.assign({}, LIKED, { id: 3, filters: { liked: true, genres: ['Jazz', 'Rock'],
-    year_from: 1970, year_to: 1979, pepe_min: 4, jenni_min: 3.5, rating_mode: 'or',
+    decades: [1960, 1970], pepe_min: 4, jenni_min: 3.5, rating_mode: 'or',
     places: ['Shop'], source: 'all' } });
   const { win, doc } = await openPanel({ saved: [PICKY] });
   try {
     const tags = () => row(doc, 3).querySelectorAll('.pl-tag');
     assert.deepStrictEqual([...tags()].map(e => e.textContent),
-      ['liked songs', '+ compilations', 'Jazz', 'Rock', '1970–1979', 'Pepe ≥ 4 or Jenni ≥ 3.5', 'Shop']);
+      ['liked songs', '+ compilations', 'Jazz', 'Rock', '1960s, 1970s', 'Pepe ≥ 4 or Jenni ≥ 3.5', 'Shop']);
     assert.ok(row(doc, 3).querySelector('.playlist-tags.enter'));
     // cover, name and the Spotify logo — no separate "open" text link
     assert.strictEqual(row(doc, 3).querySelectorAll('a[href]').length, 3);
@@ -259,29 +259,39 @@ test('the form previews the match count and the name as filters change', async (
     assert.match(doc.getElementById('plCount').textContent, /^1 record matches/);
     assert.strictEqual(doc.getElementById('plName').value, 'Zucoloto Vinyl · Jazz');
 
-    const from = doc.querySelector('select[data-field="year_from"]');
-    from.value = '2000';
-    win.__peek('playlistFormInput')(from);
+    const seventies = doc.querySelector('input[data-field="decades"][value="1970"]');
+    seventies.checked = true;
+    win.__peek('playlistDecadeToggle')(seventies);
     assert.ok(doc.getElementById('plCount').classList.contains('warn'), '0 matches is not flagged');
     assert.strictEqual(doc.querySelectorAll('#plMatches .pl-match').length, 0);
   } finally { win.close(); }
 });
 
-test('the year field picks whole decades', async () => {
+test('the decade field picks any set of decades, not a range', async () => {
   const { win, doc } = await openPanel({ saved: [EVERY], records: RECS });
   try {
     const every = doc.querySelector('input[name="plLiked"][value="0"]');
     every.checked = true;
     win.__peek('playlistFormInput')(every);
     assert.strictEqual(doc.querySelectorAll('#plMatches .pl-match').length, 2);
-    const to = doc.querySelector('select[data-field="year_to"]');
-    assert.ok([...to.options].some(o => o.value === '1979' && o.textContent === '1970s'));
-    to.value = '1979';
-    win.__peek('playlistFormInput')(to);
+    const pill = d => doc.querySelector(`input[data-field="decades"][value="${d}"]`);
+    assert.strictEqual(pill(1970).parentElement.textContent.trim(), '70s');
+    const toggle = (d, on) => { pill(d).checked = on; win.__peek('playlistDecadeToggle')(pill(d)); };
+
+    toggle(1970, true);
     assert.match(doc.getElementById('plCount').textContent, /^1 record matches/);
     const shown = doc.querySelectorAll('#plMatches .pl-match');
     assert.strictEqual(shown.length, 1);
     assert.match(shown[0].textContent, /1973/);
+    assert.strictEqual(doc.getElementById('plName').value, 'Zucoloto Vinyl · 1970s');
+
+    // The 80s sit between them but stay out; the 90s add the 1991 record.
+    toggle(1990, true);
+    assert.match(doc.getElementById('plCount').textContent, /^2 records match/);
+    assert.strictEqual(doc.getElementById('plName').value, 'Zucoloto Vinyl · 1970s, 1990s');
+    toggle(1970, false);
+    assert.match(doc.getElementById('plCount').textContent, /^1 record matches/);
+    assert.match(doc.querySelector('#plMatches .pl-match').textContent, /1991/);
   } finally { win.close(); }
 });
 
@@ -391,15 +401,15 @@ test('create stays locked while no record matches', async () => {
   try {
     const create = doc.getElementById('plCreate');
     assert.ok(!create.disabled);
-    const from = doc.querySelector('select[data-field="year_from"]');
-    from.value = '2000';
-    win.__peek('playlistFormInput')(from);
+    const noughties = doc.querySelector('input[data-field="decades"][value="2000"]');
+    noughties.checked = true;
+    win.__peek('playlistDecadeToggle')(noughties);
     assert.ok(create.disabled, 'create is clickable with 0 matches');
     press(win, create);
     await settle();
     assert.deepStrictEqual(posted, []);
-    from.value = '';
-    win.__peek('playlistFormInput')(from);
+    noughties.checked = false;
+    win.__peek('playlistDecadeToggle')(noughties);
     assert.ok(!create.disabled, 'create stayed locked once records matched again');
   } finally { win.close(); }
 });

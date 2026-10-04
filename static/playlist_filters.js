@@ -38,6 +38,15 @@ const VinylPlaylistFilters = (function () {
     return parseInt(v, 10);
   }
 
+  function decades(v) {
+    const out = new Set();
+    for (const x of (Array.isArray(v) ? v : [v])) {
+      const d = year(x);
+      if (d !== null && d % 10 === 0) out.add(d);
+    }
+    return [...out].sort((a, b) => a - b);
+  }
+
   function stars(v) {
     if (blank(v)) return null;
     const s = Number(v);
@@ -61,6 +70,8 @@ const VinylPlaylistFilters = (function () {
     const [yf, yt] = ordered(year(raw.year_from), year(raw.year_to));
     if (yf !== null) f.year_from = yf;
     if (yt !== null) f.year_to = yt;
+    const ds = decades(raw.decades);
+    if (ds.length) f.decades = ds;
     for (const k of ['genres', 'places']) {
       if (!blank(raw[k])) {
         const l = names(raw[k]);
@@ -98,6 +109,10 @@ const VinylPlaylistFilters = (function () {
       if (y === null) return false;
       if ('year_from' in f && y < f.year_from) return false;
       if ('year_to' in f && y > f.year_to) return false;
+    }
+    if (f.decades) {
+      const y = recordYear(r.year);
+      if (y === null || !f.decades.includes(Math.floor(y / 10) * 10)) return false;
     }
     if (f.genres && !f.genres.some(g => g.toLowerCase() === fold(r.genre))) return false;
     const checks = [];
@@ -142,6 +157,7 @@ const VinylPlaylistFilters = (function () {
   function parts(f) {
     const out = [];
     if (f.genres) out.push(f.genres.join(', '));
+    if (f.decades) out.push(f.decades.map(d => d + 's').join(', '));
     if ('year_from' in f || 'year_to' in f) out.push(span(f.year_from, f.year_to));
     const r = [];
     if ('pepe_min' in f) r.push('Pepe ≥' + num(f.pepe_min));

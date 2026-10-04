@@ -74,8 +74,11 @@ def rows(filters):
     out = []
     if f.get("genres"):
         out.append(("genre", [f["genres"]]))
+    years = [[f"{d}s" for d in f["decades"]]] if f.get("decades") else []
     if "year_from" in f or "year_to" in f:
-        out.append(("year", [_span(f.get("year_from"), f.get("year_to"))]))
+        years.append(_span(f.get("year_from"), f.get("year_to")))
+    if years:
+        out.append(("year", years))
     ratings = []
     if "pepe_min" in f:
         ratings.append(f"Pepe ≥{_num(f['pepe_min'])}")

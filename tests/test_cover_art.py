@@ -52,6 +52,7 @@ def test_a_year_range_and_a_single_year():
     assert dict(rows({"year_from": 1970, "year_to": 1979}))["year"] == ["1970–1979"]
     assert dict(rows({"year_from": 1970, "year_to": 1970}))["year"] == ["1970"]
     assert dict(rows({"year_from": 1970}))["year"] == ["≥1970"]
+    assert dict(rows({"decades": [1960, 1980]}))["year"] == [["1960s", "1980s"]]
 
 
 def test_both_ratings_take_a_line_each():

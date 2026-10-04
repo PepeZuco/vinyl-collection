@@ -2418,7 +2418,7 @@ select option{background:var(--surface);color:var(--text)}
 .pl-seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:1px}
 .pl-seg .ti-heart-filled{color:var(--ev-liked)}
 .pl-seg.sm label{padding:3px 9px;font-size:11px}
-.pl-decade{width:auto}
+.pl-decades{flex-wrap:wrap;flex:0 1 auto;border-radius:16px}
 .pl-rate{display:inline-flex;align-items:center;gap:6px}
 .pl-rate .ti{color:var(--accent)}
 .pl-name{flex:1 1 160px}
@@ -10541,7 +10541,7 @@ function setPlaylistBusy(busy){
 }
 
 function blankPlaylistForm(){
-  return {liked: true, year_from: '', year_to: '', genres: [], pepe_min: '', jenni_min: '',
+  return {liked: true, decades: [], genres: [], pepe_min: '', jenni_min: '',
           rating_mode: 'and', places: [], bought_from: '', bought_to: '', source: 'albums', owned: 'owned', name: '', nameTouched: false};
 }
 let playlistForm = blankPlaylistForm();
@@ -10749,6 +10749,7 @@ function renderPlaylistForm(){
   const el=document.getElementById('playlistFormBody');
   if(!el)return;
   const f=playlistForm;
+  if(f.decades&&f.decades.length)chip('ti-calendar',f.decades.map(d=>d+'s').join(', '));
   const chips=(field,choices)=>{
     const taken=new Set(f[field].map(x=>x.toLowerCase()));
     const left=choices.filter(c=>!taken.has(c.toLowerCase()));
@@ -10759,9 +10760,10 @@ function renderPlaylistForm(){
         </select>`:'');
   };
   const decades=playlistDecades();
-  const decade=(field,ph,end)=>`<select class="pl-decade" data-field="${field}" onchange="playlistFormInput(this)">
-      <option value="">${ph}</option>${decades.map(d=>{const v=String(d+end);
-        return `<option value="${v}" ${String(f[field])===v?'selected':''}>${d}s</option>`;}).join('')}</select>`;
+  const decadeLabel=d=>decades.some(o=>o!==d&&o%100===d%100)?d+'s':String(d).slice(2)+'s';
+  const decadePills=()=>`<span class="pl-seg pl-decades">${decades.map(d=>`<label title="${d}s">
+      <input type="checkbox" data-field="decades" value="${d}" ${f.decades.includes(d)?'checked':''}
+      onchange="playlistDecadeToggle(this)">${decadeLabel(d)}</label>`).join('')}</span>`;
   const stars=field=>`<select data-field="${field}" onchange="playlistFormInput(this)">
       <option value="">–</option>${[1,2,3,4,5,6,7,8,9,10].map(i=>{const v=String(i/2);
         return `<option value="${v}" ${String(f[field])===v?'selected':''}>${v}</option>`;}).join('')}</select>`;
@@ -10776,9 +10778,9 @@ function renderPlaylistForm(){
     <div class="pl-field">${label('ti-brand-spotify','from')}<span class="pl-seg">
       ${radio('plSource','source','albums','albums',f.source==='albums','ti-vinyl')}${radio('plSource','source','compilations','compilations',f.source==='compilations','ti-playlist')}${radio('plSource','source','all','both',f.source==='all')}</span></div>
     <div class="pl-field">${label('ti-books','records')}<span class="pl-seg">
+  // "70s" reads best; the full "1970s" only where two centuries would share a label.
       ${radio('plOwned','owned','owned','owned',f.owned==='owned','ti-check')}${radio('plOwned','owned','wishlist','wishlist',f.owned==='wishlist','ti-heart-plus')}${radio('plOwned','owned','all','both',f.owned==='all')}</span></div>
-    <div class="pl-field">${label('ti-calendar','decade')}
-      ${decade('year_from','any',0)} <span class="pl-sep">to</span> ${decade('year_to','any',9)}</div>
+    <div class="pl-field">${label('ti-calendar','decade')}${decadePills()}</div>
     <div class="pl-field">${label('ti-tag','genre')}${chips('genres',playlistChoices.genres)}</div>
     <div class="pl-field">${label('ti-star','rating')}<span class="pl-rate">Pepe ≥ ${stars('pepe_min')}</span>
       <span class="pl-mode pl-seg sm" id="plMode">${radio('plMode','rating_mode','and','and',f.rating_mode!=='or')}${radio('plMode','rating_mode','or','or',f.rating_mode==='or')}</span>
@@ -10797,8 +10799,8 @@ function renderPlaylistForm(){
   updatePlaylistPreview();
 }
 
-// Decade starts from the oldest record in the collection up to this decade;
-// the from/to pickers send 1970 and 1979 for "1970s", so the filters stay years.
+// Decades from the oldest record in the collection up to this one, each sent
+// as its first year (1970 for the 1970s). None picked means any decade.
 function playlistDecades(){
   const years=(records||[]).map(r=>parseInt(/\d{4}/.exec(String(r&&r.year||''))||'',10)).filter(Number.isFinite);
   const now=Math.floor(new Date().getFullYear()/10)*10;
@@ -10810,7 +10812,7 @@ function playlistDecades(){
 
 function playlistFilters(){
   const f=playlistForm;
-  return VinylPlaylistFilters.normalize({liked:f.liked,year_from:f.year_from,year_to:f.year_to,
+  return VinylPlaylistFilters.normalize({liked:f.liked,decades:f.decades,
     genres:f.genres,pepe_min:f.pepe_min,jenni_min:f.jenni_min,rating_mode:f.rating_mode,
     places:f.places,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source,owned:f.owned});
 }
@@ -10901,6 +10903,14 @@ async function createPlaylist(){
   try{
     const r=await fetch('/api/spotify/playlists',{method:'POST',
       headers:{'Content-Type':'application/json'},
+// Toggled in place, like the radios, so the pill keeps focus.
+function playlistDecadeToggle(box){
+  const d=Number(box.value);
+  const left=playlistForm.decades.filter(x=>x!==d);
+  playlistForm.decades=box.checked?left.concat(d):left;
+  updatePlaylistPreview();
+}
+
       body:JSON.stringify({filters:playlistFilters(),name:playlistForm.name})});
     d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
