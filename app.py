@@ -2322,6 +2322,89 @@ def spotify_delete_playlist(pid):
     db.session.commit()
     return jsonify({"ok": True})
 
+# ── spotify playlist → wishlist ───────────────────────────────────────────────
+# The admin page's tool: read one of the owner's playlists, name each song's
+# studio album, and offer the albums for the wishlist. Split in two routes
+# because the MusicBrainz half is throttled to a call a second — a big
+# playlist cannot be resolved inside gunicorn's 120 s, so the browser feeds
+# the albums back to /resolve in chunks (see RESOLVE_CHUNK).
+
+PLAYLIST_SCAN_CAP = 500
+
+
+def _album_key(artist, album):
+    return f"{scan._normalise(artist)}|{scan._normalise(album)}"
+
+
+@app.route("/api/spotify/me/playlists")
+@require_auth
+def spotify_my_playlists():
+    acct = _spotify_account()
+    if not acct or not acct.refresh_token:
+        return _not_connected()
+    try:
+        return jsonify({"playlists": spotify_sync.user_playlists(_spotify_client(acct))})
+    except spotify_sync.NotConnected:
+        return _login_expired(acct)
+    except (spotify_sync.SpotifyError, requests.RequestException) as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/spotify/wishlist-scan", methods=["POST"])
+@require_auth
+def spotify_wishlist_scan():
+    d = request.get_json(silent=True) or {}
+    playlist_id = str(d.get("playlist_id") or "").strip()
+    if not playlist_id:
+        return jsonify({"error": "pick a playlist first"}), 400
+    acct = _spotify_account()
+    if not acct or not acct.refresh_token:
+        return _not_connected()
+
+    spent = []
+    try:
+        try:
+            tracks, truncated = spotify_sync.playlist_tracks(
+                _spotify_client(acct), playlist_id, cap=PLAYLIST_SCAN_CAP)
+        except spotify_sync.NotConnected:
+            return _login_expired(acct)
+        except (spotify_sync.SpotifyError, requests.RequestException) as e:
+            return jsonify({"error": str(e)}), 502
+
+        identified = scan.identify_albums(tracks, usage_out=spent)
+
+        albums, by_key, unplaced = [], {}, 0
+        for track, found in zip(tracks, identified):
+            if not found.get("album"):
+                unplaced += 1
+                continue
+            key = _album_key(found["artist"], found["album"])
+            row = by_key.get(key)
+            if row is None:
+                row = by_key[key] = {
+                    "key": key, "artist": found["artist"], "album_name": found["album"],
+                    "year": found.get("year"), "songs": [],
+                    "spotify_image": track.get("image_url") or "",
+                    "unverified": bool(found.get("unverified")),
+                    "duplicate_of": None, "have_it": None}
+                albums.append(row)
+            row["songs"].append(track["title"])
+
+        owned = {r.id: r.have_it for r in Record.query.with_entities(Record.id, Record.have_it)}
+        existing = [{"id": r.id, "artist": r.artist or "", "album_name": r.album_name or ""}
+                    for r in Record.query.with_entities(Record.id, Record.artist, Record.album_name)]
+        for row in albums:
+            dup = _search_duplicate({"credited": row["artist"], "album_name": row["album_name"]},
+                                    existing)
+            if dup:
+                row["duplicate_of"] = dup
+                row["have_it"] = bool(owned.get(dup["id"]))
+
+        return jsonify({"albums": albums, "truncated": truncated,
+                        "unplaced": unplaced, "song_count": len(tracks)})
+    finally:
+        _record_scan_spend("playlist", spent)
+
 # ── daily backups ─────────────────────────────────────────────────────────────
 
 @app.route("/api/backups")
