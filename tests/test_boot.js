@@ -569,6 +569,27 @@ test('editing an existing record fills the form from it', async () => {
   assert.strictEqual($(doc, '#fArtist').value, rec.artist);
 });
 
+test('the genre dropdown offers the whole genre list, not just the genres on the shelf', async () => {
+  const { win, doc, read } = await boot();
+  win.openAdd();
+  const offered = [...doc.querySelectorAll('#fGenre option')].map(o => o.value).filter(Boolean);
+  assert.deepStrictEqual(offered, JSON.parse(read('JSON.stringify(GENRES)')));
+  assert.strictEqual(offered.length, 19);
+  assert.ok(offered.includes('Salsa'), 'a genre no fixture record has is still offered');
+  assert.ok(!offered.includes('MPB & Samba'));
+});
+
+test('editing a record still on a retired genre shows that genre, not a blank', async () => {
+  const { win, doc, read } = await boot();
+  const rec = RECORDS.find(r => r.have_it);
+  read(`records.find(r => r.id === ${rec.id}).genre = 'MPB & Samba'`);
+  win.openEdit(rec.id);
+  assert.strictEqual($(doc, '#fGenre').value, 'MPB & Samba');
+  win.openAdd();
+  const offered = [...doc.querySelectorAll('#fGenre option')].map(o => o.value);
+  assert.ok(!offered.includes('MPB & Samba'), 'the retired genre leaked into the add form');
+});
+
 test('an untouched edit form is not dirty, so it will not nag on close', async () => {
   const { win } = await boot();
   win.openEdit(RECORDS.find(r => r.have_it).id);
