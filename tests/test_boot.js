@@ -3421,12 +3421,12 @@ test('the tour walks every step across collection, playlists and readme', async 
     assert.strictEqual(read('currentTab'), step.tab, `step ${step.id} is not on its tab`);
     press(win, $(doc, '#tourNext'));
   }
-  assert.deepStrictEqual(seen, read('VinylTour.STEPS.map(s => s.id)'));
+  assert.deepStrictEqual(seen, JSON.parse(read('JSON.stringify(VinylTour.STEPS.map(s => s.id))')));
   assert.strictEqual($(doc, '#tourLayer').hidden, true, 'done did not close the tour');
   assert.strictEqual(read('currentTab'), 'collection');
 });
 
-test('back returns to the step before, across a tab change', async () => {
+test('tour: back returns to the step before, across a tab change', async () => {
   const { win, doc, read } = await boot();
   tourBoot(win);
   press(win, $(doc, '#tourBtn'));
@@ -3436,7 +3436,7 @@ test('back returns to the step before, across a tab change', async () => {
   assert.strictEqual(read('currentTab'), 'collection');
 });
 
-test('a step whose target is not on screen is skipped', async () => {
+test('tour: a step whose target is not on screen is skipped', async () => {
   const { win, doc, read } = await boot();
   tourBoot(win);
   const real = win.Element.prototype.getClientRects;
