@@ -3396,3 +3396,94 @@ const tabIcons = (doc, pane) => DETAIL_TABS.map(id => {
     });
   });
 });
+
+// ── the guided tour ─────────────────────────────────────────────────────────
+/* jsdom lays nothing out, so getClientRects is empty for every element and the
+ * tour would skip each lit step as "not on screen". A box for everything is
+ * what a browser reports for the visible ones; the tests that care about a
+ * hidden target say so themselves. */
+function tourBoot(win) {
+  win.Element.prototype.getClientRects = () => [{}];
+}
+
+test('the tour walks every step across collection, playlists and readme', async () => {
+  const { win, doc, read } = await boot();
+  tourBoot(win);
+  press(win, $(doc, '#tourBtn'));
+  assert.strictEqual($(doc, '#tourLayer').hidden, false, 'the tour did not open');
+  const owned = RECORDS.filter(r => r.have_it).length;
+  assert.match($(doc, '#tourText').textContent, new RegExp('^' + owned + ' records'));
+
+  const seen = [];
+  for (let i = 0; i < 20 && read('tourAt') !== -1; i++) {
+    const step = read('VinylTour.STEPS[tourAt]');
+    seen.push(step.id);
+    assert.strictEqual(read('currentTab'), step.tab, `step ${step.id} is not on its tab`);
+    press(win, $(doc, '#tourNext'));
+  }
+  assert.deepStrictEqual(seen, read('VinylTour.STEPS.map(s => s.id)'));
+  assert.strictEqual($(doc, '#tourLayer').hidden, true, 'done did not close the tour');
+  assert.strictEqual(read('currentTab'), 'collection');
+});
+
+test('back returns to the step before, across a tab change', async () => {
+  const { win, doc, read } = await boot();
+  tourBoot(win);
+  press(win, $(doc, '#tourBtn'));
+  while (read('VinylTour.STEPS[tourAt].id') !== 'playlists') press(win, $(doc, '#tourNext'));
+  press(win, $(doc, '#tourBack'));
+  assert.strictEqual(read('VinylTour.STEPS[tourAt].id'), 'record');
+  assert.strictEqual(read('currentTab'), 'collection');
+});
+
+test('a step whose target is not on screen is skipped', async () => {
+  const { win, doc, read } = await boot();
+  tourBoot(win);
+  const real = win.Element.prototype.getClientRects;
+  win.Element.prototype.getClientRects = function () {
+    return this.id === 'randomBtn' ? [] : real.call(this);
+  };
+  press(win, $(doc, '#tourBtn'));
+  while (read('VinylTour.STEPS[tourAt].id') !== 'arrange') press(win, $(doc, '#tourNext'));
+  press(win, $(doc, '#tourNext'));
+  assert.strictEqual(read('VinylTour.STEPS[tourAt].id'), 'record');
+});
+
+test('Escape leaves the tour, back on the tab it started from, and goes no further', async () => {
+  const { win, doc, read } = await boot();
+  tourBoot(win);
+  win.switchTab('stats');
+  press(win, $(doc, '#tourBtn'));
+  while (read('VinylTour.STEPS[tourAt].id') !== 'claude') press(win, $(doc, '#tourNext'));
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.strictEqual($(doc, '#tourLayer').hidden, true, 'Escape did not close the tour');
+  assert.strictEqual(read('tourAt'), -1);
+  assert.strictEqual(read('currentTab'), 'stats');
+});
+
+test('the owner in edit mode is not offered the tour', async () => {
+  const { doc } = await boot();
+  assert.ok($(doc, '#tourOffer').classList.contains('hidden'));
+});
+
+test('a first-time visitor is offered the tour once, and no thanks is remembered', async () => {
+  const { win, doc, read } = await boot();
+  read('setAuthed(false)');
+  read('maybeOfferTour()');
+  assert.ok(!$(doc, '#tourOffer').classList.contains('hidden'), 'no offer for a new visitor');
+  press(win, [...doc.querySelectorAll('#tourOffer button')].find(b => /no thanks/.test(b.textContent)));
+  assert.ok($(doc, '#tourOffer').classList.contains('hidden'));
+  read('maybeOfferTour()');
+  assert.ok($(doc, '#tourOffer').classList.contains('hidden'), 'offered again after no thanks');
+});
+
+test('take the tour from the offer starts it', async () => {
+  const { win, doc, read } = await boot();
+  tourBoot(win);
+  read('setAuthed(false)');
+  read('maybeOfferTour()');
+  press(win, [...doc.querySelectorAll('#tourOffer button')].find(b => /take the tour/.test(b.textContent)));
+  assert.ok($(doc, '#tourOffer').classList.contains('hidden'));
+  assert.strictEqual($(doc, '#tourLayer').hidden, false);
+  assert.strictEqual(read('VinylTour.STEPS[tourAt].id'), 'welcome');
+});

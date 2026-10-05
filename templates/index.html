@@ -2072,6 +2072,48 @@ select option{background:var(--surface);color:var(--text)}
   .app{padding-bottom:calc(90px + env(safe-area-inset-bottom, 0px))}
 }
 
+/* ── guided tour ───────────────────────────────────────────────────────────
+   One box over the step's target whose huge box-shadow is the dimmed page, so
+   the lit area is just the hole in it. #tourCatch sits under it and swallows
+   clicks: the page underneath is for looking at during the tour, not using,
+   or a stray tap could open a record and leave the tour pointing at nothing.
+   The steps and the placement maths are in static/tour.js. */
+.tour-layer{position:fixed;inset:0;z-index:350}
+.tour-layer[hidden]{display:none}
+.tour-catch{position:absolute;inset:0}
+.tour-spot{position:fixed;border-radius:8px;pointer-events:none;
+  box-shadow:0 0 0 2px var(--accent),0 0 0 9999px rgba(0,0,0,.66);
+  transition:top .28s ease,left .28s ease,width .28s ease,height .28s ease}
+.tour-spot.none{box-shadow:0 0 0 9999px rgba(0,0,0,.66)}
+.tour-card{position:fixed;width:min(340px,calc(100vw - 24px));background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:10px;padding:16px 16px 12px;
+  box-shadow:0 18px 50px rgba(0,0,0,.45);font-family:var(--font);
+  transition:top .28s ease,left .28s ease,opacity .2s ease}
+.tour-card:focus{outline:none}
+.tour-progress{height:3px;border-radius:2px;background:var(--border);overflow:hidden;margin-bottom:12px}
+.tour-progress span{display:block;height:100%;background:var(--accent);transition:width .28s ease}
+.tour-card h3{margin:0 0 6px;font-size:15px;font-weight:700;letter-spacing:-.01em}
+.tour-card p{margin:0;font-size:13px;line-height:1.55;color:var(--label)}
+.tour-foot{display:flex;align-items:center;gap:6px;margin-top:14px}
+.tour-foot .spacer{flex:1}
+.tour-offer{position:fixed;right:20px;bottom:20px;z-index:340;width:min(320px,calc(100vw - 32px));
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;
+  padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.4);font-family:var(--font);
+  display:flex;flex-direction:column;gap:10px;animation:tour-in .3s ease both}
+.tour-offer.hidden{display:none}
+.tour-offer b{font-size:14px}
+.tour-offer p{margin:0;font-size:12.5px;line-height:1.5;color:var(--label)}
+.tour-offer .tour-foot{margin-top:0;justify-content:flex-end}
+@keyframes tour-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media(max-width:760px){
+  /* above the 58px tab bar and whatever the device reserves under it */
+  .tour-offer{left:16px;right:16px;width:auto;bottom:calc(74px + env(safe-area-inset-bottom, 0px))}
+}
+@media (prefers-reduced-motion:reduce){
+  .tour-spot,.tour-card,.tour-progress span{transition:none}
+  .tour-offer{animation:none}
+}
+
 /* mobile bottom tab bar — replaces the top nav-tabs */
 .mobile-tabbar{display:none}
 @media(max-width:760px){
@@ -3317,6 +3359,7 @@ select option{background:var(--surface);color:var(--text)}
       <span class="record-count" id="recordCount"></span>
     </div>
     <div class="header-right">
+      <button class="btn btn-icon" id="tourBtn" title="take the tour" aria-label="take the tour" onclick="startTour()"><i class="ti ti-help"></i></button>
       <button class="btn theme-btn btn-icon" id="themeBtn" title="Toggle theme">☀</button>
       <div class="auth-badge" id="authBadge" style="display:none"><i class="ti ti-lock"></i><span>visitor</span></div>
       <div class="more-menu" id="moreMenu">
@@ -3714,6 +3757,32 @@ select option{background:var(--surface);color:var(--text)}
     </div>
   </div>
 </nav>
+
+<!-- guided tour: the spotlight and its card, and the one-time offer to a
+     first-time visitor. Driven by the tour script below; steps in static/tour.js. -->
+<div class="tour-layer" id="tourLayer" hidden>
+  <div class="tour-catch" id="tourCatch"></div>
+  <div class="tour-spot" id="tourSpot"></div>
+  <div class="tour-card" id="tourCard" role="dialog" aria-modal="true" aria-labelledby="tourTitle" aria-describedby="tourText" tabindex="-1">
+    <div class="tour-progress"><span id="tourProgress"></span></div>
+    <h3 id="tourTitle"></h3>
+    <p id="tourText"></p>
+    <div class="tour-foot">
+      <button class="btn btn-ghost btn-sm" onclick="endTour()">skip</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="tourBack" onclick="tourGo(-1)">back</button>
+      <button class="btn btn-primary btn-sm" id="tourNext" onclick="tourGo(1)">next</button>
+    </div>
+  </div>
+</div>
+<div class="tour-offer hidden" id="tourOffer" role="dialog" aria-labelledby="tourOfferTitle">
+  <b id="tourOfferTitle">First time here?</b>
+  <p>A one-minute tour of the collection, the Spotify playlists and the AI behind them.</p>
+  <div class="tour-foot">
+    <button class="btn btn-ghost btn-sm" onclick="dismissTourOffer()">no thanks</button>
+    <button class="btn btn-primary btn-sm" onclick="dismissTourOffer();startTour()">take the tour</button>
+  </div>
+</div>
 
 <!-- Detail modal -->
 <div class="overlay hidden" id="detailOverlay">
@@ -4477,6 +4546,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/scanstream.js"></script>
 <script src="/static/queue.js"></script>
 <script src="/static/idle-spotlight.js"></script>
+<script src="/static/tour.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 let records = [];
@@ -13868,7 +13938,7 @@ function idleShowing() { return !idleOverlayEl().classList.contains('hidden'); }
 // the user is busy, not idle — check back shortly rather than popping a
 // screensaver over whatever they're doing.
 function idleOtherOverlayOpen() {
-  return !!document.querySelector('.overlay:not(.hidden):not(#idleOverlay)');
+  return tourActive() || !!document.querySelector('.overlay:not(.hidden):not(#idleOverlay)');
 }
 
 // A real setTimeout/setInterval doubles as a Node Timeout in jsdom (the boot
@@ -14082,7 +14152,175 @@ document.addEventListener('focusin', e => {
   }
 })();
 
-init();
+// ── guided tour ────────────────────────────────────────────────────────────
+// A walk through the collection, the playlists and the readme, one lit element
+// at a time. The steps, which selector a step uses on a phone, the skipping
+// and the card placement come from tour.js; this is the DOM and timer side.
+const TOUR_GAP = 12;          // px between the lit target and the card, and the viewport edge
+const TOUR_PAD = 6;           // px of breathing room the spotlight adds around its target
+
+let tourAt = -1;              // index into VinylTour.STEPS, -1 when the tour is down
+let tourFrom = 'collection';  // the tab to hand back on skip
+let tourRaf = 0;
+let tourObserver = null;
+
+function tourActive() { return tourAt !== -1; }
+
+function tourTargetEl(step) {
+  const sel = VinylTour.targetOf(step, isPhone());
+  if (!sel) return null;
+  // A selector list (`.vcard, .list-row`) matches the first in document
+  // order, so whichever view is on the first record shown is the one lit.
+  const el = document.querySelector(sel);
+  return el && el.getClientRects().length ? el : null;
+}
+
+// A step on another tab can't be measured until that tab is up, so it counts
+// as available here and is checked again by tourShow once it has switched.
+function tourAvailable(step) {
+  if (step.tab && step.tab !== currentTab) return true;
+  return !VinylTour.targetOf(step, isPhone()) || !!tourTargetEl(step);
+}
+
+function startTour() {
+  if (tourActive()) return;
+  VinylTour.markSeen(safeLocalStorage());
+  document.getElementById('tourOffer').classList.add('hidden');
+  if (idleShowing()) closeIdleSpotlight();
+  document.getElementById('morePanel').classList.add('hidden');
+  closeMobileMore();
+  tourFrom = currentTab;
+  document.getElementById('tourLayer').hidden = false;
+  window.addEventListener('keydown', tourKeys, true);
+  window.addEventListener('resize', tourQueue);
+  window.addEventListener('scroll', tourQueue, true);
+  if (window.ResizeObserver) tourObserver = new ResizeObserver(tourQueue);
+  tourAt = -1;
+  tourGo(1);
+}
+
+function endTour(keepTab) {
+  if (!tourActive()) return;
+  tourAt = -1;
+  document.getElementById('tourLayer').hidden = true;
+  window.removeEventListener('keydown', tourKeys, true);
+  window.removeEventListener('resize', tourQueue);
+  window.removeEventListener('scroll', tourQueue, true);
+  if (tourObserver) { tourObserver.disconnect(); tourObserver = null; }
+  cancelAnimationFrame(tourRaf);
+  if (!keepTab && currentTab !== tourFrom) switchTab(tourFrom);
+  document.getElementById('tourBtn').focus();
+  scheduleIdleTimer();
+}
+
+function tourGo(dir) {
+  const from = tourAt;
+  const next = VinylTour.stepIndex(VinylTour.STEPS, from, dir, tourAvailable);
+  // Off the end forward is finishing; off the start backward is just a no-op.
+  if (next === -1) { if (dir > 0) endTour(true); return; }
+  tourShow(next, dir);
+}
+
+function tourShow(i, dir) {
+  const step = VinylTour.STEPS[i];
+  if (step.tab && step.tab !== currentTab) switchTab(step.tab);
+  const target = tourTargetEl(step);
+  // Its tab is up now and the target still isn't there (an empty shelf, a
+  // control this layout hides): carry on the way we were going.
+  if (VinylTour.targetOf(step, isPhone()) && !target) {
+    tourAt = i;
+    const next = VinylTour.stepIndex(VinylTour.STEPS, i, dir, tourAvailable);
+    if (next === -1) { if (dir > 0) endTour(true); else tourGo(1); return; }
+    return tourShow(next, dir);
+  }
+  tourAt = i;
+
+  const owned = records.filter(r => r.have_it).length;
+  document.getElementById('tourTitle').textContent = step.title;
+  document.getElementById('tourText').textContent = step.text.replace('{count}', owned);
+  document.getElementById('tourProgress').style.width = ((i + 1) / VinylTour.STEPS.length * 100) + '%';
+  const isFirst = VinylTour.stepIndex(VinylTour.STEPS, i, -1, tourAvailable) === -1;
+  const isLast = VinylTour.stepIndex(VinylTour.STEPS, i, 1, tourAvailable) === -1;
+  document.getElementById('tourBack').style.visibility = isFirst ? 'hidden' : '';
+  document.getElementById('tourNext').textContent = isLast ? 'done' : 'next';
+
+  if (tourObserver) { tourObserver.disconnect(); if (target) tourObserver.observe(target); }
+  if (target) {
+    const reduced = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+    target.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+  }
+  tourPlace();
+  document.getElementById('tourNext').focus({ preventScroll: true });
+}
+
+// Scroll, resize and a target changing size (the playlists arriving after
+// "loading…") all land here; one placement per frame is plenty.
+function tourQueue() {
+  if (!tourActive()) return;
+  cancelAnimationFrame(tourRaf);
+  tourRaf = requestAnimationFrame(tourPlace);
+}
+
+function tourPlace() {
+  if (!tourActive()) return;
+  const step = VinylTour.STEPS[tourAt];
+  const target = tourTargetEl(step);
+  const spot = document.getElementById('tourSpot');
+  const card = document.getElementById('tourCard');
+  const vp = { width: window.innerWidth, height: window.innerHeight };
+  let rect = null;
+  if (target) {
+    // Clipped to the viewport: a target taller than the screen (a whole
+    // playlist list) would otherwise light a box running off both edges.
+    const r = target.getBoundingClientRect();
+    const top = Math.max(r.top - TOUR_PAD, 4), left = Math.max(r.left - TOUR_PAD, 4);
+    const bottom = Math.min(r.bottom + TOUR_PAD, vp.height - 4), right = Math.min(r.right + TOUR_PAD, vp.width - 4);
+    rect = { top, left, width: Math.max(right - left, 0), height: Math.max(bottom - top, 0) };
+  }
+  spot.classList.toggle('none', !rect);
+  const box = rect || { top: vp.height / 2, left: vp.width / 2, width: 0, height: 0 };
+  Object.assign(spot.style, { top: box.top + 'px', left: box.left + 'px', width: box.width + 'px', height: box.height + 'px' });
+
+  const c = card.getBoundingClientRect();
+  const at = VinylTour.placePopover(rect, { width: c.width, height: c.height }, vp, TOUR_GAP);
+  card.style.top = at.top + 'px';
+  card.style.left = at.left + 'px';
+}
+
+// Capture phase on window, ahead of every document-level handler: while the
+// tour is up, Escape means "leave the tour" and the arrows mean "step", not
+// whatever the page underneath would make of them.
+function tourKeys(e) {
+  if (!tourActive()) return;
+  if (e.key === 'Escape') endTour();
+  else if (e.key === 'ArrowRight') tourGo(1);
+  else if (e.key === 'ArrowLeft') tourGo(-1);
+  else if (e.key === 'Tab') {
+    // Focus stays on the card's buttons; the page behind is inert.
+    const btns = [...document.querySelectorAll('#tourCard button')].filter(b => b.style.visibility !== 'hidden');
+    const at = btns.indexOf(document.activeElement);
+    const next = btns[(at + (e.shiftKey ? -1 : 1) + btns.length) % btns.length];
+    if (next) next.focus();
+  } else return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}
+
+function safeLocalStorage() {
+  try { return window.localStorage; } catch (e) { return null; }
+}
+
+function maybeOfferTour() {
+  if (!VinylTour.shouldOffer(safeLocalStorage(), { authed, hash: location.hash })) return;
+  document.getElementById('tourOffer').classList.remove('hidden');
+}
+
+function dismissTourOffer() {
+  VinylTour.markSeen(safeLocalStorage());
+  document.getElementById('tourOffer').classList.add('hidden');
+}
+
+init().then(maybeOfferTour);
 initIdleSpotlight();
 </script>
 </body>
