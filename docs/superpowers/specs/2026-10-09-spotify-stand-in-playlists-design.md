@@ -101,9 +101,9 @@ the Spotify message.
 
 ## 4. Description and cover
 
-- Description: `"{Artist} — {Album} ({year}) · {genre} · {Country} · bought at
-  {place} · vinyl stand-in, {n} of {m} songs found · Zucoloto vinyl
-  collection"`, empty parts left out, capped at 300 characters (Spotify's
+- Description: `"{Artist} — {Album} ({year}) · {genre} · {Country} · vinyl
+  stand-in, {n} of {m} songs found · Zucoloto vinyl collection"`, empty parts
+  left out (where the record was bought is never shown), capped at 300 characters (Spotify's
   limit). No newlines (Spotify rejects them).
 - Cover: the record's `cover_data` decoded, converted to RGB, resized to
   640×640 (centre-cropped square) and saved as JPEG with falling quality

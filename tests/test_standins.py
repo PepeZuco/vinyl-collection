@@ -159,7 +159,14 @@ def test_a_live_only_song_is_still_found():
 
 def test_the_description_names_the_record_and_skips_empty_parts():
     text = standins.description({"artist": "Elis Regina", "album_name": "Elis", "year": "1972",
-                                 "genre": "MPB", "country": "BR", "bought_where": ""}, 9, 12)
+                                 "genre": "MPB", "country": "", "bought_where": ""}, 9, 12)
+    assert text == ("Elis Regina — Elis (1972) · MPB · vinyl stand-in, 9 of 12 songs "
+                    "found · Zucoloto vinyl collection")
+
+
+def test_the_description_leaves_out_where_the_record_was_bought():
+    text = standins.description({"artist": "Elis Regina", "album_name": "Elis", "year": "1972",
+                                 "genre": "MPB", "country": "BR", "bought_where": "Shop"}, 9, 12)
     assert text == ("Elis Regina — Elis (1972) · MPB · BR · vinyl stand-in, 9 of 12 songs "
                     "found · Zucoloto vinyl collection")
 
@@ -348,7 +355,7 @@ def test_create_builds_the_playlist_with_the_records_cover_and_facts(client, spo
     assert spotify.playlists[pid]["uris"] == ["spotify:track:intro", "spotify:track:outro"]
     (body,) = spotify.created
     assert body["name"] == "Artist — Album" and body["public"] is False
-    assert body["description"].startswith("Artist — Album (1975) · MPB · BR · bought at Shop")
+    assert body["description"].startswith("Artist — Album (1975) · MPB · BR · vinyl stand-in")
     assert "2 of 2 songs found" in body["description"]
     content_type, data = spotify.covers[pid]
     assert content_type == "image/jpeg"

@@ -151,9 +151,7 @@ def description(record, found, total):
     year = _one_line(record.get("year"))
     if year:
         head += f" ({year})"
-    place = _one_line(record.get("bought_where"))
     parts = [head, _one_line(record.get("genre")), _one_line(record.get("country")),
-             f"bought at {place}" if place else "",
              f"vinyl stand-in, {found} of {total} songs found", "Zucoloto vinyl collection"]
     text = " · ".join(p for p in parts if p)
     if len(text) > MAX_DESCRIPTION:
