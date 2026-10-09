@@ -1146,6 +1146,14 @@ html{overflow-x:clip}
 .paint-hex:focus{outline:none;border-color:var(--accent)}
 .paint-reset{width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;
   flex:0 0 auto}
+/* "each disc its own color": the switch, then one row per disc in place of
+   the shared row, each led by its disc number */
+.paint-each{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
+  color:var(--label);margin-bottom:12px;cursor:pointer}
+.paint-each input{accent-color:var(--accent);margin:0}
+.paint-disc + .paint-disc{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.paint-disc-n{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);min-width:44px}
 
 /* ratings — segmented bars in each person's colour, mirroring .dm-rate in the
    detail drawer so a record reads the same in both views */
@@ -4492,7 +4500,12 @@ html{overflow-x:clip}
         <div class="form-section">
           <header><i class="ti ti-palette"></i> Paint the record</header>
           <div class="sec-body">
-            <div class="paint-row">
+            <label class="paint-each" id="fPaintEachWrap" style="display:none">
+              <input type="checkbox" id="fPaintEach" onchange="setFormPaintEach(this.checked)">
+              Each disc its own color
+            </label>
+            <div id="fPaintDiscs"></div>
+            <div class="paint-row" id="fPaintShared">
               <span class="disc" id="fPaintPreview" style="--d:34px"></span>
               <div class="paint-fields">
                 <label class="paint-field">
@@ -7374,6 +7387,9 @@ let formSize = '';
 // '' means unpainted — recVinylColor/recLabelColor render that as black/white.
 let formVinylColor = '';
 let formLabelColor = '';
+// One {vinyl, label} per disc when "each disc its own color" is on; [] while
+// every disc shares the pair above, which is the default.
+let formDiscColors = [];
 
 const SIZE_OPTIONS = ['7', '10', '12'];
 const DISC_OPTIONS = [1, 2, 3, 4];
@@ -7414,6 +7430,63 @@ function resetFormPaint() {
   formChanged();
 }
 
+/* Turning it on starts every disc from the shared pair, so nothing changes on
+ * screen until a disc is repainted; turning it off goes back to the shared
+ * pair, which was kept all along. */
+function setFormPaintEach(on) {
+  formDiscColors = on ? Array.from({ length: formDiscCount },
+    () => ({ vinyl: formVinylColor, label: formLabelColor })) : [];
+  renderPaintForm();
+  formChanged();
+}
+function setDiscPaint(i, key, v) { formDiscColors[i][key] = v; renderPaintForm(); formChanged(); }
+function setDiscPaintHex(i, key, raw) {
+  formDiscColors[i][key] = normalizedHexOrKeep(raw, formDiscColors[i][key]);
+  renderPaintForm();
+  formChanged();
+}
+function resetDiscPaint(i) {
+  formDiscColors[i] = { vinyl: '', label: '' };
+  renderPaintForm();
+  formChanged();
+}
+
+/* One pair per disc: a disc added comes in wearing the shared pair, a disc
+ * removed takes its colors with it, and a single disc has nothing to differ
+ * from, so it shares. */
+function fitFormDiscColors() {
+  if (formDiscCount < 2) { formDiscColors = []; return; }
+  if (!formDiscColors.length) return;
+  formDiscColors = Array.from({ length: formDiscCount }, (_, i) =>
+    formDiscColors[i] || { vinyl: formVinylColor, label: formLabelColor });
+}
+
+// the form edits its own copy, so a cancelled edit leaves the record untouched
+function copyDiscColors(list) {
+  return Array.isArray(list) ? list.map(c => ({ vinyl: c.vinyl || '', label: c.label || '' })) : [];
+}
+
+function paintDiscRowHTML(c, i) {
+  const vinyl = c.vinyl || formVinylColor || '#000000';
+  const label = c.label || formLabelColor || '#ffffff';
+  const field = (key, name, value, hex, placeholder) => `<label class="paint-field">
+      <span>${name}</span>
+      <input type="color" value="${value}" onchange="setDiscPaint(${i},'${key}',this.value)">
+      <input type="text" class="paint-hex" maxlength="7" placeholder="${placeholder}" value="${esc(hex)}"
+             onchange="setDiscPaintHex(${i},'${key}',this.value)">
+    </label>`;
+  return `<div class="paint-row paint-disc">
+    <span class="disc" style="--vinyl:${vinyl};--lab:${label};--d:34px"></span>
+    <div class="paint-fields">
+      <span class="paint-disc-n">Disc ${i + 1}</span>
+      ${field('vinyl', 'Vinyl', vinyl, c.vinyl, '#000000')}
+      ${field('label', 'Label', label, c.label, '#ffffff')}
+    </div>
+    <button type="button" class="btn btn-sm paint-reset" title="reset to black/white"
+            onclick="resetDiscPaint(${i})"><i class="ti ti-arrow-back-up"></i></button>
+  </div>`;
+}
+
 /* Swatches need a real value to show (a bare '#rrggbb'), even when the record
  * is unpainted — the hex fields are what actually show blank in that case. */
 function renderPaintForm() {
@@ -7424,6 +7497,11 @@ function renderPaintForm() {
   document.getElementById('fLabelColor').value = label;
   document.getElementById('fLabelHex').value = formLabelColor;
   document.getElementById('fPaintPreview').setAttribute('style', `--vinyl:${vinyl};--lab:${label};--d:34px`);
+  const each = formDiscCount > 1 && formDiscColors.length > 0;
+  document.getElementById('fPaintEachWrap').style.display = formDiscCount > 1 ? '' : 'none';
+  document.getElementById('fPaintEach').checked = each;
+  document.getElementById('fPaintShared').style.display = each ? 'none' : '';
+  document.getElementById('fPaintDiscs').innerHTML = each ? formDiscColors.map(paintDiscRowHTML).join('') : '';
 }
 
 function renderTracksForm() {
@@ -7485,7 +7563,9 @@ function setFormDiscCount(n) {
     return;
   }
   formDiscCount = n;
+  fitFormDiscColors();
   renderTracksForm();
+  renderPaintForm();
 }
 
 /* The artists a song can be credited to: whichever editor is on screen holds
@@ -8218,6 +8298,7 @@ function applyDraft(d){
   formSize = d.size || '';
   formVinylColor = d.vinyl_color || '';
   formLabelColor = d.label_color || '';
+  formDiscColors = copyDiscColors(d.disc_colors);
   renderTracksForm();
   renderPaintForm();
   if (d.cover_data) applyCover(d.cover_data);
@@ -8354,7 +8435,7 @@ function openAdd(){
   renderNoteShots();
   renderNotesForm();
   formTracks = []; formDiscCount = 1; formSize = '';
-  formVinylColor = ''; formLabelColor = '';
+  formVinylColor = ''; formLabelColor = ''; formDiscColors = [];
   renderTracksForm();
   renderPaintForm();
   document.getElementById('fCensored').checked = false;
@@ -8450,6 +8531,7 @@ function openEdit(id){
   formSize = r.size || '';
   formVinylColor = r.vinyl_color || '';
   formLabelColor = r.label_color || '';
+  formDiscColors = copyDiscColors(r.disc_colors);
   renderTracksForm();
   renderPaintForm();
   const previewSrc = VinylCover.coverPreviewSrc(r, coverDataUri);
@@ -8616,7 +8698,7 @@ function editRootValues(){
     size: formSize,
     discs: formDiscCount,
     tracks: (formTracks || []).length,
-    painted: !!(formVinylColor || formLabelColor),
+    painted: !!(formVinylColor || formLabelColor || formDiscColors.length),
   };
 }
 
@@ -8890,6 +8972,7 @@ function formValues(){
     spotify_missing:document.getElementById('fSpotifyMissing').checked,
     vinyl_color:formVinylColor,
     label_color:formLabelColor,
+    disc_colors:formDiscCount > 1 ? formDiscColors.map(c => ({ vinyl: c.vinyl, label: c.label })) : [],
   };
 }
 

@@ -661,6 +661,76 @@ test('editing an existing record fills the form from it', async () => {
   assert.strictEqual($(doc, '#fArtist').value, rec.artist);
 });
 
+// ── a color per disc ────────────────────────────────────────────────────────
+// Every disc wears the record's one vinyl/label pair unless "each disc its
+// own color" is on, which gives one pair per disc, seeded from the shared one.
+
+test('a single-disc record offers no per-disc colors', async () => {
+  const { win, doc } = await boot();
+  win.openAdd();
+  assert.strictEqual($(doc, '#fPaintEachWrap').style.display, 'none');
+  assert.strictEqual(count(doc, '#fPaintDiscs .paint-disc'), 0);
+});
+
+test('giving each disc its own color adds a row per disc, starting from the shared colors', async () => {
+  const { win, doc, read } = await boot();
+  win.openAdd();
+  win.setFormVinylColor('#ff0000');
+  win.setFormDiscCount(3);
+  assert.notStrictEqual($(doc, '#fPaintEachWrap').style.display, 'none');
+  assert.deepStrictEqual(JSON.parse(read('JSON.stringify(formValues().disc_colors)')), [],
+    'the discs stopped sharing before anyone asked');
+
+  win.setFormPaintEach(true);
+  assert.strictEqual(count(doc, '#fPaintDiscs .paint-disc'), 3);
+  assert.strictEqual($(doc, '#fPaintShared').style.display, 'none');
+  win.setDiscPaintHex(2, 'vinyl', '0000FF');
+  assert.deepStrictEqual(JSON.parse(read('JSON.stringify(formValues().disc_colors)')), [
+    { vinyl: '#ff0000', label: '' }, { vinyl: '#ff0000', label: '' }, { vinyl: '#0000ff', label: '' }]);
+
+  win.setFormPaintEach(false);
+  assert.deepStrictEqual(JSON.parse(read('JSON.stringify(formValues().disc_colors)')), []);
+  assert.strictEqual(read('formVinylColor'), '#ff0000', 'turning it off lost the shared color');
+});
+
+test('changing the disc count keeps one color row per disc', async () => {
+  const { win, doc, read } = await boot();
+  win.openAdd();
+  win.setFormDiscCount(2);
+  win.setFormPaintEach(true);
+  win.setFormDiscCount(4);
+  assert.strictEqual(count(doc, '#fPaintDiscs .paint-disc'), 4);
+  win.setFormDiscCount(3);
+  assert.strictEqual(count(doc, '#fPaintDiscs .paint-disc'), 3);
+  win.setFormDiscCount(1);
+  assert.strictEqual($(doc, '#fPaintEachWrap').style.display, 'none');
+  assert.deepStrictEqual(JSON.parse(read('JSON.stringify(formValues().disc_colors)')), []);
+});
+
+test('editing a record whose discs differ fills a row for each', async () => {
+  const { win, doc, read } = await boot();
+  const rec = RECORDS.find(r => r.have_it);
+  read(`Object.assign(records.find(r => r.id === ${rec.id}), { disc_count: 2,
+    disc_colors: [{ vinyl: '#ff0000', label: '#ffffff' }, { vinyl: '#0000ff', label: '#000000' }] })`);
+  win.openEdit(rec.id);
+  assert.strictEqual($(doc, '#fPaintEach').checked, true);
+  const hexes = [...doc.querySelectorAll('#fPaintDiscs .paint-hex')].map(i => i.value);
+  assert.deepStrictEqual(hexes, ['#ff0000', '#ffffff', '#0000ff', '#000000']);
+  assert.strictEqual(win.formIsDirty(), false);
+});
+
+test('the card draws each disc in its own color', async () => {
+  const { doc, read } = await boot();
+  const rec = RECORDS.find(r => r.have_it);
+  read(`Object.assign(records.find(r => r.id === ${rec.id}), { disc_count: 2, size: '12',
+    disc_colors: [{ vinyl: '#ff0000', label: '' }, { vinyl: '#0000ff', label: '' }] }); render()`);
+  const styles = [...doc.querySelectorAll(`.vcard[data-id="${rec.id}"] .vcard-rec`)]
+    .map(el => el.getAttribute('style'));
+  // back to front: disc 2 sits behind disc 1
+  assert.match(styles[0], /--vinyl:#0000ff/);
+  assert.match(styles[1], /--vinyl:#ff0000/);
+});
+
 test('the genre dropdown offers the whole genre list, not just the genres on the shelf', async () => {
   const { win, doc, read } = await boot();
   win.openAdd();
