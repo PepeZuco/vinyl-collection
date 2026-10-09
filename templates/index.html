@@ -14266,7 +14266,8 @@ function tourGo(dir) {
 
 function tourShow(i, dir) {
   const step = VinylTour.STEPS[i];
-  if (step.tab && step.tab !== currentTab) switchTab(step.tab);
+  // Quietly: on the first step tourAt is still -1, so this would count as a click.
+  if (step.tab && step.tab !== currentTab) quietly(() => switchTab(step.tab));
   const target = tourTargetEl(step);
   // Its tab is up now and the target still isn't there (an empty shelf, a
   // control this layout hides): carry on the way we were going.

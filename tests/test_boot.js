@@ -3512,9 +3512,10 @@ test('a person browsing sends one event per thing they do', async () => {
 
   const names = events.map(e => e[0]);
   assert.deepStrictEqual(names, ['tab', 'tab', 'record-open', 'search']);
-  assert.deepStrictEqual(events[0][1], { tab: 'stats' });
+  // Spread into this realm: objects made in the page fail a strict compare.
+  assert.deepStrictEqual({ ...events[0][1] }, { tab: 'stats' });
   assert.match(events[2][1].record, /^Artist \d+ — Album \d+$/);
-  assert.deepStrictEqual(events[3][1], { query: 'album' });
+  assert.deepStrictEqual({ ...events[3][1] }, { query: 'album' });
 });
 
 test('following a link or taking the tour is not counted as a person acting', async () => {
