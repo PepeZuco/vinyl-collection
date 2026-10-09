@@ -1592,3 +1592,18 @@ test('a single record has an empty bottom row and does not throw', async () => {
     assert.deepStrictEqual(errors, []);
   } finally { win.close(); }
 });
+
+test('raising the sheet leaves Tracks highlighted, and a tab press moves the highlight', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    const on = () => [...doc.querySelectorAll('#dmTabs .dm-tab.on')].map(b => b.dataset.ddsec);
+    press(win, doc.querySelector('.dm-handle'));
+    assert.deepStrictEqual(on(), ['tracks']);
+    press(win, doc.querySelector('#dmTabs .dm-tab[data-ddsec="timeline"]'));
+    assert.deepStrictEqual(on(), ['timeline']);
+    press(win, doc.querySelector('.dm-handle'));   // lower and raise again: back on Tracks
+    press(win, doc.querySelector('.dm-handle'));
+    assert.deepStrictEqual(on(), ['tracks']);
+  } finally { win.close(); }
+});

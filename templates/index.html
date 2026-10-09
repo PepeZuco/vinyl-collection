@@ -6381,13 +6381,22 @@ function dmNavHTML() {
 function dmSetSheet(open) {
   const lay = document.getElementById('dmLayout');
   if (!lay) return;
+  const was = lay.classList.contains('sheet-open');
   lay.classList.toggle('sheet-open', !!open);
+  // Raised or lowered, the view sits at the top of Tracks. The spy only runs on
+  // scroll, and while the sheet is down the other two blocks have no layout.
+  if (was !== !!open) {
+    const secs = document.getElementById('dmSecs');
+    if (secs) secs.scrollTop = 0;
+  }
+  detailMarkSection('dm', 'tracks');
   const h = lay.querySelector('.dm-handle');
   if (h) {
     h.setAttribute('aria-expanded', open ? 'true' : 'false');
     h.setAttribute('aria-label', open ? 'show less' : 'show more');
   }
   dmMeasureChrome();
+  if (open) detailSyncSpy('dm');
 }
 
 const DM_MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -6729,7 +6738,7 @@ function detailSyncSpy(pane) {
   let active = order[0];
   order.forEach(id => {
     const sec = document.getElementById(pane + 'Sec-' + id);
-    if (sec && sec.getBoundingClientRect().top <= line) active = id;
+    if (sec && sec.offsetParent !== null && sec.getBoundingClientRect().top <= line) active = id;
   });
   // A short last block can never reach the row — the pane runs out of scroll
   // first — so a pane scrolled to its end names its last block regardless,
