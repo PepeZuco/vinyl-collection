@@ -94,6 +94,15 @@ const VinylGrouping = (function () {
     return given.length ? given.reduce((a, b) => (a > b ? a : b)) : '';
   }
 
+  /* The index letter a name files under: its first character with any accent
+   * folded away (Élis under E, Ópera under O), and '#' for anything that still
+   * is not A–Z — digits, brackets, quotes. */
+  function letterOf(text) {
+    const first = String(text || '').trim().charAt(0)
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    return /^[A-Z]$/.test(first) ? first : '#';
+  }
+
   /* The crate a record belongs to for a given grouping field.
    *
    *   id       what records are bucketed on
@@ -124,9 +133,20 @@ const VinylGrouping = (function () {
         if (!artist) return { id: 'noartist', label: 'Unknown artist', rank: '', unknown: true };
         return { id: artist.toLowerCase(), label: artist, rank: artist.toLowerCase(), unknown: false };
       }
+      /* The crates that go with sorting by artist: a whole artist per crate
+       * makes 215 crates, 188 holding one record, so the letter is the useful
+       * cut. A compilation's first-listed performer is an accident of how it
+       * was typed in, so they share one crate at the end — the same place the
+       * artist sort already puts them. */
+      case 'artist_initial': {
+        const artist = (r.artist || '').trim();
+        if (!artist) return { id: 'noartist', label: 'Unknown artist', rank: '', unknown: true };
+        if (artist.includes(';')) return { id: 'various', label: 'Multiple artists', rank: '', unknown: true };
+        const letter = letterOf(artist);
+        return { id: letter, label: letter, rank: letter, unknown: false };
+      }
       case 'album_name': {
-        const first = (r.album_name || '').trim().charAt(0).toUpperCase();
-        const letter = /[A-Z]/.test(first) ? first : '#';
+        const letter = letterOf(r.album_name);
         return { id: letter, label: letter, rank: letter, unknown: false };
       }
       case 'year': {

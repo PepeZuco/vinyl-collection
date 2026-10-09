@@ -95,7 +95,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:cal
 /* setup mode — the shelf view: full collection, ordered by artist, split into
    the two physical blocks. Filters/sort/group don't apply here, so their bar
    hides in favor of a banner naming the mode and how to leave it. */
-body.setup-mode .bar{display:none}
+body.setup-mode .bar,body.setup-mode .shelf-summary{display:none}
 .setup-banner{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 14px;
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);
   font-size:13px;color:var(--muted);flex-wrap:wrap}
@@ -2004,29 +2004,6 @@ select option{background:var(--surface);color:var(--text)}
 @media(max-width:900px){.country-split{grid-template-columns:1fr}
   .country-rank{max-height:220px}}
 
-/* crate and sort dropdowns on the arrange row */
-.sort-dropdown,.group-dropdown{position:relative;flex-shrink:0}
-.sort-trigger,.group-trigger{height:34px;padding:0 10px;display:flex;align-items:center;gap:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-family:var(--font);white-space:nowrap;min-width:132px}
-/* the sort trigger is welded to the direction button on its right */
-.sort-trigger{border-right:none;border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
-.sort-trigger:hover,.group-trigger:hover{border-color:#444}
-.sort-trigger i:first-child,.group-trigger i:first-child{font-size:15px;color:var(--muted);flex-shrink:0}
-.sort-panel,.group-panel{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);min-width:190px;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.35);overflow:hidden}
-.sort-panel.hidden,.group-panel.hidden{display:none}
-.sort-list,.group-list{max-height:280px;overflow-y:auto;padding:4px}
-.sort-item,.group-item{display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;font-size:13px;border-radius:var(--radius-sm);transition:background .1s}
-.sort-item:hover,.group-item:hover{background:var(--card)}
-.sort-item i,.group-item i{font-size:15px;color:var(--muted);flex-shrink:0;width:16px;text-align:center}
-.group-item[data-group="none"]{border-bottom:1px solid var(--border);border-radius:var(--radius-sm) var(--radius-sm) 0 0;margin-bottom:4px;padding-bottom:10px}
-.sort-item.selected,.group-item.selected{background:rgba(245,197,24,.10);color:var(--accent)}
-.sort-item.selected i,.group-item.selected i{color:var(--accent)}
-
-
-/* sort group: select + asc/desc direction toggle */
-.sort-group{display:flex;align-items:center;gap:0;flex-shrink:0}
-.sort-dir-btn{height:34px;width:30px;border:1px solid var(--border);border-left:none;border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--surface);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:color .12s,background .12s}
-.sort-dir-btn:hover{color:var(--text);background:var(--card)}
-
 /* random dice button */
 .dice-btn{width:34px;height:34px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
 .dice-btn:hover{border-color:var(--text)}
@@ -2180,61 +2157,187 @@ select option{background:var(--surface);color:var(--text)}
   body.is-authed .mtab-visitor{display:none}
 }
 
-/* smart filter chips — only rendered once a filter is restricted from its default */
 /* ── the filter bar ──────────────────────────────────────────────────────
-   Two labelled rows. The top decides WHICH records; the bottom decides how
-   they are arranged and can never remove one. */
-.bar{display:flex;flex-direction:column;gap:9px;margin-bottom:20px}
-.bar-row{display:flex;align-items:center;gap:8px;min-height:34px;flex-wrap:wrap}
+   Three rows. The top holds the search, which side of the shelf you are on,
+   and — on the collection — how it is ordered. Under it the saved views, then
+   every dimension you can narrow by, each a button that shows its value once
+   set. Nothing is behind a "+ filter": what you cannot see you never use. */
+.bar{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;padding:12px 14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.bar-row{display:flex;align-items:center;gap:8px;min-height:32px;flex-wrap:wrap}
+.bar-top{position:relative}
+.bar-views{padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
+.bar-facets{position:relative}
 .bar-tag{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.14em;color:color-mix(in srgb,var(--text) 22%,transparent);
-  width:58px;flex-shrink:0;user-select:none}
-.bar-row.arrange{padding-top:9px;border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
-@media(max-width:760px){
-  .bar-tag{width:auto;font-size:9px}
-  .bar-row{gap:6px}
-}
+  letter-spacing:.14em;color:var(--label);width:58px;flex-shrink:0;user-select:none}
 
-.chiprow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
-.chip{display:inline-flex;align-items:center;height:26px;border-radius:999px;font-size:12px;
-  background:rgba(245,197,24,.08);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);
-  color:var(--accent);white-space:nowrap;overflow:hidden}
-.chip .k{opacity:.62;margin-right:5px}
-.chip b{font-weight:700}
-.chip-open{background:transparent;border:none;color:inherit;font-family:var(--font);font-size:12px;
-  padding:0 4px 0 10px;height:100%;display:flex;align-items:center;cursor:pointer}
-.chip-open:hover{background:rgba(245,197,24,.10)}
-.chip-x{background:transparent;border:none;color:inherit;opacity:.6;cursor:pointer;
-  padding:0 6px 0 2px;height:100%;display:flex;align-items:center;font-size:13px}
-.chip-x:hover{opacity:1;background:rgba(245,197,24,.16)}
 /* ownership is always present — the shelf is always showing something — so it
    is a toggle rather than a filter you added. Both sides stay on screen: which
-   one you are on and what the other one is are the same glance, where the
-   cycling chip made you click to find out. */
-.own-seg{display:inline-flex;align-items:center;height:26px;padding:2px;gap:2px;
-  border-radius:999px;background:color-mix(in srgb,var(--label) 8%,transparent);
-  border:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
-.own-opt{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 10px;
+   one you are on and what the other one is are the same glance. */
+.own-seg{display:inline-flex;align-items:center;height:34px;padding:2px;gap:2px;box-sizing:border-box;
+  border-radius:999px;background:var(--card);border:1px solid var(--border)}
+.own-opt{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;
   border:none;border-radius:999px;background:transparent;cursor:pointer;white-space:nowrap;
-  font-family:var(--font);font-size:12px;font-weight:600;color:var(--muted)}
-.own-opt i{font-size:12px;opacity:.75}
+  font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--label)}
+.own-opt i{font-size:13px;opacity:.75}
+.own-opt .own-n{font-family:var(--font-mono);font-weight:400;font-size:11.5px;opacity:.8}
 .own-opt:hover{color:var(--text)}
 .own-opt[aria-pressed="true"]{color:#4CB96B;background:rgba(95,191,122,.14);
   box-shadow:inset 0 0 0 1px rgba(95,191,122,.4)}
 .own-opt[aria-pressed="true"] i{opacity:1}
 .own-opt.wishlist[aria-pressed="true"]{color:#9B7FD4;background:rgba(155,127,212,.16);
   box-shadow:inset 0 0 0 1px rgba(155,127,212,.45)}
-.chip-add{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 11px 0 8px;
-  border-radius:999px;font-size:12px;background:transparent;border:1px dashed var(--border);
-  color:var(--muted);cursor:pointer;font-family:var(--font)}
-.chip-add:hover{border-color:var(--accent);color:var(--accent)}
-.chip-clear{background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;
-  text-underline-offset:2px;cursor:pointer;padding:0 4px;font-family:var(--font)}
+
+/* saved views: places you go, so they read as destinations rather than as
+   filters — a bookmark, a name and how many records are there. One on is the
+   whole query, and pressing it again goes back to the whole shelf. */
+.views-scroll{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.view-pill{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 10px;
+  border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text);
+  font:500 12.5px var(--font);white-space:nowrap;cursor:pointer;flex-shrink:0}
+.view-pill i{font-size:13px;color:var(--label)}
+.view-pill .view-n{font-family:var(--font-mono);font-size:11.5px;color:var(--label)}
+.view-pill:hover{border-color:var(--accent)}
+.view-pill.empty{opacity:.45}
+.view-pill[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 14%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 60%,transparent);color:var(--accent)}
+.view-pill[aria-pressed="true"] i,.view-pill[aria-pressed="true"] .view-n{color:var(--accent)}
+
+/* one button per facet, in registry order, so the set of things you can ask
+   never moves around; a set one fills in and names its value. */
+.chiprow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.facet-btn{display:inline-flex;align-items:center;height:32px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--card);color:var(--text);white-space:nowrap;
+  overflow:hidden;font-size:13px;max-width:100%}
+.facet-open{display:inline-flex;align-items:center;gap:6px;height:100%;padding:0 10px 0 12px;
+  background:transparent;border:none;color:inherit;font:500 13px var(--font);cursor:pointer;min-width:0}
+.facet-open i{font-size:12px;color:var(--label)}
+.facet-open .k{opacity:.7}
+.facet-open b{font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.facet-btn:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--border))}
+.facet-btn.open{border-color:var(--accent)}
+.facet-btn.on{background:color-mix(in srgb,var(--accent) 12%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 55%,transparent);color:var(--accent)}
+.facet-x{display:flex;align-items:center;height:100%;padding:0 8px 0 2px;background:transparent;border:none;
+  color:inherit;opacity:.7;cursor:pointer;font-size:13px}
+.facet-x:hover{opacity:1}
+.chip-clear{background:none;border:none;color:var(--label);font-size:12.5px;text-decoration:underline;
+  text-underline-offset:3px;cursor:pointer;padding:0 4px;font-family:var(--font)}
 .chip-clear:hover{color:var(--text)}
 
-.trigger-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
-  color:var(--muted)}
-#groupChevron,#sortChevron{font-size:12px;margin-left:auto;color:var(--muted)}
+/* the shelf read back as a sentence: how many, which, and in what order */
+.shelf-summary{margin:0 2px 16px;font-size:13px;color:var(--label);line-height:1.5}
+.shelf-summary b{color:var(--text);font-weight:700}
+
+/* ── sort & crates: one control, because the crates follow the sort ───── */
+.arrange{display:flex;align-items:center;gap:8px;margin-left:auto}
+.arrange-dd{position:relative;display:flex;gap:8px}
+.arrange-trigger{height:34px;padding:0 11px;display:flex;align-items:center;gap:8px;background:var(--card);
+  color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);font:500 13px var(--font);
+  cursor:pointer;white-space:nowrap}
+.arrange-trigger:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--border))}
+.arrange-trigger[aria-expanded="true"]{border-color:var(--accent)}
+.arrange-trigger i{font-size:15px;color:var(--label)}
+.arrange-trigger .arrange-chev{font-size:12px;transition:transform .15s}
+.arrange-trigger[aria-expanded="true"] .arrange-chev{transform:rotate(180deg)}
+.trigger-label{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--label)}
+.sort-short{display:none}
+.crate-trigger[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 10%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--accent)}
+.crate-trigger[aria-pressed="true"] i{color:var(--accent)}
+
+.arrange-panel{position:absolute;top:calc(100% + 6px);right:0;width:340px;z-index:96;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 14px 38px rgba(0,0,0,.5);
+  display:flex;flex-direction:column;overflow:hidden}
+.arrange-panel.hidden{display:none}
+.ap-head{display:none;align-items:center;padding:6px 6px 6px 16px;border-bottom:1px solid var(--border)}
+.ap-head .modal-title{flex:1}
+.ap-body{overflow-y:auto;padding-bottom:12px}
+.ap-sec{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--label);padding:12px 14px 6px}
+.ap-opt{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 14px;border:none;
+  background:transparent;color:var(--text);font:500 13px var(--font);text-align:left;cursor:pointer}
+.ap-opt:hover{background:var(--card)}
+.ap-opt i{font-size:15px;color:var(--label);width:16px;text-align:center}
+.ap-opt .ap-hint{margin-left:auto;font-size:11.5px;color:var(--label);font-weight:400}
+.ap-opt.selected{background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent)}
+.ap-opt.selected i,.ap-opt.selected .ap-hint{color:var(--accent)}
+.ap-seg{display:flex;gap:3px;margin:8px 14px 2px;padding:3px;border-radius:var(--radius-sm);
+  background:var(--bg);border:1px solid var(--border)}
+.ap-seg button{flex:1;height:30px;border:none;border-radius:3px;background:transparent;color:var(--label);
+  font:600 12px var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.ap-seg button[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
+.ap-rule{height:1px;background:var(--border);margin:12px 0 0}
+.ap-switch{display:flex;align-items:center;gap:12px;width:100%;padding:2px 14px 10px;border:none;background:transparent;
+  color:var(--text);text-align:left;cursor:pointer;font-family:var(--font)}
+.ap-switch .t{display:block;font-size:13px;font-weight:600}
+.ap-switch .s{display:block;font-size:11.5px;color:var(--label);margin-top:2px}
+.ap-track{width:34px;height:20px;border-radius:999px;background:var(--border);position:relative;flex-shrink:0;
+  margin-left:auto;transition:background .15s}
+.ap-track::after{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;
+  background:var(--surface);transition:left .15s}
+.ap-switch[aria-checked="true"] .ap-track{background:var(--accent)}
+.ap-switch[aria-checked="true"] .ap-track::after{left:16px}
+.ap-crates{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px}
+.ap-crate{height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--border);background:transparent;
+  color:var(--text);font:500 12px var(--font);cursor:pointer}
+.ap-crate:hover{border-color:var(--accent)}
+.ap-crate[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 14%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 60%,transparent);color:var(--accent)}
+.ap-note{font-size:11.5px;color:var(--label);padding:0 14px 8px}
+.ap-phone{display:none}
+.ap-foot{display:none}
+
+/* the phone's Filters button: the facet buttons fold into a sheet there */
+.m-filter-btn{display:none;align-items:center;gap:6px;height:44px;padding:0 13px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--card);color:var(--text);font:600 13px var(--font);cursor:pointer}
+.m-filter-btn i{font-size:16px;color:var(--label)}
+.m-filter-btn.on{border-color:color-mix(in srgb,var(--accent) 55%,transparent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+.m-filter-btn.on i{color:var(--accent)}
+.m-filter-n{min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:999px;background:var(--accent);
+  color:#141414;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center}
+.m-filter-btn.on .m-filter-n{display:inline-flex}
+[data-theme="light"] .m-filter-n{color:#fff}
+
+@media(max-width:760px){
+  .bar{padding:0;background:transparent;border:none;gap:10px}
+  .bar-tag{display:none}
+  .bar-views{padding-top:0;border-top:none}
+  .bar-top{gap:8px}
+  .bar-top .search{order:1;flex:1 1 calc(100% - 52px);max-width:none;height:44px}
+  .arrange{display:contents}
+  .arrange .dice-btn{order:2;width:44px;height:44px}
+  .own-wrap{order:3;flex:1;min-width:0;display:flex}
+  .own-seg{height:44px;flex:1}
+  .own-opt{flex:1;justify-content:center;height:38px}
+  .own-opt .own-n{display:none}
+  .m-filter-btn{display:inline-flex;order:4}
+  .arrange-dd{order:5}
+  .arrange-trigger{height:44px}
+  .arrange-trigger .trigger-label,#sortLabel,.arrange-chev,.crate-trigger,.view-toggle{display:none}
+  .sort-short{display:inline}
+  .views-scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}
+  .views-scroll::-webkit-scrollbar{display:none}
+  .view-pill{height:36px;font-size:13px}
+  /* only what is set stays on the bar; the rest lives in the Filters sheet */
+  .facet-btn:not(.on){display:none}
+  .bar-facets.none-set{display:none}
+  .facet-btn{height:32px;border-radius:999px}
+  .shelf-summary{margin:0 2px 12px;font-size:12.5px}
+
+  .arrange-panel{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:86vh;
+    border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none}
+  .ap-head{display:flex}
+  .ap-opt{height:48px;font-size:15px}
+  .ap-seg button{height:40px;font-size:13.5px}
+  .ap-switch .t{font-size:14.5px}
+  .ap-crate{height:36px;font-size:13px;padding:0 13px}
+  .ap-phone{display:block}
+  .ap-foot{display:block;padding:12px 14px 20px;border-top:1px solid var(--border)}
+}
 
 /* ── the facet popover ───────────────────────────────────────────────────
    One control doing two jobs: pick a dimension, then pick its values. A
@@ -3387,12 +3490,12 @@ select option{background:var(--surface);color:var(--text)}
 
   <!-- The filter bar, above the tabs' content because it belongs to all of
        them: one query decides what the shelf, the timeline and the charts are
-       describing. The top row changes WHICH records; the bottom row changes
-       how they are arranged and can never remove one. Splitting the two verbs
-       is what turns a drawer of 43 controls into six that state their setting. -->
+       describing. Nothing hides behind a "+ filter" any more: the saved views
+       and every dimension you can narrow by are buttons on the bar, and a set
+       one shows its value. Sort and crates are one control on the collection,
+       because the crates follow the sort — sorting by artist gives A, B, C. -->
   <div class="bar" id="filterBar">
-    <div class="bar-row" id="filterRow">
-      <span class="bar-tag">Filter</span>
+    <div class="bar-row bar-top" id="filterRow">
       <div class="search">
         <i class="ti ti-search"></i>
         <input type="text" id="searchInput" placeholder="search artist, album...">
@@ -3415,42 +3518,47 @@ select option{background:var(--surface);color:var(--text)}
           </div>
         </div>
       </div>
+      <div class="own-wrap" id="ownSeg"></div>
+      <button class="m-filter-btn" id="mFilterBtn" onclick="openFilterSheet()" aria-label="filters">
+        <i class="ti ti-adjustments-horizontal"></i><span>Filters</span><span class="m-filter-n" id="mFilterN"></span>
+      </button>
+      <div class="arrange" id="arrangeRow">
+        <div class="arrange-dd" id="arrangeDropdown">
+          <button class="arrange-trigger" id="sortTrigger" onclick="toggleArrangePanel()" aria-haspopup="dialog" aria-expanded="false">
+            <i class="ti ti-arrows-sort"></i>
+            <span class="trigger-label">sort</span>
+            <span id="sortLabel">Date added, newest first</span>
+            <span class="sort-short" id="sortShort">Newest</span>
+            <i class="ti ti-chevron-down arrange-chev"></i>
+          </button>
+          <button class="arrange-trigger crate-trigger" id="crateTrigger" onclick="toggleArrangePanel()" aria-haspopup="dialog">
+            <i class="ti ti-box-multiple"></i>
+            <span id="crateLabel">Crates by month</span>
+          </button>
+          <div class="arrange-panel hidden" id="arrangePanel" role="dialog" aria-label="sort and crates"></div>
+        </div>
+        <div class="view-toggle" id="viewToggle">
+          <button class="view-btn active" id="viewGridBtn" data-view="grid" title="grid view" aria-label="grid view"><i class="ti ti-layout-grid"></i></button>
+          <button class="view-btn" id="viewListBtn" data-view="list" title="list view" aria-label="list view"><i class="ti ti-list"></i></button>
+        </div>
+        <button class="dice-btn" id="randomBtn" title="surprise me from this filter" aria-label="random record from this filter">
+          <div class="dice-face" id="diceFace"></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="bar-row bar-views" id="viewsRow">
+      <span class="bar-tag">Views</span>
+      <div class="views-scroll" id="savedViews"></div>
+    </div>
+
+    <div class="bar-row bar-facets" id="facetRow">
+      <span class="bar-tag">Filters</span>
       <div class="chiprow" id="filterChips"></div>
       <div class="facet-pop hidden" id="facetPop"></div>
     </div>
-
-    <div class="bar-row arrange" id="arrangeRow">
-      <span class="bar-tag">Arrange</span>
-      <div class="group-dropdown" id="groupDropdown">
-        <button class="group-trigger" id="groupTrigger" onclick="toggleGroupDropdown()">
-          <i class="ti ti-calendar-event" id="groupTriggerIcon"></i>
-          <span class="trigger-label">crates</span>
-          <span id="groupLabel">Month added</span>
-          <i class="ti ti-chevron-down" id="groupChevron"></i>
-        </button>
-        <div class="group-panel hidden" id="groupPanel"><div class="group-list" id="groupList"></div></div>
-      </div>
-      <div class="sort-group">
-        <div class="sort-dropdown" id="sortDropdown">
-          <button class="sort-trigger" id="sortTrigger" onclick="toggleSortDropdown()">
-            <i class="ti ti-arrows-sort" id="sortTriggerIcon"></i>
-            <span class="trigger-label">sort</span>
-            <span id="sortLabel">Date added</span>
-            <i class="ti ti-chevron-down" id="sortChevron"></i>
-          </button>
-          <div class="sort-panel hidden" id="sortPanel"><div class="sort-list" id="sortList"></div></div>
-        </div>
-        <button class="sort-dir-btn desc" id="sortDirBtn" title="toggle sort direction"><i class="ti ti-arrow-down"></i></button>
-      </div>
-      <div class="view-toggle" id="viewToggle">
-        <button class="view-btn active" id="viewGridBtn" data-view="grid" title="grid view"><i class="ti ti-layout-grid"></i></button>
-        <button class="view-btn" id="viewListBtn" data-view="list" title="list view"><i class="ti ti-list"></i></button>
-      </div>
-      <button class="dice-btn" id="randomBtn" title="surprise me from this filter">
-        <div class="dice-face" id="diceFace"></div>
-      </button>
-    </div>
   </div>
+  <p class="shelf-summary" id="shelfSummary"></p>
 
   <!-- Setup mode: the whole collection, ordered by artist and split into the
        two physical blocks the records actually sit in on the shelf. Shown in
@@ -3467,7 +3575,7 @@ select option{background:var(--surface);color:var(--text)}
   </div>
 
   <!-- Dims the page behind the popover when it rises as a sheet on a phone. -->
-  <div class="facet-backdrop" id="facetBackdrop" onclick="closeFacetPop()"></div>
+  <div class="facet-backdrop" id="facetBackdrop" onclick="closeFacetPop(); closeArrangePanel()"></div>
 
   <!-- timeline page — the same events at three zooms. Month and Week are the
        calendar; Replay is the growth race and the activity lanes, which used
@@ -4699,10 +4807,8 @@ async function init() {
   await checkAuth();
   await loadRecords();
   buildRatingRows();
-  buildSortList();
-  syncSortTrigger();
-  buildGroupList();
-  syncGroupTrigger();
+  syncGroupBy();
+  syncArrange();
   syncMobileTabbar();
   bindEvents();
   // Last, so it lands on a page that is already built: the hash decides the
@@ -4978,37 +5084,63 @@ function multiArtistBadgeHTML() {
 /* Everything the shared query is, apart from the search box's own text.
  * One object, so no surface can hold a filter another surface cannot see. */
 let filterState = { ownership: 'owned', facets: {} };
-let sortDir = 'desc'; // 'asc' | 'desc'
+let sortDir = 'desc'; // 'asc' | 'desc' — asc runs up the field: oldest, A, lowest
 let sortBy = 'bought_date';
 
-// Grouping is independent of sorting: you pick the crates, then how records run
-// inside them. Deliberately NOT every sort field — grouping 259 records by
-// artist makes 215 crates, 188 holding a single record, which is the flat grid
-// with headers in it. Artist stays a sort option; it is not a crate.
-const GROUP_OPTIONS = [
-  { value: 'none',        label: 'No crates',     icon: 'ti-layout-grid' },
-  { value: 'bought_date', label: 'Month added',   icon: 'ti-calendar-event' },
-  { value: 'bought_where', label: 'Bought at',    icon: 'ti-map-pin' },
-  { value: 'genre',       label: 'Genre',         icon: 'ti-music' },
-  { value: 'condition',   label: 'New / Used',    icon: 'ti-certificate' },
-  { value: 'country',     label: 'Country',       icon: 'ti-world' },
-  { value: 'year',        label: 'Decade',        icon: 'ti-calendar' },
-  { value: 'album_name',  label: 'Album initial', icon: 'ti-abc' },
-  { value: 'avg_rating',  label: 'Rating',        icon: 'ti-star-filled' },
-  { value: 'play_count',  label: 'Plays',         icon: 'ti-headphones' },
-  { value: 'last_played', label: 'Last played',   icon: 'ti-player-track-prev' },
+/* Every sort carries the crates that go with it, and reads in its own words.
+ *
+ * Crates and sort used to be two independent pickers, so the default shelf —
+ * crates by month added — stayed in months when you sorted by artist, and an
+ * A→Z inside each month read as no order at all. Now the crates follow the
+ * sort unless you pick crates on purpose: artist gives A, B, C; year gives
+ * decades. Never a crate per artist — 215 crates, 188 holding one record, is
+ * the flat grid with headers in it.
+ *
+ * `dir` is where a sort starts when picked: newest, A → Z, highest first.
+ * `dirs` names both directions, so the button can say "A → Z" rather than
+ * show an arrow you have to interpret. */
+const SORT_OPTIONS = [
+  { value: 'bought_date', label: 'Date added',   icon: 'ti-calendar-event', crate: 'bought_date',
+    noun: 'month',  dir: 'desc', dirs: { desc: 'newest first', asc: 'oldest first' },
+    short: { desc: 'Newest', asc: 'Oldest' } },
+  { value: 'artist',      label: 'Artist',       icon: 'ti-microphone-2',   crate: 'artist_initial',
+    noun: 'letter', dir: 'asc',  dirs: { asc: 'A → Z', desc: 'Z → A' },
+    short: { asc: 'A → Z', desc: 'Z → A' } },
+  { value: 'album_name',  label: 'Album',        icon: 'ti-disc',           crate: 'album_name',
+    noun: 'letter', dir: 'asc',  dirs: { asc: 'A → Z', desc: 'Z → A' },
+    short: { asc: 'A → Z', desc: 'Z → A' } },
+  { value: 'year',        label: 'Year',         icon: 'ti-calendar',       crate: 'year',
+    noun: 'decade', dir: 'desc', dirs: { desc: 'newest first', asc: 'oldest first' },
+    short: { desc: 'Newest', asc: 'Oldest' } },
+  { value: 'avg_rating',  label: 'Rating',       icon: 'ti-star-filled',    crate: 'avg_rating',
+    noun: 'star rating', dir: 'desc', dirs: { desc: 'highest first', asc: 'lowest first' },
+    short: { desc: 'Top rated', asc: 'Lowest' } },
+  { value: 'my_rating',   label: 'Pepe rating',  icon: 'ti-star-half-filled', crate: 'my_rating',
+    noun: 'star rating', dir: 'desc', dirs: { desc: 'highest first', asc: 'lowest first' },
+    short: { desc: 'Pepe ★', asc: 'Pepe ★' } },
+  { value: 'wife_rating', label: 'Jenni rating', icon: 'ti-star-half-filled', crate: 'wife_rating',
+    noun: 'star rating', dir: 'desc', dirs: { desc: 'highest first', asc: 'lowest first' },
+    short: { desc: 'Jenni ★', asc: 'Jenni ★' } },
+  { value: 'play_count',  label: 'Plays',        icon: 'ti-headphones',     crate: 'play_count',
+    noun: 'play count', dir: 'desc', dirs: { desc: 'most played first', asc: 'least played first' },
+    short: { desc: 'Most played', asc: 'Least played' } },
 ];
 
-const SORT_OPTIONS = [
-  { value: 'bought_date',  label: 'Date added',   icon: 'ti-calendar-event' },
-  { value: 'artist',       label: 'Artist',        icon: 'ti-microphone-2' },
-  { value: 'album_name',   label: 'Album',         icon: 'ti-disc' },
-  { value: 'year',         label: 'Year',          icon: 'ti-calendar' },
-  { value: 'avg_rating',   label: 'Total rating',  icon: 'ti-star-filled' },
-  { value: 'my_rating',    label: 'Pepe rating',   icon: 'ti-star-half-filled' },
-  { value: 'wife_rating',  label: 'Jenni rating',  icon: 'ti-star-half-filled' },
-  { value: 'play_count',   label: 'Plays',         icon: 'ti-headphones' },
+/* Crates you pick on purpose: dimensions the shelf does not sort by. Each runs
+ * in its own natural order whatever the sort direction — genres A→Z, the most
+ * recent play first — because flipping newest/oldest is about the records
+ * inside a crate, not about which genre comes first. */
+const CRATE_OPTIONS = [
+  { value: 'genre',        label: 'Genre',       icon: 'ti-music',             dir: 'asc' },
+  { value: 'country',      label: 'Country',     icon: 'ti-world',             dir: 'asc' },
+  { value: 'bought_where', label: 'Bought at',   icon: 'ti-map-pin',           dir: 'asc' },
+  { value: 'condition',    label: 'New / Used',  icon: 'ti-certificate',       dir: 'asc' },
+  { value: 'last_played',  label: 'Last played', icon: 'ti-player-track-prev', dir: 'desc' },
 ];
+
+function sortOption(value) {
+  return SORT_OPTIONS.find(o => o.value === (value || sortBy)) || SORT_OPTIONS[0];
+}
 
 function toggleSearchField(field) {
   searchFields[field] = !searchFields[field];
@@ -5107,7 +5239,7 @@ function urlSnapshot() {
     text: document.getElementById('searchInput').value,
     ownership: filterState.ownership,
     facets: filterState.facets,
-    crate: groupBy,
+    crate: crateBy,
     sort: sortBy,
     dir: sortDir,
     view: viewMode,
@@ -5153,18 +5285,19 @@ function applyUrlState(st, params) {
   document.getElementById('searchInput').value = st.text;
   filterState.ownership = st.ownership;
   filterState.facets = st.facets;
-  if (GROUP_OPTIONS.some(o => o.value === st.crate)) groupBy = st.crate;
+  // Anything else — including the month/decade/rating crates an older link
+  // named outright — is now just "the crates that go with the sort".
+  crateBy = st.crate === 'none' || CRATE_OPTIONS.some(o => o.value === st.crate) ? st.crate : 'sort';
   if (SORT_OPTIONS.some(o => o.value === st.sort)) sortBy = st.sort;
   sortDir = st.dir;
+  syncGroupBy();
   // Only when the link actually says so: setViewMode persists, and a plain
   // reload carries no view parameter — applying the default here overwrote a
   // saved list-view preference every time.
   if (/(^|&)view=/.test(params || '')) setViewMode(st.view);
   else { document.getElementById('viewGridBtn').classList.toggle('active', viewMode === 'grid');
          document.getElementById('viewListBtn').classList.toggle('active', viewMode === 'list'); }
-  syncGroupTrigger();
-  syncSortTrigger();
-  renderSortDirBtn();
+  syncArrange();
 
   if (st.tab !== currentTab) switchTab(st.tab); else applyQueryChange();
 
@@ -5192,21 +5325,24 @@ function filtered() {
     // whose crates are already contiguous — which is what lets the detail
     // drawer's prev/next walk this list and stay in step with the screen.
     if (groupBy !== 'none') {
-      const byCrate = VinylGrouping.compareByGroup(a, b_, groupBy, sortDir, countryNameOf);
+      const byCrate = VinylGrouping.compareByGroup(a, b_, groupBy, crateDir(), countryNameOf);
       if (byCrate !== 0) return byCrate;
     }
     if (s === 'artist') {
       const aMulti = isMultiArtist(a), bMulti = isMultiArtist(b_);
       if (aMulti !== bMulti) return aMulti ? 1 : -1; // multi-artist records always last, regardless of sortDir
       const cmp = (a.artist||'').localeCompare(b_.artist||'');
-      return sortDir === 'asc' ? -cmp : cmp;
+      return sortDir === 'asc' ? cmp : -cmp;   // ascending is A → Z, as the crates are
     }
+    // cmp runs up the field — oldest, lowest, A first — so 'asc' means the
+    // same thing for every sort and for the crates around it. Text sorts used
+    // to run the other way, which put album crates Z→A around records A→Z.
     let cmp;
-    if (s === 'bought_date') cmp = momentAt(b_.bought_date).localeCompare(momentAt(a.bought_date));
-    else if (s === 'avg_rating')  cmp = avgRating(b_) - avgRating(a);
-    else if (['year','my_rating','wife_rating','play_count'].includes(s)) cmp = (Number(b_[s])||0) - (Number(a[s])||0);
+    if (s === 'bought_date') cmp = momentAt(a.bought_date).localeCompare(momentAt(b_.bought_date));
+    else if (s === 'avg_rating')  cmp = avgRating(a) - avgRating(b_);
+    else if (['year','my_rating','wife_rating','play_count'].includes(s)) cmp = (Number(a[s])||0) - (Number(b_[s])||0);
     else cmp = (a[s]||'').localeCompare(b_[s]||'');
-    return sortDir === 'asc' ? -cmp : cmp;
+    return sortDir === 'asc' ? cmp : -cmp;
   });
   return base;
 }
@@ -5217,7 +5353,7 @@ function render() {
   const recs = filtered();
   renderCount(recs.length);
   renderFilters();
-  renderChips();
+  renderBar();
   const c = document.getElementById('recordsContainer');
   if (!recs.length) {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
@@ -5326,13 +5462,26 @@ function setupLetterBodyHTML(recs) {
 }
 
 // ── crates ─────────────────────────────────────────────────────────────────
-// One control decides both whether the collection is in crates and what the
-// crates are; 'none' is the flat grid. It replaces the old grid/group toggle,
-// whose "group" simply meant "bucket by whatever Sort by happens to be".
-// Deliberately not persisted: the collection always opens grouped by month
-// added, regardless of what you last picked, so a filtered/sorted session
-// never leaks into the next time you open the app.
+// What you asked for is `crateBy`: 'sort' (the crates that go with the sort),
+// 'none' (one flat grid), or a CRATE_OPTIONS dimension picked on purpose.
+// `groupBy` is what that resolves to — the grouping field the shelf is drawn
+// with — and is only ever written by syncGroupBy, so the two cannot disagree.
+// Deliberately not persisted: the collection always opens by date added in
+// month crates, so a sorted session never leaks into the next visit.
+let crateBy = 'sort';
 let groupBy = 'bought_date';
+
+function syncGroupBy() {
+  groupBy = crateBy === 'sort' ? sortOption().crate : crateBy;
+}
+
+/* The direction the crates themselves run in. Crates that follow the sort run
+ * with it; crates picked on purpose keep their own order. */
+function crateDir() {
+  if (crateBy === 'sort') return sortDir;
+  const opt = CRATE_OPTIONS.find(o => o.value === crateBy);
+  return opt ? opt.dir : sortDir;
+}
 
 // Crates are keyed by the field they belong to, so shutting every artist does
 // not also shut your decades — and "collapse all" survives a reload as a mode
@@ -5363,13 +5512,40 @@ function countryNameOf(code) {
   return countryLabelFromCode(code).replace(/\s*\([A-Z]{2}\)$/, '');
 }
 
-function setGroupBy(field) {
-  groupBy = field;
-  trackEvent('group-by', { field });
-  buildGroupList();
-  syncGroupTrigger();
+function setCrates(mode) {
+  if (mode !== 'sort' && mode !== 'none' && !CRATE_OPTIONS.some(o => o.value === mode)) return;
+  crateBy = mode;
+  syncGroupBy();
+  trackEvent('group-by', { field: mode });
+  syncArrange();
   render();
   syncUrl();
+}
+
+/* Picking a sort starts it in the direction it reads naturally — newest
+ * first, A → Z — and, unless crates were picked on purpose, brings its crates. */
+function setSortBy(value) {
+  const opt = SORT_OPTIONS.find(o => o.value === value);
+  if (!opt) return;
+  sortBy = value;
+  sortDir = opt.dir;
+  syncGroupBy();
+  trackEvent('sort', { field: value });
+  syncArrange();
+  render();
+  syncUrl();
+}
+
+function setSortDir(dir) {
+  if (dir !== 'asc' && dir !== 'desc') return;
+  sortDir = dir;
+  syncArrange();
+  render();
+  syncUrl();
+}
+
+function toggleSortDir() {
+  setSortDir(sortDir === 'desc' ? 'asc' : 'desc');
 }
 
 function toggleCrate(id) {
@@ -11328,7 +11504,6 @@ function bindEvents(){
   });
   document.getElementById('setupSearchInput').addEventListener('input',
     e => onSetupSearch(e.target.value));
-  document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
   document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
   document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
   document.getElementById('viewGridBtn').classList.toggle('active', viewMode === 'grid');
@@ -11391,24 +11566,6 @@ function bindCalSwipe() {
     if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
     calNavigate(dx < 0 ? 1 : -1);
   }, { passive: true });
-}
-
-/* The button's class and its arrow are the same fact, so one function owns
- * both — applyUrl set the class alone and left the arrow pointing the wrong
- * way until the next click. */
-function renderSortDirBtn() {
-  const btn = document.getElementById('sortDirBtn');
-  btn.classList.toggle('asc', sortDir === 'asc');
-  btn.classList.toggle('desc', sortDir === 'desc');
-  btn.innerHTML = sortDir === 'asc'
-    ? '<i class="ti ti-arrow-up"></i>' : '<i class="ti ti-arrow-down"></i>';
-}
-
-function toggleSortDir() {
-  sortDir = sortDir === 'desc' ? 'asc' : 'desc';
-  renderSortDirBtn();
-  render();
-  syncUrl();
 }
 
 /* The phone's Search item: go where the bar is and put the cursor in it. */

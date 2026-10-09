@@ -218,18 +218,37 @@ test('the record count agrees with the data', async () => {
 
 // ── the filter bar ──────────────────────────────────────────────────────────
 
-test('the bar shows both ownership options and the add-filter button', async () => {
+test('the bar shows both ownership options', async () => {
   const { doc } = await boot();
-  const opts = [...doc.querySelectorAll('#filterChips .own-seg .own-opt')];
-  assert.deepStrictEqual(opts.map(o => o.textContent.trim()), ['Owned', 'Wishlist']);
+  const opts = [...doc.querySelectorAll('#ownSeg .own-opt')];
+  assert.deepStrictEqual(opts.map(o => o.querySelector('.own-label').textContent.trim()),
+    ['Owned', 'Wishlist']);
   assert.ok(opts.every(o => o.querySelector('i.ti')), 'an option is missing its icon');
-  assert.ok($(doc, '#filterChips .chip-add'), 'no way to add a filter');
+});
+
+/* Every filter is a button on the bar rather than an entry behind "+ filter":
+ * a dimension you cannot see is one you never think to use. */
+test('every filter dimension has its own button on the bar', async () => {
+  const { doc, read } = await boot();
+  const ids = [...doc.querySelectorAll('#filterChips [data-facet-btn]')].map(b => b.dataset.facetBtn);
+  assert.deepStrictEqual(ids, read('VinylFilters.FACETS.map(f => f.id)'));
+  assert.strictEqual(count(doc, '#filterChips .facet-btn.on'), 0, 'a filter reads as set on a fresh shelf');
+});
+
+test('the saved views sit on the bar with the count each would show', async () => {
+  const { doc, read } = await boot();
+  const pills = [...doc.querySelectorAll('#savedViews .view-pill')];
+  assert.strictEqual(pills.length, read('SAVED_VIEWS.length'));
+  const cleaning = pills.find(p => /Needs cleaning/.test(p.textContent));
+  const expected = RECORDS.filter(r =>
+    r.have_it && !(JSON.parse(r.cleaned_dates || '[]') || []).some(Boolean)).length;
+  assert.strictEqual(cleaning.querySelector('.view-n').textContent.trim(), String(expected));
 });
 
 test('the toggle moves the shelf to the wishlist and marks which side is on', async () => {
   const { win, doc, read } = await boot();
   // Re-queried every time: choosing a side re-renders the whole bar.
-  const opt = value => $(doc, `#filterChips .own-opt.${value}`);
+  const opt = value => $(doc, `#ownSeg .own-opt.${value}`);
   assert.strictEqual(read('filterState.ownership'), 'owned');
   assert.strictEqual(opt('owned').getAttribute('aria-pressed'), 'true');
 
@@ -244,12 +263,28 @@ test('the toggle moves the shelf to the wishlist and marks which side is on', as
     RECORDS.filter(r => !r.have_it).length);
 });
 
-test('opening the facet picker lists the saved views and the dimensions', async () => {
-  const { win, doc } = await boot();
-  win.openFacetPicker();
-  const items = [...doc.querySelectorAll('#facetPop .facet-item')].map(el => el.textContent);
-  assert.ok(items.some(t => /Needs cleaning/.test(t)), 'no saved views');
-  assert.ok(items.some(t => /Genre/.test(t)), 'no facets');
+test('the filter sheet lists the saved views and every dimension at once', async () => {
+  const { win, doc, read } = await boot();
+  win.openFilterSheet();
+  const text = $(doc, '#facetPop').textContent;
+  assert.match(text, /Needs cleaning/, 'no saved views');
+  read('VinylFilters.FACETS.map(f => f.label)').forEach(label =>
+    assert.ok(text.includes(label), 'the sheet leaves out ' + label));
+  // Values are right there to tick, not one level down.
+  assert.ok(count(doc, '#facetPop [data-facet="genre"]') > 0, 'no genre values in the sheet');
+});
+
+test('a facet button opens only that facet, nothing ticked until you pick', async () => {
+  const { win, doc, read } = await boot();
+  press(win, $(doc, '#filterChips [data-facet-btn="genre"] .facet-open'));
+  assert.strictEqual(read('facetPopFor'), 'genre');
+  assert.ok(count(doc, '#facetPop .facet-item[data-facet="genre"]') > 0);
+  assert.strictEqual(count(doc, '#facetPop .facet-item.on'), 0,
+    'an untouched facet showed every value as ticked');
+  press(win, $(doc, '#facetPop .facet-item[data-value="Jazz"]'));
+  assert.deepStrictEqual(read('filterState.facets.genre'), ['Jazz']);
+  assert.ok($(doc, '#filterChips [data-facet-btn="genre"]').classList.contains('on'));
+  assert.match($(doc, '#filterChips [data-facet-btn="genre"]').textContent, /Jazz/);
 });
 
 test('a saved view narrows the shelf and leaves a chip explaining it', async () => {
@@ -258,7 +293,30 @@ test('a saved view narrows the shelf and leaves a chip explaining it', async () 
   const expected = RECORDS.filter(r =>
     r.have_it && !(JSON.parse(r.cleaned_dates || '[]') || []).some(Boolean)).length;
   assert.match($(doc, '#recordCount').textContent, new RegExp('^— ' + expected + '\\b'));
-  assert.match($(doc, '#filterChips').textContent, /cleaning/i);
+  const btn = $(doc, '#filterChips [data-facet-btn="cleaning"]');
+  assert.ok(btn.classList.contains('on'), 'the view left no filter showing');
+  assert.match(btn.textContent, /never cleaned/i);
+  const pill = $(doc, '#savedViews [data-view="needs-cleaning"]');
+  assert.strictEqual(pill.getAttribute('aria-pressed'), 'true', 'the view does not show as on');
+});
+
+test('pressing the view that is on goes back to the whole shelf', async () => {
+  const { win, doc, read } = await boot();
+  const before = count(doc, '#recordsContainer .vcard');
+  win.applySavedView('needs-cleaning');
+  press(win, $(doc, '#savedViews [data-view="needs-cleaning"]'));
+  assert.deepStrictEqual(read('filterState.facets'), {});
+  assert.strictEqual(count(doc, '#recordsContainer .vcard'), before);
+});
+
+test('the summary line reads the shelf back as a sentence', async () => {
+  const { win, doc } = await boot();
+  win.applySavedView('needs-cleaning');
+  win.setSortBy('artist');
+  const line = $(doc, '#shelfSummary').textContent;
+  assert.match(line, /never cleaned/i, 'the filter is missing from the summary');
+  assert.match(line, /artist, A → Z/, 'the sort is missing from the summary');
+  assert.match(line, /crate per letter/, 'the crates are missing from the summary');
 });
 
 test('dropping a facet chip puts the records back', async () => {
@@ -434,7 +492,7 @@ test('the drawer offers neither for a wishlist record, on both layouts', async (
 // so it is a second place the decision has to hold.
 test('walking the wishlist shelf never brings the buttons back', async () => {
   const { win, doc, read } = await boot();
-  press(win, $(doc, '#filterChips .own-opt.wishlist'));
+  press(win, $(doc, '#ownSeg .own-opt.wishlist'));
   const shelf = read('filtered()').map(r => r.id);
   assert.ok(shelf.length > 1, 'the wishlist shelf is too short to walk');
   win.openDetail(shelf[0]);
@@ -488,16 +546,52 @@ test('a form with something in it asks before throwing it away', async () => {
 
 test('changing the crate regroups the shelf', async () => {
   const { win, doc, read } = await boot();
-  win.setGroupBy('genre');
+  win.setCrates('genre');
   assert.strictEqual(read('groupBy'), 'genre');
   const heads = [...doc.querySelectorAll('#recordsContainer .crate-head')];
   assert.ok(heads.length > 0, 'no crates were drawn');
-  assert.match($(doc, '#groupLabel').textContent, /Genre/);
+  assert.match($(doc, '#crateLabel').textContent, /genre/i);
+});
+
+/* The bug this bar exists to fix: sorting by artist used to leave the shelf in
+ * month-added crates, A→Z inside each month, which read as no order at all. */
+test('picking a sort brings the crates that go with it', async () => {
+  const { win, doc, read } = await boot();
+  win.openArrangePanel();
+  const item = $(doc, '#arrangePanel [data-sort="artist"]');
+  assert.ok(item, 'the sort list offers no artist option');
+  press(win, item);
+  assert.strictEqual(read('sortBy'), 'artist');
+  assert.strictEqual(read('groupBy'), 'artist_initial');
+  const labels = [...doc.querySelectorAll('#recordsContainer .crate-label')].map(e => e.textContent.trim());
+  assert.ok(labels.length && labels.every(l => /^[A-Z#]$|^Multiple artists$/.test(l)),
+    'crates were not letters: ' + labels.join(', '));
+  assert.match($(doc, '#crateLabel').textContent, /letter/i);
+});
+
+test('a crate picked on purpose survives a change of sort', async () => {
+  const { win, read } = await boot();
+  win.setCrates('genre');
+  win.setSortBy('artist');
+  assert.strictEqual(read('groupBy'), 'genre');
+});
+
+test('each sort starts in the direction it reads naturally', async () => {
+  const { win, doc, read } = await boot();
+  const firstArtist = () => read('records').find(r =>
+    r.id === Number($(doc, '#recordsContainer .vcard').dataset.id)).artist;
+  win.setSortBy('artist');
+  assert.strictEqual(read('sortDir'), 'asc', 'artist did not start A → Z');
+  assert.strictEqual(firstArtist(), 'Artist 1');
+  win.setSortDir('desc');
+  assert.strictEqual(firstArtist(), 'Artist 8', 'Z → A did not reverse the shelf');
+  win.setSortBy('bought_date');
+  assert.strictEqual(read('sortDir'), 'desc', 'date added did not start newest first');
 });
 
 test('no crates draws one flat grid', async () => {
   const { win, doc } = await boot();
-  win.setGroupBy('none');
+  win.setCrates('none');
   assert.strictEqual(count(doc, '#recordsContainer .crate-head'), 0);
   assert.ok(count(doc, '#recordsContainer .vcard') > 0);
 });
@@ -505,9 +599,7 @@ test('no crates draws one flat grid', async () => {
 test('changing the sort keeps every record on the shelf', async () => {
   const { win, doc, read } = await boot();
   const before = count(doc, '#recordsContainer .vcard');
-  const item = $(doc, '#sortList [data-sort="artist"]');
-  assert.ok(item, 'the sort list offers no artist option');
-  item.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  win.setSortBy('artist');
   assert.strictEqual(read('sortBy'), 'artist');
   assert.strictEqual(count(doc, '#recordsContainer .vcard'), before);
 });
@@ -529,7 +621,7 @@ test('the list view draws rows instead of cards', async () => {
 
 test('collapsing a crate hides its records but keeps its header', async () => {
   const { win, doc } = await boot();
-  win.setGroupBy('genre');
+  win.setCrates('genre');
   const head = $(doc, '#recordsContainer .crate-head');
   const id = head.dataset.crate;
   win.toggleCrate(id);
@@ -894,17 +986,22 @@ test('a link that names a view still wins', async () => {
 
 test('the arrange controls write themselves into the address bar', async () => {
   const { win } = await boot();
-  win.setGroupBy('genre');
+  win.setCrates('genre');
   assert.match(win.location.hash, /crate=genre/);
   win.toggleSortDir();
   assert.match(win.location.hash, /dir=asc/);
 });
 
-test('a dir=asc link shows an ascending arrow', async () => {
+test('a dir=asc link says oldest first on the sort button', async () => {
   const { doc } = await boot('#dir=asc');
-  assert.ok($(doc, '#sortDirBtn').classList.contains('asc'));
-  assert.match($(doc, '#sortDirBtn').innerHTML, /arrow-up/,
-    'the arrow disagreed with the sort it is describing');
+  assert.match($(doc, '#sortLabel').textContent, /oldest first/i,
+    'the button disagreed with the sort it is describing');
+});
+
+test('an old link naming the month crates lands on crates that follow the sort', async () => {
+  const { read } = await boot('#crate=bought_date&sort=artist');
+  assert.strictEqual(read('crateBy'), 'sort');
+  assert.strictEqual(read('groupBy'), 'artist_initial');
 });
 
 // ── setup mode ───────────────────────────────────────────────────────────
@@ -1121,15 +1218,15 @@ test('clicking away closes the facet popover on a desktop', async () => {
   // The backdrop that carries the close is display:none above 760px, and the
   // dropdowns this replaced each had an outside-click closer of their own.
   const { win, doc, read } = await boot();
-  win.openFacetPicker();
-  assert.strictEqual(read('facetPopFor'), 'pick');
+  win.openFilterSheet();
+  assert.strictEqual(read('facetPopFor'), 'all');
   $(doc, '#recordsContainer').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   assert.strictEqual(read('facetPopFor'), null, 'the popover would not go away');
 });
 
 test('escape closes the facet popover', async () => {
   const { win, doc, read } = await boot();
-  win.openFacetPicker();
+  win.openFilterSheet();
   doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.strictEqual(read('facetPopFor'), null);
 });

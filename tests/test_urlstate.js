@@ -50,6 +50,14 @@ test('an open record is carried', () => {
   assert.strictEqual(decode(encode(state({ recordId: 34 }))).recordId, 34);
 });
 
+test('crates follow the sort unless a link says otherwise', () => {
+  // 'sort' is the crate that goes with whatever the shelf is sorted by, so a
+  // plain link sorted by artist gets letter crates without having to say so.
+  assert.strictEqual(DEFAULTS.crate, 'sort');
+  assert.strictEqual(encode(state({ sort: 'artist' })), 'sort=artist');
+  assert.strictEqual(decode(encode(state({ crate: 'none' }))).crate, 'none');
+});
+
 test('the arrange controls are carried', () => {
   const got = decode(encode(state({ crate: 'genre', sort: 'year', dir: 'asc', view: 'list' })));
   assert.strictEqual(got.crate, 'genre');

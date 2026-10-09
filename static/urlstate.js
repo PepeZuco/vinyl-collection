@@ -26,7 +26,7 @@ const VinylUrlState = (function () {
     text: '',
     ownership: 'owned',
     facets: {},
-    crate: 'bought_date',
+    crate: 'sort',          // the crates that go with the sort; see the page's SORT_OPTIONS
     sort: 'bought_date',
     dir: 'desc',
     view: 'grid',

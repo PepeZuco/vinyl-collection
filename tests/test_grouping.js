@@ -50,6 +50,47 @@ test('a record with no artist falls into the Unknown artist bucket', () => {
   assert.strictEqual(bucketOf(rec({ artist: '' }), 'artist').label, 'Unknown artist');
 });
 
+test('artist initial buckets by the uppercased first letter', () => {
+  const b = bucketOf(rec({ artist: 'caetano Veloso' }), 'artist_initial');
+  assert.strictEqual(b.label, 'C');
+  assert.strictEqual(b.unknown, false);
+});
+
+test('an accented artist files under its bare letter, not under #', () => {
+  // Élis and Elis are the same shelf position to anyone looking for her.
+  assert.strictEqual(bucketOf(rec({ artist: 'Élis Regina' }), 'artist_initial').label, 'E');
+  assert.strictEqual(bucketOf(rec({ artist: 'Ângela Maria' }), 'artist_initial').label, 'A');
+});
+
+test('a compilation gets a crate of its own, pinned with the unknowns', () => {
+  // Sorting by artist already puts compilations last; filing one under
+  // whichever performer happens to be listed first would scatter them.
+  const b = bucketOf(rec({ artist: 'Duke Ellington; Count Basie' }), 'artist_initial');
+  assert.strictEqual(b.label, 'Multiple artists');
+  assert.strictEqual(b.unknown, true);
+});
+
+test('an artist starting with a digit or symbol buckets into #', () => {
+  assert.strictEqual(bucketOf(rec({ artist: '10cc' }), 'artist_initial').label, '#');
+});
+
+test('a record with no artist falls into the Unknown artist letter bucket', () => {
+  const b = bucketOf(rec({ artist: '' }), 'artist_initial');
+  assert.strictEqual(b.label, 'Unknown artist');
+  assert.strictEqual(b.unknown, true);
+});
+
+test('artist initial crates run A first ascending', () => {
+  const a = rec({ artist: 'Altamiro Carrilho' });
+  const c = rec({ artist: 'Chico Buarque' });
+  assert.ok(compareByGroup(a, c, 'artist_initial', 'asc') < 0);
+  assert.ok(compareByGroup(a, c, 'artist_initial', 'desc') > 0);
+});
+
+test('an accented album files under its bare letter', () => {
+  assert.strictEqual(bucketOf(rec({ album_name: 'Ópera do Malandro' }), 'album_name').label, 'O');
+});
+
 test('album buckets by its uppercased first letter', () => {
   assert.strictEqual(bucketOf(rec({ album_name: 'aja' }), 'album_name').label, 'A');
 });
