@@ -60,3 +60,7 @@ all, just the art and its shadow.
 With *Reduce Motion* on (iOS: Accessibility → Motion; Android: Remove
 animations), every cover opens flat and stays still — a new one keeps its
 glare, resting in the middle.
+
+## The record's own cover
+
+The small cover on the record screen tilts too now, with the same lean and (on a new record) the same glare; see `phone-record-view-manual-verification.md`.
