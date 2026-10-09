@@ -2162,12 +2162,13 @@ select option{background:var(--surface);color:var(--text)}
    and — on the collection — how it is ordered. Under it the saved views, then
    every dimension you can narrow by, each a button that shows its value once
    set. Nothing is behind a "+ filter": what you cannot see you never use. */
-.bar{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;padding:12px 14px;
+.bar{position:relative;display:flex;flex-direction:column;gap:10px;margin-bottom:12px;padding:12px 14px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
 .bar-row{display:flex;align-items:center;gap:8px;min-height:32px;flex-wrap:wrap}
 .bar-top{position:relative}
+/* the search gives way first, so the sort and crates stay on the same line */
+.bar-top .search{flex:1 1 200px;max-width:none;min-width:160px}
 .bar-views{padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
-.bar-facets{position:relative}
 .bar-tag{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
   letter-spacing:.14em;color:var(--label);width:58px;flex-shrink:0;user-select:none}
 
@@ -2197,7 +2198,7 @@ select option{background:var(--surface);color:var(--text)}
   font:500 12.5px var(--font);white-space:nowrap;cursor:pointer;flex-shrink:0}
 .view-pill i{font-size:13px;color:var(--label)}
 .view-pill .view-n{font-family:var(--font-mono);font-size:11.5px;color:var(--label)}
-.view-pill:hover{border-color:var(--accent)}
+@media(hover:hover){.view-pill:hover{border-color:var(--accent)}}
 .view-pill.empty{opacity:.45}
 .view-pill[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 14%,transparent);
   border-color:color-mix(in srgb,var(--accent) 60%,transparent);color:var(--accent)}
@@ -2253,7 +2254,7 @@ select option{background:var(--surface);color:var(--text)}
 .arrange-panel.hidden{display:none}
 .ap-head{display:none;align-items:center;padding:6px 6px 6px 16px;border-bottom:1px solid var(--border)}
 .ap-head .modal-title{flex:1}
-.ap-body{overflow-y:auto;padding-bottom:12px}
+.ap-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-bottom:12px}
 .ap-sec{font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
   color:var(--label);padding:12px 14px 6px}
 .ap-opt{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 14px;border:none;
@@ -2310,13 +2311,16 @@ select option{background:var(--surface);color:var(--text)}
   .bar-top .search{order:1;flex:1 1 calc(100% - 52px);max-width:none;height:44px}
   .arrange{display:contents}
   .arrange .dice-btn{order:2;width:44px;height:44px}
-  .own-wrap{order:3;flex:1;min-width:0;display:flex}
-  .own-seg{height:44px;flex:1}
-  .own-opt{flex:1;justify-content:center;height:38px}
-  .own-opt .own-n{display:none}
-  .m-filter-btn{display:inline-flex;order:4}
+  /* one row of three on a 360px phone: the words stay, the icons give way */
+  .own-wrap{order:3;flex:1 1 0;min-width:0;display:flex}
+  .own-seg{height:44px;flex:1;min-width:0}
+  .own-opt{flex:1;justify-content:center;height:38px;padding:0 8px;min-width:0;overflow:hidden}
+  .own-opt i,.own-opt .own-n{display:none}
+  .own-label{overflow:hidden;text-overflow:ellipsis}
+  .m-filter-btn{display:inline-flex;order:4;flex-shrink:0}
+  .m-filter-btn.on i{display:none}
   .arrange-dd{order:5}
-  .arrange-trigger{height:44px}
+  .arrange-trigger{height:44px;padding:0 10px;gap:6px}
   .arrange-trigger .trigger-label,#sortLabel,.arrange-chev,.crate-trigger,.view-toggle{display:none}
   .sort-short{display:inline}
   .views-scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}
@@ -2337,6 +2341,13 @@ select option{background:var(--surface);color:var(--text)}
   .ap-crate{height:36px;font-size:13px;padding:0 13px}
   .ap-phone{display:block}
   .ap-foot{display:block;padding:12px 14px 20px;border-top:1px solid var(--border)}
+  .ap-foot .facet-apply{width:100%}
+}
+/* the narrowest phones: the sort button keeps its icon and lets the words go
+   to the summary line, which already says how the shelf is sorted */
+@media(max-width:374px){
+  .sort-short{display:none !important}
+  .arrange-trigger{width:44px;justify-content:center;padding:0}
 }
 
 /* ── the facet popover ───────────────────────────────────────────────────
@@ -2345,8 +2356,7 @@ select option{background:var(--surface);color:var(--text)}
 .facet-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:95;
   opacity:0;pointer-events:none;transition:opacity .2s}
 .facet-backdrop.open{opacity:1;pointer-events:auto}
-#filterRow{position:relative}
-.facet-pop{position:absolute;top:calc(100% + 6px);left:66px;z-index:96;background:var(--surface);border:1px solid var(--border);
+.facet-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:96;background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius);width:290px;box-shadow:0 12px 34px rgba(0,0,0,.5);
   display:flex;flex-direction:column;overflow:hidden}
 .facet-pop.hidden{display:none}
@@ -2374,9 +2384,28 @@ select option{background:var(--surface);color:var(--text)}
 .facet-apply{flex:1;height:34px;border:none;border-radius:var(--radius-sm);background:var(--accent);
   color:#141414;font:700 12.5px var(--font);cursor:pointer}
 [data-theme="light"] .facet-apply{color:#fff}
+.facet-head .chip-clear{margin-left:auto}
+/* every facet at once: the phone's Filters sheet */
+.facet-pop.sheet{width:min(560px,100%)}
+.facet-pop.sheet .facet-body{max-height:min(70vh,560px);padding:4px 14px 12px}
+.facet-pop.sheet .facet-section{display:flex;align-items:baseline;padding:16px 0 8px;font-size:10px;color:var(--label)}
+.fs-picked{margin-left:auto;font-family:var(--font);font-size:12px;letter-spacing:0;text-transform:none;
+  font-weight:500;color:var(--accent)}
+.fs-chips{display:flex;flex-wrap:wrap;gap:8px}
+.fs-chip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 13px;border-radius:999px;
+  border:1px solid var(--border);background:var(--card);color:var(--text);font:500 13.5px var(--font);
+  cursor:pointer;max-width:100%}
+.fs-chip .facet-name{flex:0 1 auto}
+.fs-chip .facet-count{margin-left:0}
+.fs-chip.on{background:color-mix(in srgb,var(--accent) 14%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 60%,transparent);color:var(--accent)}
+.fs-chip.on .facet-count{color:var(--accent)}
+.fs-more{background:transparent;border-style:dashed;color:var(--label)}
 
 @media(max-width:760px){
   .facet-backdrop{display:block}
+  .facet-pop.sheet{width:auto}
+  .facet-pop.sheet .facet-body{max-height:none}
   .facet-pop{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:82vh;
     border-radius:16px 16px 0 0;border-left:none;border-right:none;border-bottom:none}
   .facet-body{max-height:none;flex:1}
@@ -3555,8 +3584,10 @@ select option{background:var(--surface);color:var(--text)}
     <div class="bar-row bar-facets" id="facetRow">
       <span class="bar-tag">Filters</span>
       <div class="chiprow" id="filterChips"></div>
-      <div class="facet-pop hidden" id="facetPop"></div>
     </div>
+    <!-- a child of the bar rather than the facet row: on a phone that row is
+         hidden while nothing is set, and the sheet has to open from it anyway -->
+    <div class="facet-pop hidden" id="facetPop"></div>
   </div>
   <p class="shelf-summary" id="shelfSummary"></p>
 
@@ -5111,19 +5142,19 @@ const SORT_OPTIONS = [
     short: { asc: 'A → Z', desc: 'Z → A' } },
   { value: 'year',        label: 'Year',         icon: 'ti-calendar',       crate: 'year',
     noun: 'decade', dir: 'desc', dirs: { desc: 'newest first', asc: 'oldest first' },
-    short: { desc: 'Newest', asc: 'Oldest' } },
+    short: { desc: 'Year ↓', asc: 'Year ↑' } },
   { value: 'avg_rating',  label: 'Rating',       icon: 'ti-star-filled',    crate: 'avg_rating',
     noun: 'star rating', dir: 'desc', dirs: { desc: 'highest first', asc: 'lowest first' },
-    short: { desc: 'Top rated', asc: 'Lowest' } },
+    short: { desc: 'Rating ↓', asc: 'Rating ↑' } },
   { value: 'my_rating',   label: 'Pepe rating',  icon: 'ti-star-half-filled', crate: 'my_rating',
     noun: 'star rating', dir: 'desc', dirs: { desc: 'highest first', asc: 'lowest first' },
-    short: { desc: 'Pepe ★', asc: 'Pepe ★' } },
+    short: { desc: 'Pepe ↓', asc: 'Pepe ↑' } },
   { value: 'wife_rating', label: 'Jenni rating', icon: 'ti-star-half-filled', crate: 'wife_rating',
     noun: 'star rating', dir: 'desc', dirs: { desc: 'highest first', asc: 'lowest first' },
-    short: { desc: 'Jenni ★', asc: 'Jenni ★' } },
+    short: { desc: 'Jenni ↓', asc: 'Jenni ↑' } },
   { value: 'play_count',  label: 'Plays',        icon: 'ti-headphones',     crate: 'play_count',
     noun: 'play count', dir: 'desc', dirs: { desc: 'most played first', asc: 'least played first' },
-    short: { desc: 'Most played', asc: 'Least played' } },
+    short: { desc: 'Plays ↓', asc: 'Plays ↑' } },
 ];
 
 /* Crates you pick on purpose: dimensions the shelf does not sort by. Each runs
@@ -5353,7 +5384,7 @@ function render() {
   const recs = filtered();
   renderCount(recs.length);
   renderFilters();
-  renderBar();
+  renderBar(recs.length);
   const c = document.getElementById('recordsContainer');
   if (!recs.length) {
     c.innerHTML = `<div class="empty"><i class="ti ti-disc"></i>${records.length ? 'no records match your filters.' : 'no records yet. add your first vinyl.'}</div>`;
@@ -5593,40 +5624,6 @@ function cratesHTML(recs) {
       <div class="crate-body">${recordsHTML(crate.records)}</div>
     </section>`;
   }).join('');
-}
-
-// ── smart filter chips — only shown once a filter is restricted from default ─
-/* The bar, rendered from the query. Every constraint is a chip that names its
- * field and its value, so a shelf reads back as a sentence — "owned, used" —
- * and an empty one always says why. Search and ownership used to leave no
- * trace at all, which is how you ended up staring at a grid unable to tell
- * what was hiding the rest of it. */
-function renderChips() {
-  const chips = VinylFilters.chipsFor(currentQuery());
-
-  const ownSeg = `<div class="own-seg" role="group" aria-label="show owned or wishlist">
-      ${OWNERSHIP.map(o => `<button class="own-opt ${esc(o.value)}" onclick="setOwnership('${esc(o.value)}')"
-        aria-pressed="${o.value === filterState.ownership}" title="show ${esc(o.label.toLowerCase())}">
-        <i class="ti ${esc(o.icon)}"></i><span>${esc(o.label)}</span>
-      </button>`).join('')}
-    </div>`;
-
-  const facetChips = chips.map(c => `<span class="chip">
-      <button class="chip-open" onclick="openFacetValues('${esc(c.id)}')">
-        <span class="k">${esc(c.label.toLowerCase())}</span><b>${esc(chipValueText(c))}</b>
-      </button>
-      <button class="chip-x" onclick="dropFacet('${esc(c.id)}')" title="remove this filter">
-        <i class="ti ti-x"></i>
-      </button>
-    </span>`).join('');
-
-  const add = `<button class="chip-add" onclick="openFacetPicker()">
-      <i class="ti ti-plus"></i>filter
-    </button>`;
-  const clear = chips.length
-    ? `<button class="chip-clear" onclick="clearAllFilters()">clear</button>` : '';
-
-  document.getElementById('filterChips').innerHTML = ownSeg + facetChips + add + clear;
 }
 
 // ── trigger square-shine animation only once a card is actually visible ────
@@ -11893,15 +11890,27 @@ function setSearchFields(fields) {
 }
 let searchFieldsFromView = false;
 
+/* Whether the shelf is showing exactly what a view asks for — the pill lights
+ * up only then, so a view you have since narrowed further reads as left. */
+function savedViewIsOn(view) {
+  const q = view.query;
+  const norm = f => JSON.stringify(Object.keys(f || {}).sort().map(k => [k, (f[k] || []).slice().sort()]));
+  return filterState.ownership === q.ownership &&
+    norm(filterState.facets) === norm(q.facets) &&
+    document.getElementById('searchInput').value.trim().toLowerCase() === (q.text || '').toLowerCase();
+}
+
 function applySavedView(id) {
   const view = SAVED_VIEWS.find(v => v.id === id);
   if (!view) return;
+  // Pressing the view you are in is how you leave it: back to the whole shelf.
+  const leaving = savedViewIsOn(view);
   trackEvent('saved-view', { view: id });
-  filterState.ownership = view.query.ownership;
-  filterState.facets = JSON.parse(JSON.stringify(view.query.facets));
-  document.getElementById('searchInput').value = view.query.text || '';
+  filterState.ownership = leaving ? 'owned' : view.query.ownership;
+  filterState.facets = leaving ? {} : JSON.parse(JSON.stringify(view.query.facets));
+  document.getElementById('searchInput').value = leaving ? '' : (view.query.text || '');
   // A view's fields are borrowed: the next view puts the person's own back.
-  if (view.query.fields) {
+  if (view.query.fields && !leaving) {
     setSearchFields(view.query.fields);
     searchFieldsFromView = true;
   } else if (searchFieldsFromView) {
@@ -11931,105 +11940,213 @@ function facetValueLabel(facetId, value) {
   return value;
 }
 
-/* What a chip says. One value reads as itself; several read as a count, since
- * "Genre · Rock, Jazz, Soul & Funk, Pop" is longer than the shelf it explains. */
+/* What a set facet button says. Two values still fit as names; past that the
+ * first name and how many more, since "Rock, Jazz, Soul & Funk, Pop" is longer
+ * than the shelf it explains. */
 function chipValueText(chip) {
-  if (chip.values.length === 0) return 'none';
-  if (chip.values.length === 1) return facetValueLabel(chip.id, chip.values[0]);
-  const total = VinylFilters.facetValues(records, currentQuery(), chip.id, FILTER_DEPS).length;
-  return chip.values.length + ' of ' + total;
+  const names = chip.values.map(v => facetValueLabel(chip.id, v));
+  if (names.length === 0) return 'none';
+  if (names.length <= 2) return names.join(', ');
+  return names[0] + ' +' + (names.length - 1);
 }
 
-// ── the facet popover: one control, two jobs ───────────────────────────────
-// Closed, it is nothing. Opened from "+ filter" it lists the dimensions you
-// could narrow by; opened from a chip it lists that dimension's values with
-// the count each would leave on screen. On a phone the same element rises as
-// a bottom sheet — the sheet it replaces was a settings screen holding every
-// control at once, which is what made it feel endless.
-let facetPopFor = null;   // null | 'pick' | a facet id
+// ── the bar ──────────────────────────────────────────────────────────────────
+// Drawn from the query on every render, so nothing on it can describe a shelf
+// other than the one on screen.
+function renderBar(shown) {
+  const q = currentQuery();
+  const owned = records.filter(r => r.have_it).length;
+  const total = { owned, wishlist: records.length - owned };
 
-function openFacetPicker() { facetPopFor = 'pick'; renderFacetPop(); }
-function openFacetValues(id) { facetPopFor = id; renderFacetPop(); }
-function closeFacetPop() { facetPopFor = null; renderFacetPop(); }
+  document.getElementById('ownSeg').innerHTML =
+    `<div class="own-seg" role="group" aria-label="show owned or wishlist">
+      ${OWNERSHIP.map(o => `<button class="own-opt ${esc(o.value)}" onclick="setOwnership('${esc(o.value)}')"
+        aria-pressed="${o.value === filterState.ownership}" title="show ${esc(o.label.toLowerCase())}">
+        <i class="ti ${esc(o.icon)}"></i><span class="own-label">${esc(o.label)}</span><span class="own-n">${total[o.value]}</span>
+      </button>`).join('')}
+    </div>`;
+
+  document.getElementById('savedViews').innerHTML = SAVED_VIEWS.map(viewPillHTML).join('');
+
+  const set = VinylFilters.FACETS.filter(f => q.facets[f.id]);
+  document.getElementById('filterChips').innerHTML = VinylFilters.FACETS.map(f => {
+    const values = q.facets[f.id];
+    const open = facetPopFor === f.id;
+    return `<span class="facet-btn${values ? ' on' : ''}${open ? ' open' : ''}" data-facet-btn="${esc(f.id)}">
+      <button class="facet-open" onclick="toggleFacetValues('${esc(f.id)}')" aria-expanded="${open}" aria-haspopup="dialog">
+        ${values
+          ? `<span class="k">${esc(f.label)}</span><b>${esc(chipValueText({ id: f.id, values }))}</b>`
+          : `${esc(f.label)}<i class="ti ti-chevron-down"></i>`}
+      </button>${values ? `<button class="facet-x" onclick="dropFacet('${esc(f.id)}')"
+        aria-label="remove the ${esc(f.label.toLowerCase())} filter" title="remove this filter"><i class="ti ti-x"></i></button>` : ''}
+    </span>`;
+  }).join('') + (set.length ? `<button class="chip-clear" onclick="clearAllFilters()">Clear all</button>` : '');
+  document.getElementById('facetRow').classList.toggle('none-set', !set.length);
+
+  const mBtn = document.getElementById('mFilterBtn');
+  mBtn.classList.toggle('on', set.length > 0);
+  document.getElementById('mFilterN').textContent = set.length || '';
+
+  renderSummary(shown, q);
+}
+
+function viewPillHTML(v) {
+  const n = savedViewCount(v);
+  const on = savedViewIsOn(v);
+  return `<button class="view-pill${n ? '' : ' empty'}" data-view="${esc(v.id)}" aria-pressed="${on}"
+      onclick="applySavedView('${esc(v.id)}')" title="${esc(v.hint)}">
+    <i class="ti ti-bookmark"></i>${esc(v.label)}<span class="view-n">${n}</span>
+  </button>`;
+}
+
+/* The shelf read back as one sentence: how many, which, and in what order. */
+function renderSummary(shown, q) {
+  const el = document.getElementById('shelfSummary');
+  if (shown === undefined) return;
+  const parts = [`<b>${shown} ${shown === 1 ? 'record' : 'records'}</b>` +
+    (q.ownership === 'wishlist' ? ' on the wishlist' : '')];
+  const text = (q.text || '').trim();
+  if (text) parts.push(`matching “${esc(text)}”`);
+  VinylFilters.chipsFor(q).forEach(c => {
+    const names = c.values.map(v => facetValueLabel(c.id, v));
+    parts.push(!names.length ? `no ${esc(c.label.toLowerCase())}`
+      : names.length <= 3 ? esc(names.join(' or '))
+      : `${names.length} ${esc(c.label.toLowerCase())} values`);
+  });
+  parts.push(arrangePhrase());
+  el.innerHTML = parts.join(' · ');
+}
+
+function arrangePhrase() {
+  const o = sortOption();
+  const sorted = `sorted by ${o.label.toLowerCase()}, ${o.dirs[sortDir]}`;
+  if (crateBy === 'sort') return `${sorted}, one crate per ${o.noun}`;
+  if (crateBy === 'none') return `${sorted}, no crates`;
+  const c = CRATE_OPTIONS.find(x => x.value === crateBy);
+  return `in ${c.label.toLowerCase()} crates, ${sorted} inside each`;
+}
+
+// ── the facet popover: one facet, or every facet at once ────────────────────
+// Opened from a facet button it lists that facet's values with the count each
+// would leave on screen; on a phone it rises as a bottom sheet. Opened from the
+// phone's Filters button it is the whole bar in one sheet — the saved views,
+// then every facet with its values right there to tick.
+let facetPopFor = null;   // null | 'all' | a facet id
+const facetSheetOpen = new Set();   // facets whose long value lists are expanded
+const SHEET_VALUES = 8;
+
+function openFilterSheet() { closeArrangePanel(); facetPopFor = 'all'; renderFacetPop(); renderBar(); }
+function openFacetValues(id) { closeArrangePanel(); facetPopFor = id; renderFacetPop(); renderBar(); }
+function toggleFacetValues(id) { facetPopFor === id ? closeFacetPop() : openFacetValues(id); }
+function closeFacetPop() {
+  if (facetPopFor === null) return;
+  facetPopFor = null;
+  renderFacetPop();
+  renderBar();
+}
+
+function syncBackdrop() {
+  document.getElementById('facetBackdrop').classList.toggle('open', facetPopFor !== null || arrangeOpen);
+}
+
+function facetValueButton(facetId, v, picked, cls) {
+  const on = !!picked && picked.indexOf(v.value) !== -1;
+  return `<button class="${cls}${on ? ' on' : ''}" data-facet="${esc(facetId)}" data-value="${esc(v.value)}" aria-pressed="${on}">
+    ${cls === 'facet-item' ? `<span class="facet-check">${on ? '<i class="ti ti-check"></i>' : ''}</span>` : ''}
+    <span class="facet-name">${esc(facetValueLabel(facetId, v.value))}</span>
+    <span class="facet-count">${v.count}</span>
+  </button>`;
+}
 
 function renderFacetPop() {
   const pop = document.getElementById('facetPop');
-  const backdrop = document.getElementById('facetBackdrop');
   pop.classList.toggle('hidden', facetPopFor === null);
-  backdrop.classList.toggle('open', facetPopFor !== null);
+  pop.classList.toggle('sheet', facetPopFor === 'all');
+  syncBackdrop();
   if (facetPopFor === null) { pop.innerHTML = ''; return; }
 
   const q = currentQuery();
+  const shown = VinylFilters.filterRecords(records, q, FILTER_DEPS).length;
+  const showBtn = `<button class="facet-apply" onclick="closeFacetPop()">Show ${shown} record${shown === 1 ? '' : 's'}</button>`;
 
-  if (facetPopFor === 'pick') {
+  if (facetPopFor === 'all') {
+    pop.style.left = '';
+    pop.style.top = '';
+    const anySet = VinylFilters.FACETS.some(f => q.facets[f.id]);
     pop.innerHTML = `<div class="facet-head">
-        <span class="modal-title">views and filters</span>
-        <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()"><i class="ti ti-x"></i></button>
+        <span class="modal-title">Filters</span>
+        ${anySet ? `<button class="chip-clear" onclick="clearAllFilters()">Clear all</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()" aria-label="close"><i class="ti ti-x"></i></button>
       </div>
       <div class="facet-body">
-        <div class="facet-section">saved views</div>` +
-      SAVED_VIEWS.map(v => {
-        const n = savedViewCount(v);
-        return `<button class="facet-item view" onclick="applySavedView('${v.id}')">
-          <span class="facet-name">${esc(v.label)}<span class="facet-hint">${esc(v.hint)}</span></span>
-          <span class="facet-count">${n}</span>
-        </button>`;
-      }).join('') +
-      `<div class="facet-section">narrow the shelf by</div>` +
+        <div class="facet-section">Quick views</div>
+        <div class="fs-chips">${SAVED_VIEWS.map(viewPillHTML).join('')}</div>` +
       VinylFilters.FACETS.map(f => {
-        const n = VinylFilters.facetValues(records, q, f.id, FILTER_DEPS).length;
-        const on = !!q.facets[f.id];
-        return `<button class="facet-item${on ? ' sel' : ''}" onclick="openFacetValues('${f.id}')">
-          <span>${esc(f.label)}</span>
-          <span class="facet-count">${n} value${n === 1 ? '' : 's'}</span>
-        </button>`;
-      }).join('') + `</div>`;
+        const values = VinylFilters.facetValues(records, q, f.id, FILTER_DEPS);
+        const picked = q.facets[f.id] || null;
+        const all = facetSheetOpen.has(f.id) || values.length <= SHEET_VALUES + 1;
+        const list = all ? values : values.slice(0, SHEET_VALUES);
+        return `<div class="facet-section">${esc(f.label)}${picked
+            ? `<span class="fs-picked">${picked.length} picked</span>` : ''}</div>
+          <div class="fs-chips">${list.map(v => facetValueButton(f.id, v, picked, 'fs-chip')).join('')}${
+            all ? '' : `<button class="fs-chip fs-more" data-facet-more="${esc(f.id)}">+${values.length - list.length} more</button>`}</div>`;
+      }).join('') + `</div>
+      <div class="facet-foot">${showBtn}</div>`;
     return;
   }
 
   const facet = VinylFilters.facetById(facetPopFor);
   const values = VinylFilters.facetValues(records, q, facet.id, FILTER_DEPS);
   const picked = q.facets[facet.id] || null;
-  const shown = VinylFilters.filterRecords(records, q, FILTER_DEPS).length;
   pop.innerHTML = `<div class="facet-head">
-      <button class="btn btn-ghost btn-sm" onclick="openFacetPicker()"><i class="ti ti-chevron-left"></i></button>
       <span class="modal-title">${esc(facet.label)}</span>
-      <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()"><i class="ti ti-x"></i></button>
+      <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()" aria-label="close"><i class="ti ti-x"></i></button>
     </div>
     <div class="facet-body">` +
-    values.map(v => {
-      const on = picked === null || picked.indexOf(v.value) !== -1;
-      return `<button class="facet-item${on ? ' on' : ''}" data-facet="${esc(facet.id)}" data-value="${esc(v.value)}">
-        <span class="facet-check">${on ? '<i class="ti ti-check"></i>' : ''}</span>
-        <span class="facet-name">${esc(facetValueLabel(facet.id, v.value))}</span>
-        <span class="facet-count">${v.count}</span>
-      </button>`;
-    }).join('') + `</div>
+    values.map(v => facetValueButton(facet.id, v, picked, 'facet-item')).join('') + `</div>
     <div class="facet-foot">
-      <button class="btn btn-sm" onclick="dropFacet('${facet.id}')">Reset</button>
-      <button class="facet-apply" onclick="closeFacetPop()">Show ${shown} record${shown === 1 ? '' : 's'}</button>
+      <button class="btn btn-sm" onclick="dropFacet('${esc(facet.id)}')">Reset</button>
+      ${showBtn}
     </div>`;
+
+  // Under the button it came from — the bar is the offset parent of both.
+  // Clamped, so a facet near the right edge does not hang its list off the bar.
+  const btn = document.querySelector(`#filterChips [data-facet-btn="${facet.id}"]`);
+  const bar = document.getElementById('filterBar');
+  // On a phone it is a bottom sheet, which an inline top would pull back up.
+  const phone = window.matchMedia && window.matchMedia('(max-width: 760px)').matches;
+  pop.style.left = pop.style.top = '';
+  if (btn && bar && !phone) {
+    pop.style.left = Math.max(0, Math.min(btn.offsetLeft, bar.clientWidth - pop.offsetWidth)) + 'px';
+    pop.style.top = (btn.offsetTop + btn.offsetHeight + 6) + 'px';
+  }
 }
 
 // delegated, so a value carrying quotes or an ampersand cannot break the handler
 document.addEventListener('click', e => {
-  const item = e.target.closest('#facetPop .facet-item[data-facet]');
-  if (item) toggleFacetValue(item.dataset.facet, item.dataset.value);
+  const item = e.target.closest('#facetPop [data-facet][data-value]');
+  if (item) { toggleFacetValue(item.dataset.facet, item.dataset.value); return; }
+  const more = e.target.closest('#facetPop [data-facet-more]');
+  if (more) { facetSheetOpen.add(more.dataset.facetMore); renderFacetPop(); }
 });
 
 /* Clicking away closes it. On a phone the backdrop catches that, but the
- * backdrop is display:none on a desktop — where the dropdowns this replaced
- * each had a closer of their own, all four of which went with them. */
+ * backdrop is display:none on a desktop. The path is read rather than
+ * contains(): ticking a value re-renders the list, and the clicked element is
+ * gone from the page by the time this runs. */
 document.addEventListener('click', e => {
   if (facetPopFor === null) return;
+  const path = e.composedPath ? e.composedPath() : [];
   const pop = document.getElementById('facetPop');
-  if (pop.contains(e.target)) return;
-  if (e.target.closest('.chip-open, .chip-add')) return;   // the things that open it
+  if (path.includes(pop) || pop.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('.facet-open, .m-filter-btn')) return;   // the things that open it
   closeFacetPop();
 });
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && facetPopFor !== null) closeFacetPop();
+  if (e.key !== 'Escape') return;
+  if (facetPopFor !== null) closeFacetPop();
+  if (arrangeOpen) closeArrangePanel();
 });
 
 /* Ticking values one at a time. An untouched facet has no entry at all, so the
@@ -12044,8 +12161,10 @@ function toggleFacetValue(id, value) {
   else if (picked.indexOf(value) === -1) picked = picked.concat(value);
   else picked = picked.filter(v => v !== value);
 
-  // Everything ticked is the same as no constraint, and must not leave a chip.
-  if (picked.length === all.length && all.every(v => picked.indexOf(v) !== -1)) delete facets[id];
+  // Everything ticked is the same as no constraint, and nothing ticked is too —
+  // an untick down to zero must not leave a shelf emptied by a facet with no
+  // values, which is not something this list can show you as set.
+  if (!picked.length || (picked.length === all.length && all.every(v => picked.indexOf(v) !== -1))) delete facets[id];
   else facets[id] = picked;
 
   filterState.facets = facets;
@@ -12064,7 +12183,7 @@ function dropFacet(id) {
 function clearAllFilters() {
   filterState.facets = {};
   applyQueryChange();
-  closeFacetPop();
+  if (facetPopFor !== null) renderFacetPop();
 }
 
 // ── ownership: the shelf is either the collection or the wishlist ──────────
@@ -12081,97 +12200,105 @@ function setOwnership(value) {
   applyQueryChange();
 }
 
-function buildGroupList() {
-  document.getElementById('groupList').innerHTML = GROUP_OPTIONS.map(o => `
-    <div class="group-item${o.value===groupBy?' selected':''}" data-group="${o.value}">
-      <i class="ti ${o.icon}"></i>
-      <span>${esc(o.label)}</span>
-    </div>`).join('');
+// ── sort & crates ──────────────────────────────────────────────────────────
+// One panel, because the crates follow the sort: picking a sort is also
+// picking its crates, and the panel says which before you pick. A dropdown on
+// a desktop; a bottom sheet on a phone, where it also holds covers/list.
+let arrangeOpen = false;
+
+function openArrangePanel() { closeFacetPop(); arrangeOpen = true; renderArrangePanel(); }
+function closeArrangePanel() {
+  if (!arrangeOpen) return;
+  arrangeOpen = false;
+  renderArrangePanel();
+}
+function toggleArrangePanel() { arrangeOpen ? closeArrangePanel() : openArrangePanel(); }
+
+/* The two buttons say what the shelf is doing in words, and the panel (when
+ * open) is redrawn so it never shows a choice that has since changed. */
+function syncArrange() {
+  const o = sortOption();
+  document.getElementById('sortLabel').textContent = `${o.label}, ${o.dirs[sortDir]}`;
+  document.getElementById('sortShort').textContent = o.short[sortDir];
+  // the narrowest phones show only the icon, so the name has to say it all
+  document.getElementById('sortTrigger').setAttribute('aria-label', `sort and crates: ${o.label}, ${o.dirs[sortDir]}`);
+  const crate = CRATE_OPTIONS.find(c => c.value === crateBy);
+  document.getElementById('crateLabel').textContent =
+    crateBy === 'sort' ? `Crates by ${o.noun}`
+    : crateBy === 'none' ? 'No crates'
+    : `Crates by ${crate.label.toLowerCase()}`;
+  document.getElementById('crateTrigger').setAttribute('aria-pressed', String(crateBy !== 'none'));
+  if (arrangeOpen) renderArrangePanel();
 }
 
-function syncGroupTrigger() {
-  const opt = GROUP_OPTIONS.find(o => o.value === groupBy) || GROUP_OPTIONS[0];
-  document.getElementById('groupLabel').textContent = opt.label;
-  document.getElementById('groupTriggerIcon').className = `ti ${opt.icon}`;
-}
+function renderArrangePanel() {
+  const panel = document.getElementById('arrangePanel');
+  panel.classList.toggle('hidden', !arrangeOpen);
+  document.getElementById('sortTrigger').setAttribute('aria-expanded', String(arrangeOpen));
+  syncBackdrop();
+  if (!arrangeOpen) { panel.innerHTML = ''; return; }
 
-function toggleGroupDropdown() {
-  const panel = document.getElementById('groupPanel');
-  const chevron = document.getElementById('groupChevron');
-  const open = !panel.classList.contains('hidden');
-  panel.classList.toggle('hidden', open);
-  chevron.style.transform = open ? '' : 'rotate(180deg)';
+  const o = sortOption();
+  const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+  const dirs = [o.dir, o.dir === 'asc' ? 'desc' : 'asc'];   // the natural one first
+  const crate = CRATE_OPTIONS.find(c => c.value === crateBy);
+  const sub = crateBy === 'sort' ? `One crate per ${o.noun}, following the sort`
+    : crateBy === 'none' ? 'One flat shelf'
+    : `By ${crate.label.toLowerCase()}, ${o.label.toLowerCase()} inside each`;
+
+  panel.innerHTML = `<div class="ap-head">
+      <span class="modal-title">Sort &amp; crates</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeArrangePanel()" aria-label="close"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="ap-body">
+      <div class="ap-sec">Sort by</div>
+      ${SORT_OPTIONS.map(x => `<button class="ap-opt${x.value === sortBy ? ' selected' : ''}" data-sort="${x.value}"
+          aria-pressed="${x.value === sortBy}">
+        <i class="ti ${x.value === sortBy ? 'ti-check' : x.icon}"></i>${esc(x.label)}<span class="ap-hint">${esc(x.noun)} crates</span>
+      </button>`).join('')}
+      <div class="ap-seg" role="group" aria-label="direction">
+        ${dirs.map(d => `<button data-dir="${d}" aria-pressed="${d === sortDir}">${esc(cap(o.dirs[d]))}</button>`).join('')}
+      </div>
+      <div class="ap-rule"></div>
+      <div class="ap-sec">Crates</div>
+      <button class="ap-switch" role="switch" aria-checked="${crateBy !== 'none'}" data-crates-toggle>
+        <span><span class="t">Split into crates</span><span class="s">${esc(sub)}</span></span>
+        <span class="ap-track"></span>
+      </button>
+      ${crateBy === 'none' ? '' : `<div class="ap-crates" role="group" aria-label="crate by">
+        <button class="ap-crate" data-crate-mode="sort" aria-pressed="${crateBy === 'sort'}">By ${esc(o.noun)}</button>
+        ${CRATE_OPTIONS.map(c => `<button class="ap-crate" data-crate-mode="${c.value}"
+          aria-pressed="${crateBy === c.value}">${esc(c.label)}</button>`).join('')}
+      </div>`}
+      <div class="ap-phone">
+        <div class="ap-rule"></div>
+        <div class="ap-sec">Show as</div>
+        <div class="ap-seg" role="group" aria-label="covers or list">
+          <button data-view-mode="grid" aria-pressed="${viewMode === 'grid'}"><i class="ti ti-layout-grid"></i>Covers</button>
+          <button data-view-mode="list" aria-pressed="${viewMode === 'list'}"><i class="ti ti-list"></i>List</button>
+        </div>
+      </div>
+    </div>
+    <div class="ap-foot"><button class="facet-apply" onclick="closeArrangePanel()">Done</button></div>`;
 }
 
 document.addEventListener('click', e => {
-  const item = e.target.closest('.group-item');
-  if (item && item.dataset.group) {
-    setGroupBy(item.dataset.group);
-    document.getElementById('groupPanel')?.classList.add('hidden');
-    const ch = document.getElementById('groupChevron');
-    if (ch) ch.style.transform = '';
-  }
+  const t = e.target.closest && e.target.closest('#arrangePanel button');
+  if (!t) return;
+  if (t.dataset.sort) setSortBy(t.dataset.sort);
+  else if (t.dataset.dir) setSortDir(t.dataset.dir);
+  else if (t.dataset.crateMode) setCrates(t.dataset.crateMode);
+  else if (t.hasAttribute('data-crates-toggle')) setCrates(crateBy === 'none' ? 'sort' : 'none');
+  else if (t.dataset.viewMode) { setViewMode(t.dataset.viewMode); renderArrangePanel(); }
 });
 
-// close group dropdown when clicking outside
+// clicking away closes it — read off the path, since every choice redraws it
 document.addEventListener('click', e => {
-  const dd = document.getElementById('groupDropdown');
+  if (!arrangeOpen) return;
+  const dd = document.getElementById('arrangeDropdown');
   const path = e.composedPath ? e.composedPath() : [];
-  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
-  if (dd && !clickedInside) {
-    document.getElementById('groupPanel')?.classList.add('hidden');
-    const ch = document.getElementById('groupChevron');
-    if (ch) ch.style.transform = '';
-  }
-});
-
-// ── sort dropdown — custom, app-styled ──────────────────────────────────────
-function buildSortList() {
-  const list = document.getElementById('sortList');
-  list.innerHTML = SORT_OPTIONS.map(o => `
-    <div class="sort-item${o.value===sortBy?' selected':''}" data-sort="${o.value}">
-      <i class="ti ${o.icon}"></i>
-      <span>${esc(o.label)}</span>
-    </div>`).join('');
-}
-
-function syncSortTrigger() {
-  const opt = SORT_OPTIONS.find(o => o.value === sortBy) || SORT_OPTIONS[0];
-  document.getElementById('sortLabel').textContent = opt.label;
-  document.getElementById('sortTriggerIcon').className = `ti ${opt.icon}`;
-}
-
-document.addEventListener('click', e => {
-  const item = e.target.closest('.sort-item');
-  if (item && item.dataset.sort) {
-    sortBy = item.dataset.sort;
-    buildSortList();
-    syncSortTrigger();
-    render(); syncUrl();
-    document.getElementById('sortPanel')?.classList.add('hidden');
-    const ch = document.getElementById('sortChevron');
-    if (ch) ch.style.transform = '';
-  }
-});
-
-function toggleSortDropdown() {
-  const panel = document.getElementById('sortPanel');
-  const chevron = document.getElementById('sortChevron');
-  const open = !panel.classList.contains('hidden');
-  panel.classList.toggle('hidden', open);
-  chevron.style.transform = open ? '' : 'rotate(180deg)';
-}
-
-// close sort dropdown when clicking outside
-document.addEventListener('click', e => {
-  const dd = document.getElementById('sortDropdown');
-  const path = e.composedPath ? e.composedPath() : [];
-  const clickedInside = dd && (path.includes(dd) || dd.contains(e.target));
-  if (dd && !clickedInside) {
-    document.getElementById('sortPanel')?.classList.add('hidden');
-    const ch = document.getElementById('sortChevron');
-    if (ch) ch.style.transform = '';
-  }
+  if (path.includes(dd) || dd.contains(e.target)) return;
+  closeArrangePanel();
 });
 
 // close search fields panel when clicking outside
@@ -12226,8 +12353,12 @@ function switchTab(tab) {
   // Same for the playlists: each one carries its own filters.
   document.getElementById('filterBar').style.display =
     tab === 'features' || tab === 'playlists' || tab === 'admin' ? 'none' : '';
+  // Sort, crates and the summary that reads them back only mean something on
+  // the shelf itself; the charts and the timeline have orders of their own.
   document.getElementById('arrangeRow').style.display = tab === 'collection' ? '' : 'none';
+  document.getElementById('shelfSummary').style.display = tab === 'collection' ? '' : 'none';
   closeFacetPop();
+  closeArrangePanel();
   syncMobileTabbar();
 
   if (heavyRenderTimer) { clearTimeout(heavyRenderTimer); heavyRenderTimer = null; }

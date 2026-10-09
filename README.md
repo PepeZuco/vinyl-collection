@@ -78,7 +78,8 @@ pessoa que clicou. A lógica está em `static/analytics.js` e as chamadas, em
 | `search` | `query` | busca na estante (ao confirmar, não a cada letra) |
 | `filter` | `field`, `value` | marca/desmarca um valor de filtro |
 | `saved-view` | `view` | escolhe uma visão salva |
-| `group-by` / `view-mode` | `field` / `mode` | muda agrupamento / grade ou lista |
+| `sort` | `field` | muda a ordenação (as caixas acompanham) |
+| `group-by` / `view-mode` | `field` / `mode` | muda as caixas (`sort`, `none` ou um campo) / grade ou lista |
 | `theme` | `theme` | troca claro/escuro |
 | `tour-start` / `tour-end` | `step`, `of` | tour guiado (até onde chegou) |
 | `feature-open` | `flow` | abre um diagrama na aba Readme |

@@ -231,7 +231,7 @@ test('the bar shows both ownership options', async () => {
 test('every filter dimension has its own button on the bar', async () => {
   const { doc, read } = await boot();
   const ids = [...doc.querySelectorAll('#filterChips [data-facet-btn]')].map(b => b.dataset.facetBtn);
-  assert.deepStrictEqual(ids, read('VinylFilters.FACETS.map(f => f.id)'));
+  assert.deepStrictEqual(ids, JSON.parse(read('JSON.stringify(VinylFilters.FACETS.map(f => f.id))')));
   assert.strictEqual(count(doc, '#filterChips .facet-btn.on'), 0, 'a filter reads as set on a fresh shelf');
 });
 
@@ -282,7 +282,7 @@ test('a facet button opens only that facet, nothing ticked until you pick', asyn
   assert.strictEqual(count(doc, '#facetPop .facet-item.on'), 0,
     'an untouched facet showed every value as ticked');
   press(win, $(doc, '#facetPop .facet-item[data-value="Jazz"]'));
-  assert.deepStrictEqual(read('filterState.facets.genre'), ['Jazz']);
+  assert.strictEqual(read('JSON.stringify(filterState.facets.genre)'), '["Jazz"]');
   assert.ok($(doc, '#filterChips [data-facet-btn="genre"]').classList.contains('on'));
   assert.match($(doc, '#filterChips [data-facet-btn="genre"]').textContent, /Jazz/);
 });
@@ -305,7 +305,7 @@ test('pressing the view that is on goes back to the whole shelf', async () => {
   const before = count(doc, '#recordsContainer .vcard');
   win.applySavedView('needs-cleaning');
   press(win, $(doc, '#savedViews [data-view="needs-cleaning"]'));
-  assert.deepStrictEqual(read('filterState.facets'), {});
+  assert.strictEqual(read('JSON.stringify(filterState.facets)'), '{}');
   assert.strictEqual(count(doc, '#recordsContainer .vcard'), before);
 });
 

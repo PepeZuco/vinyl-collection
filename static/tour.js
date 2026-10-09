@@ -35,17 +35,18 @@ const VinylTour = (function () {
         'which record has a track. Accents and typos are forgiven.',
     },
     {
-      id: 'filters', tab: 'collection', target: '#filterChips',
+      id: 'filters', tab: 'collection', target: { desktop: '#facetRow', phone: '#mFilterBtn' },
       title: 'Narrow it down',
-      text: 'Switch between the records owned and the wishlist, then press + filter to stack ' +
-        'genre, decade, country, where it was bought or when it was last played. Saved views ' +
-        'like “In rotation” and “Gathering dust” are one tap away.',
+      text: 'Switch between the records owned and the wishlist, tap a saved view like ' +
+        '“Gathering dust”, or open any filter: genre, decade, country, where it was bought ' +
+        'or when it was last played.',
     },
     {
-      id: 'arrange', tab: 'collection', target: '#arrangeRow',
-      title: 'Arrange the crates',
-      text: 'Group the records into crates by month added, genre, decade, rating or plays, then ' +
-        'sort inside each crate. Switch between covers and a compact list.',
+      id: 'arrange', tab: 'collection', target: { desktop: '#arrangeDropdown', phone: '#sortTrigger' },
+      title: 'Sort, and the crates follow',
+      text: 'Sort by artist and the shelf splits into A, B, C; by date added, into months; by ' +
+        'year, into decades. Or crate by genre or country instead, and switch between covers ' +
+        'and a compact list.',
     },
     {
       id: 'dice', tab: 'collection', target: '#randomBtn',
