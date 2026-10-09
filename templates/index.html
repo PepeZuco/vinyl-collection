@@ -172,7 +172,7 @@ select option{background:var(--surface);color:var(--text)}
 /* The record itself, behind its sleeve, at the card's right edge. That edge
  * used to carry a 4px genre-coloured offset shadow; it now shows the edge of
  * every disc the record has, in its own vinyl and label colours, at true scale
- * against the sleeve (a 12" is 88% of it, a 7" visibly shorter), resting on
+ * against the sleeve (a 12" is 97% of it, a 7" visibly shorter), resting on
  * the bottom the way a record sits in a sleeve. A record of several discs
  * climbs: each extra disc a step further out and a step higher, a stair.
  * Geometry is all % of the card width, set inline by recordEdgeHTML(), so the
@@ -182,7 +182,7 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-shelf{position:relative}
 .vcard-shelf .vcard-cover{width:86.5%;z-index:1;box-shadow:3px 0 6px rgba(0,0,0,.45)}
 .vcard-recs{position:absolute;inset:0;pointer-events:none}
-.vcard-recs .vcard-rec{position:absolute;bottom:2.4%;height:auto;aspect-ratio:1;flex:none}
+.vcard-recs .vcard-rec{position:absolute;bottom:1.2%;height:auto;aspect-ratio:1;flex:none}
 .vcard-recs .vcard-rec.disc::after{background:var(--card)}
 /* each disc throws a shadow on the one behind it, so a black stair of black
    discs still shows where one step ends and the next begins */
@@ -434,6 +434,40 @@ html{overflow-x:clip}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;display:flex;align-items:center;justify-content:center;
   padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
 .overlay.hidden{display:none}
+
+/* The phone's full-screen cover. Above the drawer it was opened from (an
+   .overlay, z 100). The lean is four numbers JS writes as --rx/--ry (degrees)
+   and --gx/--gy (% of the cover, where the glare sits); see
+   static/covertilt.js. Only a NEW record's card gets .tilt, so a used one is
+   a plain, flat picture with no glare. */
+.cover-view{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.92);
+  display:flex;align-items:center;justify-content:center;padding:16px;
+  perspective:900px;cursor:zoom-out;animation:coverViewIn .18s ease-out}
+.cover-view.hidden{display:none}
+@keyframes coverViewIn{from{opacity:0}}
+.cover-view-close{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;
+  width:36px;height:36px;border-radius:50%;border:0;background:rgba(255,255,255,.12);
+  color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cover-view-card{position:relative;width:min(92vw,80vh,640px);aspect-ratio:1;
+  border-radius:6px;overflow:hidden;background:#0a0a0a;
+  box-shadow:0 20px 50px rgba(0,0,0,.6);
+  transform:rotateX(calc(var(--rx,0) * 1deg)) rotateY(calc(var(--ry,0) * 1deg))}
+.cover-view-card img{width:100%;height:100%;object-fit:cover;display:block}
+/* The shadow falls away from the light: the glare sits opposite the lean, so
+   the shadow moves with it. */
+.cover-view-card.tilt{will-change:transform;
+  box-shadow:calc(var(--ry,0) * 1.5px) calc(20px - var(--rx,0) * 1.5px) 50px rgba(0,0,0,.6)}
+/* Shrink-wrap: a soft hotspot where the light is, a long diagonal streak
+   through it, and a faint edge where the plastic folds over the sleeve. */
+.cover-view-glare{display:none;position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);
+  background:
+    radial-gradient(circle at calc(var(--gx,50) * 1%) calc(var(--gy,50) * 1%),
+      rgba(255,255,255,.32), rgba(255,255,255,0) 42%),
+    linear-gradient(115deg, rgba(255,255,255,0) calc(var(--gx,50) * 1% - 22%),
+      rgba(255,255,255,.16) calc(var(--gx,50) * 1% - 6%),
+      rgba(255,255,255,0) calc(var(--gx,50) * 1% + 8%))}
+.cover-view-card.tilt .cover-view-glare{display:block}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
 .modal.modal-wide{max-width:920px}
 
@@ -970,6 +1004,7 @@ html{overflow-x:clip}
   .dm-slide img{width:100%;height:100%;object-fit:cover;display:block}
   .dm-slide-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#3a3a3a}
   [data-theme="light"] .dm-slide-ph{color:#b0a99b}
+  .dm-slide.cur img{cursor:zoom-in}
 
   /* the crate — square cover thumbnails, freely scrollable; only a tap changes
      the current record, dragging the strip just browses it */
@@ -1653,7 +1688,7 @@ html{overflow-x:clip}
 .sti-search{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:999px;padding:10px 16px 10px 38px;
   font:inherit;font-size:14px;background:var(--sp-raise);color:var(--sp-text);outline:none}
 .sti-search:focus{border-color:var(--sp-sub)}
-.sti-count{font-size:12px;color:var(--sp-sub);margin:0 0 6px 4px}
+.sti-count{font-size:12px;color:var(--sp-sub);margin:0 0 6px 4px;display:flex;align-items:center;gap:8px}
 .sti-cands{display:flex;flex-direction:column;gap:2px;max-height:280px;overflow:auto;margin:0 -8px}
 .sti-cand{display:flex;align-items:center;gap:12px;padding:6px 8px;border:none;border-radius:6px;background:transparent;
   color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .15s}
@@ -4661,6 +4696,17 @@ html{overflow-x:clip}
   </div>
 </div>
 
+<!-- The phone's full-screen cover: a tap on the current cover in the drawer.
+     A NEW record leans with the phone and catches a shrink-wrap glare; see
+     static/covertilt.js. Any tap closes it — there is nothing in here to press. -->
+<div class="cover-view hidden" id="coverView" onclick="closeCoverView()">
+  <button type="button" class="cover-view-close" title="close"><i class="ti ti-x"></i></button>
+  <div class="cover-view-card" id="coverViewCard">
+    <img id="coverViewImg" alt="">
+    <div class="cover-view-glare"></div>
+  </div>
+</div>
+
 <!-- Spotify link popup — submitting a valid link closes this and runs the
      scan immediately; there is no separate "tap analyse" step for this path. -->
 <div class="overlay hidden" id="spotifyOverlay">
@@ -4887,6 +4933,7 @@ html{overflow-x:clip}
      preference. -->
 <script src="/static/grouping.js"></script>
 <script src="/static/carousel.js"></script>
+<script src="/static/covertilt.js"></script>
 <script src="/static/filters.js"></script>
 <script src="/static/timeline.js"></script>
 <script src="/static/health.js"></script>
@@ -5045,7 +5092,7 @@ function conditionBadgeHTML(r) {
 
 // ── the record's edge at the card's right side — see .vcard-recs ───────────
 const EDGE_SLEEVE = 86.5;               // % of the card width the sleeve keeps
-const EDGE_D12    = EDGE_SLEEVE * 0.88; // a 12", leaving the stair room to climb
+const EDGE_D12    = EDGE_SLEEVE * 0.97; // a 12" in its sleeve: 12" of wax in a 12⅜" jacket
 // Each stair: % of card width out and % of sleeve height up. 4.5 reads as a
 // distinct step; a box of 4 shares 10 between its three steps so the front
 // disc still peeks out of the sleeve and the back one still fits under the top.
@@ -5066,14 +5113,18 @@ function recordEdgeHTML(r) {
   const n = Math.min(DM_PLATTERS_MAX, Math.max(1, Number(r.disc_count) || 1));
   const inches = Number(r.size) || 0;
   const d = inches ? EDGE_D12 * inches / 12 : EDGE_D12 * 0.8;
-  const step = edgeStep(n), hoverStep = edgeHoverStep(n);
+  const hoverStep = edgeHoverStep(n);
+  // The wax nearly fills the jacket, so the vertical climb is whatever height
+  // is left under the sleeve's top edge, shared between the steps.
+  const room = 100 - d / EDGE_SLEEVE * 100 - 1.2;
+  const step = n > 1 ? Math.max(0, Math.min(edgeStep(n), room / (n - 1))) : 0;
   const discs = [];
   for (let i = n - 1; i >= 0; i--) {
     const peek = (100 - EDGE_SLEEVE - 1) - step * (n - 1 - i);
     const cls = 'vcard-rec' + (inches ? ' disc' : ' unk')
       + (r.have_it ? '' : ' ghost');
     const geom = `left:${(EDGE_SLEEVE + peek - d).toFixed(2)}%;width:${d.toFixed(2)}%`
-      + `;bottom:${(2.4 + step * i).toFixed(1)}%`
+      + `;bottom:${(1.2 + step * i).toFixed(1)}%`
       + `;--slide:${((0.45 * d + hoverStep * i - peek) / d * 100).toFixed(1)}%`
       + (i ? `;--delay:${i * 60}ms` : '');
     discs.push(`<span class="${cls}" style="${inches ? discStyle(r, geom, i) : geom}"></span>`);
@@ -6989,12 +7040,86 @@ function dmBind() {
       if (best !== dmIdx) dmSetCurrent(best);
     });
   }, {passive: true});
+  // Only the cover in the middle opens. The neighbours peeking in at the
+  // edges are a swipe away, not a tap, and opening one you are not on would
+  // show a record the drawer below is not about.
+  car.addEventListener('click', e => {
+    const sl = e.target.closest('.dm-slide.cur');
+    if (sl) openCoverView(Number(sl.dataset.id));
+  });
   document.getElementById('dmCrate').addEventListener('click', e => {
     const th = e.target.closest('.dm-thumb');
     if (!th) return;
     const idx = dmList.findIndex(r => r.id === Number(th.dataset.id));
     if (idx !== -1) dmCenterSlide(idx, true);
   });
+}
+
+// ── the phone's full-screen cover ───────────────────────────────────────────
+// A tap on the current cover in the phone drawer opens it on its own. A NEW
+// record — a sealed one — also leans with the phone; the maths is
+// static/covertilt.js, and this is only the listener and the paint.
+let coverTilt = null;   // {base, shown, target, raf} while a tilting cover is open
+
+function openCoverView(id) {
+  const r = records.find(x => x.id === id);
+  if (!r || !r.cover_url) return;
+  // the blur is a choice someone made about this cover; a tap is not a way round it
+  if (r.censored && !revealedCovers.has(r.id)) return;
+  closeCoverView();
+  const img = document.getElementById('coverViewImg');
+  img.src = r.cover_url;
+  img.alt = r.album_name || '';
+  const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const tilt = VinylCoverTilt.wantsTilt(r, reduced);
+  document.getElementById('coverViewCard').classList.toggle('tilt', tilt);
+  document.getElementById('coverView').classList.remove('hidden');
+  trackEvent('cover-open', { record: VinylAnalytics.recordLabel(r), tilt });
+  if (!tilt) return;
+  const state = coverTilt = { base: null, shown: { rx: 0, ry: 0, gx: 50, gy: 50 }, target: null, raf: 0 };
+  // Asked here, still inside the tap: iOS shows no prompt otherwise. Denied or
+  // no sensor, the cover just stays flat with the glare at rest.
+  VinylCoverTilt.requestMotion(window).then(answer => {
+    if (answer === 'granted' && coverTilt === state) {
+      window.addEventListener('deviceorientation', coverOnOrient);
+    }
+  });
+}
+
+function coverOnOrient(e) {
+  const st = coverTilt;
+  // desktop Chrome fires one reading of nulls when there is no sensor at all
+  if (!st || e.beta == null || e.gamma == null) return;
+  const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  const cur = VinylCoverTilt.screenTilt(e.beta, e.gamma, angle);
+  // flat is how the phone was held when the cover opened — and again after a
+  // turn to landscape, where the old baseline is in the other axes
+  if (!st.base || st.base.angle !== angle) st.base = Object.assign({ angle }, cur);
+  st.target = VinylCoverTilt.tiltFrom(st.base, cur);
+  if (!st.raf) st.raf = requestAnimationFrame(coverTiltFrame);
+}
+
+// Eases toward the latest reading and stops once it gets there, so a phone
+// lying still costs no frames at all.
+function coverTiltFrame() {
+  const st = coverTilt;
+  if (!st) return;
+  st.raf = 0;
+  st.shown = VinylCoverTilt.smooth(st.shown, st.target, 0.2);
+  const card = document.getElementById('coverViewCard');
+  for (const k of ['rx', 'ry', 'gx', 'gy']) card.style.setProperty('--' + k, st.shown[k].toFixed(2));
+  if (Object.keys(st.target).some(k => st.shown[k] !== st.target[k])) {
+    st.raf = requestAnimationFrame(coverTiltFrame);
+  }
+}
+
+function closeCoverView() {
+  window.removeEventListener('deviceorientation', coverOnOrient);
+  if (coverTilt && coverTilt.raf) cancelAnimationFrame(coverTilt.raf);
+  coverTilt = null;
+  const card = document.getElementById('coverViewCard');
+  ['--rx', '--ry', '--gx', '--gy'].forEach(p => card.style.removeProperty(p));
+  document.getElementById('coverView').classList.add('hidden');
 }
 
 // ── desktop vertical cover carousel ─────────────────────────────────────────
@@ -11288,7 +11413,7 @@ function renderAdminSpotify(){
 // untick the wrong ones and create. Matching writes the playlist's link into
 // the record, so the Spotify tab's playlists take its songs on their next sync.
 let standin = {loaded: false, error: '', list: [], candidates: [], pill: '', query: '',
-               picked: null, draft: null, songs: null, ticked: new Set(),
+               picked: null, draft: null, songs: null, ticked: new Set(), wishlist: false,
                busy: '', stepError: '', status: {}};
 
 async function loadStandins(){
@@ -11504,9 +11629,23 @@ function standinRowHTML(s){
   </div>`;
 }
 
+// Wishlist records are hidden unless asked for: a stand-in is for a record on the shelf.
+function standinPool(){
+  return standin.wishlist ? standin.candidates : standin.candidates.filter(c => c.have_it);
+}
+
+function toggleStandinWishlist(){
+  standin.wishlist = !standin.wishlist;
+  if(standin.picked && !standinPool().some(c => c.id === standin.picked)){
+    standin.picked = null; standin.draft = null; standin.songs = null; standin.ticked = new Set(); standin.stepError = '';
+  }
+  renderStandins();
+}
+
 function standinCandidatesHTML(){
-  const shown = VinylStandins.filterCandidates(standin.candidates, standin.query);
-  if(!standin.candidates.length) return '<div class="place-empty">every record has a Spotify link.</div>';
+  const pool = standinPool();
+  const shown = VinylStandins.filterCandidates(pool, standin.query);
+  if(!pool.length) return '<div class="place-empty">every record has a Spotify link.</div>';
   if(!shown.length) return '<div class="place-empty">no record matches that search.</div>';
   return shown.map(c => `<button class="sti-cand${c.id === standin.picked ? ' on' : ''}" ${standin.busy ? 'disabled' : ''}
       onclick="pickStandinRecord(${c.id})">
@@ -11601,7 +11740,7 @@ function renderStandins(){
   const rows = !standin.list.length ? '<div class="place-empty">no stand-ins yet — pick a record on the right.</div>'
     : !shown.length ? '<div class="place-empty">no stand-ins match this filter.</div>'
     : shown.map(standinRowHTML).join('');
-  const n = standin.candidates.length;
+  const n = standinPool().length;
   body.innerHTML = `${connect}<div class="sti-grid">
     <div>
       <div class="sp-lib-head"><span class="sp-lib-avatar"><i class="ti ti-vinyl"></i></span>
@@ -11614,7 +11753,9 @@ function renderStandins(){
       <div class="sti-search-wrap"><i class="ti ti-search"></i>
         <input class="sti-search" id="stiSearch" type="search" placeholder="Search records without a Spotify link"
           value="${esc(standin.query)}" oninput="standinSearch(this.value)"></div>
-      <div class="sti-count">${n} ${n === 1 ? 'record has' : 'records have'} no Spotify link</div>
+      <div class="sti-count">${n} ${n === 1 ? 'record has' : 'records have'} no Spotify link
+        <button class="sp-pill${standin.wishlist ? ' on' : ''}" aria-pressed="${standin.wishlist}"
+          onclick="toggleStandinWishlist()">Wishlist</button></div>
       <div class="sti-cands" id="stiCands">${standinCandidatesHTML()}</div>
       ${standinBuilderHTML()}
     </div>
@@ -12394,6 +12535,12 @@ function bindEvents(){
   document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeDetail();});
   document.addEventListener('keydown', e => {
     if (document.getElementById('detailOverlay').classList.contains('hidden')) return;
+    // The full-screen cover sits on top of everything in the drawer, so it
+    // takes the keys first, the same way an open photo does below.
+    if (!document.getElementById('coverView').classList.contains('hidden')) {
+      if (e.key === 'Escape') closeCoverView();
+      return;
+    }
     // An open photo takes the keys off the drawer behind it: the arrows walked
     // the collection while you were looking at a photograph, and Escape threw
     // the whole record away rather than the photo you meant to shut.

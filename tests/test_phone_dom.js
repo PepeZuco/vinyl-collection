@@ -1272,3 +1272,187 @@ test('reduced motion turns the whole gesture off, not just the CSS transition', 
     win.close();
   }
 });
+
+// ── the full-screen cover ───────────────────────────────────────────────────
+//
+// Tapping the cover in the phone's drawer opens it on its own, as big as it
+// fits. A NEW record also leans with the phone. jsdom has no gyroscope, so
+// these drive the page with hand-made deviceorientation events and read back
+// the custom properties the stylesheet turns into the lean; how it feels is
+// docs/cover-tilt-manual-verification.md.
+
+function slideFor(doc, id) {
+  return doc.querySelector(`#dmCarousel .dm-slide[data-id="${id}"]`);
+}
+
+function orient(win, beta, gamma) {
+  const e = new win.Event('deviceorientation');
+  e.beta = beta; e.gamma = gamma; e.alpha = 0;
+  win.dispatchEvent(e);
+}
+
+const frames = n => new Promise(r => setTimeout(r, n * 20));
+
+test('tapping the current cover opens it on its own', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    const view = doc.getElementById('coverView');
+    assert.ok(view.classList.contains('hidden'), 'closed until tapped');
+    press(win, slideFor(doc, 13).querySelector('img'));
+    assert.ok(!view.classList.contains('hidden'), 'the tap opens it');
+    assert.match(doc.getElementById('coverViewImg').getAttribute('src'), /\/api\/records\/13\/cover/);
+  } finally {
+    win.close();
+  }
+});
+
+test('tapping a neighbouring cover does not open it', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    const other = [...doc.querySelectorAll('#dmCarousel .dm-slide')].find(s => !s.classList.contains('cur'));
+    press(win, other);
+    assert.ok(doc.getElementById('coverView').classList.contains('hidden'));
+  } finally {
+    win.close();
+  }
+});
+
+test('a censored cover does not open until it is revealed', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(14);
+    press(win, slideFor(doc, 14).querySelector('img'));
+    assert.ok(doc.getElementById('coverView').classList.contains('hidden'), 'the blur is not a way around');
+    press(win, slideFor(doc, 14).querySelector('.cover-censor-eye'));
+    press(win, slideFor(doc, 14).querySelector('img'));
+    assert.ok(!doc.getElementById('coverView').classList.contains('hidden'), 'revealed, it opens');
+  } finally {
+    win.close();
+  }
+});
+
+test('a record with no artwork has nothing to open', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(15);
+    press(win, slideFor(doc, 15).querySelector('.dm-slide-ph'));
+    assert.ok(doc.getElementById('coverView').classList.contains('hidden'));
+  } finally {
+    win.close();
+  }
+});
+
+test('tapping the open cover closes it', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    press(win, slideFor(doc, 13).querySelector('img'));
+    press(win, doc.getElementById('coverView'));
+    assert.ok(doc.getElementById('coverView').classList.contains('hidden'));
+  } finally {
+    win.close();
+  }
+});
+
+test('a new record leans with the phone, measured from how it was held', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.openDetail(13);
+    press(win, slideFor(doc, 13).querySelector('img'));
+    const card = doc.getElementById('coverViewCard');
+    assert.ok(card.classList.contains('tilt'), 'a sealed record gets the shrink-wrap');
+    await frames(2);                       // the permission answer
+    orient(win, 55, 0);                    // how it was held: flat
+    await frames(10);
+    assert.strictEqual(Number(card.style.getPropertyValue('--ry') || 0), 0);
+    orient(win, 55, 10);                   // right edge down
+    await frames(30);
+    assert.ok(Number(card.style.getPropertyValue('--ry')) > 0, 'the cover turns with the phone');
+    assert.ok(Number(card.style.getPropertyValue('--gx')) < 50, 'the glare runs the other way');
+  } finally {
+    win.close();
+  }
+});
+
+test('a used record stays flat and never asks for the sensor', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    let asked = 0;
+    win.DeviceOrientationEvent = function () {};
+    win.DeviceOrientationEvent.requestPermission = async () => { asked++; return 'granted'; };
+    win.openDetail(1);
+    press(win, slideFor(doc, 1).querySelector('img'));
+    const card = doc.getElementById('coverViewCard');
+    assert.ok(!card.classList.contains('tilt'));
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(10);
+    assert.strictEqual(asked, 0, 'no iOS prompt for a cover that does not move');
+    assert.strictEqual(card.style.getPropertyValue('--ry'), '');
+  } finally {
+    win.close();
+  }
+});
+
+test('closing stops listening to the phone', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.openDetail(13);
+    press(win, slideFor(doc, 13).querySelector('img'));
+    await frames(2);
+    win.closeCoverView();
+    const card = doc.getElementById('coverViewCard');
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(10);
+    assert.strictEqual(card.style.getPropertyValue('--ry'), '', 'a closed cover does not move');
+  } finally {
+    win.close();
+  }
+});
+
+test('reduced motion opens a new record flat', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.openDetail(13);
+    const mm = win.matchMedia;
+    win.matchMedia = q => /prefers-reduced-motion/.test(q) ? { matches: true } : mm(q);
+    press(win, slideFor(doc, 13).querySelector('img'));
+    assert.ok(!doc.getElementById('coverViewCard').classList.contains('tilt'));
+  } finally {
+    win.close();
+  }
+});
+
+test('Escape shuts the cover, not the record behind it', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    press(win, slideFor(doc, 13).querySelector('img'));
+    doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.ok(doc.getElementById('coverView').classList.contains('hidden'), 'the cover closed');
+    assert.ok(!doc.getElementById('detailOverlay').classList.contains('hidden'), 'the record is still open');
+  } finally {
+    win.close();
+  }
+});
+
+test('opening the cover is counted, with whether it tilts', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    const seen = [];
+    read('VinylAnalytics').track = (name, data) => seen.push([name, data]);
+    win.openDetail(13);
+    press(win, slideFor(doc, 13).querySelector('img'));
+    const ev = seen.find(([n]) => n === 'cover-open');
+    assert.ok(ev, 'cover-open was sent');
+    assert.strictEqual(ev[1].tilt, true);
+    assert.match(ev[1].record, /Artist 13/);
+  } finally {
+    win.close();
+  }
+});
