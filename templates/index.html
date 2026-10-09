@@ -190,14 +190,15 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-recs .vcard-rec.unk{border:1.5px dashed color-mix(in srgb, var(--text) 35%, transparent);
   border-radius:50%;box-sizing:border-box}
 .vcard-recs .vcard-rec.ghost{opacity:.28}
-/* hovering pulls the front disc out far enough to show its label — over the
-   neighbouring card if need be, which is why the card stops clipping and
-   rises above its row while hovered. Pointer devices only: a tap opens the
-   record instead, and a phone's records stay in their sleeves. */
+/* hovering pulls the discs out, as a wider stair, far enough to show the
+   front one's label — over the neighbouring card if need be, which is why the
+   card stops clipping and rises above its row while hovered. Pointer devices
+   only: a tap opens the record instead, and a phone's records stay in their
+   sleeves. */
 @media(hover:hover){
-  .vcard-recs .vcard-rec.front{transition:transform .4s cubic-bezier(.2,.7,.2,1)}
+  .vcard-recs .vcard-rec{transition:transform .4s cubic-bezier(.2,.7,.2,1) var(--delay,0s)}
   .vcard:hover{overflow:visible;z-index:2}
-  .vcard:hover .vcard-recs .vcard-rec.front{transform:translateX(var(--slide))}
+  .vcard:hover .vcard-recs .vcard-rec{transform:translateX(var(--slide))}
 }
 /* the last column's disc slides past the grid; never let that scroll the page */
 html{overflow-x:clip}
@@ -4980,29 +4981,33 @@ const EDGE_D12    = EDGE_SLEEVE * 0.88; // a 12", leaving the stair room to clim
 // distinct step; a box of 4 shares 10 between its three steps so the front
 // disc still peeks out of the sleeve and the back one still fits under the top.
 const edgeStep = n => n > 1 ? Math.min(4.5, 10 / (n - 1)) : 0;
+// The same stair pulled open on hover: the front disc comes out to 45% of
+// itself (past its label's edge, whatever its size) and each disc behind it
+// lands this much further out again, in % of card width.
+const edgeHoverStep = n => n > 1 ? Math.min(9, 24 / (n - 1)) : 0;
 
 /* One disc per disc_count (capped like the Tracks tab), back to front. The
  * back disc reaches to within 1% of the card's edge, so the strip the sleeve
  * gave up is filled. A record with more than one disc is a stair: each disc
  * behind the front one sits a step further out AND a step higher, so a double
- * reads as two records rather than one thick edge. --slide is
- * how far the front disc travels on hover, as % of its own width, so it
- * ends with 45% of itself out of the sleeve —
- * past the label's edge — whatever its size. */
+ * reads as two records rather than one thick edge. On hover every disc
+ * slides (--slide, as % of its own width) to its place on a wider stair, the
+ * front one first and each one behind it a beat later (--delay). */
 function recordEdgeHTML(r) {
   const n = Math.min(DM_PLATTERS_MAX, Math.max(1, Number(r.disc_count) || 1));
   const inches = Number(r.size) || 0;
   const d = inches ? EDGE_D12 * inches / 12 : EDGE_D12 * 0.8;
-  const step = edgeStep(n);
+  const step = edgeStep(n), hoverStep = edgeHoverStep(n);
   const discs = [];
   for (let i = n - 1; i >= 0; i--) {
     const peek = (100 - EDGE_SLEEVE - 1) - step * (n - 1 - i);
     const cls = 'vcard-rec' + (inches ? ' disc' : ' unk')
-      + (r.have_it ? '' : ' ghost') + (i === 0 ? ' front' : '');
+      + (r.have_it ? '' : ' ghost');
     const geom = `left:${(EDGE_SLEEVE + peek - d).toFixed(2)}%;width:${d.toFixed(2)}%`
       + `;bottom:${(2.4 + step * i).toFixed(1)}%`
-      + (i === 0 ? `;--slide:${(45 - peek / d * 100).toFixed(1)}%` : '');
-    discs.push(`<span class="${cls}" style="${inches ? discStyle(r, geom) : geom}"></span>`);
+      + `;--slide:${((0.45 * d + hoverStep * i - peek) / d * 100).toFixed(1)}%`
+      + (i ? `;--delay:${i * 60}ms` : '');
+    discs.push(`<span class="${cls}" style="${inches ? discStyle(r, geom, i) : geom}"></span>`);
   }
   return `<div class="vcard-recs" aria-hidden="true">${discs.join('')}</div>`;
 }
@@ -6673,14 +6678,24 @@ function dmInfoTabHTML(r) {
 function recVinylColor(r) { return r.vinyl_color || '#000000'; }
 function recLabelColor(r) { return r.label_color || '#ffffff'; }
 
+/* The colors of one disc (0-based). Every disc shares the record's pair
+ * unless the record gives each disc its own (disc_colors, one pair per disc);
+ * a color left blank there still falls back to the shared one. */
+function recDiscColors(r, disc) {
+  const own = (Array.isArray(r.disc_colors) && r.disc_colors[disc]) || {};
+  return { vinyl: own.vinyl || recVinylColor(r), label: own.label || recLabelColor(r) };
+}
+
 /* The inline custom properties every .disc for THIS record is drawn with,
  * so a painted record shows its colors everywhere its disc appears — the
  * card tag, the tracks header, the multi-disc pips — not just in the
  * detail view where it was painted. `extra` is any other inline style the
  * call site already needs (e.g. --d for size), appended after so it can
- * still win on its own properties. */
-function discStyle(r, extra) {
-  return `--vinyl:${recVinylColor(r)};--lab:${recLabelColor(r)}${extra ? ';' + extra : ''}`;
+ * still win on its own properties. `disc` picks which disc, 0-based, for a
+ * record whose discs differ; the first by default. */
+function discStyle(r, extra, disc = 0) {
+  const c = recDiscColors(r, disc);
+  return `--vinyl:${c.vinyl};--lab:${c.label}${extra ? ';' + extra : ''}`;
 }
 
 /* Size and disc count in one cell rather than two: on a shelf they are one
@@ -6718,7 +6733,7 @@ function dmFormatHeaderHTML(r) {
   if (!f.size && f.discs < 2) return '';
   const px = Math.round(DM_DISC_12IN * (f.size || 12) / 12);
   const platters = Array.from({ length: Math.min(DM_PLATTERS_MAX, f.discs) },
-    () => `<span class="disc" style="${discStyle(r, `--d:${px}px`)}"></span>`).join('');
+    (_, i) => `<span class="disc" style="${discStyle(r, `--d:${px}px`, i)}"></span>`).join('');
   const big = f.size
     ? `${f.discs > 1 ? `${f.discs} <em>×</em> ` : ''}${f.size}<em>"</em>`
     : `${f.discs} <em>discs</em>`;
@@ -6758,7 +6773,7 @@ function dmTracksTabHTML(r) {
   return header + discGroups(list, discs).map(g => `
     <div class="tl-group">
       <div class="hd">
-        <span class="pip"><span class="disc" style="${discStyle(r, '--d:16px')}"></span></span>
+        <span class="pip"><span class="disc" style="${discStyle(r, '--d:16px', g.disc - 1)}"></span></span>
         <span class="t">Disc ${g.disc}</span>
         <span class="m">· ${g.letters.join('/')} · ${g.songs} song${g.songs === 1 ? '' : 's'}</span>
       </div>

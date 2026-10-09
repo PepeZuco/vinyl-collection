@@ -109,3 +109,79 @@ def test_a_csv_without_the_columns_still_imports(client):
         rec = app_module.Record.query.filter_by(album_name="Africa Brasil").one()
         assert rec.vinyl_color in ("", None)
         assert rec.label_color in ("", None)
+
+
+# ── a color per disc ────────────────────────────────────────────────────────
+# By default every disc of a record wears vinyl_color/label_color. A record of
+# several discs can instead give each disc its own pair: disc_colors is then a
+# list of {"vinyl", "label"}, one per disc, and [] means "all share".
+
+PAIR = [{"vinyl": "#ff0000", "label": "#ffffff"}, {"vinyl": "#0000ff", "label": "#000000"}]
+
+
+def test_a_new_record_shares_one_color_across_its_discs(client):
+    r = client.post("/api/records", json={"album_name": "Transa", "disc_count": 2})
+    assert r.get_json()["disc_colors"] == []
+
+
+def test_each_disc_keeps_its_own_colors(client):
+    r = client.post("/api/records", json={
+        "album_name": "The Wall", "disc_count": 2, "disc_colors": PAIR})
+    assert r.status_code == 201
+    assert r.get_json()["disc_colors"] == PAIR
+
+
+def test_a_bad_disc_color_is_dropped_not_stored(client):
+    r = client.post("/api/records", json={
+        "album_name": "x", "disc_count": 2,
+        "disc_colors": [{"vinyl": "red", "label": "#ffffff"}, {"vinyl": "#0000ff"}]})
+    assert r.get_json()["disc_colors"] == [
+        {"vinyl": "", "label": "#ffffff"}, {"vinyl": "#0000ff", "label": ""}]
+
+
+def test_disc_colors_follow_the_disc_count(client):
+    """One pair per disc: extras are dropped, missing ones come back unpainted."""
+    r = client.post("/api/records", json={
+        "album_name": "x", "disc_count": 3, "disc_colors": PAIR})
+    assert r.get_json()["disc_colors"] == PAIR + [{"vinyl": "", "label": ""}]
+    r = client.post("/api/records", json={
+        "album_name": "y", "disc_count": 1, "disc_colors": PAIR})
+    assert r.get_json()["disc_colors"] == []
+
+
+def test_lowering_the_disc_count_trims_the_stored_colors(client):
+    made = client.post("/api/records", json={
+        "album_name": "x", "disc_count": 3,
+        "disc_colors": PAIR + [{"vinyl": "#00ff00", "label": "#ffffff"}]})
+    rid = made.get_json()["id"]
+    r = client.put(f"/api/records/{rid}", json={"disc_count": 2})
+    assert r.get_json()["disc_colors"] == PAIR
+    r = client.put(f"/api/records/{rid}", json={"disc_count": 1})
+    assert r.get_json()["disc_colors"] == []
+
+
+def test_sending_no_disc_colors_goes_back_to_sharing(client):
+    made = client.post("/api/records", json={
+        "album_name": "x", "disc_count": 2, "disc_colors": PAIR})
+    rid = made.get_json()["id"]
+    r = client.put(f"/api/records/{rid}", json={"disc_colors": []})
+    assert r.get_json()["disc_colors"] == []
+
+
+def test_disc_colors_survive_export_and_import(client):
+    client.post("/api/records", json={
+        "album_name": "The Wall", "disc_count": 2, "disc_colors": PAIR})
+    csv_text = client.get("/api/export").get_data(as_text=True)
+    assert "disc_colors" in csv_text.splitlines()[0]
+
+    with app_module.app.app_context():
+        app_module.db.drop_all()
+        app_module.db.create_all()
+
+    r = client.post("/api/import", data={
+        "file": (io.BytesIO(csv_text.encode()), "backup.csv")},
+        content_type="multipart/form-data")
+    assert r.status_code == 200
+    rec = client.get("/api/records").get_json()
+    rec = rec if isinstance(rec, list) else rec["records"]
+    assert [x for x in rec if x["album_name"] == "The Wall"][0]["disc_colors"] == PAIR

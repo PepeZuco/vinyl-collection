@@ -269,6 +269,31 @@ def _hex_color(value):
     return v if _HEX_COLOR.match(v) else ""
 
 
+def _disc_colors(value, disc_count):
+    """A color pair per disc, or [] when every disc shares the record's
+    vinyl_color/label_color — the default. Takes the list the API sends or
+    the JSON text the database and the CSV hold. Always exactly one pair per
+    disc: extras are dropped, missing ones come back unpainted, and a single
+    disc has nothing to tell apart, so it shares. Each color is cleaned like
+    vinyl_color, so a bad one is dropped rather than stored."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value) if value.strip() else []
+        except ValueError:
+            value = []
+    if not isinstance(value, list) or not value or disc_count < 2:
+        return []
+    pairs = [p if isinstance(p, dict) else {} for p in value[:disc_count]]
+    pairs += [{}] * (disc_count - len(pairs))
+    return [{"vinyl": _hex_color(p.get("vinyl")), "label": _hex_color(p.get("label"))}
+            for p in pairs]
+
+
+def _disc_colors_text(value, disc_count):
+    pairs = _disc_colors(value, disc_count)
+    return json.dumps(pairs) if pairs else ""
+
+
 _PLACE_HTTP_PREFIX  = re.compile(r"^https?://", re.I)           # already an http(s) url
 _PLACE_HOST_PORT    = re.compile(r"^[^\s:/?#]+:\d+(?:[/?#]|$)")  # host:port, not a scheme
 _PLACE_OTHER_SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")  # some other scheme — refuse
@@ -437,6 +462,7 @@ class Record(db.Model):
     spotify_standin = db.Column(db.Boolean, default=False)
     vinyl_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as black
     label_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as white
+    disc_colors = db.Column(db.Text)       # JSON [{vinyl, label}] per disc, or unset — all discs share the two above
 
     def to_dict(self, private=True):
         """The record as the API sends it.
@@ -476,6 +502,7 @@ class Record(db.Model):
             "spotify_standin": bool(self.spotify_standin) and bool(self.spotify_url),
             "vinyl_color": self.vinyl_color or "",
             "label_color": self.label_color or "",
+            "disc_colors": _disc_colors(self.disc_colors or "", self.disc_count or 1),
         }
 
 # One row per distinct note image, addressed by its own content hash.
@@ -725,6 +752,7 @@ with app.app_context(), _startup_lock():
         "spotify_standin": "BOOLEAN",
         "vinyl_color": "VARCHAR(7)",
         "label_color": "VARCHAR(7)",
+        "disc_colors": "TEXT",
     }
     if "youtube_id" not in [c["name"] for c in inspector.get_columns("feature_video")]:
         with db.engine.connect() as conn:
@@ -1065,6 +1093,7 @@ def create_record():
         spotify_missing = bool(d.get("spotify_missing", False)),
         vinyl_color = _hex_color(d.get("vinyl_color")),
         label_color = _hex_color(d.get("label_color")),
+        disc_colors = _disc_colors_text(d.get("disc_colors"), disc_count),
     )
     db.session.add(r)
     _ensure_place(r.bought_where)
@@ -1119,6 +1148,9 @@ def update_record(rid):
     disc_count_changed = "disc_count" in d
     if "disc_count"  in d: r.disc_count   = _disc_count(d["disc_count"], r.disc_count)
     if "size"        in d: r.size         = _size(d["size"])
+    # Re-cleaned on every PUT, sent or not, so a lowered disc_count trims the
+    # colors of the discs it dropped instead of leaving them stored.
+    r.disc_colors = _disc_colors_text(d.get("disc_colors", r.disc_colors or ""), r.disc_count or 1)
     if "tracks"      in d:
         try:
             r.tracks = _clean_tracks(d["tracks"], r.disc_count)
@@ -1873,7 +1905,7 @@ def export_csv():
     # be a backup you could restore from.
     recs = Record.query.order_by(Record.artist).all()
     cols = ["id","artist","album_name","year","genre","bought_date","bought_where",
-            "bought_where_url","bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size","vinyl_color","label_color"]
+            "bought_where_url","bought_by","condition","my_rating","wife_rating","have_it","play_count","play_dates","cleaned_dates","cover_image_base64","notes","country","note_images","tracks","disc_count","size","vinyl_color","label_color","disc_colors"]
     # One dict for the whole export rather than a lookup per row: there are a
     # few dozen places against hundreds of records, and unlike the note images
     # below these are short strings, so holding them all costs nothing.
@@ -1896,6 +1928,7 @@ def export_csv():
             images = dict(db.session.query(NoteImage.id, NoteImage.data)
                           .filter(NoteImage.id.in_(image_ids)).all()) if image_ids else {}
             d["note_images"] = json.dumps(images) if images else ""
+            d["disc_colors"] = json.dumps(d["disc_colors"]) if d["disc_colors"] else ""
             row = []
             for c in cols:
                 v = str(d.get(c,""))
@@ -1971,6 +2004,7 @@ def _record_mapping(row):
         "size":        _size(row.get("size")),
         "vinyl_color": _hex_color(row.get("vinyl_color")),
         "label_color": _hex_color(row.get("label_color")),
+        "disc_colors": _disc_colors_text(row.get("disc_colors", ""), disc_count),
     }
 
 
