@@ -219,7 +219,7 @@ svg.edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 body.embed .brand,body.embed #flowTabs,body.embed #themeBtn{display:none}
 body.embed .top{padding:8px 12px}
 body.embed .side{width:330px}
-@media (max-width:900px){ body.embed .canvas{height:440px} body.embed .side{width:100%} body.embed .side-scroll{overflow:visible} .meter{display:none} }
+@media (max-width:900px){ body.embed{overflow:hidden} body.embed .canvas{height:440px} body.embed .side{width:100%} body.embed .side-scroll{overflow:visible} .meter{display:none} }
 .face{width:var(--face);height:var(--face);background:url('../analyse-sprite-128.png') no-repeat;
   background-size:calc(var(--face) * 30) var(--face);background-position:0 0}
 .node .face{--face:56px}
@@ -303,6 +303,31 @@ body.embed .side{width:330px}
 .cv.vinyl::after{content:'';position:absolute;left:4px;bottom:4px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1.5px rgba(12,12,12,.8)}
 .cv.owned{outline:2px solid var(--accent);outline-offset:1px}
 .cv.picked{outline:2px solid var(--text);outline-offset:1px}
+.strip .cv{cursor:pointer;transition:transform .15s}
+.strip .cv:hover{transform:scale(1.06)}
+/* a sleeve tapped in the step by step: the record as this run has collected it so far */
+.rec-pop{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,var(--bg) 45%,transparent);
+  opacity:0;pointer-events:none;transition:opacity .2s}
+/* the blur lives on the card only: a backdrop-filter on the overlay too would stop the card's from working */
+.rec-pop.on{opacity:1;pointer-events:auto}
+.rec-card{position:absolute;left:50%;width:300px;max-width:calc(100% - 32px);transform:translate(-50%,8px);transition:transform .2s;
+  background:color-mix(in srgb,var(--surface) 78%,transparent);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
+  border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 24px 50px -18px rgba(0,0,0,.75)}
+.rec-pop.on .rec-card{transform:translate(-50%,0)}
+.rec-card .x{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:0;cursor:pointer;
+  background:color-mix(in srgb,var(--bg) 70%,transparent);color:var(--text);display:flex;align-items:center;justify-content:center;font-size:15px;z-index:1}
+.rec-art{aspect-ratio:1;border-radius:9px;overflow:hidden;background:linear-gradient(135deg,var(--card),var(--node));border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:32px}
+.rec-art img{width:100%;height:100%;object-fit:cover;display:block}
+.rec-card h4{margin:12px 0 0;font-size:15px;letter-spacing:-.01em}
+.rec-card .by{color:var(--label);font-size:12.5px;margin-top:2px}
+.rec-card dl{margin:10px 0 0;display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px}
+.rec-card dt{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.06em;padding-top:2px}
+.rec-card dd{margin:0;color:var(--text)}
+.rec-card dd.mono{font-family:var(--font-mono);font-size:11.5px}
+.rec-card .tag{display:inline-flex;align-items:center;gap:5px;font-weight:600}
+.rec-card .tag.y{color:var(--accent)}
+.rec-card .src{margin-top:10px;padding-top:9px;border-top:1px solid var(--border);font-size:10.5px;color:var(--muted)}
 .strip-key{font-size:10.5px;color:var(--muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
 .strip-key span{display:flex;align-items:center;gap:4px}
 .strip-key i{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block}
@@ -400,6 +425,7 @@ body.embed .side{width:330px}
       <div class="why" id="why"></div>
     </div>
   </aside>
+  <div class="rec-pop" id="recPop"><div class="rec-card" id="recCard" role="dialog" aria-modal="true"></div></div>
 </div>
 
 <script>
@@ -935,7 +961,7 @@ function saveSteps(){
    ═══════════════════════════════════════════════════════════════════════ */
 const $=id=>document.getElementById(id);
 const world=$('world'), svg=$('edges'), canvas=$('canvas');
-let cur='claude', scen='happy', inp='upload', nodes={}, edgeEls={};
+let cur='claude', scen='happy', inp='search', nodes={}, edgeEls={};
 
 function geom(n){ const [w,h]=SIZE[n.k]; return {x:n.x,y:n.y,w,h,cx:n.x+w/2,cy:n.y+h/2}; }
 function edgePath(e, F){
@@ -1172,6 +1198,38 @@ function strip(id, shown=99){
     + (lvl>=3 ? `<div class="strip-key"><span><i></i>on vinyl</span>${lvl>=4?'<span><i class="o"></i>on your shelf</span>':''}</div>` : '');
 }
 
+// tap a sleeve in the strip: that record, with only what the run has found out by now
+const stageDone = id => !!stEl(id)?.classList.contains('done');
+function openRecord(cv){
+  const i=+cv.dataset.i, a=K()==='search' ? P.albums[i] : A, kind=K();
+  const vinylKnown=stageDone('vinyl'), shelfKnown=stageDone('shelf'), mbKnown=kind==='search'||stageDone('mb');
+  const owned=ownedRec(P,a), label=a[3]&&a[3]!=='[none]'?a[3]:'', cat=a[4]&&a[4]!=='[none]'?a[4]:'';
+  const rows=[
+    ['Released', `${a[1]}${P.country?' · '+P.country:''}`],
+    kind!=='search' && ['Genre', P.genre],
+    mbKnown && ['Label', label||'<span style="color:var(--muted)">none listed</span>'],
+    mbKnown && cat && ['Catalog', cat, 'mono'],
+    kind!=='search' && pressings()>1 && ['Pressing', `${i+1} of ${pressings()}`],
+    vinylKnown && ['Vinyl', a[5] ? `<span class="tag y"><i class="ti ti-disc"></i>confirmed · ${a[5]} pressing${a[5]>1?'s':''}</span>` : `<span class="tag">likely · none listed</span>`],
+    shelfKnown && ['Shelf', owned ? `<span class="tag y"><i class="ti ti-check"></i>yours · record #${owned.id}</span>` : `<span class="tag">not on your shelf</span>`],
+  ].filter(Boolean);
+  const src=[kind==='search'?'Claude (parse)':kind==='photo'?'Claude (vision)':'Spotify', 'MusicBrainz', a[2]&&'Cover Art Archive', vinylKnown&&'Claude (vinyl check)'].filter(Boolean);
+  $('recCard').innerHTML=`<button class="x" aria-label="Close"><i class="ti ti-x"></i></button>
+    <div class="rec-art">${a[2]?`<img src="${cover(P,a)}" alt="">`:'<i class="ti ti-photo-off"></i>'}</div>
+    <h4>${a[0]}</h4><div class="by">${P.artist}</div>
+    <dl>${rows.map(([k,v,c])=>`<dt>${k}</dt><dd${c?` class="${c}"`:''}>${v}</dd>`).join('')}</dl>
+    <div class="src">collected by ${list(src)}</div>`;
+  // next to the sleeve that was tapped: an embedded frame on a phone is as tall as its content,
+  // so the middle of the frame can be far off screen
+  const card=$('recCard'), r=cv.getBoundingClientRect(), h=card.offsetHeight||480;
+  card.style.top=Math.max(12,Math.min(r.top-h/3, innerHeight-h-12))+'px';
+  $('recPop').classList.add('on');
+}
+const closeRecord = () => $('recPop').classList.remove('on');
+$('story').addEventListener('click',e=>{ const cv=e.target.closest('.strip .cv'); if(cv) openRecord(cv); });
+$('recPop').addEventListener('click',e=>{ if(e.target.id==='recPop'||e.target.closest('.x')) closeRecord(); });
+addEventListener('keydown',e=>{ if(e.key==='Escape') closeRecord(); });
+
 function renderPanel(){
   const kind=K();
   $('story').innerHTML = STAGES[kind].map((id,i)=>{ const m=STAGE_META[id], est=EST[id];
@@ -1308,10 +1366,11 @@ function step(){
 }
 // the three entry squares of the Claude tab, and which input each one is
 const PICK={upload:'upload', camera:'camera', query:'search'};
-let awaiting=false, pendingStep=false;
-// Run on the Claude tab only gets as far as the entry squares; a click on one carries it on
+let awaiting=false, pendingStep=false, ranClaude=false;
+// the first Run on the Claude tab goes straight in from search; after that, Run only gets
+// as far as the entry squares and a click on one carries it on
 function begin(stepping){
-  if(cur!=='claude'){ roll(); reset(); stepping?step():run(); return; }
+  if(cur!=='claude' || !ranClaude){ if(cur==='claude') ranClaude=true; roll(); reset(); stepping?step():run(); return; }
   reset(); awaiting=true; pendingStep=!!stepping; canvas.classList.add('choose');
   $('storyWhat').textContent='choose an input on the diagram';
   updateButtons();

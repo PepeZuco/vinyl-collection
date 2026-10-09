@@ -13684,7 +13684,9 @@ function renderFeatures() {
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || e.data?.type !== 'flow-height') return;
   const box = document.querySelector(`#featureCard-${e.data.flow} .feature-flow`);
-  if (box) box.style.height = e.data.h ? e.data.h + 'px' : '';
+  // plus the box's own border: a frame even 2px short of its content scrolls itself,
+  // and that tiny scroll catches the swipes meant for the page
+  if (box) box.style.height = e.data.h ? e.data.h + (box.offsetHeight - box.clientHeight) + 'px' : '';
 });
 
 // ── history: the collection's growth as a bar chart race ───────────────────
