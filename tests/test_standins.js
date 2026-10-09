@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { filterCandidates, pillKeeps, hitLabel, sidesFor, discCountFor, pickedUris } =
+const { filterCandidates, tracksKeeps, pillKeeps, hitLabel, sidesFor, discCountFor, pickedUris } =
   require('../static/standins.js');
 
 const rec = (artist, album_name) => ({ artist, album_name });
@@ -27,6 +27,14 @@ test('pills split matched from not matched, and none shows all', () => {
   assert.strictEqual(pillKeeps({ matched: true }, 'unmatched'), false);
   assert.strictEqual(pillKeeps({ matched: false }, 'unmatched'), true);
   assert.strictEqual(pillKeeps({ matched: false }, ''), true);
+});
+
+test('the tracks filter splits records with a tracklist from those without', () => {
+  assert.strictEqual(tracksKeeps({ has_tracks: true }, 'with'), true);
+  assert.strictEqual(tracksKeeps({ has_tracks: false }, 'with'), false);
+  assert.strictEqual(tracksKeeps({ has_tracks: false }, 'without'), true);
+  assert.strictEqual(tracksKeeps({ has_tracks: true }, 'without'), false);
+  assert.strictEqual(tracksKeeps({ has_tracks: false }, ''), true);
 });
 
 test('a hit reads as track, album and year; a miss says so', () => {

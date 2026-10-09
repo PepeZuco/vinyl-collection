@@ -187,6 +187,16 @@ def test_a_cover_becomes_a_square_jpeg_spotify_takes():
     assert len(base64.b64encode(jpeg)) <= cover_art.MAX_BASE64
 
 
+def test_a_cover_with_the_record_shows_its_wax_beside_the_sleeve():
+    plain = Image.open(io.BytesIO(standins.cover_jpeg(_png((600, 600)))))
+    shown = Image.open(io.BytesIO(standins.cover_jpeg(
+        _png((600, 600)), {"size": "12", "disc_count": 2, "vinyl_color": "#ff0000"})))
+    assert shown.size == (640, 640)
+    # the right edge is wax and background, not sleeve
+    assert shown.getpixel((630, 320)) != plain.getpixel((630, 320))
+    assert shown.getpixel((630, 100))[0] < 40  # above the disc: background
+
+
 def test_an_unreadable_cover_is_no_cover():
     assert standins.cover_jpeg(b"not an image") is None
     assert standins.cover_jpeg(None) is None

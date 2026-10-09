@@ -2533,7 +2533,7 @@ def _upload_record_cover(spotify, spotify_id, record):
     """Put the record's cover on the playlist. Never fails the create:
     "uploaded", "none" (no cover to send), "needs_reconnect" or "failed"."""
     decoded = _decode_data_uri(record.cover_data)
-    jpeg = standins.cover_jpeg(decoded[0]) if decoded else None
+    jpeg = standins.cover_jpeg(decoded[0], record.to_dict()) if decoded else None
     if jpeg is None:
         return "none"
     try:

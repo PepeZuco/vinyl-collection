@@ -15,7 +15,7 @@ import io
 import re
 import urllib.parse
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageOps
 
 import cover_art
 import scan
@@ -161,8 +161,58 @@ def description(record, found, total):
     return text
 
 
-def cover_jpeg(image_bytes):
-    """The record's cover as the square JPEG Spotify takes, or None if it cannot be read."""
+# The record in its sleeve, as the records page draws it (recordEdgeHTML): the
+# sleeve keeps 86.5% of the width, and the wax — 97% of the sleeve for a 12" —
+# peeks out of the right edge, resting on the bottom. Several discs climb in
+# steps, back one furthest out.
+_SLEEVE = 0.865
+_WAX_12 = _SLEEVE * 0.97
+_BG = (11, 11, 11)
+_SS = 2  # supersampling for the wax, so its edge is smooth
+_MAX_DISCS = 4
+
+
+def _rgb(value, fallback):
+    value = (value or "").strip().lstrip("#")
+    if re.fullmatch(r"[0-9a-fA-F]{6}", value):
+        return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4))
+    return fallback
+
+
+def _disc_colours(record, i):
+    own = (record.get("disc_colors") or [])
+    own = own[i] if i < len(own) and isinstance(own[i], dict) else {}
+    return (_rgb(own.get("vinyl") or record.get("vinyl_color"), (0, 0, 0)),
+            _rgb(own.get("label") or record.get("label_color"), (255, 255, 255)))
+
+
+def _wax(diameter, vinyl, label):
+    """One record, face on: grooved wax, a label, a spindle hole."""
+    n = diameter * _SS
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    edge = tuple(min(255, round(c + (255 - c) * .3)) for c in vinyl)
+    groove = tuple(min(255, round(c + (255 - c) * .08)) for c in vinyl)
+    d.ellipse((0, 0, n - 1, n - 1), fill=vinyl, outline=edge, width=_SS)
+    r = n / 2
+    step = max(2 * _SS, n // 90)
+    for k in range(int(r * .34), int(r) - 2 * _SS, step):
+        d.ellipse((r - k, r - k, r + k, r + k), outline=groove, width=1)
+    lr = r * .32
+    d.ellipse((r - lr, r - lr, r + lr, r + lr), fill=label)
+    hr = max(2.0, n * .045)
+    d.ellipse((r - hr, r - hr, r + hr, r + hr), fill=_BG)
+    return img.resize((diameter, diameter), Image.LANCZOS)
+
+
+def cover_jpeg(image_bytes, record=None):
+    """The record's cover as the square JPEG Spotify takes, or None if it cannot be read.
+
+    With `record` (the to_dict() facts: size, disc_count, vinyl_color,
+    label_color, disc_colors) the sleeve sits at the left with its discs
+    sticking out of the right edge, as on the records page; without it, the
+    cover alone fills the square.
+    """
     if not image_bytes:
         return None
     try:
@@ -170,8 +220,31 @@ def cover_jpeg(image_bytes):
         img = ImageOps.exif_transpose(img).convert("RGB")
     except Exception:
         return None
-    img = ImageOps.fit(img, (COVER_SIZE, COVER_SIZE), Image.LANCZOS)
-    return cover_art.to_spotify_jpeg(img)
+    if record is None:
+        img = ImageOps.fit(img, (COVER_SIZE, COVER_SIZE), Image.LANCZOS)
+        return cover_art.to_spotify_jpeg(img)
+
+    sleeve = round(COVER_SIZE * _SLEEVE)
+    top = (COVER_SIZE - sleeve) // 2
+    canvas = Image.new("RGB", (COVER_SIZE, COVER_SIZE), _BG)
+    try:
+        inches = float(record.get("size") or 0)
+    except (TypeError, ValueError):
+        inches = 0.0
+    count = min(_MAX_DISCS, max(1, int(record.get("disc_count") or 1)))
+    # An unknown size is drawn as a 10", not a guessed 12" (the page dashes it).
+    diameter = round(COVER_SIZE * _WAX_12 * (inches or 10) / 12)
+    peek = COVER_SIZE - sleeve - round(COVER_SIZE * .01)
+    room = sleeve - diameter - round(sleeve * .012)
+    rise = min(round(COVER_SIZE * .045), room // (count - 1)) if count > 1 else 0
+    for i in range(count - 1, -1, -1):
+        vinyl, label = _disc_colours(record, i)
+        x = sleeve + (peek - rise * i) - diameter
+        y = top + sleeve - round(sleeve * .012) - diameter - rise * i
+        wax = _wax(diameter, vinyl, label)
+        canvas.paste(wax, (x, y), wax)
+    canvas.paste(ImageOps.fit(img, (sleeve, sleeve), Image.LANCZOS), (0, top))
+    return cover_art.to_spotify_jpeg(canvas)
 
 
 def create(client, name, description_text, uris, on_created):

@@ -74,6 +74,7 @@ pessoa que clicou. A lógica está em `static/analytics.js` e as chamadas, em
 |---|---|---|
 | `tab` | `tab` | troca de aba |
 | `record-open` | `record` ("Artista — Álbum") | abre o detalhe de um disco |
+| `cover-open` | `record`, `tilt` | toca na capa (celular) e ela abre em tela cheia; `tilt` = disco novo, que inclina com o giroscópio |
 | `random-record` | — | botão de disco aleatório |
 | `search` | `query` | busca na estante (ao confirmar, não a cada letra) |
 | `filter` | `field`, `value` | marca/desmarca um valor de filtro |

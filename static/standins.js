@@ -22,6 +22,14 @@ const VinylStandins = (function () {
     });
   }
 
+  /* 'with' keeps records that already have a tracklist, 'without' those that
+   * have none; anything else keeps all. */
+  function tracksKeeps(record, which) {
+    if (which === 'with') return !!record.has_tracks;
+    if (which === 'without') return !record.has_tracks;
+    return true;
+  }
+
   function pillKeeps(standIn, pill) {
     if (pill === 'matched') return !!standIn.matched;
     if (pill === 'unmatched') return !standIn.matched;
@@ -53,7 +61,7 @@ const VinylStandins = (function () {
     return out;
   }
 
-  return { filterCandidates, pillKeeps, hitLabel, sidesFor, discCountFor, pickedUris };
+  return { filterCandidates, tracksKeeps, pillKeeps, hitLabel, sidesFor, discCountFor, pickedUris };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylStandins;

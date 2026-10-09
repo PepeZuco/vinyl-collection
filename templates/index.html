@@ -436,11 +436,12 @@ html{overflow-x:clip}
 .overlay.hidden{display:none}
 
 /* The phone's full-screen cover. Above the drawer it was opened from (an
-   .overlay, z 100). The lean is four numbers JS writes as --rx/--ry (degrees)
+   .overlay, z 100) and the tour's offer card (340), which otherwise sat on the
+   artwork; below the tour itself (350) and the idle spotlight (400). The lean is four numbers JS writes as --rx/--ry (degrees)
    and --gx/--gy (% of the cover, where the glare sits); see
    static/covertilt.js. Only a NEW record's card gets .tilt, so a used one is
    a plain, flat picture with no glare. */
-.cover-view{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.92);
+.cover-view{position:fixed;inset:0;z-index:345;background:rgba(0,0,0,.92);
   display:flex;align-items:center;justify-content:center;padding:16px;
   perspective:900px;cursor:zoom-out;animation:coverViewIn .18s ease-out}
 .cover-view.hidden{display:none}
@@ -463,9 +464,9 @@ html{overflow-x:clip}
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);
   background:
     radial-gradient(circle at calc(var(--gx,50) * 1%) calc(var(--gy,50) * 1%),
-      rgba(255,255,255,.32), rgba(255,255,255,0) 42%),
+      rgba(255,255,255,.45), rgba(255,255,255,0) 45%),
     linear-gradient(115deg, rgba(255,255,255,0) calc(var(--gx,50) * 1% - 22%),
-      rgba(255,255,255,.16) calc(var(--gx,50) * 1% - 6%),
+      rgba(255,255,255,.26) calc(var(--gx,50) * 1% - 6%),
       rgba(255,255,255,0) calc(var(--gx,50) * 1% + 8%))}
 .cover-view-card.tilt .cover-view-glare{display:block}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
@@ -11413,7 +11414,7 @@ function renderAdminSpotify(){
 // untick the wrong ones and create. Matching writes the playlist's link into
 // the record, so the Spotify tab's playlists take its songs on their next sync.
 let standin = {loaded: false, error: '', list: [], candidates: [], pill: '', query: '',
-               picked: null, draft: null, songs: null, ticked: new Set(), wishlist: false,
+               picked: null, draft: null, songs: null, ticked: new Set(), wishlist: false, tracks: '',
                busy: '', stepError: '', status: {}};
 
 async function loadStandins(){
@@ -11631,7 +11632,16 @@ function standinRowHTML(s){
 
 // Wishlist records are hidden unless asked for: a stand-in is for a record on the shelf.
 function standinPool(){
-  return standin.wishlist ? standin.candidates : standin.candidates.filter(c => c.have_it);
+  const owned = standin.wishlist ? standin.candidates : standin.candidates.filter(c => c.have_it);
+  return owned.filter(c => VinylStandins.tracksKeeps(c, standin.tracks));
+}
+
+function setStandinTracks(k){
+  standin.tracks = standin.tracks === k ? '' : k;
+  if(standin.picked && !standinPool().some(c => c.id === standin.picked)){
+    standin.picked = null; standin.draft = null; standin.songs = null; standin.ticked = new Set(); standin.stepError = '';
+  }
+  renderStandins();
 }
 
 function toggleStandinWishlist(){
@@ -11755,7 +11765,10 @@ function renderStandins(){
           value="${esc(standin.query)}" oninput="standinSearch(this.value)"></div>
       <div class="sti-count">${n} ${n === 1 ? 'record has' : 'records have'} no Spotify link
         <button class="sp-pill${standin.wishlist ? ' on' : ''}" aria-pressed="${standin.wishlist}"
-          onclick="toggleStandinWishlist()">Wishlist</button></div>
+          onclick="toggleStandinWishlist()">Wishlist</button>
+        ${[['with', 'With tracks'], ['without', 'No tracks']].map(([k, t]) =>
+          `<button class="sp-pill${standin.tracks === k ? ' on' : ''}" aria-pressed="${standin.tracks === k}"
+            onclick="setStandinTracks('${k}')">${t}</button>`).join('')}</div>
       <div class="sti-cands" id="stiCands">${standinCandidatesHTML()}</div>
       ${standinBuilderHTML()}
     </div>
