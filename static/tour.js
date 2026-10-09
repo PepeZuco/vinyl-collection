@@ -35,7 +35,7 @@ const VinylTour = (function () {
         'which record has a track. Accents and typos are forgiven.',
     },
     {
-      id: 'filters', tab: 'collection', target: { desktop: '#facetRow', phone: '#mFilterBtn' },
+      id: 'filters', tab: 'collection', target: { desktop: '#barAcc', phone: '#mFilterBtn' },
       title: 'Narrow it down',
       text: 'Switch between the records owned and the wishlist, tap a saved view like ' +
         '“Gathering dust”, or open any filter: genre, decade, country, where it was bought ' +

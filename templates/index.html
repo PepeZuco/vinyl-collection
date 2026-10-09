@@ -2352,6 +2352,31 @@ html{overflow-x:clip}
 /* the search gives way first, so the sort and crates stay on the same line */
 .bar-top .search{flex:1 1 200px;max-width:none;min-width:160px}
 .bar-views{padding-top:10px;border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
+/* the views and the filters, folded: two headers on one line, and opening
+   one closes the other. Each says what is in force while it is shut — the
+   view's name, how many filters — so a narrowed shelf never looks whole. */
+.bar-acc{display:none}
+@media(min-width:761px){
+  .bar-acc{display:flex;align-items:center;gap:6px;padding-top:10px;
+    border-top:1px solid color-mix(in srgb,var(--border) 60%,transparent)}
+  .bar-views,.bar-facets{display:none;padding-top:0;border-top:none}
+  .bar.open-views .bar-views,.bar.open-filters .bar-facets{display:flex}
+  .bar-views>.bar-tag,.bar-facets>.bar-tag{display:none}
+}
+.acc-btn{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;margin-left:-10px;
+  border:none;border-radius:var(--radius-sm);background:transparent;cursor:pointer;
+  font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.14em;color:var(--label)}
+.acc-btn+.acc-btn{margin-left:8px}
+.acc-btn:hover{color:var(--text);background:var(--card)}
+.acc-btn i{font-size:12px;transition:transform .15s}
+.acc-btn[aria-expanded="true"]{color:var(--text)}
+.acc-btn[aria-expanded="true"] i{transform:rotate(180deg)}
+.acc-val{font-family:var(--font);font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--accent)}
+.acc-val:empty,.acc-n:empty{display:none}
+.acc-n{min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:999px;background:var(--accent);
+  color:#141414;font-family:var(--font);font-size:11px;letter-spacing:0;display:inline-flex;align-items:center;justify-content:center}
+[data-theme="light"] .acc-n{color:#fff}
 .bar-tag{font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
   letter-spacing:.14em;color:var(--label);width:58px;flex-shrink:0;user-select:none}
 
@@ -3786,6 +3811,17 @@ html{overflow-x:clip}
           <div class="dice-die"><div class="dice-face" id="diceFace"></div></div>
         </button>
       </div>
+    </div>
+
+    <!-- on a desktop the views and the filters open one at a time from here,
+         so the shelf starts under one short line rather than two full rows -->
+    <div class="bar-acc" id="barAcc">
+      <button class="acc-btn" id="accViews" onclick="toggleBarSection('views')" aria-expanded="false" aria-controls="viewsRow">
+        Views<span class="acc-val" id="accViewsVal"></span><i class="ti ti-chevron-down"></i>
+      </button>
+      <button class="acc-btn" id="accFilters" onclick="toggleBarSection('filters')" aria-expanded="false" aria-controls="facetRow">
+        Filters<span class="acc-n" id="accFiltersN"></span><i class="ti ti-chevron-down"></i>
+      </button>
     </div>
 
     <div class="bar-row bar-views" id="viewsRow">
@@ -13050,11 +13086,29 @@ function renderBar(shown) {
   }).join('') + (set.length ? `<button class="chip-clear" onclick="clearAllFilters()">Clear all</button>` : '');
   document.getElementById('facetRow').classList.toggle('none-set', !set.length);
 
+  const view = SAVED_VIEWS.find(savedViewIsOn);
+  document.getElementById('accViewsVal').textContent = view ? view.label : '';
+  document.getElementById('accFiltersN').textContent = set.length || '';
+
   const mBtn = document.getElementById('mFilterBtn');
   mBtn.classList.toggle('on', set.length > 0);
   document.getElementById('mFilterN').textContent = set.length || '';
 
   renderSummary(shown, q);
+}
+
+/* The desktop bar's two folded sections. Both start shut on every visit;
+ * pressing the open one shuts it again. */
+let barSection = null;   // null | 'views' | 'filters'
+function toggleBarSection(which) {
+  barSection = barSection === which ? null : which;
+  const bar = document.getElementById('filterBar');
+  bar.classList.toggle('open-views', barSection === 'views');
+  bar.classList.toggle('open-filters', barSection === 'filters');
+  document.getElementById('accViews').setAttribute('aria-expanded', barSection === 'views');
+  document.getElementById('accFilters').setAttribute('aria-expanded', barSection === 'filters');
+  // a value list hanging under a row that just folded away would float loose
+  if (barSection !== 'filters') closeFacetPop();
 }
 
 function viewPillHTML(v) {
