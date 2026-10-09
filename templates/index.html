@@ -186,15 +186,20 @@ select option{background:var(--surface);color:var(--text)}
 .vcard-recs .vcard-rec.unk{border:1.5px dashed color-mix(in srgb, var(--text) 35%, transparent);
   border-radius:50%;box-sizing:border-box}
 .vcard-recs .vcard-rec.ghost{opacity:.28}
-/* hovering pulls the front disc out far enough to show its label — over the
+/* Pulling the front disc out far enough to show its label — over the
    neighbouring card if need be, which is why the card stops clipping and
-   rises above its row while hovered. Pointer devices only: a tap opens the
-   record instead. */
+   rises above its row while pulled. With a pointer it is pulled on hover; on
+   a touch screen, which has no hover, every card on screen is pulled and the
+   disc goes back into its sleeve as the card scrolls away (.rec-out, set by
+   observeRecordEdges(), which also stacks each pulled card above the one to
+   its right). */
+.vcard-recs .vcard-rec.front{transition:transform .5s cubic-bezier(.2,.7,.2,1)}
 @media(hover:hover){
-  .vcard-recs .vcard-rec.front{transition:transform .4s cubic-bezier(.2,.7,.2,1)}
   .vcard:hover{overflow:visible;z-index:2}
   .vcard:hover .vcard-recs .vcard-rec.front{transform:translateX(var(--slide))}
 }
+.vcard.rec-out{overflow:visible}
+.vcard.rec-out .vcard-recs .vcard-rec.front{transform:translateX(var(--slide))}
 /* the last column's disc slides past the grid; never let that scroll the page */
 html{overflow-x:clip}
 
@@ -4973,17 +4978,19 @@ function conditionBadgeHTML(r) {
 const EDGE_SLEEVE = 86.5;               // % of the card width the sleeve keeps
 const EDGE_D12    = EDGE_SLEEVE * 0.94; // a 12" just fits inside its sleeve
 
-/* One disc per disc_count (capped like the Tracks tab), back to front, each
- * peeking 2.2% further out than the one in front of it. --slide is how far the
- * front disc travels on hover, as % of its own width, so it ends with 45% of
- * itself out of the sleeve — past the label's edge — whatever its size. */
+/* One disc per disc_count (capped like the Tracks tab), back to front. The
+ * back disc reaches to within 1% of the card's edge, so the strip the sleeve
+ * gave up is filled, and each disc in front of it peeks 2.2% less. --slide is
+ * how far the front disc travels when pulled (hover, or on screen on a phone),
+ * as % of its own width, so it ends with 45% of itself out of the sleeve —
+ * past the label's edge — whatever its size. */
 function recordEdgeHTML(r) {
   const n = Math.min(DM_PLATTERS_MAX, Math.max(1, Number(r.disc_count) || 1));
   const inches = Number(r.size) || 0;
   const d = inches ? EDGE_D12 * inches / 12 : EDGE_D12 * 0.8;
   const discs = [];
   for (let i = n - 1; i >= 0; i--) {
-    const peek = 5.2 + 2.2 * i;
+    const peek = (100 - EDGE_SLEEVE - 1) - 2.2 * (n - 1 - i);
     const cls = 'vcard-rec' + (inches ? ' disc' : ' unk')
       + (r.have_it ? '' : ' ghost') + (i === 0 ? ' front' : '');
     const geom = `left:${(EDGE_SLEEVE + peek - d).toFixed(2)}%;width:${d.toFixed(2)}%`
@@ -5802,6 +5809,30 @@ function observeCardsForGlow() {
   document.querySelectorAll('.vcard').forEach(card => {
     if (card.querySelector('.score-sq.full')) glowObserver.observe(card);
   });
+  observeRecordEdges();
+}
+
+// ── touch screens: the records on screen come out of their sleeves ─────────
+// A pointer pulls a record out on hover (see .vcard-recs); a phone has no
+// hover, so a card that is mostly on screen gets .rec-out instead, and loses
+// it again as it scrolls away. A pulled disc overhangs the card to its right,
+// so each pulled card stacks above the cards after it in its grid.
+let edgeObserver = null;
+function observeRecordEdges() {
+  if (!window.matchMedia || !matchMedia('(hover: none)').matches) return;
+  if (!edgeObserver) {
+    edgeObserver = new IntersectionObserver((entries) => {
+      entries.forEach(({ target: card, intersectionRatio }) => {
+        const out = intersectionRatio >= 0.6;
+        card.classList.toggle('rec-out', out);
+        card.style.zIndex = out
+          ? String(2 + card.parentNode.children.length - [...card.parentNode.children].indexOf(card))
+          : '';
+      });
+    }, { threshold: [0, 0.6] });
+  }
+  edgeObserver.disconnect();   // the last render's cards are gone
+  document.querySelectorAll('.vcard').forEach(card => edgeObserver.observe(card));
 }
 
 function renderCount(n) {
