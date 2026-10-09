@@ -1730,3 +1730,45 @@ test('closing the record stops listening to the phone', async () => {
     assert.strictEqual(ry(slide), 0);
   } finally { win.close(); }
 });
+
+test('admin gets a small edit button on the record, a visitor does not', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    const btn = doc.getElementById('dmEdit');
+    assert.strictEqual(read('authed'), true, 'the fixture session is the admin');
+    assert.strictEqual(btn.hidden, false);
+    assert.ok(doc.getElementById('dmLayout').classList.contains('has-edit'));
+    win.__peek('authed = false; renderDetailFoot(currentDetailId)');
+    assert.strictEqual(btn.hidden, true);
+    assert.ok(!doc.getElementById('dmLayout').classList.contains('has-edit'));
+  } finally { win.close(); }
+});
+
+test('the edit button opens this record\'s edit form', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    press(win, doc.getElementById('dmEdit'));
+    assert.strictEqual(read('editingId'), 13);
+    assert.ok(doc.getElementById('detailOverlay').classList.contains('hidden'), 'the record closed behind it');
+  } finally { win.close(); }
+});
+
+test('the phone record screen has no delete button', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    assert.strictEqual(doc.querySelector('#dmLayout .btn-danger'), null);
+    assert.strictEqual(doc.getElementById('dmFoot'), null);
+  } finally { win.close(); }
+});
+
+test('the edit form on the phone still carries delete', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    press(win, doc.getElementById('dmEdit'));
+    assert.ok(doc.getElementById('editRootDelete'), 'delete lives in the form');
+  } finally { win.close(); }
+});
