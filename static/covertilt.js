@@ -1,9 +1,11 @@
-/* The phone's full-screen cover, and the tilt a NEW record gets in it.
+/* The phone's full-screen cover, and the tilt it gets there.
  *
- * A new record is a sealed one, and a sealed sleeve is something you turn in
- * your hand to watch the light slide across the shrink-wrap. So while the
- * cover is open the phone's orientation leans it in 3D, and a glare streak
- * runs the opposite way: the light stays put and the sleeve moves under it.
+ * While the cover is open the phone's orientation leans it in 3D, so moving
+ * the phone feels like turning the sleeve in your hand. A NEW record is a
+ * sealed one, and on that a faint glare also runs the opposite way to the
+ * lean, the light staying put while the shrink-wrap slides under it. Over the
+ * full lean it crosses the whole sleeve, edge to edge, and off it. A used
+ * sleeve has no plastic on it, so it leans with no glare.
  *
  * Flat is however the phone was being held when the cover opened, not "lying
  * on a table" — nobody looks at a phone at beta 0, and measuring from there
@@ -16,15 +18,20 @@
 const VinylCoverTilt = (() => {
   const MAX_TILT = 12;   // degrees the cover leans at most, either axis
   const GAIN = 0.6;      // cover degrees per degree of phone
-  const GLARE = 40;      // % the glare travels from the middle at full lean
+  const GLARE = 80;      // % the glare travels from the middle at full lean —
+                         // past the edge, so it sweeps right across and off
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   // beta runs -180..180, so a phone held just past upright jumps from 179 to
   // -179; the difference is a 2° nudge, not a 358° turn
   const wrap = d => ((d + 180) % 360 + 360) % 360 - 180;
 
-  function wantsTilt(rec, reducedMotion) {
-    return !!rec && rec.condition === 'new' && !reducedMotion;
+  function wantsTilt(reducedMotion) {
+    return !reducedMotion;
+  }
+
+  function hasShrinkWrap(rec) {
+    return !!rec && rec.condition === 'new';
   }
 
   /* beta/gamma are the DEVICE's axes; what the cover has to follow is the
@@ -78,7 +85,7 @@ const VinylCoverTilt = (() => {
     }
   }
 
-  return { MAX_TILT, wantsTilt, screenTilt, tiltFrom, smooth, requestMotion };
+  return { MAX_TILT, wantsTilt, hasShrinkWrap, screenTilt, tiltFrom, smooth, requestMotion };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylCoverTilt;

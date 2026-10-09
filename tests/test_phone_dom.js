@@ -1276,7 +1276,8 @@ test('reduced motion turns the whole gesture off, not just the CSS transition', 
 // ── the full-screen cover ───────────────────────────────────────────────────
 //
 // Tapping the cover in the phone's drawer opens it on its own, as big as it
-// fits. A NEW record also leans with the phone. jsdom has no gyroscope, so
+// fits, and it leans with the phone. A NEW record also catches a shrink-wrap
+// glare. jsdom has no gyroscope, so
 // these drive the page with hand-made deviceorientation events and read back
 // the custom properties the stylesheet turns into the lean; how it feels is
 // docs/cover-tilt-manual-verification.md.
@@ -1363,7 +1364,8 @@ test('a new record leans with the phone, measured from how it was held', async (
     win.openDetail(13);
     press(win, slideFor(doc, 13).querySelector('img'));
     const card = doc.getElementById('coverViewCard');
-    assert.ok(card.classList.contains('tilt'), 'a sealed record gets the shrink-wrap');
+    assert.ok(card.classList.contains('tilt'), 'it leans');
+    assert.ok(card.classList.contains('sealed'), 'a new record gets the shrink-wrap');
     await frames(2);                       // the permission answer
     orient(win, 55, 0);                    // how it was held: flat
     await frames(10);
@@ -1377,7 +1379,7 @@ test('a new record leans with the phone, measured from how it was held', async (
   }
 });
 
-test('a used record stays flat and never asks for the sensor', async () => {
+test('a used record leans too, but with no shrink-wrap on it', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
     let asked = 0;
@@ -1386,12 +1388,13 @@ test('a used record stays flat and never asks for the sensor', async () => {
     win.openDetail(1);
     press(win, slideFor(doc, 1).querySelector('img'));
     const card = doc.getElementById('coverViewCard');
-    assert.ok(!card.classList.contains('tilt'));
+    assert.ok(card.classList.contains('tilt'), 'it leans');
+    assert.ok(!card.classList.contains('sealed'), 'no glare on a used sleeve');
+    assert.strictEqual(asked, 1, 'iOS is asked, inside the tap');
     await frames(2);
     orient(win, 55, 0); orient(win, 55, 20);
-    await frames(10);
-    assert.strictEqual(asked, 0, 'no iOS prompt for a cover that does not move');
-    assert.strictEqual(card.style.getPropertyValue('--ry'), '');
+    await frames(30);
+    assert.ok(Number(card.style.getPropertyValue('--ry')) > 0, 'the cover turns with the phone');
   } finally {
     win.close();
   }
@@ -1414,7 +1417,7 @@ test('closing stops listening to the phone', async () => {
   }
 });
 
-test('reduced motion opens a new record flat', async () => {
+test('reduced motion opens the cover flat', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
     win.DeviceOrientationEvent = function () {};
@@ -1441,7 +1444,7 @@ test('Escape shuts the cover, not the record behind it', async () => {
   }
 });
 
-test('opening the cover is counted, with whether it tilts', async () => {
+test('opening the cover is counted, with whether it is sealed', async () => {
   const { win, doc, read } = await boot({ phone: true });
   try {
     const seen = [];
@@ -1450,7 +1453,7 @@ test('opening the cover is counted, with whether it tilts', async () => {
     press(win, slideFor(doc, 13).querySelector('img'));
     const ev = seen.find(([n]) => n === 'cover-open');
     assert.ok(ev, 'cover-open was sent');
-    assert.strictEqual(ev[1].tilt, true);
+    assert.strictEqual(ev[1].sealed, true);
     assert.match(ev[1].record, /Artist 13/);
   } finally {
     win.close();

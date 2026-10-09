@@ -1,34 +1,36 @@
-// Tests for the phone's full-screen cover and the tilt a NEW record gets.
+// Tests for the phone's full-screen cover: the tilt every record gets, and the
+// shrink-wrap glare only a NEW one does.
 // Run by tests/test_covertilt.py so `pytest` stays the single command.
 //
 // jsdom has no gyroscope, so the part worth pinning down here is the maths
 // between a deviceorientation reading and the transform it produces: that the
 // way you were holding the phone when the cover opened reads as flat, that the
 // cover never leans past the cap, that the glare runs AGAINST the tilt (the
-// light stays put and the sleeve moves under it), and that landscape does not
-// swap the axes on you. What it feels like in the hand is in
+// light stays put and the sleeve moves under it) and sweeps the whole sleeve
+// over the lean, and that landscape does not swap the axes on you. What it feels like in the hand is in
 // docs/cover-tilt-manual-verification.md.
 
 const test = require('node:test');
 const assert = require('node:assert');
 
 const {
-  MAX_TILT, wantsTilt, screenTilt, tiltFrom, smooth, requestMotion,
+  MAX_TILT, wantsTilt, hasShrinkWrap, screenTilt, tiltFrom, smooth, requestMotion,
 } = require('../static/covertilt.js');
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} != ${b}`);
 
 // ── who tilts ───────────────────────────────────────────────────────────────
 
-test('only a new record tilts', () => {
-  assert.strictEqual(wantsTilt({ condition: 'new' }, false), true);
-  assert.strictEqual(wantsTilt({ condition: 'used' }, false), false);
-  assert.strictEqual(wantsTilt({ condition: '' }, false), false);
-  assert.strictEqual(wantsTilt({}, false), false);
+test('every record tilts, unless motion is reduced', () => {
+  assert.strictEqual(wantsTilt(false), true);
+  assert.strictEqual(wantsTilt(true), false);
 });
 
-test('reduced motion turns the tilt off even on a new record', () => {
-  assert.strictEqual(wantsTilt({ condition: 'new' }, true), false);
+test('only a new record is in shrink-wrap', () => {
+  assert.strictEqual(hasShrinkWrap({ condition: 'new' }), true);
+  assert.strictEqual(hasShrinkWrap({ condition: 'used' }), false);
+  assert.strictEqual(hasShrinkWrap({ condition: '' }), false);
+  assert.strictEqual(hasShrinkWrap({}), false);
 });
 
 // ── from the device's axes to the screen's ──────────────────────────────────
@@ -71,7 +73,18 @@ test('the cover never leans past the cap, however far the phone goes', () => {
   const t = tiltFrom({ fb: 0, lr: 0 }, { fb: 80, lr: -80 });
   near(Math.abs(t.rx), MAX_TILT, 'rx capped');
   near(Math.abs(t.ry), MAX_TILT, 'ry capped');
-  assert.ok(t.gx >= 0 && t.gx <= 100 && t.gy >= 0 && t.gy <= 100, 'glare stays on the cover');
+});
+
+test('over the full lean the glare crosses the whole sleeve, edge to edge', () => {
+  // It used to wander ±40% round the middle, which reads as a spot that
+  // never leaves the cover. A light on shrink-wrap slides right off it.
+  const right = tiltFrom({ fb: 0, lr: 0 }, { fb: 0, lr: 80 });
+  const left = tiltFrom({ fb: 0, lr: 0 }, { fb: 0, lr: -80 });
+  assert.ok(right.gx < 0, `off the left edge at full right lean, got ${right.gx}`);
+  assert.ok(left.gx > 100, `off the right edge at full left lean, got ${left.gx}`);
+  const back = tiltFrom({ fb: 0, lr: 0 }, { fb: 80, lr: 0 });
+  const fwd = tiltFrom({ fb: 0, lr: 0 }, { fb: -80, lr: 0 });
+  assert.ok(back.gy > 100 && fwd.gy < 0, 'and top to bottom');
 });
 
 test('crossing the 180° seam is a small tilt, not a full turn', () => {

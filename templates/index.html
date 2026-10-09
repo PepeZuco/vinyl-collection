@@ -439,8 +439,8 @@ html{overflow-x:clip}
    .overlay, z 100) and the tour's offer card (340), which otherwise sat on the
    artwork; below the tour itself (350) and the idle spotlight (400). The lean is four numbers JS writes as --rx/--ry (degrees)
    and --gx/--gy (% of the cover, where the glare sits); see
-   static/covertilt.js. Only a NEW record's card gets .tilt, so a used one is
-   a plain, flat picture with no glare. */
+   static/covertilt.js. Every card leans (.tilt, off under reduced motion);
+   only a NEW record's is .sealed and gets the shrink-wrap glare. */
 .cover-view{position:fixed;inset:0;z-index:345;background:rgba(0,0,0,.92);
   display:flex;align-items:center;justify-content:center;padding:16px;
   perspective:900px;cursor:zoom-out;animation:coverViewIn .18s ease-out}
@@ -459,16 +459,18 @@ html{overflow-x:clip}
 .cover-view-card.tilt{will-change:transform;
   box-shadow:calc(var(--ry,0) * 1.5px) calc(20px - var(--rx,0) * 1.5px) 50px rgba(0,0,0,.6)}
 /* Shrink-wrap: a soft hotspot where the light is, a long diagonal streak
-   through it, and a faint edge where the plastic folds over the sleeve. */
+   through it, and a faint edge where the plastic folds over the sleeve. Kept
+   faint on purpose — it is a sheen passing over the art, never a white wash
+   on top of it. --gx/--gy run past 0..100 at full lean so it slides off. */
 .cover-view-glare{display:none;position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
   background:
     radial-gradient(circle at calc(var(--gx,50) * 1%) calc(var(--gy,50) * 1%),
-      rgba(255,255,255,.45), rgba(255,255,255,0) 45%),
+      rgba(255,255,255,.14), rgba(255,255,255,0) 40%),
     linear-gradient(115deg, rgba(255,255,255,0) calc(var(--gx,50) * 1% - 22%),
-      rgba(255,255,255,.26) calc(var(--gx,50) * 1% - 6%),
+      rgba(255,255,255,.09) calc(var(--gx,50) * 1% - 6%),
       rgba(255,255,255,0) calc(var(--gx,50) * 1% + 8%))}
-.cover-view-card.tilt .cover-view-glare{display:block}
+.cover-view-card.sealed .cover-view-glare{display:block}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;transition:background .2s}
 .modal.modal-wide{max-width:920px}
 
@@ -7057,9 +7059,10 @@ function dmBind() {
 }
 
 // ── the phone's full-screen cover ───────────────────────────────────────────
-// A tap on the current cover in the phone drawer opens it on its own. A NEW
-// record — a sealed one — also leans with the phone; the maths is
-// static/covertilt.js, and this is only the listener and the paint.
+// A tap on the current cover in the phone drawer opens it on its own, and it
+// leans with the phone. A NEW record — a sealed one — also catches a faint
+// shrink-wrap glare. The maths is static/covertilt.js; this is only the
+// listener and the paint.
 let coverTilt = null;   // {base, shown, target, raf} while a tilting cover is open
 
 function openCoverView(id) {
@@ -7072,14 +7075,17 @@ function openCoverView(id) {
   img.src = r.cover_url;
   img.alt = r.album_name || '';
   const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const tilt = VinylCoverTilt.wantsTilt(r, reduced);
-  document.getElementById('coverViewCard').classList.toggle('tilt', tilt);
+  const tilt = VinylCoverTilt.wantsTilt(reduced);
+  const sealed = VinylCoverTilt.hasShrinkWrap(r);
+  const card = document.getElementById('coverViewCard');
+  card.classList.toggle('tilt', tilt);
+  card.classList.toggle('sealed', sealed);
   document.getElementById('coverView').classList.remove('hidden');
-  trackEvent('cover-open', { record: VinylAnalytics.recordLabel(r), tilt });
+  trackEvent('cover-open', { record: VinylAnalytics.recordLabel(r), sealed });
   if (!tilt) return;
   const state = coverTilt = { base: null, shown: { rx: 0, ry: 0, gx: 50, gy: 50 }, target: null, raf: 0 };
   // Asked here, still inside the tap: iOS shows no prompt otherwise. Denied or
-  // no sensor, the cover just stays flat with the glare at rest.
+  // no sensor, the cover just stays flat (a sealed one with its glare at rest).
   VinylCoverTilt.requestMotion(window).then(answer => {
     if (answer === 'granted' && coverTilt === state) {
       window.addEventListener('deviceorientation', coverOnOrient);
