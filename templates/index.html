@@ -452,32 +452,34 @@ html{overflow-x:clip}
   font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(232,232,224,.45);
 }
 .idle-eyebrow{top:28px}
-.idle-card{display:flex;flex-direction:column;align-items:center;gap:22px;transition:opacity .5s ease;cursor:pointer}
-.idle-card.idle-fading{opacity:0}
-.idle-art{position:relative;width:220px;height:220px}
-.idle-disc{
-  position:absolute;inset:0;border-radius:50%;
-  background:repeating-radial-gradient(circle at 50% 50%,#1c1c1c 0 2px,#262626 2px 4px);
-  box-shadow:0 20px 50px rgba(0,0,0,.5);
-  animation:idle-spin 16s linear infinite;
+.idle-card{display:flex;flex-direction:column;align-items:center;gap:22px;cursor:pointer}
+/* The sleeve sits on top; the record slides out of it to the right and spins
+   there, drawn with the record's own colors and true size (a 7" is narrower
+   than a 12"). --sleeve is the one number the rest is derived from. */
+.idle-art{--sleeve:168px;position:relative;width:calc(var(--sleeve) * 1.5);height:var(--sleeve)}
+.idle-platter{
+  position:absolute;left:0;top:0;width:var(--sleeve);height:var(--sleeve);z-index:1;
+  display:flex;align-items:center;justify-content:center;opacity:0;
+  transform:translateX(0);transition:transform .9s cubic-bezier(.22,.8,.3,1),opacity .35s ease;
 }
-.idle-disc::after{content:'';position:absolute;width:56px;height:56px;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--accent)}
-.idle-disc::before{content:'';position:absolute;width:7px;height:7px;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);background:#100b00;z-index:1}
+.idle-platter.out{transform:translateX(calc(var(--sleeve) * .5));opacity:1}
+.idle-platter.leaving{transform:translateX(calc(var(--sleeve) * 1.6));opacity:0;
+  transition:transform .5s cubic-bezier(.6,0,.9,.5),opacity .5s ease .1s}
+.idle-platter .disc{animation:idle-spin 8s linear infinite;box-shadow:0 14px 34px rgba(0,0,0,.55)}
 @keyframes idle-spin{to{transform:rotate(360deg)}}
-@media (prefers-reduced-motion: reduce){.idle-disc{animation:none}}
+@media (prefers-reduced-motion: reduce){.idle-platter .disc{animation:none}.idle-platter{transition:none}}
 .idle-cover{
-  position:absolute;width:168px;height:168px;top:26px;left:26px;border-radius:4px;overflow:hidden;
-  box-shadow:0 18px 40px rgba(0,0,0,.45);background:#111;
+  position:absolute;width:var(--sleeve);height:var(--sleeve);top:0;left:0;z-index:2;border-radius:4px;overflow:hidden;
+  box-shadow:0 18px 40px rgba(0,0,0,.45);background:#111;transition:opacity .5s ease;
   display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:32px;
 }
 .idle-cover img{width:100%;height:100%;object-fit:cover}
+.idle-meta,.idle-stats{transition:opacity .5s ease}
+.idle-card.idle-fading .idle-cover,.idle-card.idle-fading .idle-meta,.idle-card.idle-fading .idle-stats{opacity:0}
 /* Desktop has the screen real estate to let the record breathe; phones keep
    the sizes above so the card still fits above the fold in portrait. */
 @media (min-width:761px){
-  .idle-art{width:360px;height:360px}
-  .idle-disc::after{width:92px;height:92px}
-  .idle-disc::before{width:12px;height:12px}
-  .idle-cover{width:280px;height:280px;top:40px;left:40px;font-size:52px}
+  .idle-art{--sleeve:280px;font-size:52px}
 }
 .idle-meta{text-align:center;color:var(--text)}
 .idle-artist{font-size:21px;font-weight:700;text-wrap:balance}
@@ -1105,8 +1107,36 @@ html{overflow-x:clip}
   color:var(--text);border:1px solid var(--border);border-radius:5px;padding:5px 7px;
   text-transform:lowercase}
 .paint-hex:focus{outline:none;border-color:var(--accent)}
-.paint-reset{width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;
+.paint-reset,.paint-pick{width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;
   flex:0 0 auto}
+
+/* picking the paint off a photo: the photo whole in its stage, a crosshair on
+   the picked pixel and, while the finger is down, a loupe above it — the
+   finger would otherwise cover the very spot it is picking */
+#colorPickOverlay .modal{max-width:560px;display:flex;flex-direction:column}
+.cp-body{display:flex;flex-direction:column;gap:12px;min-height:0}
+.cp-targets{display:flex;align-items:center;gap:8px}
+.cp-chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;
+  border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--muted);
+  font:600 12px var(--font);cursor:pointer}
+.cp-chip.on{border-color:var(--accent);color:var(--text)}
+.cp-chip code{font:500 11px var(--font-mono);opacity:.75}
+.cp-sw{width:16px;height:16px;border-radius:50%;border:1px solid var(--border)}
+.cp-stage{position:relative;height:min(58vh,520px);background:#000;border-radius:var(--radius-sm);
+  overflow:hidden;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+.cp-stage img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+.cp-cross{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+  border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.6),inset 0 0 0 1px rgba(0,0,0,.6);pointer-events:none}
+.cp-loupe{position:absolute;width:100px;height:100px;border-radius:50%;border:3px solid #fff;
+  box-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;image-rendering:pixelated}
+.cp-hint{font-size:12px;color:var(--muted);margin:0}
+@media(max-width:760px){
+  #colorPickOverlay{padding:0;align-items:stretch}
+  #colorPickOverlay .modal{max-width:100%;width:100%;height:100%;max-height:100%;border-radius:0;border:none;
+    padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+  #colorPickOverlay .modal-body{flex:1}
+  .cp-stage{height:auto;flex:1;min-height:200px}
+}
 /* "each disc its own color": the switch, then one row per disc in place of
    the shared row, each led by its disc number */
 .paint-each{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
@@ -4483,6 +4513,8 @@ html{overflow-x:clip}
                          onchange="setFormLabelHex(this.value)">
                 </label>
               </div>
+              <button type="button" class="btn btn-sm paint-pick" title="pick the colors from a photo"
+                      onclick="openPaintCamera(null)"><i class="ti ti-camera"></i></button>
               <button type="button" class="btn btn-sm paint-reset" title="reset to black/white"
                       onclick="resetFormPaint()"><i class="ti ti-arrow-back-up"></i></button>
             </div>
@@ -4518,6 +4550,37 @@ html{overflow-x:clip}
     <div class="modal-foot">
       <button class="btn" onclick="closeCamera()">cancel</button>
       <button class="btn btn-primary" onclick="captureFrame()">capture</button>
+    </div>
+  </div>
+</div>
+
+<!-- Picking the paint off a photo. Nothing reaches the form until "use colors";
+     the photo itself is never uploaded or kept. -->
+<div class="overlay hidden" id="colorPickOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="cpTitle">pick colors</span>
+      <button class="btn btn-ghost btn-sm" onclick="closeColorPick()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body cp-body">
+      <div class="cp-targets">
+        <span class="disc" id="cpPreview" style="--d:34px"></span>
+        <button type="button" class="cp-chip" data-key="vinyl" onclick="setColorPickKey('vinyl')">
+          <span class="cp-sw"></span>Vinyl <code></code></button>
+        <button type="button" class="cp-chip" data-key="label" onclick="setColorPickKey('label')">
+          <span class="cp-sw"></span>Label <code></code></button>
+      </div>
+      <div class="cp-stage" id="cpStage">
+        <img id="cpImg" alt="">
+        <div class="cp-cross" id="cpCross" hidden></div>
+        <canvas class="cp-loupe" id="cpLoupe" width="100" height="100" hidden></canvas>
+      </div>
+      <p class="cp-hint">Tap or drag on the vinyl, then switch to Label and tap the label.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="retakeColorPick()"><i class="ti ti-camera-rotate"></i> retake</button>
+      <button class="btn" onclick="closeColorPick()">cancel</button>
+      <button class="btn btn-primary" onclick="applyColorPick()">use colors</button>
     </div>
   </div>
 </div>
@@ -4762,7 +4825,7 @@ html{overflow-x:clip}
   <div class="idle-eyebrow">quiet for a while &mdash; from your collection</div>
   <div class="idle-card" id="idleCard">
     <div class="idle-art">
-      <div class="idle-disc"></div>
+      <div class="idle-platter" id="idlePlatter"><span class="disc" id="idleDisc"></span></div>
       <div class="idle-cover" id="idleCover"></div>
     </div>
     <div class="idle-meta">
@@ -4801,6 +4864,7 @@ html{overflow-x:clip}
 <script src="/static/activity.js"></script>
 <script src="/static/draft.js"></script>
 <script src="/static/phoneform.js"></script>
+<script src="/static/colorpick.js"></script>
 <script src="/static/urlstate.js"></script>
 <script src="/static/cover.js"></script>
 <script src="/static/notes.js"></script>
@@ -7478,6 +7542,8 @@ function paintDiscRowHTML(c, i) {
       ${field('vinyl', 'Vinyl', vinyl, c.vinyl, '#000000')}
       ${field('label', 'Label', label, c.label, '#ffffff')}
     </div>
+    <button type="button" class="btn btn-sm paint-pick" title="pick this disc's colors from a photo"
+            onclick="openPaintCamera(${i})"><i class="ti ti-camera"></i></button>
     <button type="button" class="btn btn-sm paint-reset" title="back to the shared colors"
             onclick="resetDiscPaint(${i})"><i class="ti ti-arrow-back-up"></i></button>
   </div>`;
@@ -7498,6 +7564,8 @@ function renderPaintForm() {
   document.getElementById('fPaintEach').checked = each;
   document.getElementById('fPaintShared').style.display = each ? 'none' : '';
   document.getElementById('fPaintDiscs').innerHTML = each ? formDiscColors.map(paintDiscRowHTML).join('') : '';
+  const canPhoto = canTakePhoto();
+  document.querySelectorAll('#formOverlay .paint-pick').forEach(b => { b.style.display = canPhoto ? '' : 'none'; });
 }
 
 function renderTracksForm() {
@@ -9103,11 +9171,156 @@ function fallbackCapture(){ document.getElementById('coverCaptureInput').click()
 // after the decode, and tapping the other picker mid-decode sent an album
 // cover to a note, or a note photo over the cover.
 function applyPhoto(dataUri, target, note){
-  if((target || photoTarget) === 'note') {
+  const dest = target || photoTarget;
+  if(dest === 'note') {
     trackNoteUpload(addNoteImage(dataUri, note === undefined ? photoNote : note));
   }
+  else if(dest === 'paint') openColorPick(dataUri);
   else applyCover(dataUri);
 }
+
+// ── picking the paint off a photo ──────────────────────────────────────────
+// Which paint row the photo is for: null for the shared pair, else a disc.
+let colorPickDisc = null;
+// The pair being picked, in the form's own terms: '' is unpainted (or, on a
+// disc, "same as the shared pair"), so a color never tapped writes back as it was.
+let colorPickColors = { vinyl: '', label: '' };
+let colorPickKey = 'vinyl';
+// The photo's pixels at full resolution, read once when it loads.
+let colorPickPixels = null;
+const CP_PATCH = 2;         // average a 5x5 patch: one camera pixel is noise
+const CP_LOUPE_PX = 15;     // photo pixels across the loupe
+const CP_LOUPE_SIZE = 100;  // css px, matches .cp-loupe
+
+function openPaintCamera(disc){
+  if(camStream) return;
+  colorPickDisc = disc;
+  const own = disc === null ? { vinyl: formVinylColor, label: formLabelColor } : formDiscColors[disc];
+  colorPickColors = { vinyl: own.vinyl, label: own.label };
+  colorPickKey = 'vinyl';
+  openCamera('paint');
+}
+
+function openColorPick(dataUri){
+  const img = document.getElementById('cpImg');
+  colorPickPixels = null;
+  document.getElementById('cpCross').hidden = true;
+  document.getElementById('cpLoupe').hidden = true;
+  img.onload = () => {
+    const cv = document.createElement('canvas');
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    colorPickPixels = { canvas: cv, width: cv.width, height: cv.height,
+                        data: ctx.getImageData(0, 0, cv.width, cv.height).data };
+  };
+  img.src = dataUri;
+  document.getElementById('cpTitle').textContent =
+    colorPickDisc === null ? 'pick colors' : `pick colors · disc ${colorPickDisc + 1}`;
+  renderColorPick();
+  document.getElementById('colorPickOverlay').classList.remove('hidden');
+}
+
+function closeColorPick(){
+  document.getElementById('colorPickOverlay').classList.add('hidden');
+  // An empty src attribute resolves to the page URL and fetches it again.
+  document.getElementById('cpImg').removeAttribute('src');
+  colorPickPixels = null;
+}
+
+// Keeps what was picked so far, so the vinyl can come from one photo and the
+// label from a closer one.
+function retakeColorPick(){
+  closeColorPick();
+  openCamera('paint');
+}
+
+function applyColorPick(){
+  const { vinyl, label } = colorPickColors;
+  if(colorPickDisc === null){ formVinylColor = vinyl; formLabelColor = label; }
+  else if(formDiscColors[colorPickDisc]) formDiscColors[colorPickDisc] = { vinyl, label };
+  closeColorPick();
+  renderPaintForm();
+  formChanged();
+}
+
+function setColorPickKey(key){ colorPickKey = key; renderColorPick(); }
+
+// What a color looks like on the record, the way renderPaintForm shows it.
+function colorPickShown(key){
+  const shared = key === 'vinyl' ? formVinylColor : formLabelColor;
+  return colorPickColors[key] || (colorPickDisc !== null && shared)
+    || (key === 'vinyl' ? '#000000' : '#ffffff');
+}
+
+function renderColorPick(){
+  document.querySelectorAll('#colorPickOverlay .cp-chip').forEach(chip => {
+    const key = chip.dataset.key;
+    chip.classList.toggle('on', key === colorPickKey);
+    chip.querySelector('.cp-sw').style.background = colorPickShown(key);
+    chip.querySelector('code').textContent = colorPickColors[key];
+  });
+  document.getElementById('cpPreview').setAttribute('style',
+    `--vinyl:${colorPickShown('vinyl')};--lab:${colorPickShown('label')};--d:34px`);
+}
+
+function colorPickAt(e){
+  if(!colorPickPixels) return;   // still decoding
+  const { width, height, data } = colorPickPixels;
+  const rect = document.getElementById('cpStage').getBoundingClientRect();
+  const fit = VinylColorPick.fitContain(rect.width, rect.height, width, height);
+  const p = VinylColorPick.toImagePoint(e.clientX - rect.left, e.clientY - rect.top, fit, width, height);
+  const c = VinylColorPick.averagePatch(data, width, height, p.x, p.y, CP_PATCH);
+  colorPickColors[colorPickKey] = VinylColorPick.rgbToHex(c.r, c.g, c.b);
+  // On the pixel actually read, which a drag off the photo's edge leaves
+  // behind the finger rather than under it.
+  const x = fit.x + (p.x + .5) / width * fit.w, y = fit.y + (p.y + .5) / height * fit.h;
+  const cross = document.getElementById('cpCross');
+  cross.style.left = x + 'px'; cross.style.top = y + 'px'; cross.hidden = false;
+  drawColorPickLoupe(p, x, y, rect.width);
+  renderColorPick();
+}
+
+/* The photo's pixels around the pick, blown up, with the averaged patch
+ * outlined. The source square is clipped to the photo by hand: Safari draws
+ * nothing at all for a source rectangle that runs off the image. */
+function drawColorPickLoupe(p, x, y, boxW){
+  const { canvas, width, height } = colorPickPixels;
+  const loupe = document.getElementById('cpLoupe');
+  const ctx = loupe.getContext('2d');
+  const half = Math.floor(CP_LOUPE_PX / 2), cell = CP_LOUPE_SIZE / CP_LOUPE_PX;
+  const x0 = p.x - half, y0 = p.y - half;
+  const cx0 = Math.max(0, x0), cy0 = Math.max(0, y0);
+  const cx1 = Math.min(width, x0 + CP_LOUPE_PX), cy1 = Math.min(height, y0 + CP_LOUPE_PX);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, CP_LOUPE_SIZE, CP_LOUPE_SIZE);
+  ctx.drawImage(canvas, cx0, cy0, cx1 - cx0, cy1 - cy0,
+                (cx0 - x0) * cell, (cy0 - y0) * cell, (cx1 - cx0) * cell, (cy1 - cy0) * cell);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect((half - CP_PATCH) * cell, (half - CP_PATCH) * cell,
+                 (2 * CP_PATCH + 1) * cell, (2 * CP_PATCH + 1) * cell);
+  const pos = VinylColorPick.loupePlacement(x, y, boxW, CP_LOUPE_SIZE, 40);
+  loupe.style.left = pos.left + 'px'; loupe.style.top = pos.top + 'px';
+  loupe.hidden = false;
+}
+
+// Pointer events, so a mouse drag on desktop and a finger on the phone are the
+// same gesture; the loupe shows only while pressed.
+(() => {
+  const stage = document.getElementById('cpStage');
+  let pressed = false;
+  stage.addEventListener('pointerdown', e => {
+    pressed = true;
+    stage.setPointerCapture(e.pointerId);
+    colorPickAt(e);
+  });
+  stage.addEventListener('pointermove', e => { if(pressed) colorPickAt(e); });
+  const release = () => { pressed = false; document.getElementById('cpLoupe').hidden = true; };
+  stage.addEventListener('pointerup', release);
+  stage.addEventListener('pointercancel', release);
+})();
 
 // Uploads still in the air. addNote waits on these, because a photo that has
 // not come back yet is not in formNoteImages, and filing the note now would
@@ -9297,10 +9510,14 @@ function clearCover(){
   document.getElementById('coverDrop').classList.remove('has-cover');
   document.getElementById('coverPickerRow').style.display = '';
   // Hide the camera button when no camera path can work at all.
-  const hasCamera = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
-    || 'capture' in document.createElement('input');
-  document.getElementById('coverPickerCamera').style.display = hasCamera ? '' : 'none';
+  document.getElementById('coverPickerCamera').style.display = canTakePhoto() ? '' : 'none';
   updateScanControls();
+}
+
+// A live camera, or failing that a file input the phone opens as its camera.
+function canTakePhoto(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    || 'capture' in document.createElement('input');
 }
 
 // ── what scanning costs ────────────────────────────────────────────────────
@@ -12109,7 +12326,8 @@ function bindEvents(){
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (!document.getElementById('noteLinkPicker').classList.contains('hidden')) closeNoteLinkPicker();
+      if (!document.getElementById('colorPickOverlay').classList.contains('hidden')) closeColorPick();
+      else if (!document.getElementById('noteLinkPicker').classList.contains('hidden')) closeNoteLinkPicker();
       else if (!document.getElementById('noteMdOverlay').classList.contains('hidden')) closeNoteMdModal();
       else if (!document.getElementById('calDayOverlay').classList.contains('hidden')) closeCalDay();
       else if (!document.getElementById('calDatePickerOverlay').classList.contains('hidden')) closeCalDatePicker();
@@ -14949,11 +15167,12 @@ function fireIdleSpotlight() {
 function advanceIdleSpotlight(pool) {
   const card = document.getElementById('idleCard');
   card.classList.add('idle-fading');
+  document.getElementById('idlePlatter').classList.add('leaving');
   idleUnref(setTimeout(() => {
     idleQueue = VinylIdleSpotlight.advance(idleQueue, pool);
     renderIdleRecord(idleQueue[0], pool);
     card.classList.remove('idle-fading');
-  }, 500));
+  }, 600));
 }
 
 function idleSegs(el, n) {
@@ -14978,6 +15197,20 @@ function renderIdleRecord(r, pool) {
 
   document.getElementById('idleDots').innerHTML =
     pool.map(p => `<i class="${p.id === r.id ? 'on' : ''}"></i>`).join('');
+
+  // The record itself: its colors, and its size relative to a 12" sleeve.
+  // Parked behind the sleeve, then released on the next frame so it slides
+  // out to the right.
+  const f = formatSummary(parseTracks(r.tracks), r.disc_count, r.size);
+  const k = Math.min(1, (f.size || 12) / 12);
+  const disc = document.getElementById('idleDisc');
+  disc.setAttribute('style', discStyle(r, `--d:calc(var(--sleeve) * .96 * ${k})`));
+  const platter = document.getElementById('idlePlatter');
+  platter.style.transition = 'none';
+  platter.classList.remove('out', 'leaving');
+  void platter.offsetWidth;
+  platter.style.transition = '';
+  platter.classList.add('out');
 }
 
 function closeIdleSpotlight() {
