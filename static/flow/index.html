@@ -294,18 +294,18 @@ body.embed .side{width:330px}
 .chip.est{font-weight:400;color:var(--label);background:transparent;border-color:var(--border)}
 .chip.fresh{animation:billflash .7s ease}
 /* the records a step found: one tile per album, filling in as the run goes */
-/* twelve columns always: a full discography fits one row, and a few pressings stay the same size */
-.strip{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-top:7px}
-.cv{aspect-ratio:1;border-radius:3px;overflow:hidden;position:relative;background:linear-gradient(135deg,var(--card),var(--node));border:1px solid var(--border)}
+/* six columns always: a full discography fits two rows, and a few pressings stay the same size */
+.strip{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:9px}
+.cv{aspect-ratio:1;border-radius:5px;overflow:hidden;position:relative;background:linear-gradient(135deg,var(--card),var(--node));border:1px solid var(--border)}
 .cv img{width:100%;height:100%;object-fit:cover;display:block;animation:artin .45s ease}
 @keyframes artin{from{opacity:0;transform:scale(1.06)}}
-.cv .none{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
-.cv.vinyl::after{content:'';position:absolute;left:2px;bottom:2px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1.5px rgba(12,12,12,.8)}
+.cv .none{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px}
+.cv.vinyl::after{content:'';position:absolute;left:4px;bottom:4px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 1.5px rgba(12,12,12,.8)}
 .cv.owned{outline:2px solid var(--accent);outline-offset:1px}
 .cv.picked{outline:2px solid var(--text);outline-offset:1px}
 .strip-key{font-size:10.5px;color:var(--muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
 .strip-key span{display:flex;align-items:center;gap:4px}
-.strip-key i{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block}
+.strip-key i{width:9px;height:9px;border-radius:50%;background:var(--accent);display:inline-block}
 .strip-key i.o{width:9px;height:9px;border-radius:2px;background:transparent;outline:2px solid var(--accent);outline-offset:-1px}
 .why{margin-top:14px;padding:10px 12px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:0 8px 8px 0}
 .why b{display:block;font-size:12px;margin-bottom:2px}
