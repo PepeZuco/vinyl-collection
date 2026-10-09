@@ -12973,6 +12973,64 @@ const PLAYED_LABELS = {
   stale:  'Over 6 months ago',   never:  'Never played',
 };
 
+/* And what they wear beside the words: an icon per facet for the sheet's
+ * headings, and per value an icon and, where it has one, a colour. Condition
+ * is the New/Used badge every card shows (conditionBadgeHTML); the played and
+ * cleaning hues match the quick views that ask for them. */
+const FACET_ICONS = {
+  genre: 'ti-music', condition: 'ti-disc', decade: 'ti-calendar', country: 'ti-world',
+  store: 'ti-building-store', cleaning: 'ti-sparkles', played: 'ti-player-play',
+};
+const VALUE_LOOKS = {
+  condition: { new: ['ti-star', '#E0A529'], used: ['ti-recycle', '#4AA3C4'], '': ['ti-help-circle'] },
+  cleaning:  { cleaned: ['ti-sparkles', '#2FB673'], never: ['ti-spray', '#C98A3A'] },
+  played:    { recent: ['ti-flame', '#F08A2E'], months: ['ti-clock', '#D9A62E'],
+               stale: ['ti-hourglass-low', '#8E9BB0'], never: ['ti-zzz'] },
+};
+
+/* { lead: html before the name, hue: a colour or null, paint: tint it unticked } */
+function facetValueLook(facetId, value) {
+  const icon = (name, hue) => ({ lead: `<i class="ti ${name} facet-lead"></i>`, hue: hue || null });
+  if (facetId === 'genre')   return { lead: '', hue: genreColor(value), paint: true };
+  if (facetId === 'country') return value ? { lead: flagImgHTML(value, 18), hue: null } : icon('ti-world-off');
+  if (facetId === 'decade')  return icon(value ? 'ti-calendar-event' : 'ti-calendar-off');
+  if (facetId === 'store')   return icon(!value ? 'ti-map-pin-off'
+    : /presente|gift/i.test(value) ? 'ti-gift' : 'ti-building-store');
+  const look = (VALUE_LOOKS[facetId] || {})[value];
+  return look ? icon(look[0], look[1]) : { lead: '', hue: null };
+}
+
+/* Countries by continent, so a long list reads as a map rather than a column.
+ * Central America and the Caribbean go with the north; anything missing here
+ * lands under "Elsewhere" rather than nowhere. */
+const CONTINENTS = [
+  { name: 'South America', globe: '🌎', codes: ['BR','AR','CL','CO','PE','UY','VE','EC','BO','PY'] },
+  { name: 'North America', globe: '🌎', codes: ['US','CA','MX','CU','JM','CR','PA','DO','PR','TT','BS','BB'] },
+  { name: 'Europe', globe: '🌍', codes: ['GB','FR','DE','IT','ES','PT','NL','BE','SE','NO','DK','FI','IE','IS',
+      'PL','AT','CH','GR','RU','UA','CZ','HU','RO','BG','HR','RS','SK'] },
+  { name: 'Africa', globe: '🌍', codes: ['ZA','NG','EG','MA','SN','GH','ET','KE','CD','ML','CV','AO','MZ'] },
+  { name: 'Asia', globe: '🌏', codes: ['JP','IN','CN','KR','TH','PH','ID','VN','IL','LB','TR'] },
+  { name: 'Oceania', globe: '🌏', codes: ['AU','NZ'] },
+];
+
+/* The country values in continent groups, the biggest continent first; the
+ * records with no country come last under a group of their own. */
+function countryGroups(values) {
+  const groups = CONTINENTS.map(c => ({ name: c.name, globe: c.globe, values: [] }));
+  const elsewhere = { name: 'Elsewhere', globe: '🌐', values: [] };
+  const unset = { name: 'Not recorded', globe: '', values: [] };
+  values.forEach(v => {
+    if (!v.value) { unset.values.push(v); return; }
+    const i = CONTINENTS.findIndex(c => c.codes.includes(String(v.value).toUpperCase()));
+    (i === -1 ? elsewhere : groups[i]).values.push(v);
+  });
+  const total = g => g.values.reduce((n, v) => n + v.count, 0);
+  return groups.concat(elsewhere).filter(g => g.values.length)
+    .sort((a, b) => total(b) - total(a))
+    .concat(unset.values.length ? [unset] : [])
+    .map(g => Object.assign(g, { count: total(g) }));
+}
+
 /* Questions worth asking often enough to deserve a name.
  *
  * Each is the shared query with a different setting — nothing here is a
@@ -12980,21 +13038,21 @@ const PLAYED_LABELS = {
  * outright rather than adding to it: "show me what needs cleaning" is a place
  * you go, not a filter you stack onto wherever you happened to be. */
 const SAVED_VIEWS = [
-  { id: 'needs-cleaning', label: 'Needs cleaning', hint: 'never been cleaned',
+  { id: 'needs-cleaning', icon: 'ti-spray', hue: '#C98A3A', label: 'Needs cleaning', hint: 'never been cleaned',
     query: { ownership: 'owned', facets: { cleaning: ['never'] } } },
-  { id: 'gathering-dust', label: 'Gathering dust', hint: 'not played in 6 months',
+  { id: 'gathering-dust', icon: 'ti-hourglass-low', hue: '#8E9BB0', label: 'Gathering dust', hint: 'not played in 6 months',
     query: { ownership: 'owned', facets: { played: ['stale', 'never'] } } },
-  { id: 'in-rotation', label: 'In rotation', hint: 'played in the last 30 days',
+  { id: 'in-rotation', icon: 'ti-flame', hue: '#F08A2E', label: 'In rotation', hint: 'played in the last 30 days',
     query: { ownership: 'owned', facets: { played: ['recent'] } } },
-  { id: 'wishlist', label: 'The wishlist', hint: 'wanted, not bought',
+  { id: 'wishlist', icon: 'ti-shopping-cart', hue: '#9B7FD4', label: 'The wishlist', hint: 'wanted, not bought',
     query: { ownership: 'wishlist', facets: {} } },
   /* Text views: the phrase goes in the search box, where it can be read and
    * edited, and `fields` says where it is looked for. Case never matters — the
    * model lower-cases both sides. */
-  { id: 'som-ambiente', label: 'Som Ambiente', hint: 'the words, anywhere',
+  { id: 'som-ambiente', icon: 'ti-armchair', hue: '#2FB673', label: 'Som Ambiente', hint: 'the words, anywhere',
     query: { ownership: 'owned', facets: {}, text: 'Som Ambiente',
              fields: { artist: true, album: true, genre: true, notes: true } } },
-  { id: 'abril-cultural', label: 'Abril Cultural', hint: 'artist, album or note',
+  { id: 'abril-cultural', icon: 'ti-books', hue: '#E06C5A', label: 'Abril Cultural', hint: 'artist, album or note',
     query: { ownership: 'owned', facets: {}, text: 'Abril Cultural',
              fields: { artist: true, album: true, notes: true } } },
 ];
@@ -13132,7 +13190,7 @@ function viewPillHTML(v) {
   const on = savedViewIsOn(v);
   return `<button class="view-pill${n ? '' : ' empty'}" data-view="${esc(v.id)}" aria-pressed="${on}"
       onclick="applySavedView('${esc(v.id)}')" title="${esc(v.hint)}">
-    <i class="ti ti-bookmark"></i>${esc(v.label)}<span class="view-n">${n}</span>
+    <i class="ti ${esc(v.icon || 'ti-bookmark')}" style="--view-hue:${esc(v.hue || '')}"></i>${esc(v.label)}<span class="view-n">${n}</span>
   </button>`;
 }
 
@@ -13188,9 +13246,15 @@ function syncBackdrop() {
 
 function facetValueButton(facetId, v, picked, cls) {
   const on = !!picked && picked.indexOf(v.value) !== -1;
-  return `<button class="${cls}${on ? ' on' : ''}" data-facet="${esc(facetId)}" data-value="${esc(v.value)}" aria-pressed="${on}">
+  const look = facetValueLook(facetId, v.value);
+  // a painted genre has no icon of its own, so its tick is what shows it picked
+  const lead = look.paint && cls === 'fs-chip'
+    ? (on ? `<i class="ti ti-check facet-lead"></i>` : '') : look.lead;
+  const looks = (look.hue ? ' hued' : '') + (look.paint ? ' painted' : '');
+  return `<button class="${cls}${looks}${on ? ' on' : ''}" data-facet="${esc(facetId)}" data-value="${esc(v.value)}"
+    aria-pressed="${on}"${look.hue ? ` style="--fc:${esc(look.hue)}"` : ''}>
     ${cls === 'facet-item' ? `<span class="facet-check">${on ? '<i class="ti ti-check"></i>' : ''}</span>` : ''}
-    <span class="facet-name">${esc(facetValueLabel(facetId, v.value))}</span>
+    ${lead}<span class="facet-name">${esc(facetValueLabel(facetId, v.value))}</span>
     <span class="facet-count">${v.count}</span>
   </button>`;
 }
@@ -13216,16 +13280,23 @@ function renderFacetPop() {
         <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()" aria-label="close"><i class="ti ti-x"></i></button>
       </div>
       <div class="facet-body">
-        <div class="facet-section">Quick views</div>
+        <div class="facet-section"><i class="ti ti-bookmarks"></i>Quick views</div>
         <div class="fs-chips">${SAVED_VIEWS.map(viewPillHTML).join('')}</div>` +
       VinylFilters.FACETS.map(f => {
         const values = VinylFilters.facetValues(records, q, f.id, FILTER_DEPS);
         const picked = q.facets[f.id] || null;
+        const head = `<div class="facet-section"><i class="ti ${FACET_ICONS[f.id] || 'ti-filter'}"></i>${esc(f.label)}${picked
+            ? `<span class="fs-picked">${picked.length} picked</span>` : ''}</div>`;
+        // Countries come whole, under their continents: cutting the list at
+        // eight would cut a continent in half.
+        if (f.id === 'country') {
+          return head + `<div class="fs-chips">${countryGroups(values).map(g =>
+            `<div class="fs-group">${g.globe ? `<span aria-hidden="true">${g.globe}</span>` : ''}${esc(g.name)}<span class="facet-count">${g.count}</span></div>` +
+            g.values.map(v => facetValueButton(f.id, v, picked, 'fs-chip')).join('')).join('')}</div>`;
+        }
         const all = facetSheetOpen.has(f.id) || values.length <= SHEET_VALUES + 1;
         const list = all ? values : values.slice(0, SHEET_VALUES);
-        return `<div class="facet-section">${esc(f.label)}${picked
-            ? `<span class="fs-picked">${picked.length} picked</span>` : ''}</div>
-          <div class="fs-chips">${list.map(v => facetValueButton(f.id, v, picked, 'fs-chip')).join('')}${
+        return head + `<div class="fs-chips">${list.map(v => facetValueButton(f.id, v, picked, 'fs-chip')).join('')}${
             all ? '' : `<button class="fs-chip fs-more" data-facet-more="${esc(f.id)}">+${values.length - list.length} more</button>`}</div>`;
       }).join('') + `</div>
       <div class="facet-foot">${showBtn}</div>`;
