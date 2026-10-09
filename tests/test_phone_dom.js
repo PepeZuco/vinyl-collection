@@ -1760,15 +1760,31 @@ test('the phone record screen has no delete button', async () => {
   try {
     win.openDetail(13);
     assert.strictEqual(doc.querySelector('#dmLayout .btn-danger'), null);
-    assert.strictEqual(doc.getElementById('dmFoot'), null);
+    const layout = doc.getElementById('dmLayout');
+    const deleting = [...layout.querySelectorAll('[onclick]')]
+      .filter(el => /confirmDeleteId|doDelete/.test(el.getAttribute('onclick')));
+    assert.strictEqual(deleting.length, 0, 'no delete action is wired inside the record layout');
   } finally { win.close(); }
 });
 
 test('the edit form on the phone still carries delete', async () => {
-  const { win, doc } = await boot({ phone: true });
+  const { win, doc, read } = await boot({ phone: true });
   try {
     win.openDetail(13);
     press(win, doc.getElementById('dmEdit'));
-    assert.ok(doc.getElementById('editRootDelete'), 'delete lives in the form');
+    assert.strictEqual(read('editingId'), 13);
+    // The edit button opens step 1; the section list (edit root, which holds
+    // delete) is one tap away via the header's "‹ edit" button.
+    assert.strictEqual(doc.getElementById('editRoot').hidden, true, 'opens on step 1, not the root');
+    // Dispatched directly, not through press(): this button carries a static
+    // onclick="closeForm()" attribute, which rebuildFormChrome replaces with a
+    // property handler (backToEditRoot) on a phone. press() would run the
+    // stale attribute, so a real click is the only way to hit the live one.
+    doc.getElementById('formHeadCancel').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+    const root = doc.getElementById('editRoot');
+    assert.strictEqual(root.hidden, false, 'the phone edit root is showing for the record');
+    const del = doc.getElementById('editRootDelete');
+    assert.ok(del && root.contains(del), 'delete lives inside the shown edit root');
+    assert.strictEqual(del.hidden, false, 'delete is not hidden');
   } finally { win.close(); }
 });
