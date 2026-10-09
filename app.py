@@ -23,6 +23,7 @@ import pricing
 import scan
 import playlist_filters
 import spotify_sync
+import standins
 from genres import GENRES, canonical_genre
 
 
@@ -431,6 +432,9 @@ class Record(db.Model):
     censored    = db.Column(db.Boolean, default=False)  # cover has explicit art; blurred client-side until revealed
     spotify_url = db.Column(db.String(500))  # free text: whatever link the scan or the user handed in
     spotify_missing = db.Column(db.Boolean, default=False)  # marked as not on Spotify; a link overrides it
+    # The link is a stand-in playlist built for this album (see StandInPlaylist):
+    # the filters count the record as an album, not a compilation.
+    spotify_standin = db.Column(db.Boolean, default=False)
     vinyl_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as black
     label_color = db.Column(db.String(7))  # '#rrggbb' or unset — unset renders as white
 
@@ -469,6 +473,7 @@ class Record(db.Model):
             "censored": bool(self.censored),
             "spotify_url": self.spotify_url or "",
             "spotify_missing": bool(self.spotify_missing) and not self.spotify_url,
+            "spotify_standin": bool(self.spotify_standin) and bool(self.spotify_url),
             "vinyl_color": self.vinyl_color or "",
             "label_color": self.label_color or "",
         }
@@ -612,6 +617,26 @@ class SpotifyPlaylist(db.Model):
         }
 
 
+# A playlist built on the owner's Spotify to stand in for a record that is not
+# there as an album: its songs found one by one (see standins.py). Matching it
+# writes its link into the record, and from then on the filtered playlists
+# read it like an album. record_id is not a foreign key: a deleted record
+# leaves the row, shown as such, so its playlist can still be deleted.
+class StandInPlaylist(db.Model):
+    id          = db.Column(db.Integer, primary_key=True)
+    record_id   = db.Column(db.Integer, nullable=False)
+    spotify_id  = db.Column(db.String(64))
+    name        = db.Column(db.String(200), nullable=False)
+    track_count = db.Column(db.Integer, default=0)
+    song_count  = db.Column(db.Integer, default=0)
+    cover_url   = db.Column(db.String(500))
+    created_at  = db.Column(db.String(50))
+    matched_at  = db.Column(db.String(50))
+
+    def url(self):
+        return spotify_sync.playlist_url(self.spotify_id) if self.spotify_id else ""
+
+
 _LEGACY_PLAYLISTS = (
     ("Zucoloto Vinyl Collection", {"liked": False}),
     ("Zucoloto Vinyl Collection — Liked", {"liked": True}),
@@ -697,6 +722,7 @@ with app.app_context(), _startup_lock():
         "censored": "BOOLEAN",
         "spotify_url": "VARCHAR(500)",
         "spotify_missing": "BOOLEAN",
+        "spotify_standin": "BOOLEAN",
         "vinyl_color": "VARCHAR(7)",
         "label_color": "VARCHAR(7)",
     }
@@ -1078,7 +1104,12 @@ def update_record(rid):
     if "notes"       in d: r.notes        = d["notes"]
     if "country"     in d: r.country      = (d["country"] or "").strip().upper()[:2]
     if "censored"    in d: r.censored     = bool(d["censored"])
-    if "spotify_url" in d: r.spotify_url  = _spotify_url(d["spotify_url"])
+    if "spotify_url" in d:
+        link = _spotify_url(d["spotify_url"])
+        # A hand-edited link is no longer the stand-in this flag described.
+        if link != r.spotify_url:
+            r.spotify_standin = False
+        r.spotify_url = link
     if "spotify_missing" in d: r.spotify_missing = bool(d["spotify_missing"])
     if "vinyl_color" in d: r.vinyl_color  = _hex_color(d["vinyl_color"])
     if "label_color" in d: r.label_color  = _hex_color(d["label_color"])
@@ -2152,12 +2183,12 @@ def _playlist_records():
     rows = (db.session.query(Record.id, Record.cover_hash, Record.artist, Record.album_name,
                              Record.spotify_url, Record.tracks, Record.year, Record.genre,
                              Record.my_rating, Record.wife_rating, Record.bought_where,
-                             Record.bought_date, Record.have_it)
+                             Record.bought_date, Record.have_it, Record.spotify_standin)
             .filter(Record.spotify_url.isnot(None), Record.spotify_url != "")
             .order_by(Record.bought_date, Record.id).all())
     out = []
     for (rid, cover_hash, artist, album, link, tracks, year, genre,
-         my_rating, wife_rating, bought_where, bought_date, have_it) in rows:
+         my_rating, wife_rating, bought_where, bought_date, have_it, standin) in rows:
         try:
             parsed = json.loads(tracks) if tracks else []
         except ValueError:
@@ -2168,7 +2199,8 @@ def _playlist_records():
                     "tracks": parsed if isinstance(parsed, list) else [],
                     "year": year, "genre": genre, "my_rating": my_rating,
                     "wife_rating": wife_rating, "bought_where": bought_where,
-                    "bought_date": bought_date, "have_it": bool(have_it)})
+                    "bought_date": bought_date, "have_it": bool(have_it),
+                    "spotify_standin": bool(standin)})
     return out
 
 
@@ -2346,6 +2378,246 @@ def spotify_delete_playlist(pid):
     db.session.delete(row)
     db.session.commit()
     return jsonify({"ok": True})
+
+# ── spotify stand-ins ─────────────────────────────────────────────────────────
+# The admin page's tool for records Spotify does not have as an album: build a
+# playlist of their songs, found one by one (standins.py), and match it to the
+# record. A match is the playlist's link in record.spotify_url plus the
+# spotify_standin flag, which keeps the record among the albums in the filters.
+
+_STANDIN_URI = re.compile(r"^spotify:track:[A-Za-z0-9]+$")
+_STANDIN_MAX_SONGS = 300
+
+
+def _stamp():
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _standin_or_404(sid):
+    row = db.session.get(StandInPlaylist, sid)
+    if row is None:
+        raise NotFound()
+    return row
+
+
+def _record_or_404(rid):
+    try:
+        row = db.session.get(Record, int(rid))
+    except (TypeError, ValueError):
+        row = None
+    if row is None:
+        raise NotFound()
+    return row
+
+
+def _parsed_tracks(record):
+    try:
+        parsed = json.loads(record.tracks) if record.tracks else []
+    except ValueError:
+        return []
+    return [t for t in parsed if isinstance(t, dict) and (t.get("title") or "").strip()] \
+        if isinstance(parsed, list) else []
+
+
+def _record_card(record):
+    """Just what a row needs to show a record: no notes, no dates."""
+    return {"id": record.id, "artist": record.artist or "", "album_name": record.album_name or "",
+            "year": record.year or "", "have_it": bool(record.have_it),
+            "cover_url": f"/api/records/{record.id}/cover?v={record.cover_hash}" if record.cover_hash else ""}
+
+
+def _standin_dict(row, record=None):
+    url = row.url()
+    matched = bool(row.matched_at) and record is not None and record.spotify_url == url
+    return {"id": row.id, "record_id": row.record_id, "name": row.name, "url": url,
+            "track_count": row.track_count or 0, "song_count": row.song_count or 0,
+            "cover_url": row.cover_url or "", "created_at": row.created_at,
+            "matched": matched, "matched_at": row.matched_at if matched else None,
+            "record": _record_card(record) if record is not None else None}
+
+
+def _standin_payload(row):
+    return _standin_dict(row, db.session.get(Record, row.record_id))
+
+
+@app.route("/api/spotify/stand-ins")
+@require_auth
+def spotify_standins():
+    rows = StandInPlaylist.query.order_by(StandInPlaylist.id.desc()).all()
+    records = {r.id: r for r in Record.query.options(defer(Record.cover_data))
+               .filter(Record.id.in_({row.record_id for row in rows})).all()} if rows else {}
+    lost = (Record.query.options(defer(Record.cover_data))
+            .filter((Record.spotify_url.is_(None)) | (Record.spotify_url == ""))
+            .order_by(func.lower(Record.artist), func.lower(Record.album_name)).all())
+    return jsonify({
+        "stand_ins": [_standin_dict(row, records.get(row.record_id)) for row in rows],
+        "candidates": [{**_record_card(r), "has_tracks": bool(_parsed_tracks(r)),
+                        "spotify_missing": bool(r.spotify_missing)} for r in lost],
+    })
+
+
+@app.route("/api/spotify/stand-ins/tracklist", methods=["POST"])
+@require_auth
+def spotify_standin_tracklist():
+    record = _record_or_404((request.get_json(silent=True) or {}).get("record_id"))
+    if _parsed_tracks(record):
+        return jsonify({"error": "this record already has a tracklist"}), 400
+    spent = []
+    try:
+        found = scan.suggest_tracklist(record.artist or "", record.album_name or "",
+                                       record.year or "", usage_out=spent)
+    finally:
+        _record_scan_spend("tracklist", spent)
+    if not found:
+        return jsonify({"error": "Claude does not know this record — type its tracklist "
+                                 "in the record form"}), 422
+    return jsonify(found)
+
+
+@app.route("/api/spotify/stand-ins/preview", methods=["POST"])
+@require_auth
+def spotify_standin_preview():
+    record = _record_or_404((request.get_json(silent=True) or {}).get("record_id"))
+    tracks = _parsed_tracks(record)
+    if not tracks:
+        return jsonify({"error": "this record has no tracklist yet"}), 400
+    acct = _spotify_account()
+    if not acct or not acct.refresh_token:
+        return _not_connected()
+    try:
+        songs = standins.preview(_spotify_client(acct), {
+            "artist": record.artist, "album_name": record.album_name, "tracks": tracks})
+    except spotify_sync.NotConnected:
+        return _login_expired(acct)
+    except (spotify_sync.SpotifyError, requests.RequestException) as e:
+        app.logger.warning("Stand-in song search failed", exc_info=True)
+        return jsonify({"error": str(e)}), 502
+    return jsonify({"songs": songs})
+
+
+def _upload_record_cover(spotify, spotify_id, record):
+    """Put the record's cover on the playlist. Never fails the create:
+    "uploaded", "none" (no cover to send), "needs_reconnect" or "failed"."""
+    decoded = _decode_data_uri(record.cover_data)
+    jpeg = standins.cover_jpeg(decoded[0]) if decoded else None
+    if jpeg is None:
+        return "none"
+    try:
+        spotify_sync.upload_cover(spotify, spotify_id, jpeg)
+        return "uploaded"
+    except spotify_sync.SpotifyError as e:
+        if e.status in (401, 403):
+            return "needs_reconnect"
+        app.logger.warning("Stand-in cover upload failed", exc_info=True)
+    except requests.RequestException:
+        app.logger.warning("Stand-in cover upload failed", exc_info=True)
+    return "failed"
+
+
+@app.route("/api/spotify/stand-ins", methods=["POST"])
+@require_auth
+def spotify_create_standin():
+    d = request.get_json(silent=True) or {}
+    record = _record_or_404(d.get("record_id"))
+    if record.spotify_url:
+        return jsonify({"error": "this record already has a Spotify link"}), 400
+    uris = d.get("uris")
+    if not isinstance(uris, list) or not all(isinstance(u, str) and _STANDIN_URI.match(u) for u in uris):
+        return jsonify({"error": "uris must be Spotify track URIs"}), 400
+    uris = list(dict.fromkeys(uris))[:_STANDIN_MAX_SONGS]
+    if not uris:
+        return jsonify({"error": "pick at least one song"}), 400
+    acct = _spotify_account()
+    if not acct or not acct.refresh_token:
+        return _not_connected()
+
+    facts = record.to_dict()
+    name = f"{' '.join((record.artist or '?').split())} — {' '.join((record.album_name or '?').split())}"[:200]
+    row = StandInPlaylist(record_id=record.id, name=name, track_count=len(uris),
+                          song_count=len(_parsed_tracks(record)), created_at=_stamp())
+
+    def keep_new_id(new_id):
+        # Stored before the playlist is filled: a fill that fails still
+        # leaves a row the owner can delete, not a playlist nobody knows of.
+        row.spotify_id = new_id
+        db.session.add(row)
+        db.session.commit()
+    spotify = _spotify_client(acct)
+    try:
+        standins.create(spotify, name, standins.description(facts, len(uris), row.song_count),
+                        uris, keep_new_id)
+    except spotify_sync.NotConnected:
+        return _login_expired(acct)
+    except (spotify_sync.SpotifyError, requests.RequestException) as e:
+        app.logger.warning("Stand-in playlist could not be built", exc_info=True)
+        return jsonify({"error": str(e)}), 502
+    cover = _upload_record_cover(spotify, row.spotify_id, record)
+    try:
+        row.cover_url = spotify_sync.playlist_cover(spotify, row.spotify_id) or row.cover_url
+    except (spotify_sync.SpotifyError, requests.RequestException):
+        app.logger.info("Stand-in playlist cover unavailable", exc_info=True)
+    db.session.commit()
+    return jsonify({"stand_in": _standin_payload(row), "cover": cover}), 201
+
+
+@app.route("/api/spotify/stand-ins/<int:sid>/match", methods=["POST"])
+@require_auth
+def spotify_match_standin(sid):
+    row = _standin_or_404(sid)
+    record = db.session.get(Record, row.record_id)
+    if record is None:
+        return jsonify({"error": "the record was deleted"}), 404
+    if not row.spotify_id:
+        return jsonify({"error": "this playlist was never made on Spotify"}), 400
+    if record.spotify_url and record.spotify_url != row.url():
+        return jsonify({"error": "the record has another Spotify link now — clear it first"}), 409
+    record.spotify_url = row.url()
+    record.spotify_standin = True
+    record.spotify_missing = False
+    row.matched_at = _stamp()
+    db.session.commit()
+    return jsonify({"stand_in": _standin_dict(row, record), "record": record.to_dict()})
+
+
+def _unlink(row, record):
+    """Take the playlist's link off the record — only if it is still this playlist's."""
+    if record is not None and record.spotify_url == row.url():
+        record.spotify_url = ""
+        record.spotify_standin = False
+    row.matched_at = None
+
+
+@app.route("/api/spotify/stand-ins/<int:sid>/unmatch", methods=["POST"])
+@require_auth
+def spotify_unmatch_standin(sid):
+    row = _standin_or_404(sid)
+    record = db.session.get(Record, row.record_id)
+    _unlink(row, record)
+    db.session.commit()
+    return jsonify({"stand_in": _standin_dict(row, record),
+                    "record": record.to_dict() if record is not None else None})
+
+
+@app.route("/api/spotify/stand-ins/<int:sid>", methods=["DELETE"])
+@require_auth
+def spotify_delete_standin(sid):
+    row = _standin_or_404(sid)
+    if row.spotify_id:
+        acct = _spotify_account()
+        if not acct or not acct.refresh_token:
+            return _not_connected()
+        try:
+            spotify_sync.delete_playlist(_spotify_client(acct), row.spotify_id)
+        except spotify_sync.NotConnected:
+            return _login_expired(acct)
+        except (spotify_sync.SpotifyError, requests.RequestException) as e:
+            app.logger.warning("Stand-in playlist delete failed", exc_info=True)
+            return jsonify({"error": str(e)}), 502
+    record = db.session.get(Record, row.record_id)
+    _unlink(row, record)
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"ok": True, "record": record.to_dict() if record is not None else None})
 
 # ── spotify playlist → wishlist ───────────────────────────────────────────────
 # The admin page's tool: read one of the owner's playlists, name each song's

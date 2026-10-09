@@ -841,6 +841,72 @@ def classify_genre(artist: str, album: str, genres: list[str],
     return genre if genre in genres else None
 
 
+TRACKLIST_MODEL = "claude-haiku-4-5"
+
+_TRACKLIST_SYSTEM = (
+    "You give the tracklist of a vinyl LP, so its songs can be found on Spotify.\n"
+    "Rules:\n"
+    "1. The ORIGINAL LP's running order, side by side: A and B for one disc, "
+    "C and D for a second, and so on.\n"
+    "2. Song titles as printed on the original release, without durations, "
+    "numbering or credits.\n"
+    "3. If you do not know this exact record, return an empty list. Never "
+    "guess or borrow another album's songs."
+)
+
+_TRACKLIST_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tracks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"side": {"type": "string"}, "title": {"type": "string"}},
+                "required": ["side", "title"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["tracks"],
+    "additionalProperties": False,
+}
+
+
+def suggest_tracklist(artist: str, album: str, year: str,
+                      usage_out: list | None = None) -> dict | None:
+    """{tracks: [{side, title}], disc_count} for a record, or None if Claude
+    does not know it or the call fails. Never raises: the owner can still type
+    the tracklist in by hand. Rows without a title or a side letter are dropped.
+    """
+    try:
+        client = _anthropic_client()
+        response = client.messages.create(
+            model=TRACKLIST_MODEL,
+            max_tokens=2048,
+            system=_TRACKLIST_SYSTEM,
+            # No "effort": it 400s on Haiku 4.5 (see classify_genre).
+            output_config={"format": {"type": "json_schema", "schema": _TRACKLIST_SCHEMA}},
+            messages=[{"role": "user", "content":
+                       f"Artist: {artist}\nAlbum: {album}" + (f"\nYear: {year}" if year else "")}],
+        )
+        _record_usage(usage_out, TRACKLIST_MODEL, response)
+        text = next(b.text for b in response.content if b.type == "text")
+        raw = json.loads(text).get("tracks") or []
+    except Exception:
+        logger.warning("Tracklist suggestion failed for %r / %r", artist, album, exc_info=True)
+        return None
+    tracks = []
+    for row in raw:
+        side = str(row.get("side") or "").strip().upper()[:1]
+        title = " ".join(str(row.get("title") or "").split())
+        if title and "A" <= side <= "Z":
+            tracks.append({"side": side, "title": title})
+    if not tracks:
+        return None
+    last = max(ord(t["side"]) - ord("A") for t in tracks)
+    return {"tracks": tracks, "disc_count": last // 2 + 1}
+
+
 SEARCH_MODEL = "claude-haiku-4-5"
 
 _SEARCH_SYSTEM = (

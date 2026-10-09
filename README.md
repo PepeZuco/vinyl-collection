@@ -136,6 +136,24 @@ O primeiro sync lê um álbum por request (o Spotify não tem mais endpoint em
 lote), então pode levar alguns minutos; o painel mostra o progresso. Os
 tracklists ficam em cache, e os syncs seguintes só leem os discos novos.
 
+### Stand-ins (discos que não estão no Spotify)
+
+Na página **admin**, a seção **spotify stand-ins** cria, para um disco sem
+link do Spotify, uma playlist privada com as músicas dele, procuradas uma a uma
+pelo título e pelo artista. A capa é a capa do disco e a descrição traz artista,
+álbum, ano, gênero, país, onde foi comprado e quantas músicas foram achadas.
+
+1. Escolha o disco. Se ele não tiver tracklist, o Claude sugere um (custo no
+   ledger de gastos, origem `tracklist`); revise e salve, e ele vai para o disco.
+2. **find songs on Spotify** mostra o resultado de cada música; desmarque as
+   gravações erradas e crie a playlist.
+3. Ouça no Spotify e, se estiver boa, **match**: o link da playlist vai para o
+   disco (marcado como stand-in), e as playlists filtradas passam a usar essas
+   músicas no próximo sync, como se fosse o álbum — inclusive as curtidas.
+
+**Unmatch** tira o link do disco; apagar a stand-in apaga a playlist no Spotify
+e também tira o link. Editar o link do disco à mão desfaz a marcação de stand-in.
+
 ## Gêneros
 
 A lista de gêneros fica em `genres.py` (19 gêneros por estilo; o antigo

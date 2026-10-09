@@ -35,6 +35,7 @@ async function boot(opts) {
   opts = opts || {};
   let resolveCalls = 0;
   const posted = [];
+  const standinCalls = [];
   const authed = !!(opts && opts.authed);
   const backups = (opts && opts.backups) || SNAPSHOTS;
   const failBackups = !!(opts && opts.failBackups);
@@ -95,6 +96,13 @@ async function boot(opts) {
       return json({ albums: body.albums.map(a => Object.assign({}, a,
         a.duplicate_of ? {} : { vinyl: opts.vinyl ? opts.vinyl(a) : 'confirmed', cover_data: '' })) });
     }
+    if (u.includes('/api/spotify/stand-ins') || (opts.standinAnswer && /\/api\/records\/\d+$/.test(u))) {
+      standinCalls.push({ u, method: (init && init.method) || 'GET', body });
+      const answer = opts.standinAnswer && opts.standinAnswer(u, (init && init.method) || 'GET', body);
+      if (answer) return json(answer);
+      if (u.endsWith('/api/spotify/stand-ins')) return json(opts.standins || { stand_ins: [], candidates: [] });
+      return json({ ok: true });
+    }
     if (u.endsWith('/api/search/genres')) return json({ genres: body.releases.map(() => 'Rock') });
     if (u.endsWith('/api/records') && init && init.method === 'POST') {
       posted.push(body);
@@ -121,7 +129,7 @@ async function boot(opts) {
   try { win.eval(source); } catch (e) { errors.push(String(e && e.message)); }
   for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0));
 
-  return { win, doc: win.document, errors, asked, posted, read: expr => win.__peek(expr) };
+  return { win, doc: win.document, errors, asked, posted, standinCalls, read: expr => win.__peek(expr) };
 }
 
 async function settle() {
@@ -328,5 +336,151 @@ test('the mobile More sheet opens the admin page in edit mode', async () => {
     assert.ok(doc.getElementById('adminPage').classList.contains('visible'));
     assert.ok(doc.getElementById('mtabAdmin').classList.contains('active'));
     assert.ok(doc.getElementById('mtabMoreBtn').classList.contains('active'));
+  } finally { win.close(); }
+});
+
+
+// ── spotify stand-ins ─────────────────────────────────────────────────────────
+
+const STANDIN_REC = { id: 7, artist: 'Elis Regina', album_name: 'Elis', year: '1972', have_it: true, cover_url: '' };
+const STANDINS = {
+  stand_ins: [
+    { id: 1, record_id: 7, name: 'Elis Regina — Elis', url: 'https://open.spotify.com/playlist/S1',
+      track_count: 9, song_count: 12, cover_url: '', matched: false, record: STANDIN_REC },
+    { id: 2, record_id: 8, name: 'Gal — Fa-Tal', url: 'https://open.spotify.com/playlist/S2',
+      track_count: 5, song_count: 5, cover_url: '', matched: true,
+      record: { id: 8, artist: 'Gal', album_name: 'Fa-Tal', year: '1971', have_it: true, cover_url: '' } },
+  ],
+  candidates: [
+    Object.assign({ has_tracks: true, spotify_missing: false }, STANDIN_REC),
+    { id: 9, artist: 'Tim Maia', album_name: 'Racional', year: '1975', have_it: true, cover_url: '',
+      has_tracks: false, spotify_missing: true },
+  ],
+};
+
+// Inline oninput/onchange attributes do not run under runScripts:'outside-only',
+// so, like press() for onclick, the attribute's code is run by hand.
+function fire(win, el, attr) {
+  win.__peek('(function(event){' + el.getAttribute(attr) + '})').call(el, new win.Event(attr.slice(2)));
+}
+
+async function openStandins(opts) {
+  const booted = await boot(Object.assign({ authed: true, account: CONNECTED, standins: STANDINS }, opts));
+  press(booted.win, booted.doc.getElementById('adminBtn'));
+  await settle();
+  return booted;
+}
+
+test('the stand-ins section lists playlists with their match state, and the records without a link', async () => {
+  const { win, doc, errors } = await openStandins();
+  try {
+    const body = doc.getElementById('adminStandinsBody');
+    const rows = [...body.querySelectorAll('[data-standin]')];
+    assert.deepStrictEqual(rows.map(r => r.querySelector('.playlist-name').textContent.trim()),
+      ['Elis Regina — Elis', 'Gal — Fa-Tal']);
+    assert.match(rows[0].textContent, /9 of 12 songs/);
+    assert.match(rows[0].textContent, /not matched/);
+    assert.ok(rows[1].querySelector('.sti-matched'));
+    const cands = [...body.querySelectorAll('.sti-cand')];
+    assert.strictEqual(cands.length, 2);
+    assert.match(cands[1].textContent, /no tracklist/);
+    assert.deepStrictEqual(errors, []);
+  } finally { win.close(); }
+});
+
+test('the matched pill keeps only matched stand-ins', async () => {
+  const { win, doc } = await openStandins();
+  try {
+    const pill = [...doc.querySelectorAll('#adminStandinsBody .sp-pill')].find(b => b.textContent === 'Matched');
+    press(win, pill);
+    const names = [...doc.querySelectorAll('#adminStandinsBody .playlist-name')].map(n => n.textContent.trim());
+    assert.deepStrictEqual(names, ['Gal — Fa-Tal']);
+  } finally { win.close(); }
+});
+
+test('the search narrows the records without a link', async () => {
+  const { win, doc } = await openStandins();
+  try {
+    const input = doc.getElementById('stiSearch');
+    input.value = 'racional';
+    fire(win, input, 'oninput');
+    const names = [...doc.querySelectorAll('.sti-cand-name')].map(n => n.textContent);
+    assert.deepStrictEqual(names, ['Racional']);
+  } finally { win.close(); }
+});
+
+test('finding songs previews each hit, and create sends only the ticked ones', async () => {
+  const songs = [
+    { side: 'A', title: 'Bala com Bala', hit: { uri: 'spotify:track:1', name: 'Bala com Bala', album: 'Elis', year: '1972' } },
+    { side: 'A', title: 'Lost Song', hit: null },
+    { side: 'B', title: 'Atrás da Porta', hit: { uri: 'spotify:track:2', name: 'Atrás da Porta', album: 'Best', year: '1990' } },
+  ];
+  const created = { id: 3, record_id: 7, name: 'Elis Regina — Elis', url: 'https://open.spotify.com/playlist/S3',
+                    track_count: 1, song_count: 3, cover_url: '', matched: false, record: STANDIN_REC };
+  const { win, doc, standinCalls } = await openStandins({
+    standinAnswer: (u, method) => u.endsWith('/preview') ? { songs }
+      : (u.endsWith('/api/spotify/stand-ins') && method === 'POST') ? { stand_in: created, cover: 'uploaded' } : null,
+  });
+  try {
+    press(win, doc.querySelectorAll('.sti-cand')[0]);
+    const find = [...doc.querySelectorAll('.sti-builder .sti-btn')].find(b => /find songs/.test(b.textContent));
+    press(win, find);
+    await settle();
+    const rows = [...doc.querySelectorAll('.sti-song')];
+    assert.strictEqual(rows.length, 3);
+    assert.match(rows[0].textContent, /Bala com Bala · Elis · 1972/);
+    assert.ok(rows[1].querySelector('input').disabled, 'a miss can be ticked');
+    assert.match(rows[1].textContent, /not found on Spotify/);
+
+    const box = rows[2].querySelector('input');
+    box.checked = false;
+    fire(win, box, 'onchange');
+    assert.match(doc.getElementById('stiCreate').textContent, /1 song/);
+    press(win, doc.getElementById('stiCreate'));
+    await settle();
+    const post = standinCalls.find(c => c.method === 'POST' && c.u.endsWith('/api/spotify/stand-ins'));
+    assert.deepStrictEqual(post.body, { record_id: 7, uris: ['spotify:track:1'] });
+    assert.ok(doc.querySelector('[data-standin="3"]'), 'the new stand-in is not listed');
+  } finally { win.close(); }
+});
+
+test('a record without a tracklist gets Claude\'s suggestion, saved to the record before searching', async () => {
+  const { win, doc, standinCalls } = await openStandins({
+    standinAnswer: (u, method) => u.endsWith('/tracklist')
+      ? { tracks: [{ side: 'A', title: 'Imunização Racional' }, { side: 'C', title: 'Bom Senso' }], disc_count: 2 }
+      : /\/api\/records\/9$/.test(u) ? { id: 9, artist: 'Tim Maia', album_name: 'Racional', tracks: '[]' }
+      : u.endsWith('/preview') ? { songs: [] } : null,
+  });
+  try {
+    press(win, doc.querySelectorAll('.sti-cand')[1]);
+    const suggest = [...doc.querySelectorAll('.sti-builder .sti-btn')].find(b => /suggest/.test(b.textContent));
+    press(win, suggest);
+    await settle();
+    const titles = [...doc.querySelectorAll('.sti-draft-row input')];
+    assert.deepStrictEqual(titles.map(i => i.value), ['Imunização Racional', 'Bom Senso']);
+    titles[1].value = 'Bom Senso (fixed)';
+    fire(win, titles[1], 'oninput');
+    const save = [...doc.querySelectorAll('.sti-builder .sti-btn')].find(b => /save tracklist/.test(b.textContent));
+    press(win, save);
+    await settle();
+    const put = standinCalls.find(c => c.method === 'PUT');
+    assert.ok(put.u.endsWith('/api/records/9'));
+    assert.deepStrictEqual(JSON.parse(put.body.tracks),
+      [{ side: 'A', title: 'Imunização Racional' }, { side: 'C', title: 'Bom Senso (fixed)' }]);
+    assert.strictEqual(put.body.disc_count, 2);
+    assert.ok(standinCalls.some(c => c.u.endsWith('/preview')), 'saving did not go on to search');
+  } finally { win.close(); }
+});
+
+test('match posts to the stand-in and shows it matched', async () => {
+  const matched = Object.assign({}, STANDINS.stand_ins[0], { matched: true });
+  const { win, doc, standinCalls } = await openStandins({
+    standinAnswer: u => u.endsWith('/1/match') ? { stand_in: matched, record: null } : null,
+  });
+  try {
+    press(win, doc.querySelector('[data-standin="1"] [aria-label="match to the record"]'));
+    await settle();
+    assert.ok(standinCalls.some(c => c.method === 'POST' && c.u.endsWith('/api/spotify/stand-ins/1/match')));
+    assert.match(doc.querySelector('[data-standin="1"]').textContent, /matched — the Spotify tab/);
   } finally { win.close(); }
 });

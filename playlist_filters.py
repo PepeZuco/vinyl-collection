@@ -18,7 +18,9 @@ Filters (all optional; absent means "does not filter"; they combine with AND):
   bought_from, bought_to   YYYY-MM-DD purchase range, inclusive
   source                   "albums" (default) | "compilations" | "all" — which kind of
                            Spotify link counts: an album (or track) link, or a playlist
-                           someone made for a compilation that is not an album on Spotify
+                           someone made for a compilation that is not an album on Spotify.
+                           A record flagged spotify_standin counts as an album whatever
+                           its link: that playlist stands in for an album Spotify lacks.
   owned                    "owned" (default) | "wishlist" | "all" — records you have,
                            records on the wishlist, or both
 
@@ -266,7 +268,10 @@ def _matches(r, f):
     if owned != "all" and have != (owned == "owned"):
         return False
     source = f.get("source", "albums")
-    if source != "all" and link_kind(r.get("spotify_url")) != ("playlist" if source == "compilations" else "album"):
+    # A stand-in is a playlist built for an album Spotify does not have: the
+    # record is still an album, so it sits with the albums.
+    kind = "album" if r.get("spotify_standin") else link_kind(r.get("spotify_url"))
+    if source != "all" and kind != ("playlist" if source == "compilations" else "album"):
         return False
     if "year_from" in f or "year_to" in f:
         y = record_year(r.get("year"))

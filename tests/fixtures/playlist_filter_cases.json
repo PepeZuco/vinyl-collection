@@ -30,6 +30,8 @@
     {"why": "a locale segment is still a playlist", "filters": {"source": "compilations"}, "record": {"spotify_url": "https://open.spotify.com/intl-pt/playlist/Y?si=1"}, "match": true},
     {"why": "a spotify: playlist URI is a playlist", "filters": {"source": "compilations"}, "record": {"spotify_url": "spotify:playlist:Y"}, "match": true},
     {"why": "all keeps both kinds", "filters": {"source": "all"}, "record": {"spotify_url": "https://open.spotify.com/playlist/Y"}, "match": true},
+    {"why": "a stand-in playlist counts as an album", "filters": {}, "record": {"spotify_url": "https://open.spotify.com/playlist/S", "spotify_standin": true}, "match": true},
+    {"why": "a stand-in playlist is no compilation", "filters": {"source": "compilations"}, "record": {"spotify_url": "https://open.spotify.com/playlist/S", "spotify_standin": true}, "match": false},
     {"why": "owned is the default, so a wishlist record is out", "filters": {}, "record": {"have_it": false}, "match": false},
     {"why": "a record without the flag counts as owned", "filters": {}, "record": {}, "match": true},
     {"why": "wishlist keeps wishlist records", "filters": {"owned": "wishlist"}, "record": {"have_it": false}, "match": true},

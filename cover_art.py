@@ -216,11 +216,21 @@ def render(filters, total):
     text = footer(filters, total, small.getlength, (_TEXT_RIGHT - _ICON_X - 36) * _S)
     d.text(((_ICON_X + 36) * _S, _FOOT_Y * _S), text, font=small, fill=MUTED)
 
-    img = img.resize((SIZE, SIZE), Image.LANCZOS)
-    for quality in (90, 80, 70, 60, 50):
-        buf = io.BytesIO()
-        img.save(buf, "JPEG", quality=quality)
-        data = buf.getvalue()
-        if (len(data) + 2) // 3 * 4 <= MAX_BASE64:
-            return data
+    return to_spotify_jpeg(img.resize((SIZE, SIZE), Image.LANCZOS))
+
+
+def to_spotify_jpeg(img):
+    """An RGB picture as JPEG bytes under Spotify's 256 KB (as base64) cap.
+
+    Quality drops until it fits; a photo too busy to fit even then is shrunk.
+    """
+    for scale in (1, 0.75, 0.5):
+        if scale != 1:
+            img = img.resize((round(img.width * scale), round(img.height * scale)), Image.LANCZOS)
+        for quality in (90, 80, 70, 60, 50):
+            buf = io.BytesIO()
+            img.save(buf, "JPEG", quality=quality)
+            data = buf.getvalue()
+            if (len(data) + 2) // 3 * 4 <= MAX_BASE64:
+                return data
     return data

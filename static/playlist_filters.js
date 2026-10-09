@@ -103,7 +103,8 @@ const VinylPlaylistFilters = (function () {
     const owned = f.owned || 'owned';
     if (owned !== 'all' && (r.have_it !== false) !== (owned === 'owned')) return false;
     const source = f.source || 'albums';
-    if (source !== 'all' && linkKind(r.spotify_url) !== (source === 'compilations' ? 'playlist' : 'album')) return false;
+    const kind = r.spotify_standin ? 'album' : linkKind(r.spotify_url);
+    if (source !== 'all' && kind !== (source === 'compilations' ? 'playlist' : 'album')) return false;
     if ('year_from' in f || 'year_to' in f) {
       const y = recordYear(r.year);
       if (y === null) return false;

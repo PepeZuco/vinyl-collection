@@ -158,16 +158,45 @@ select option{background:var(--surface);color:var(--text)}
 @media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr)}}
 
-/* vinyl card — shadow set inline by JS from the record's genre */
+/* vinyl card */
 .vcard{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:var(--radius);
   overflow:hidden;cursor:pointer;
-  transition:border-color .15s, box-shadow .3s, transform .15s;
+  transition:border-color .15s, transform .15s;
   position:relative;
 }
 .vcard:hover{border-color:color-mix(in srgb, var(--text) 40%, transparent);transform:translateY(-2px)}
+
+/* The record itself, behind its sleeve, at the card's right edge. That edge
+ * used to carry a 4px genre-coloured offset shadow; it now shows the edge of
+ * every disc the record has, in its own vinyl and label colours, at true scale
+ * against the sleeve (a 12" is 94% of it, a 7" visibly shorter), resting on
+ * the bottom the way a record sits in a sleeve. Extra discs fan further out.
+ * Geometry is all % of the card width, set inline by recordEdgeHTML(), so the
+ * phone's two-column grid gets the same picture smaller. An unknown size is a
+ * dashed outline rather than a guessed 12"; a record not owned is faded.
+ * Genre still shows in the hover scrim. */
+.vcard-shelf{position:relative}
+.vcard-shelf .vcard-cover{width:86.5%;z-index:1;box-shadow:3px 0 6px rgba(0,0,0,.45)}
+.vcard-recs{position:absolute;inset:0;pointer-events:none}
+.vcard-recs .vcard-rec{position:absolute;bottom:2.4%;height:auto;aspect-ratio:1;flex:none}
+.vcard-recs .vcard-rec.disc::after{background:var(--card)}
+.vcard-recs .vcard-rec.unk{border:1.5px dashed color-mix(in srgb, var(--text) 35%, transparent);
+  border-radius:50%;box-sizing:border-box}
+.vcard-recs .vcard-rec.ghost{opacity:.28}
+/* hovering pulls the front disc out far enough to show its label — over the
+   neighbouring card if need be, which is why the card stops clipping and
+   rises above its row while hovered. Pointer devices only: a tap opens the
+   record instead. */
+@media(hover:hover){
+  .vcard-recs .vcard-rec.front{transition:transform .4s cubic-bezier(.2,.7,.2,1)}
+  .vcard:hover{overflow:visible;z-index:2}
+  .vcard:hover .vcard-recs .vcard-rec.front{transform:translateX(var(--slide))}
+}
+/* the last column's disc slides past the grid; never let that scroll the page */
+html{overflow-x:clip}
 
 .vcard-cover{width:100%;aspect-ratio:1;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .vcard-cover img{width:100%;height:100%;object-fit:cover}
@@ -1540,11 +1569,12 @@ select option{background:var(--surface);color:var(--text)}
   background:color-mix(in srgb, #1DB954 12%, transparent)}
 
 /* spotify playlists page — what was the header menu's modal, now a tab */
-.playlists-page{display:none;max-width:720px;
-  /* Spotify's own palette for this page, whatever the app theme */
+.playlists-page{display:none;max-width:720px}
+/* Spotify's own palette for this page (and the admin stand-ins), whatever the app theme */
+.playlists-page,.admin-standins{
   --sp-bg:#121212;--sp-raise:#1f1f1f;--sp-hover:#2a2a2a;--sp-text:#fff;--sp-sub:#b3b3b3;
   --sp-pill:#2a2a2a;--sp-pill-hover:#333;--sp-green:#1DB954;--sp-on-green:#000}
-[data-theme="light"] .playlists-page{--sp-bg:#fff;--sp-raise:#f2f2f2;--sp-hover:#ececec;
+[data-theme="light"] .playlists-page,[data-theme="light"] .admin-standins{--sp-bg:#fff;--sp-raise:#f2f2f2;--sp-hover:#ececec;
   --sp-text:#000;--sp-sub:#6a6a6a;--sp-pill:#ededed;--sp-pill-hover:#e2e2e2;--sp-green:#1aa34a;--sp-on-green:#fff}
 .playlists-page.visible{display:block;background:var(--sp-bg);color:var(--sp-text);
   border-radius:12px;padding:16px 16px 20px;font-family:'Inter',system-ui,sans-serif}
@@ -1577,8 +1607,9 @@ select option{background:var(--surface);color:var(--text)}
    the one that runs long. One column on a phone, where the boxes grow to
    their content instead. */
 .admin-page{display:none;--admin-row:max(300px,calc((100vh - 230px) / 2))}
-.admin-page.visible{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:var(--admin-row) var(--admin-row);
-  grid-template-areas:"places spotify" "data spotify";gap:20px}
+.admin-page.visible{display:grid;grid-template-columns:1fr 1fr;
+  grid-template-rows:var(--admin-row) var(--admin-row) max(520px,calc(100vh - 200px));
+  grid-template-areas:"places spotify" "data spotify" "standin standin";gap:20px}
 .admin-places{grid-area:places}
 .admin-data{grid-area:data}
 .admin-spotify{grid-area:spotify}
@@ -1593,7 +1624,7 @@ select option{background:var(--surface);color:var(--text)}
 .admin-sub{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--label);margin:18px 0 2px}
 @media(max-width:760px){
   .admin-page.visible{grid-template-columns:1fr;grid-template-rows:none;
-    grid-template-areas:"places" "data" "spotify";gap:14px}
+    grid-template-areas:"places" "data" "spotify" "standin";gap:14px}
   .admin-section{overflow:visible}
   .admin-body{overflow:visible}
   .admin-page .asw-foot{position:static}
@@ -1601,6 +1632,75 @@ select option{background:var(--surface);color:var(--text)}
 .admin-data-row{display:flex;gap:8px;flex-wrap:wrap}
 .admin-import{position:relative;overflow:hidden;cursor:pointer}
 .admin-import input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+/* admin: spotify stand-ins — the last row of the admin grid, in the Spotify
+   tab's palette and with its rows, so a stand-in reads like a playlist there.
+   Two columns: the library of stand-ins, and the builder for a new one. */
+.admin-standins{grid-area:standin;background:var(--sp-bg);color:var(--sp-text);border-color:var(--sp-raise);
+  font-family:'Inter',system-ui,sans-serif}
+.admin-standins .admin-head{border-bottom-color:var(--sp-raise)}
+.admin-standins .admin-h{color:var(--sp-text)}
+.admin-standins .admin-h .ti{color:var(--sp-green)}
+.admin-standins .admin-desc,.admin-standins .backup-note,.admin-standins .place-empty{color:var(--sp-sub)}
+.sti-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:28px;align-items:start;padding-top:8px}
+.sti-new-title{margin:4px 0 12px;font-size:20px;font-weight:800;letter-spacing:-.01em;color:var(--sp-text)}
+.sti-search-wrap{position:relative;margin:0 0 6px}
+.sti-search-wrap .ti{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--sp-sub);font-size:17px}
+.sti-search{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:999px;padding:10px 16px 10px 38px;
+  font:inherit;font-size:14px;background:var(--sp-raise);color:var(--sp-text);outline:none}
+.sti-search:focus{border-color:var(--sp-sub)}
+.sti-count{font-size:12px;color:var(--sp-sub);margin:0 0 6px 4px}
+.sti-cands{display:flex;flex-direction:column;gap:2px;max-height:280px;overflow:auto;margin:0 -8px}
+.sti-cand{display:flex;align-items:center;gap:12px;padding:6px 8px;border:none;border-radius:6px;background:transparent;
+  color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .15s}
+.sti-cand:hover{background:var(--sp-raise)}
+.sti-cand.on{background:var(--sp-hover)}
+.sti-cand:disabled{cursor:default}
+.sti-art{flex:0 0 48px;width:48px;height:48px;border-radius:4px;object-fit:cover;background:var(--sp-hover);
+  display:flex;align-items:center;justify-content:center;color:var(--sp-sub);font-size:22px}
+.sti-cand-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sti-cand-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--sp-text)}
+.sti-cand.on .sti-cand-name{color:var(--sp-green)}
+.sti-cand-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.sti-cand-sub{font-size:13px;color:var(--sp-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sti-builder{margin-top:14px;padding:16px;border-radius:8px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--sp-green) 16%,var(--sp-raise)) 0,var(--sp-raise) 140px)}
+.sti-builder-head{display:flex;gap:16px;align-items:flex-end;margin-bottom:14px}
+.sti-builder-art{flex:0 0 112px;width:112px;height:112px;border-radius:4px;object-fit:cover;background:var(--sp-hover);
+  box-shadow:0 8px 24px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;color:var(--sp-sub);font-size:40px}
+.sti-builder-text{min-width:0}
+.sti-kicker{font-size:12px;font-weight:600;color:var(--sp-text)}
+.sti-builder-title{font-size:26px;font-weight:800;line-height:1.1;letter-spacing:-.02em;margin:4px 0;color:var(--sp-text);
+  overflow-wrap:anywhere}
+.sti-builder-sub{font-size:13px;color:var(--sp-sub)}
+.sti-builder-sub b{color:var(--sp-text)}
+.sti-btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:999px;padding:10px 20px;font:inherit;
+  font-size:14px;font-weight:700;background:var(--sp-green);color:var(--sp-on-green);cursor:pointer;transition:transform .15s}
+.sti-btn:hover:not(:disabled){transform:scale(1.04)}
+.sti-btn:disabled{opacity:.5;cursor:default}
+.sti-btn.ghost{background:transparent;color:var(--sp-text);box-shadow:inset 0 0 0 1px var(--sp-sub)}
+.sti-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.sti-note{font-size:13px;color:var(--sp-sub);line-height:1.5;margin:0 0 10px}
+.sti-err{font-size:13px;color:var(--danger);margin:8px 0 0}
+.sti-songs{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column}
+.sti-song{display:grid;grid-template-columns:22px 26px minmax(0,1fr);gap:10px;align-items:center;padding:6px 6px;
+  border-radius:4px;cursor:pointer}
+.sti-song:hover{background:var(--sp-hover)}
+.sti-song.miss{cursor:default}
+.sti-song input{accent-color:var(--sp-green);margin:0}
+.sti-side{font-size:13px;color:var(--sp-sub);text-align:center}
+.sti-song-text{min-width:0;display:flex;flex-direction:column;gap:1px}
+.sti-song-title{font-size:14px;color:var(--sp-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sti-song.miss .sti-song-title{color:var(--sp-sub)}
+.sti-song-hit{font-size:12px;color:var(--sp-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sti-song.miss .sti-song-hit{font-style:italic}
+.sti-draft-row{display:grid;grid-template-columns:58px minmax(0,1fr) 34px;gap:6px;margin-bottom:6px}
+.sti-draft-row select,.sti-draft-row input{background:var(--sp-hover);color:var(--sp-text);border:1px solid transparent;
+  border-radius:4px;padding:6px 8px;font:inherit;font-size:13px;min-width:0}
+.sti-draft-row button{border:none;background:transparent;color:var(--sp-sub);border-radius:50%;cursor:pointer;font-size:16px}
+.sti-draft-row button:hover{color:var(--sp-text);background:var(--sp-hover)}
+.pl-tag.sti-matched{color:var(--sp-green);background:color-mix(in srgb,var(--sp-green) 14%,transparent)}
+.pl-tag.sti-matched .ti{color:var(--sp-green)}
+@media(max-width:900px){.sti-grid{grid-template-columns:1fr}}
 .asw-pls{display:flex;flex-direction:column;gap:4px;margin:0 0 10px;max-height:260px;overflow:auto}
 .asw-pl{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;border:1px solid transparent;
   background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}
@@ -3823,6 +3923,13 @@ select option{background:var(--surface);color:var(--text)}
       </div>
       <div class="admin-body" id="adminSpotifyBody"></div>
     </section>
+    <section class="admin-section admin-standins">
+      <div class="admin-head">
+        <h2 class="admin-h"><i class="ti ti-brand-spotify"></i> spotify stand-ins</h2>
+        <p class="admin-desc">records Spotify does not have as an album — build a playlist of their songs, then match it so the Spotify tab's playlists use it</p>
+      </div>
+      <div class="admin-body" id="adminStandinsBody"></div>
+    </section>
   </div>
 
   <!-- stats page -->
@@ -4723,6 +4830,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/playlist_filters.js"></script>
 <script src="/static/spend.js"></script>
 <script src="/static/admin.js"></script>
+<script src="/static/standins.js"></script>
 <script src="/static/scanstream.js"></script>
 <script src="/static/queue.js"></script>
 <script src="/static/idle-spotlight.js"></script>
@@ -4861,17 +4969,28 @@ function conditionBadgeHTML(r) {
     : '—';
 }
 
-// ── shadow: flat genre colour, no rating influence ─────────────────────────
-function cardStyles(r) {
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+// ── the record's edge at the card's right side — see .vcard-recs ───────────
+const EDGE_SLEEVE = 86.5;               // % of the card width the sleeve keeps
+const EDGE_D12    = EDGE_SLEEVE * 0.94; // a 12" just fits inside its sleeve
 
-  if (!r.have_it) {
-    const g = isDark ? 'rgba(100,100,100,0.35)' : 'rgba(0,0,0,0.18)';
-    return { shadow: `4px 4px 0 0 ${g}` };
+/* One disc per disc_count (capped like the Tracks tab), back to front, each
+ * peeking 2.2% further out than the one in front of it. --slide is how far the
+ * front disc travels on hover, as % of its own width, so it ends with 45% of
+ * itself out of the sleeve — past the label's edge — whatever its size. */
+function recordEdgeHTML(r) {
+  const n = Math.min(DM_PLATTERS_MAX, Math.max(1, Number(r.disc_count) || 1));
+  const inches = Number(r.size) || 0;
+  const d = inches ? EDGE_D12 * inches / 12 : EDGE_D12 * 0.8;
+  const discs = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const peek = 5.2 + 2.2 * i;
+    const cls = 'vcard-rec' + (inches ? ' disc' : ' unk')
+      + (r.have_it ? '' : ' ghost') + (i === 0 ? ' front' : '');
+    const geom = `left:${(EDGE_SLEEVE + peek - d).toFixed(2)}%;width:${d.toFixed(2)}%`
+      + (i === 0 ? `;--slide:${(45 - peek / d * 100).toFixed(1)}%` : '');
+    discs.push(`<span class="${cls}" style="${inches ? discStyle(r, geom) : geom}"></span>`);
   }
-
-  const opacity = isDark ? 0.70 : 0.55;
-  return { shadow: `4px 4px 0 0 rgba(${hexToRgb(genreColor(r.genre, isDark))},${opacity})` };
+  return `<div class="vcard-recs" aria-hidden="true">${discs.join('')}</div>`;
 }
 
 // ── init ───────────────────────────────────────────────────────────────────
@@ -5796,7 +5915,6 @@ function revealCover(id, btn) {
 }
 
 function cardHTML(r) {
-  const styles = cardStyles(r);
   const cover = r.cover_url
     ? censorWrap(r, `<img src="${r.cover_url}" alt="${esc(r.album_name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-cover><i class=ti.ti-disc></i></div>'">`)
     : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
@@ -5845,7 +5963,9 @@ function cardHTML(r) {
 
   const tracklist = trackOverlayHTML(r, songNeedle());
 
-  return `<div class="vcard${tracklist ? ' song-hit' : ''}" data-id="${r.id}" style="box-shadow:${styles.shadow}">
+  return `<div class="vcard${tracklist ? ' song-hit' : ''}" data-id="${r.id}">
+    <div class="vcard-shelf">
+    ${recordEdgeHTML(r)}
     <div class="vcard-cover">
       ${cover}
       ${tracklist}
@@ -5858,6 +5978,7 @@ function cardHTML(r) {
       ${authed ? `<button class="vcard-quick-edit" title="edit record" onclick="event.stopPropagation();openEdit(${r.id})"><i class="ti ti-pencil"></i></button>` : ''}
       ${r.country ? `<div class="vcard-flag" title="${esc(countryLabelFromCode(r.country))}">${flagImgHTML(r.country, 28)}</div>` : ''}
       ${artistOverlay}
+    </div>
     </div>
     <div class="vcard-body">
       <div class="vcard-title-row">
@@ -10640,6 +10761,7 @@ function loadAdmin(){
   renderBackups(null);
   loadBackups();
   loadAdminSpotify();
+  loadStandins();
 }
 
 // ── admin: spotify playlist → wishlist ─────────────────────────────────────
@@ -10667,6 +10789,7 @@ async function loadAdminSpotify(){
     }
   }catch(e){ adminSp.error = 'could not reach the server'; }
   renderAdminSpotify();
+  renderStandins();
 }
 
 function pickAdminPlaylist(id){
@@ -10801,6 +10924,346 @@ function renderAdminSpotify(){
       ${n && !adminSp.busy ? '' : 'disabled'}><i class="ti ti-shopping-cart"></i> add ${n} to wishlist</button></div>`;
   }
   body.innerHTML = html;
+}
+
+// ── admin: spotify stand-ins ───────────────────────────────────────────────
+// A record Spotify does not have as an album gets a playlist of its songs,
+// found one by one. Pick a record; if it has no tracklist Claude suggests one
+// to review and save; then every song is searched and shown with its hit;
+// untick the wrong ones and create. Matching writes the playlist's link into
+// the record, so the Spotify tab's playlists take its songs on their next sync.
+let standin = {loaded: false, error: '', list: [], candidates: [], pill: '', query: '',
+               picked: null, draft: null, songs: null, ticked: new Set(),
+               busy: '', stepError: '', status: {}};
+
+async function loadStandins(){
+  standin.error = '';
+  try{
+    const r = await fetch('/api/spotify/stand-ins');
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) standin.error = d.error || 'could not read the stand-ins';
+    else { standin.list = d.stand_ins || []; standin.candidates = d.candidates || []; standin.loaded = true; }
+  }catch(e){ standin.error = 'could not reach the server'; }
+  renderStandins();
+}
+
+function standinPatchRecord(rec){
+  if(!rec || typeof records === 'undefined') return;
+  const i = records.findIndex(r => r.id === rec.id);
+  if(i >= 0) records[i] = rec;
+}
+
+// A 409 with connect:true means the login is gone: both Spotify sections
+// fall back to their connect button.
+function standinLostLogin(d){
+  if(d && d.connect && adminSp.account){ adminSp.account.connected = false; renderAdminSpotify(); }
+}
+
+async function standinCall(url, opts){
+  const r = await fetch(url, Object.assign({headers: {'Content-Type': 'application/json'}}, opts || {}));
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok) standinLostLogin(d);
+  return {ok: r.ok, status: r.status, d};
+}
+
+function standinPicked(){
+  return standin.candidates.find(c => c.id === standin.picked) || null;
+}
+
+function setStandinPill(k){
+  standin.pill = standin.pill === k ? '' : k;
+  renderStandins();
+}
+
+function standinSearch(value){
+  standin.query = value;
+  const el = document.getElementById('stiCands');
+  if(el) el.innerHTML = standinCandidatesHTML();
+}
+
+function pickStandinRecord(id){
+  if(standin.busy) return;
+  standin.picked = standin.picked === id ? null : id;
+  standin.draft = null; standin.songs = null; standin.ticked = new Set(); standin.stepError = '';
+  renderStandins();
+}
+
+async function suggestStandinTracklist(){
+  const rec = standinPicked();
+  if(!rec || standin.busy) return;
+  standin.busy = 'asking Claude for the tracklist…'; standin.stepError = ''; renderStandins();
+  try{
+    const {ok, d} = await standinCall('/api/spotify/stand-ins/tracklist',
+      {method: 'POST', body: JSON.stringify({record_id: rec.id})});
+    if(ok) standin.draft = {tracks: d.tracks, disc_count: d.disc_count};
+    else standin.stepError = d.error || 'the suggestion failed';
+  }catch(e){ standin.stepError = 'could not reach the server'; }
+  finally{ standin.busy = ''; renderStandins(); refreshScanUsage(); }
+}
+
+// Edited in place rather than re-rendered, so typing keeps focus.
+function standinDraftEdit(i, field, value){
+  if(!standin.draft || !standin.draft.tracks[i]) return;
+  standin.draft.tracks[i][field] = value;
+}
+
+function standinDraftRemove(i){
+  standin.draft.tracks.splice(i, 1);
+  renderStandins();
+}
+
+function standinDraftAdd(){
+  const t = standin.draft.tracks;
+  t.push({side: t.length ? t[t.length - 1].side : 'A', title: ''});
+  renderStandins();
+}
+
+async function saveStandinTracklist(){
+  const rec = standinPicked();
+  if(!rec || !standin.draft || standin.busy) return;
+  const tracks = standin.draft.tracks.map(t => ({side: t.side, title: (t.title || '').trim()})).filter(t => t.title);
+  if(!tracks.length){ standin.stepError = 'add at least one song'; renderStandins(); return; }
+  standin.busy = 'saving the tracklist…'; standin.stepError = ''; renderStandins();
+  try{
+    const {ok, d} = await standinCall(`/api/records/${rec.id}`, {method: 'PUT',
+      body: JSON.stringify({tracks: JSON.stringify(tracks), disc_count: VinylStandins.discCountFor(tracks)})});
+    if(!ok){ standin.stepError = d.error || 'the tracklist could not be saved'; return; }
+    standinPatchRecord(d);
+    rec.has_tracks = true;
+    standin.draft = null;
+  }catch(e){ standin.stepError = 'could not reach the server'; return; }
+  finally{ standin.busy = ''; renderStandins(); }
+  previewStandin();
+}
+
+async function previewStandin(){
+  const rec = standinPicked();
+  if(!rec || standin.busy) return;
+  standin.busy = 'searching Spotify for each song…'; standin.stepError = ''; renderStandins();
+  try{
+    const {ok, d} = await standinCall('/api/spotify/stand-ins/preview',
+      {method: 'POST', body: JSON.stringify({record_id: rec.id})});
+    if(ok){
+      standin.songs = d.songs;
+      standin.ticked = new Set(d.songs.map((s, i) => s.hit ? i : -1).filter(i => i >= 0));
+    } else standin.stepError = d.error || 'the search failed';
+  }catch(e){ standin.stepError = 'could not reach the server'; }
+  finally{ standin.busy = ''; renderStandins(); }
+}
+
+function toggleStandinSong(i, on){
+  if(on) standin.ticked.add(i); else standin.ticked.delete(i);
+  const btn = document.getElementById('stiCreate');
+  const n = VinylStandins.pickedUris(standin.songs, standin.ticked).length;
+  if(btn){ btn.disabled = !n; btn.querySelector('span').textContent = `create playlist (${n} ${n === 1 ? 'song' : 'songs'})`; }
+}
+
+const STANDIN_COVER_NOTES = {
+  needs_reconnect: 'the cover was not set — reconnect Spotify to allow cover uploads',
+  failed: 'the cover could not be uploaded',
+  none: 'the record has no cover, so Spotify shows its own',
+};
+
+async function createStandin(){
+  const rec = standinPicked();
+  const uris = VinylStandins.pickedUris(standin.songs, standin.ticked);
+  if(!rec || !uris.length || standin.busy) return;
+  standin.busy = 'creating the playlist…'; standin.stepError = ''; renderStandins();
+  try{
+    const {ok, d} = await standinCall('/api/spotify/stand-ins',
+      {method: 'POST', body: JSON.stringify({record_id: rec.id, uris})});
+    if(!ok){ standin.stepError = d.error || 'the playlist could not be created'; return; }
+    standin.list.unshift(d.stand_in);
+    standin.status[d.stand_in.id] = {text: ['created on Spotify — listen to it, then match it to the record',
+      STANDIN_COVER_NOTES[d.cover]].filter(Boolean).join(' · ')};
+    standin.picked = null; standin.songs = null; standin.ticked = new Set();
+    toast('stand-in playlist created');
+  }catch(e){ standin.stepError = 'could not reach the server'; }
+  finally{ standin.busy = ''; renderStandins(); }
+}
+
+async function standinRowAction(id, action){
+  const s = standin.list.find(x => x.id === id);
+  if(!s || standin.busy) return;
+  if(action === 'delete' && !confirm(`Delete "${s.name}"? It is removed from your Spotify too.`)) return;
+  standin.busy = action; standin.status[id] = {text: action === 'delete' ? 'deleting…' : 'saving…'};
+  renderStandins();
+  try{
+    const {ok, d} = await standinCall(action === 'delete' ? `/api/spotify/stand-ins/${id}`
+      : `/api/spotify/stand-ins/${id}/${action}`, {method: action === 'delete' ? 'DELETE' : 'POST'});
+    if(!ok){ standin.status[id] = {text: d.error || 'that did not work', err: true}; return; }
+    standinPatchRecord(d.record);
+    if(action === 'delete'){
+      standin.list = standin.list.filter(x => x.id !== id);
+      delete standin.status[id];
+    } else {
+      standin.list = standin.list.map(x => x.id === id ? d.stand_in : x);
+      standin.status[id] = {text: action === 'match'
+        ? 'matched — the Spotify tab’s playlists take its songs on their next sync'
+        : 'unmatched — the record has no Spotify link again'};
+    }
+    // A match takes the record off the candidates; an unmatch or a delete brings it back.
+    loadStandins();
+  }catch(e){
+    standin.status[id] = {text: 'could not reach the server', err: true};
+  }finally{ standin.busy = ''; renderStandins(); }
+}
+
+function standinArt(url, cls){
+  return url ? `<img class="${cls}" src="${esc(url)}" alt="" loading="lazy">`
+             : `<span class="${cls}"><i class="ti ti-vinyl"></i></span>`;
+}
+
+function standinRowHTML(s){
+  const st = standin.status[s.id] || {};
+  const rec = s.record;
+  const cover = s.cover_url || (rec && rec.cover_url) || '';
+  const art = cover ? `<img src="${esc(cover)}" alt="" loading="lazy">` : '<i class="ti ti-playlist"></i>';
+  const busy = standin.busy ? 'disabled' : '';
+  const chip = s.matched
+    ? '<span class="pl-tag sti-matched"><i class="ti ti-link"></i>matched</span>'
+    : '<span class="pl-tag"><i class="ti ti-link-off"></i>not matched</span>';
+  const own = rec ? (rec.have_it ? '' : '<span class="pl-tag"><i class="ti ti-heart-plus"></i>wishlist</span>')
+                  : '<span class="pl-tag"><i class="ti ti-alert-triangle"></i>record deleted</span>';
+  const toggle = s.matched
+    ? `<button class="btn btn-ghost btn-sm" ${busy} title="unmatch" aria-label="unmatch"
+        onclick="standinRowAction(${s.id},'unmatch')"><i class="ti ti-unlink"></i></button>`
+    : `<button class="btn btn-ghost btn-sm" ${busy || (rec ? '' : 'disabled')} title="match to the record" aria-label="match to the record"
+        onclick="standinRowAction(${s.id},'match')"><i class="ti ti-link"></i></button>`;
+  return `<div class="playlist-row" data-standin="${s.id}">
+    ${s.url ? `<a class="playlist-art" href="${esc(s.url)}" target="_blank" rel="noopener" tabindex="-1">${art}</a>`
+            : `<span class="playlist-art">${art}</span>`}
+    <div class="playlist-main">
+      <span class="playlist-name">${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a>` : esc(s.name)}</span>
+      <span class="playlist-sub">Playlist • ${s.track_count} of ${s.song_count} ${s.song_count === 1 ? 'song' : 'songs'}</span>
+      <span class="playlist-sub playlist-tags">${chip}${own}</span>
+    </div>
+    <div class="playlist-actions">
+      ${toggle}
+      <button class="btn btn-ghost btn-sm" ${busy} title="delete" aria-label="delete"
+        onclick="standinRowAction(${s.id},'delete')"><i class="ti ti-trash"></i></button>
+      ${s.url ? `<a class="btn btn-ghost btn-sm playlist-open" href="${esc(s.url)}" target="_blank" rel="noopener"
+        title="open in Spotify" aria-label="open in Spotify"><i class="ti ti-brand-spotify"></i></a>` : ''}
+    </div>
+    ${st.text ? `<div class="playlist-status${st.err ? ' err' : ''}">${esc(st.text)}</div>` : ''}
+  </div>`;
+}
+
+function standinCandidatesHTML(){
+  const shown = VinylStandins.filterCandidates(standin.candidates, standin.query);
+  if(!standin.candidates.length) return '<div class="place-empty">every record has a Spotify link.</div>';
+  if(!shown.length) return '<div class="place-empty">no record matches that search.</div>';
+  return shown.map(c => `<button class="sti-cand${c.id === standin.picked ? ' on' : ''}" ${standin.busy ? 'disabled' : ''}
+      onclick="pickStandinRecord(${c.id})">
+      ${standinArt(c.cover_url, 'sti-art')}
+      <span class="sti-cand-text">
+        <span class="sti-cand-name">${esc(c.album_name || '?')}</span>
+        <span class="sti-cand-sub">${esc(c.artist || '?')}${c.year ? ' • ' + esc(c.year) : ''}</span>
+        ${c.has_tracks && !c.spotify_missing ? '' : `<span class="sti-cand-tags">${
+          c.has_tracks ? '' : '<span class="pl-tag">no tracklist</span>'}${
+          c.spotify_missing ? '<span class="pl-tag">not on Spotify</span>' : ''}</span>`}
+      </span>
+    </button>`).join('');
+}
+
+function standinDraftHTML(){
+  const sides = VinylStandins.sidesFor(Math.max(standin.draft.disc_count || 1,
+    VinylStandins.discCountFor(standin.draft.tracks)));
+  const rows = standin.draft.tracks.map((t, i) => `<div class="sti-draft-row">
+      <select aria-label="side" onchange="standinDraftEdit(${i},'side',this.value)">${sides.map(x =>
+        `<option ${x === t.side ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      <input aria-label="title" value="${esc(t.title)}" oninput="standinDraftEdit(${i},'title',this.value)">
+      <button type="button" title="remove" aria-label="remove" onclick="standinDraftRemove(${i})"><i class="ti ti-x"></i></button>
+    </div>`).join('');
+  return `<p class="sti-note">Claude's suggestion — check it against the sleeve, fix what is wrong, then save it to the record.</p>
+    ${rows}
+    <div class="sti-actions">
+      <button class="sti-btn" ${standin.busy ? 'disabled' : ''} onclick="saveStandinTracklist()"><i class="ti ti-device-floppy"></i>save tracklist</button>
+      <button class="sti-btn ghost" ${standin.busy ? 'disabled' : ''} onclick="standinDraftAdd()"><i class="ti ti-plus"></i>add song</button>
+    </div>`;
+}
+
+function standinSongsHTML(){
+  const songs = standin.songs;
+  const found = songs.filter(s => s.hit).length;
+  const n = VinylStandins.pickedUris(songs, standin.ticked).length;
+  const rows = songs.map((s, i) => `<li><label class="sti-song${s.hit ? '' : ' miss'}">
+      <input type="checkbox" ${standin.ticked.has(i) ? 'checked' : ''} ${s.hit && !standin.busy ? '' : 'disabled'}
+        onchange="toggleStandinSong(${i},this.checked)">
+      <span class="sti-side">${esc(s.side)}</span>
+      <span class="sti-song-text"><span class="sti-song-title">${esc(s.title)}</span>
+        <span class="sti-song-hit">${esc(VinylStandins.hitLabel(s.hit))}</span></span>
+    </label></li>`).join('');
+  return `<p class="sti-note">${found} of ${songs.length} found. Untick any hit that is the wrong recording.</p>
+    <ul class="sti-songs">${rows}</ul>
+    <div class="sti-actions">
+      <button class="sti-btn" id="stiCreate" ${n && !standin.busy ? '' : 'disabled'} onclick="createStandin()">
+        <i class="ti ti-playlist-add"></i><span>create playlist (${n} ${n === 1 ? 'song' : 'songs'})</span></button>
+      <button class="sti-btn ghost" ${standin.busy ? 'disabled' : ''} onclick="previewStandin()"><i class="ti ti-refresh"></i>search again</button>
+    </div>`;
+}
+
+function standinBuilderHTML(){
+  const rec = standinPicked();
+  if(!rec) return '';
+  const connected = adminSp.account && adminSp.account.connected;
+  let step;
+  if(standin.draft) step = standinDraftHTML();
+  else if(!rec.has_tracks) step = `<p class="sti-note">This record has no tracklist yet. Claude can suggest one for you to check, or type it in the record form.</p>
+      <div class="sti-actions"><button class="sti-btn" ${standin.busy ? 'disabled' : ''} onclick="suggestStandinTracklist()">
+        <i class="ti ti-sparkles"></i>suggest tracklist with Claude</button></div>`;
+  else if(standin.songs) step = standinSongsHTML();
+  else step = `<p class="sti-note">Each song on the tracklist is looked up on Spotify by its title and this artist.</p>
+      <div class="sti-actions"><button class="sti-btn" ${standin.busy || !connected ? 'disabled' : ''} onclick="previewStandin()">
+        <i class="ti ti-search"></i>find songs on Spotify</button></div>`;
+  return `<div class="sti-builder">
+      <div class="sti-builder-head">
+        ${standinArt(rec.cover_url, 'sti-builder-art')}
+        <div class="sti-builder-text">
+          <div class="sti-kicker">Stand-in playlist</div>
+          <div class="sti-builder-title">${esc(rec.album_name || '?')}</div>
+          <div class="sti-builder-sub"><b>${esc(rec.artist || '?')}</b>${rec.year ? ' • ' + esc(rec.year) : ''}</div>
+        </div>
+      </div>
+      ${step}
+      ${standin.busy && !['match', 'unmatch', 'delete'].includes(standin.busy) ? `<p class="sti-note">${esc(standin.busy)}</p>` : ''}
+      ${standin.stepError ? `<p class="sti-err">${esc(standin.stepError)}</p>` : ''}
+    </div>`;
+}
+
+function renderStandins(){
+  const body = document.getElementById('adminStandinsBody');
+  if(!body) return;
+  if(!standin.loaded){ body.innerHTML = `<div class="backup-note">${esc(standin.error || 'loading…')}</div>`; return; }
+  const acct = adminSp.account;
+  const connect = acct && !acct.connected ? `<div class="playlist-account"><i class="ti ti-brand-spotify"></i>
+      <span>connect Spotify to build stand-ins</span>
+      <button class="btn btn-ghost btn-sm" onclick="window.location.href='/api/spotify/connect'">connect</button></div>` : '';
+  const pills = [['matched', 'Matched'], ['unmatched', 'Not matched']].map(([k, t]) =>
+    `<button class="sp-pill${standin.pill === k ? ' on' : ''}" aria-pressed="${standin.pill === k}"
+      onclick="setStandinPill('${k}')">${t}</button>`).join('');
+  const shown = standin.list.filter(s => VinylStandins.pillKeeps(s, standin.pill));
+  const rows = !standin.list.length ? '<div class="place-empty">no stand-ins yet — pick a record on the right.</div>'
+    : !shown.length ? '<div class="place-empty">no stand-ins match this filter.</div>'
+    : shown.map(standinRowHTML).join('');
+  const n = standin.candidates.length;
+  body.innerHTML = `${connect}<div class="sti-grid">
+    <div>
+      <div class="sp-lib-head"><span class="sp-lib-avatar"><i class="ti ti-vinyl"></i></span>
+        <h2 class="sp-lib-title">Your stand-ins</h2></div>
+      <div class="sp-pills">${pills}</div>
+      <div id="standinList">${rows}</div>
+    </div>
+    <div>
+      <h3 class="sti-new-title">New stand-in</h3>
+      <div class="sti-search-wrap"><i class="ti ti-search"></i>
+        <input class="sti-search" id="stiSearch" type="search" placeholder="Search records without a Spotify link"
+          value="${esc(standin.query)}" oninput="standinSearch(this.value)"></div>
+      <div class="sti-count">${n} ${n === 1 ? 'record has' : 'records have'} no Spotify link</div>
+      <div class="sti-cands" id="stiCands">${standinCandidatesHTML()}</div>
+      ${standinBuilderHTML()}
+    </div>
+  </div>`;
 }
 
 async function loadBackups(){
