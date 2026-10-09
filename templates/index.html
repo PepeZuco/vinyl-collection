@@ -1549,6 +1549,16 @@ select option{background:var(--surface);color:var(--text)}
 .playlists-page.visible{display:block;background:var(--sp-bg);color:var(--sp-text);
   border-radius:12px;padding:16px 16px 20px;font-family:'Inter',system-ui,sans-serif}
 .sp-lib-head{display:flex;align-items:center;gap:12px;padding:4px 0 14px}
+/* what the page is for, above the library: one sentence, then three steps */
+.sp-intro{margin:0 0 18px;padding:14px 16px;border-radius:8px;background:var(--sp-raise)}
+.sp-intro-lead{margin:0 0 12px;font-size:15px;font-weight:600;line-height:1.4;color:var(--sp-text)}
+.sp-intro-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sp-intro-steps li{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.sp-intro-steps i{flex:0 0 28px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;background:color-mix(in srgb,var(--sp-green) 18%,transparent);color:var(--sp-green);font-size:15px}
+.sp-intro-steps b{display:block;font-size:13px;font-weight:700;color:var(--sp-text)}
+.sp-intro-steps span span{display:block;font-size:12px;line-height:1.4;color:var(--sp-sub);margin-top:2px}
+@media(max-width:600px){.sp-intro-steps{grid-template-columns:1fr;gap:10px}}
 .sp-lib-avatar{flex:0 0 36px;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
   justify-content:center;background:var(--sp-green);color:var(--sp-on-green);font-size:22px}
 .sp-lib-title{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--sp-text);flex:1;min-width:0}
@@ -10876,7 +10886,7 @@ function renderPlaylists(acct){
     return;
   }
   if(acct==='visitor'){
-    body.innerHTML=`${playlistLibraryHead(false)}<div id="playlistList"></div>`;
+    body.innerHTML=`${playlistIntro(false)}${playlistLibraryHead(false)}<div id="playlistList"></div>`;
     renderPlaylistList();
     return;
   }
@@ -10886,7 +10896,7 @@ function renderPlaylists(acct){
     return;
   }
   if(!acct.connected){
-    body.innerHTML=`<div class="backup-note">connect your Spotify account so the app can
+    body.innerHTML=`${playlistIntro(true)}<div class="backup-note">connect your Spotify account so the app can
       create and edit the playlists. The Spotify app must list this redirect URI:<br>
       <code>${esc(acct.redirect_uri)}</code></div>
       <div style="padding-top:12px"><button class="btn btn-primary btn-sm" id="spotifyConnectBtn"
@@ -10897,17 +10907,38 @@ function renderPlaylists(acct){
   // Kept across re-renders: a sync finishing must not snap the form shut.
   const prev=document.getElementById('playlistNew');
   const open=prev?prev.open:!savedPlaylists.length;
-  body.innerHTML=`${playlistLibraryHead(true)}
+  body.innerHTML=`${playlistIntro(true)}${playlistLibraryHead(true)}
     <div class="playlist-account"><i class="ti ti-brand-spotify"></i>
       <span>connected as <b>${esc(acct.display_name||'Spotify')}</b></span>
       <button class="btn btn-ghost btn-sm" onclick="disconnectSpotify()">disconnect</button></div>
     <div id="playlistList"></div>
     <details class="playlist-new" id="playlistNew" ${open?'open':''}>
-      <summary>new playlist</summary><div id="playlistFormBody"></div></details>
-    <div class="backup-note">a sync creates the playlist if it is missing, adds what is new and
-      removes what no longer belongs — the playlist always mirrors the collection.</div>`;
+      <summary>new playlist</summary><div id="playlistFormBody"></div></details>`;
   renderPlaylistList();
   renderPlaylistForm();
+}
+
+// What the page is for, before anything on it: the collection, narrowed by
+// filters, becomes a playlist on Spotify, and a sync keeps it in step with the
+// shelf. The owner is told what they can do; a visitor, what was done.
+function playlistIntro(owner){
+  const steps=owner?[
+    ['ti-filter','Pick the records','genre, decade, ratings, where and when they were bought'],
+    ['ti-brand-spotify','Create the playlist','built on Spotify from their liked songs or every track'],
+    ['ti-refresh','Sync it','new records that match go in, ones that no longer match come out'],
+  ]:[
+    ['ti-filter','Picked by filters','genre, decade, ratings, where and when they were bought'],
+    ['ti-brand-spotify','Built on Spotify','from the records\u2019 liked songs or every track'],
+    ['ti-refresh','Kept in sync','new records that match go in, ones that no longer match come out'],
+  ];
+  return `<section class="sp-intro" aria-label="about these playlists">
+      <p class="sp-intro-lead">${owner
+        ?'Use the collection to create Spotify playlists automatically, then sync them whenever the shelf changes.'
+        :'These playlists are created automatically from the collection, and a sync brings each one back in step when the shelf changes.'}</p>
+      <ol class="sp-intro-steps">${steps.map(([icon,title,text])=>`<li>
+        <i class="ti ${icon}" aria-hidden="true"></i>
+        <span><b>${title}</b><span>${text}</span></span></li>`).join('')}</ol>
+    </section>`;
 }
 
 // Spotify's "Your Library" header: a big title, a "+" that opens the

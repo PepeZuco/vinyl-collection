@@ -179,6 +179,40 @@ async function openPanel(opts) {
 
 const row = (doc, id) => doc.querySelector(`.playlist-row[data-id="${id}"]`);
 
+/* The page opens on what it is for: the collection, filtered, becomes a
+ * playlist on Spotify, and a sync keeps that playlist in step with the shelf. */
+test('the page opens by explaining it turns the collection into synced playlists', async () => {
+  const { win, doc } = await openPanel({ saved: [EVERY] });
+  try {
+    const intro = doc.querySelector('#playlistsBody .sp-intro');
+    assert.ok(intro, 'no explanation at the top of the page');
+    assert.strictEqual(doc.querySelector('#playlistsBody').firstElementChild, intro,
+      'the explanation is not at the top');
+    assert.match(intro.textContent, /collection/i);
+    assert.match(intro.textContent, /create/i);
+    assert.match(intro.textContent, /sync/i);
+  } finally { win.close(); }
+});
+
+test('the explanation is there before Spotify is connected too', async () => {
+  const { win, doc } = await openPanel({ connected: false });
+  try {
+    assert.ok(doc.querySelector('#playlistsBody .sp-intro'), 'nothing says why to connect');
+  } finally { win.close(); }
+});
+
+test('a visitor is told the playlists are built and synced from the collection', async () => {
+  const { win, doc } = await boot({ authed: false, saved: [LIKED] });
+  try {
+    win.switchTab('playlists');
+    await settle(); await settle();
+    const intro = doc.querySelector('#playlistsBody .sp-intro');
+    assert.ok(intro, 'a visitor gets no explanation');
+    assert.match(intro.textContent, /sync/i);
+    assert.doesNotMatch(intro.textContent, /\byou can\b/i, 'it offers a visitor what only the owner can do');
+  } finally { win.close(); }
+});
+
 test('without a Spotify login the panel offers to connect', async () => {
   const { win, doc } = await openPanel({ connected: false });
   try {
