@@ -62,6 +62,37 @@ python seed_db.py
 
 Com o volume montado em `/data` e `DATA_DIR=/data`, o banco (`/data/vinyl.db`) persiste entre deploys e restarts — não é mais necessário exportar/importar CSV como backup manual antes de cada deploy. Os endpoints `/api/export` e `/api/import` continuam disponíveis para backups manuais opcionais.
 
+## Analytics (Umami)
+
+Com `UMAMI_WEBSITE_ID` configurada, além das visitas o app manda eventos do
+que a pessoa faz na página. Ficam em **Events** no painel do Umami.
+Abrir um link (`#tab=…&rec=…`) e o tour guiado não contam, porque não foi a
+pessoa que clicou. A lógica está em `static/analytics.js` e as chamadas, em
+`trackEvent(...)` no template.
+
+| Evento | Dados | Quando |
+|---|---|---|
+| `tab` | `tab` | troca de aba |
+| `record-open` | `record` ("Artista — Álbum") | abre o detalhe de um disco |
+| `random-record` | — | botão de disco aleatório |
+| `search` | `query` | busca na estante (ao confirmar, não a cada letra) |
+| `filter` | `field`, `value` | marca/desmarca um valor de filtro |
+| `saved-view` | `view` | escolhe uma visão salva |
+| `group-by` / `view-mode` | `field` / `mode` | muda agrupamento / grade ou lista |
+| `theme` | `theme` | troca claro/escuro |
+| `tour-start` / `tour-end` | `step`, `of` | tour guiado (até onde chegou) |
+| `feature-open` | `flow` | abre um diagrama na aba Readme |
+| `idle-spotlight-open` | — | clica no disco em destaque da tela ociosa |
+| `spotify-open` | `record` | clica em "Open in Spotify" |
+| `login` | — | entra no modo de edição |
+| `scan` | `source` (`photo`/`spotify`) | identifica um disco |
+| `catalog-search` | `query` | busca no catálogo para adicionar |
+| `record-save` | `mode` (`add`/`edit`), `wishlist` | salva um disco |
+| `playlist-create` | `existed` | cria uma playlist no Spotify |
+
+Para não contar as próprias visitas, rode no console do navegador:
+`localStorage.setItem('umami.disabled', 1)`.
+
 ## Playlists no Spotify
 
 - **Admin page** (⋯ → admin, edit mode): places, CSV export/import, backups, and a Spotify playlist → wishlist tool that names each song's studio album with Claude and checks MusicBrainz for a vinyl pressing.

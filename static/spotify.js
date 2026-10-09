@@ -30,7 +30,10 @@ const VinylSpotify = (function () {
   function rowHTML(r) {
     const url = String(r.spotify_url || '').trim();
     if (HTTP.test(url)) {
-      return '<a class="sp-open" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">'
+      // Read by the tracker's own click listener (see static/analytics.js).
+      const label = [r.artist, r.album_name].filter(Boolean).join(' — ');
+      return '<a class="sp-open" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer"'
+        + ' data-umami-event="spotify-open" data-umami-event-record="' + esc(label) + '">'
         + '<i class="ti ti-brand-spotify"></i> Open in Spotify <i class="ti ti-external-link"></i></a>';
     }
     return '<span class="sp-none"><i class="ti ti-brand-spotify"></i> Not on Spotify</span>';

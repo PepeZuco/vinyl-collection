@@ -2,12 +2,19 @@
 
 Without the variable the page must not load the tracker at all, so local runs
 and this suite never report visits. With it, the head carries the script tag
-pointed at the configured website.
+pointed at the configured website. The custom-event wrapper in
+static/analytics.js is tested under node, via test_analytics_js.
 """
+
+import pathlib
+import shutil
+import subprocess
 
 import pytest
 
 import app as app_module
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture()
@@ -38,3 +45,14 @@ def test_script_url_override_for_self_hosting(client, monkeypatch):
     html = client.get("/").get_data(as_text=True)
     assert 'src="https://stats.example.com/script.js"' in html
     assert "cloud.umami.is" not in html
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+def test_analytics_js():
+    result = subprocess.run(
+        ["node", "--test", "tests/test_analytics.js"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

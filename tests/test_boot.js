@@ -3487,3 +3487,55 @@ test('take the tour from the offer starts it', async () => {
   assert.strictEqual($(doc, '#tourLayer').hidden, false);
   assert.strictEqual(read('VinylTour.STEPS[tourAt].id'), 'welcome');
 });
+
+// ── usage events ────────────────────────────────────────────────────────────
+
+/* A stand-in for the tracker the index route adds in production. Installed
+ * after boot, so only what happens from here on is counted. */
+function fakeTracker(win) {
+  const events = [];
+  win.umami = { track(name, data) { events.push([name, data]); } };
+  return events;
+}
+
+test('a person browsing sends one event per thing they do', async () => {
+  const { win, doc } = await boot();
+  const events = fakeTracker(win);
+
+  press(win, $(doc, '#tabStats'));
+  press(win, $(doc, '#tabCollection'));
+  press(win, $(doc, '#recordsContainer .vcard'));
+  const search = $(doc, '#searchInput');
+  search.value = 'album';
+  search.dispatchEvent(new win.Event('input', { bubbles: true }));
+  search.dispatchEvent(new win.Event('change', { bubbles: true }));
+
+  const names = events.map(e => e[0]);
+  assert.deepStrictEqual(names, ['tab', 'tab', 'record-open', 'search']);
+  assert.deepStrictEqual(events[0][1], { tab: 'stats' });
+  assert.match(events[2][1].record, /^Artist \d+ — Album \d+$/);
+  assert.deepStrictEqual(events[3][1], { query: 'album' });
+});
+
+test('following a link or taking the tour is not counted as a person acting', async () => {
+  const { win, read } = await boot();
+  const events = fakeTracker(win);
+
+  read("applyUrl('#tab=timeline&rec=1')");
+  assert.deepStrictEqual(events, [], 'a restored link was counted');
+
+  read("closeDetail()");
+  win.startTour();
+  win.endTour();
+  assert.deepStrictEqual(events.map(e => e[0]), ['tour-start', 'tour-end']);
+  assert.strictEqual(events[1][1].step, 1);
+});
+
+test('with no tracker on the page nothing breaks', async () => {
+  const { win, doc, errors } = await boot();
+  assert.strictEqual(win.umami, undefined);
+  press(win, $(doc, '#tabStats'));
+  press(win, $(doc, '#tabCollection'));
+  press(win, $(doc, '#recordsContainer .vcard'));
+  assert.deepStrictEqual(errors, []);
+});

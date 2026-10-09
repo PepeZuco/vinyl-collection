@@ -43,3 +43,10 @@ test('the link is escaped', () => {
   const html = rowHTML({spotify_url: 'https://open.spotify.com/a"b'});
   assert.doesNotMatch(html, /a"b/);
 });
+
+test('the open link is tagged for the click tracker, with the record named', () => {
+  const html = rowHTML({ spotify_url: 'https://open.spotify.com/album/abc',
+                                      artist: 'Tim "Rei" Maia', album_name: 'Racional' });
+  assert.ok(html.includes('data-umami-event="spotify-open"'));
+  assert.ok(html.includes('data-umami-event-record="Tim &quot;Rei&quot; Maia — Racional"'));
+});

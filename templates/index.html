@@ -4547,6 +4547,7 @@ select option{background:var(--surface);color:var(--text)}
 <script src="/static/queue.js"></script>
 <script src="/static/idle-spotlight.js"></script>
 <script src="/static/tour.js"></script>
+<script src="/static/analytics.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <script>
 let records = [];
@@ -4575,6 +4576,24 @@ let pendingSpotifyUrl = '';
 let confirmDeleteId = null;
 let currentDetailId = null;
 
+// ── usage events ───────────────────────────────────────────────────────────
+// Only what a person does counts. Restoring a link (applyingUrl) and the tour
+// drive the same functions a click does, so both are kept out, as is anything
+// run inside quietly(). A no-op unless the tracker is on the page; see
+// static/analytics.js. Guarded as a whole because it can run before the
+// `let`s it reads have been reached.
+let analyticsMuted = 0;
+function trackEvent(name, data) {
+  try {
+    if (analyticsMuted || applyingUrl || tourActive()) return;
+    VinylAnalytics.track(name, data);
+  } catch (e) { /* analytics never breaks the page */ }
+}
+function quietly(fn) {
+  analyticsMuted++;
+  try { return fn(); } finally { analyticsMuted--; }
+}
+
 // ── theme ──────────────────────────────────────────────────────────────────
 let theme = localStorage.getItem('vinyl-theme') || 'dark';
 if (theme !== 'dark' && theme !== 'light') theme = 'dark';  // incl. the old 'wood'
@@ -4588,7 +4607,7 @@ function applyTheme(t) {
 }
 
 applyTheme(theme);
-document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
+document.getElementById('themeBtn').addEventListener('click', () => { applyTheme(theme === 'dark' ? 'light' : 'dark'); trackEvent('theme', { theme }); render(); if(currentTab==='stats') renderStats(); if(currentTab==='timeline') renderTimeline(); });
 
 // ── genres ─────────────────────────────────────────────────────────────────
 // The genre vocabulary (genres.py), rendered in by the index route. The form's
@@ -5346,6 +5365,7 @@ function countryNameOf(code) {
 
 function setGroupBy(field) {
   groupBy = field;
+  trackEvent('group-by', { field });
   buildGroupList();
   syncGroupTrigger();
   render();
@@ -5651,6 +5671,7 @@ let viewMode = localStorage.getItem('vinyl-view-mode') === 'list' ? 'list' : 'gr
 
 function setViewMode(mode) {
   viewMode = mode;
+  trackEvent('view-mode', { mode });
   localStorage.setItem('vinyl-view-mode', mode);
   document.getElementById('viewGridBtn').classList.toggle('active', mode === 'grid');
   document.getElementById('viewListBtn').classList.toggle('active', mode === 'list');
@@ -6622,6 +6643,7 @@ function ddBind() {
 
 function openDetail(id, focus) {
   const r = records.find(x=>x.id===id); if(!r)return;
+  trackEvent('record-open', { record: VinylAnalytics.recordLabel(r) });
   confirmDeleteId = null;
   currentDetailId = id;
   focusDetail(focus);
@@ -8569,6 +8591,8 @@ async function submitForm(){
   if (!(await commitPendingNotes())) return;
   const wasEditing = editingId;
   if (!await saveQuiet()) return;
+  trackEvent('record-save', { mode: wasEditing ? 'edit' : 'add',
+    wishlist: !wasEditing && !records[records.length-1].have_it });
   toast(wasEditing ? 'changes saved'
                    : (records[records.length-1].have_it ? 'record added'
                                                         : 'added to the wishlist'));
@@ -9306,6 +9330,7 @@ async function runScan(body){
     let res, data;
     try{
       const source = body.spotify_url ? 'spotify' : 'photo';
+      trackEvent('scan', { source });
       buildPanel(document.getElementById('scanPanel'), source);
       scanAbort = new AbortController();
       res = await fetch('/api/scan', {method:'POST',
@@ -9408,6 +9433,7 @@ function closeSearchOverlay(){
 function submitSearch(){
   const query = document.getElementById('searchQueryInput').value.trim();
   if(!query){ showSearchError('type an artist or album name'); return; }
+  trackEvent('catalog-search', { query });
   runSearch(query);
 }
 
@@ -10337,6 +10363,7 @@ async function doLogin(){
   const pw=document.getElementById('pwInput').value;
   const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
   if(r.ok){
+    trackEvent('login');
     setAuthed(true);
     closeLogin();
     // Not render() — REload. What this page holds was stripped of every private
@@ -11008,6 +11035,7 @@ async function createPlaylist(){
     return;
   }
   const p=d.playlist;
+  trackEvent('playlist-create', { existed: !!d.existed });
   if(!savedPlaylists.some(x=>x.id===p.id))savedPlaylists.push(p);
   playlistHighlight=p.id;
   // A new playlist clears the form for the next one; an existing match keeps
@@ -11284,6 +11312,7 @@ function bindEvents(){
   document.getElementById('randomBtn').addEventListener('click', () => {
     const recs = filtered();
     if (!recs.length) { toast('no records to pick from'); return; }
+    trackEvent('random-record');
     openDetail(recs[Math.floor(Math.random() * recs.length)].id);
   });
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
@@ -11291,6 +11320,12 @@ function bindEvents(){
   // the only caller that defers: the shelf keeps up with typing, the charts wait
   document.getElementById('searchInput').addEventListener('input',
     () => applyQueryChange({ defer: true }));
+  // 'change' fires once the query is settled (Enter or leaving the box), so a
+  // search is one event rather than one per letter typed.
+  document.getElementById('searchInput').addEventListener('change', e => {
+    const query = e.target.value.trim();
+    if (query) trackEvent('search', { query });
+  });
   document.getElementById('setupSearchInput').addEventListener('input',
     e => onSetupSearch(e.target.value));
   document.getElementById('sortDirBtn').addEventListener('click', toggleSortDir);
@@ -11704,6 +11739,7 @@ let searchFieldsFromView = false;
 function applySavedView(id) {
   const view = SAVED_VIEWS.find(v => v.id === id);
   if (!view) return;
+  trackEvent('saved-view', { view: id });
   filterState.ownership = view.query.ownership;
   filterState.facets = JSON.parse(JSON.stringify(view.query.facets));
   document.getElementById('searchInput').value = view.query.text || '';
@@ -11843,6 +11879,7 @@ document.addEventListener('keydown', e => {
  * first click has to mean "only this one" rather than "all but this one" —
  * otherwise picking Rock from a fresh list would leave everything else on. */
 function toggleFacetValue(id, value) {
+  trackEvent('filter', { field: id, value: String(value) });
   const facets = Object.assign({}, filterState.facets);
   const all = VinylFilters.facetValues(records, currentQuery(), id, FILTER_DEPS).map(v => v.value);
   let picked = facets[id];
@@ -12013,6 +12050,7 @@ let worldMapFeatures = null; // cached GeoJSON features for the country chorople
 
 function switchTab(tab) {
   const leaving = currentTab;
+  if (tab !== leaving) trackEvent('tab', { tab });
   currentTab = tab;
   document.getElementById('collectionPage').classList.toggle('hidden', tab !== 'collection');
   document.getElementById('statsPage').classList.toggle('visible', tab === 'stats');
@@ -12132,6 +12170,7 @@ function openFeatureFlow(el) {
   const box = el.querySelector('.feature-flow');
   if (!el.open || box.firstChild) return;
   const card = FEATURE_CARDS.find(c => c.flow === el.dataset.flow);
+  trackEvent('feature-open', { flow: card.flow });
   box.innerHTML = `<iframe src="/static/flow/index.html?embed=1&flow=${card.flow}&theme=${theme}"
     title="${esc(card.title)} diagram"></iframe>`;
 }
@@ -14014,6 +14053,7 @@ function openIdleRecord() {
   if (!idleShowing()) return;
   const id = idleCurrentId;
   closeIdleSpotlight();
+  trackEvent('idle-spotlight-open');
   if (id !== null) openDetail(id);
 }
 
@@ -14184,6 +14224,7 @@ function tourAvailable(step) {
 
 function startTour() {
   if (tourActive()) return;
+  trackEvent('tour-start');
   VinylTour.markSeen(safeLocalStorage());
   document.getElementById('tourOffer').classList.add('hidden');
   if (idleShowing()) closeIdleSpotlight();
@@ -14201,14 +14242,16 @@ function startTour() {
 
 function endTour(keepTab) {
   if (!tourActive()) return;
+  const reached = tourAt + 1;
   tourAt = -1;
+  trackEvent('tour-end', { step: reached, of: VinylTour.STEPS.length });
   document.getElementById('tourLayer').hidden = true;
   window.removeEventListener('keydown', tourKeys, true);
   window.removeEventListener('resize', tourQueue);
   window.removeEventListener('scroll', tourQueue, true);
   if (tourObserver) { tourObserver.disconnect(); tourObserver = null; }
   cancelAnimationFrame(tourRaf);
-  if (!keepTab && currentTab !== tourFrom) switchTab(tourFrom);
+  if (!keepTab && currentTab !== tourFrom) quietly(() => switchTab(tourFrom));
   document.getElementById('tourBtn').focus();
   scheduleIdleTimer();
 }
