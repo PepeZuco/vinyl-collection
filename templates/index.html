@@ -2404,13 +2404,13 @@ html{overflow-x:clip}
 .view-pill{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 10px;
   border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text);
   font:500 12.5px var(--font);white-space:nowrap;cursor:pointer;flex-shrink:0}
-.view-pill i{font-size:13px;color:var(--label)}
+.view-pill i{font-size:13px;color:var(--view-hue,var(--label))}
 .view-pill .view-n{font-family:var(--font-mono);font-size:11.5px;color:var(--label)}
 @media(hover:hover){.view-pill:hover{border-color:var(--accent)}}
 .view-pill.empty{opacity:.45}
 .view-pill[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 14%,transparent);
   border-color:color-mix(in srgb,var(--accent) 60%,transparent);color:var(--accent)}
-.view-pill[aria-pressed="true"] i,.view-pill[aria-pressed="true"] .view-n{color:var(--accent)}
+.view-pill[aria-pressed="true"] .view-n{color:var(--accent)}
 
 /* one button per facet, in registry order, so the set of things you can ask
    never moves around; a set one fills in and names its value. */
@@ -2597,7 +2597,8 @@ html{overflow-x:clip}
 /* every facet at once: the phone's Filters sheet */
 .facet-pop.sheet{width:min(560px,100%)}
 .facet-pop.sheet .facet-body{max-height:min(70vh,560px);padding:4px 14px 12px}
-.facet-pop.sheet .facet-section{display:flex;align-items:baseline;padding:16px 0 8px;font-size:10px;color:var(--label)}
+.facet-pop.sheet .facet-section{display:flex;align-items:center;gap:6px;padding:16px 0 8px;font-size:10px;color:var(--label)}
+.facet-pop.sheet .facet-section > i{font-size:14px}
 .fs-picked{margin-left:auto;font-family:var(--font);font-size:12px;letter-spacing:0;text-transform:none;
   font-weight:500;color:var(--accent)}
 .fs-chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -2606,10 +2607,25 @@ html{overflow-x:clip}
   cursor:pointer;max-width:100%}
 .fs-chip .facet-name{flex:0 1 auto}
 .fs-chip .facet-count{margin-left:0}
-.fs-chip.on{background:color-mix(in srgb,var(--accent) 14%,transparent);
-  border-color:color-mix(in srgb,var(--accent) 60%,transparent);color:var(--accent)}
-.fs-chip.on .facet-count{color:var(--accent)}
+/* --fc is the value's own colour where it has one (a genre's hue, the New
+   star's gold), the accent otherwise; a ticked chip lights up in it */
+.fs-chip{--fc:var(--accent)}
+.fs-chip.on{background:color-mix(in srgb,var(--fc) 14%,transparent);
+  border-color:color-mix(in srgb,var(--fc) 60%,transparent);color:var(--fc)}
+.fs-chip.on .facet-count{color:var(--fc)}
+.facet-lead{font-size:15px;color:var(--label);flex-shrink:0}
+.hued .facet-lead{color:var(--fc)}
+/* genres are painted even unticked, the same hue as their cards' spines */
+.fs-chip.painted{background:color-mix(in srgb,var(--fc) 13%,var(--card));
+  border-color:color-mix(in srgb,var(--fc) 40%,transparent)}
+.fs-chip.painted.on{background:color-mix(in srgb,var(--fc) 30%,var(--card));border-color:var(--fc);color:var(--text)}
+.fs-chip.painted.on .facet-count{color:var(--text)}
 .fs-more{background:transparent;border-style:dashed;color:var(--label)}
+/* a continent's name over its countries, on a line of its own */
+.fs-group{flex-basis:100%;display:flex;align-items:center;gap:6px;margin-top:6px;
+  font:600 12px var(--font);color:var(--label)}
+.fs-group:first-child{margin-top:0}
+.fs-group .facet-count{margin-left:0}
 
 @media(max-width:760px){
   .facet-backdrop{display:block}
