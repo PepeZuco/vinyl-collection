@@ -173,23 +173,6 @@ const VinylTracks = (function () {
     return SIZES.indexOf(n) === -1 ? null : n;
   }
 
-  /* What the card says about the object itself: how many discs, how many
-   * inches. The plain single 12" used to be left blank on the grounds that it
-   * is what most of the shelf is — but then a bare corner had to be read as
-   * "one 12-inch disc", which is a thing you have to know rather than a thing
-   * the card says, and it looked the same as a record whose size nobody had
-   * filled in. So every known size is spelled out. An unknown size is still
-   * silent rather than guessing 12", the same trade the Info tab's Format cell
-   * already makes. */
-  function formatTag(discCount, size) {
-    const n = Math.max(1, Number(discCount) || 1);
-    const inches = sizeInches(size);
-    if (n > 1 && inches) return n + ' \u00d7 ' + inches + '"';
-    if (n > 1)           return n + ' discs';
-    if (inches)          return inches + '"';
-    return '';
-  }
-
   /* The sides grouped by the disc they are on.
    *
    * tracksBySide returns a flat run of sides because that is how a tracklist
@@ -340,7 +323,7 @@ const VinylTracks = (function () {
   }
 
   return { parseTracks, serializeTracks, sideLettersFor, discOfSide, sideLabel,
-           tracksBySide, likedTracks, sidesWithTracks, formatTag, matchingTracks,
+           tracksBySide, likedTracks, sidesWithTracks, matchingTracks,
            discGroups, formatSummary, capitalizeName,
            parsePastedTracklist, artistsInUse };
 })();

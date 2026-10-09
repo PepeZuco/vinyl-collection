@@ -224,36 +224,6 @@ html{overflow-x:clip}
 .cover-censored.revealed .cover-censor-eye{display:none}
 .list-cover-wrap .cover-censor-eye{width:18px;height:18px;font-size:9px;border-width:1px}
 
-/* A double (or triple...) record is more than one record, and a 7" is not the
- * same object as an LP. The card used to say both in marks — yellow segments
- * down the left edge counting the discs, grey sleeves peeking out bottom-right
- * counting the extras — and neither was legible: the segments were a count you
- * had to decode, the sleeves were a 5px sliver that read as a rendering
- * artefact, and between them they never said the SIZE at all.
- *
- * So the card just says it. Every record whose size is known wears the tag,
- * the plain single 12" included — a blank corner was being asked to mean
- * "12″, one disc", which is only legible to someone who already knows the
- * shelf, and it read identically to a record whose size was never filled in.
- * formatTag() still returns '' when the size is unknown, so the empty corner
- * now means exactly one thing.
- *
- * Top-left: the flag is top-right and the artist overlay runs along the bottom,
- * so this corner is the tag's at rest. It shares the corner with the quick-edit
- * pencil, which only exists in edit mode and only fades in on hover — the tag
- * slides aside for it rather than being sat on. Drawn INSIDE .vcard-cover's box,
- * which clips with overflow:hidden. */
-.vcard-fmt{position:absolute;top:7px;left:7px;z-index:3;
-  display:flex;align-items:center;gap:5px;pointer-events:none;
-  background:rgba(0,0,0,.72);border-radius:3px;padding:3px 7px 3px 5px;
-  font-size:10px;font-weight:800;letter-spacing:.05em;color:#fff;
-  font-variant-numeric:tabular-nums;
-  transform:translateX(0);transition:transform .16s ease}
-/* the tag's own little record, so the number is attached to the thing it
-   counts rather than floating as a bare figure */
-.vcard-fmt .disc{--d:11px}
-.vcard-fmt .disc::after{background:#000}
-
 /* artist overlay on the cover */
 .vcard-artist-overlay{
   position:absolute;bottom:0;left:0;right:0;
@@ -406,17 +376,6 @@ html{overflow-x:clip}
 .vcard:hover .vcard-quick-edit{opacity:1;transform:translateY(0)}
 .vcard-quick-edit:hover{background:rgba(0,0,0,.8);border-color:var(--accent);color:var(--accent)}
 @media(hover:none){.vcard-quick-edit{display:none}}
-/* The pencil and the format tag want the same corner, so on hover the tag steps
-   aside by the button's footprint (26px wide + 6px gap) and the pencil lands in
-   the cleared space instead of on top of it. The tag's .16s slide starts before
-   the pencil's .12s fade finishes, so it reads as one movement rather than two.
-   Gated on body.is-authed because a visitor gets no pencil — without the gate
-   the tag would slide 32px to uncover nothing. Real-pointer devices only: touch
-   hides the button outright above, and sticky :hover would otherwise strand the
-   tag mid-shift after a tap. */
-@media(hover:hover){
-  body.is-authed .vcard:hover .vcard-fmt{transform:translateX(32px)}
-}
 
 .vcard-body{padding:8px 10px 10px}
 /* row 1: album name + year inline */
@@ -5414,7 +5373,7 @@ const FILTER_DEPS = {
 };
 
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide, sideLabel,
-        tracksBySide, likedTracks, sidesWithTracks, formatTag,
+        tracksBySide, likedTracks, sidesWithTracks,
         discGroups, formatSummary, capitalizeName,
         parsePastedTracklist, artistsInUse, matchingTracks } = VinylTracks;
 
@@ -5955,16 +5914,6 @@ function cardHTML(r) {
     : `<div class="no-cover"><i class="ti ti-disc"></i></div>`;
 
   const artistOverlay = `<div class="vcard-artist-overlay">${isMultiArtist(r) ? multiArtistBadgeHTML() : ''}${esc(artistDisplay(r))||'unknown'}</div>`;
-  // What the object is, in words, replacing the spine segments and the sleeve
-  // stack that used to count the discs in marks nobody could read. Empty only
-  // when the size is unknown — see formatTag. The title attribute carries the
-  // same text for a screen reader, since the tag itself is pointer-events:none
-  // chrome over the artwork. esc() is not optional here: the tag ENDS in an
-  // inch mark, which closes the title attribute early if it goes in raw.
-  const tag = formatTag(r.disc_count, r.size);
-  const fmtTag = tag
-    ? `<div class="vcard-fmt" title="${esc(tag)}"><span class="disc" style="${discStyle(r)}"></span>${esc(tag)}</div>`
-    : '';
 
   const myR  = Number(r.my_rating)  || 0;
   const herR = Number(r.wife_rating) || 0;
@@ -6004,7 +5953,6 @@ function cardHTML(r) {
     <div class="vcard-cover">
       ${cover}
       ${tracklist}
-      ${fmtTag}
       <div class="vcard-hover-info">
         <div class="vcard-hover-row"><span class="vcard-hover-dot" style="background:${genreColor(r.genre)}"></span>${esc(r.genre)||'no genre'}</div>
         <div class="vcard-hover-row">${conditionBadgeHTML(r)}</div>

@@ -10,7 +10,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { parseTracks, serializeTracks, sideLettersFor, discOfSide,
-        tracksBySide, likedTracks, sidesWithTracks, formatTag,
+        tracksBySide, likedTracks, sidesWithTracks,
         discGroups, formatSummary, capitalizeName,
         parsePastedTracklist, artistsInUse, sideLabel,
         matchingTracks } = require('../static/tracks.js');
@@ -175,38 +175,6 @@ test('likedTracks reports only liked songs, with their raw index', () => {
 test('sidesWithTracks names the sides that would lose songs', () => {
   const list = [{ side: 'A', title: 'x' }, { side: 'C', title: 'y' }];
   assert.deepStrictEqual(sidesWithTracks(list), ['A', 'C']);
-});
-
-// ── the grid card's format tag ──────────────────────────────────────────────
-//
-// The tag replaced the spine segments and the sleeve stack, which counted the
-// discs in marks you had to decode and never said the size at all. Every
-// record whose size is known says it, the plain single 12" included: reading
-// the tag as "this one is unusual" only works if the ordinary case is also
-// labelled, otherwise a blank corner is doing the talking.
-
-test('a plain single 12" says so too — a blank corner is not an answer', () => {
-  assert.strictEqual(formatTag(1, '12'), '12"');
-});
-
-test('an unknown size on a single disc says nothing rather than guessing 12"', () => {
-  assert.strictEqual(formatTag(1, ''), '');
-  assert.strictEqual(formatTag(1, null), '');
-  assert.strictEqual(formatTag(undefined, undefined), '');
-});
-
-test('a smaller size is worth saying on its own', () => {
-  assert.strictEqual(formatTag(1, '7'), '7"');
-  assert.strictEqual(formatTag(1, '10'), '10"');
-});
-
-test('more than one disc is worth saying, with the size when it is known', () => {
-  assert.strictEqual(formatTag(2, '12'), '2 × 12"');
-  assert.strictEqual(formatTag(3, '7'), '3 × 7"');
-});
-
-test('a multi-disc record of unknown size counts the discs alone', () => {
-  assert.strictEqual(formatTag(2, ''), '2 discs');
 });
 
 // ── the tracklist's disc groups ─────────────────────────────────────────────
