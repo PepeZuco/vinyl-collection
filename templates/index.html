@@ -7052,6 +7052,7 @@ function dmSetCurrent(idx) {
   const sameRecord = !lay || lay.dataset.rid === String(rec.id);
   if (lay) lay.dataset.rid = String(rec.id);
   dmSetSheet(!!lay && sameRecord && lay.classList.contains('sheet-open'));
+  clearSlideLean(); if (slideFollow) slideFollow.rebase();
   const ddCar = document.getElementById('ddCarousel');
   if (ddCar) {
     ddApplyDistance(idx);
@@ -7150,12 +7151,64 @@ function dmBind() {
   });
 }
 
+// ── the record's own cover leans, from the moment it is open ────────────────
+// The same maths and easing as the zoomed cover (static/covertilt.js). iOS only
+// shows its motion prompt for a call made inside the tap, so openDetail() calls
+// startSlideTilt() synchronously; a granted answer is remembered so paging
+// through records never asks again.
+let slideFollow = null, slideTiltToken = null, motionGranted = false, motionAsking = null;
+
+// One question at a time: opening a record and then its cover in quick
+// succession shares the first answer instead of asking iOS again.
+function askMotion() {
+  if (motionGranted) return Promise.resolve('granted');
+  if (!motionAsking) {
+    motionAsking = VinylCoverTilt.requestMotion(window).then(a => {
+      motionAsking = null;
+      if (a === 'granted') motionGranted = true;
+      return a;
+    });
+  }
+  return motionAsking;
+}
+
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+function curSlideEl() { return document.querySelector('#dmCarousel .dm-slide.cur'); }
+
+function clearSlideLean() {
+  document.querySelectorAll('#dmCarousel .dm-slide').forEach(s =>
+    ['--rx', '--ry', '--gx', '--gy'].forEach(p => s.style.removeProperty(p)));
+}
+
+function stopSlideTilt() {
+  slideTiltToken = null;
+  if (slideFollow) { slideFollow.stop(); slideFollow = null; }
+}
+
+function startSlideTilt() {
+  stopSlideTilt();
+  if (!isPhone() || !VinylCoverTilt.wantsTilt(prefersReducedMotion())) return;
+  const token = slideTiltToken = {};
+  const ask = askMotion();
+  ask.then(answer => {
+    if (answer !== 'granted') return;
+    motionGranted = true;
+    // closed, replaced, or the zoomed cover took over while the prompt was up
+    if (slideTiltToken !== token || currentDetailId == null) return;
+    if (!document.getElementById('coverView').classList.contains('hidden')) return;
+    slideFollow = VinylCoverTilt.follow(window, curSlideEl);
+  });
+}
+
 // ── the phone's full-screen cover ───────────────────────────────────────────
 // A tap on the current cover in the phone drawer opens it on its own, and it
-// leans with the phone. A NEW record — a sealed one — also catches a faint
+// leans with the phone, just as the record's inline cover does above. A NEW record — a sealed one — also catches a faint
 // shrink-wrap glare. The maths is static/covertilt.js; this is only the
 // listener and the paint.
-let coverTilt = null;   // {base, shown, target, raf} while a tilting cover is open
+let coverFollow = null, coverTiltToken = null;   // while a tilting zoomed cover is open
 
 function openCoverView(id) {
   const r = records.find(x => x.id === id);
@@ -7163,11 +7216,11 @@ function openCoverView(id) {
   // the blur is a choice someone made about this cover; a tap is not a way round it
   if (r.censored && !revealedCovers.has(r.id)) return;
   closeCoverView();
+  stopSlideTilt();                      // one cover leans at a time
   const img = document.getElementById('coverViewImg');
   img.src = r.cover_url;
   img.alt = r.album_name || '';
-  const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const tilt = VinylCoverTilt.wantsTilt(reduced);
+  const tilt = VinylCoverTilt.wantsTilt(prefersReducedMotion());
   const sealed = VinylCoverTilt.hasShrinkWrap(r);
   const card = document.getElementById('coverViewCard');
   card.classList.toggle('tilt', tilt);
@@ -7175,50 +7228,22 @@ function openCoverView(id) {
   document.getElementById('coverView').classList.remove('hidden');
   trackEvent('cover-open', { record: VinylAnalytics.recordLabel(r), sealed });
   if (!tilt) return;
-  const state = coverTilt = { base: null, shown: { rx: 0, ry: 0, gx: 50, gy: 50 }, target: null, raf: 0 };
-  // Asked here, still inside the tap: iOS shows no prompt otherwise. Denied or
-  // no sensor, the cover just stays flat (a sealed one with its glare at rest).
-  VinylCoverTilt.requestMotion(window).then(answer => {
-    if (answer === 'granted' && coverTilt === state) {
-      window.addEventListener('deviceorientation', coverOnOrient);
-    }
+  const token = coverTiltToken = {};
+  // Asked here, still inside the tap, unless a record already got the answer.
+  const ask = askMotion();
+  ask.then(answer => {
+    if (answer !== 'granted' || coverTiltToken !== token) return;
+    motionGranted = true;
+    coverFollow = VinylCoverTilt.follow(window, () => document.getElementById('coverViewCard'));
   });
 }
 
-function coverOnOrient(e) {
-  const st = coverTilt;
-  // desktop Chrome fires one reading of nulls when there is no sensor at all
-  if (!st || e.beta == null || e.gamma == null) return;
-  const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-  const cur = VinylCoverTilt.screenTilt(e.beta, e.gamma, angle);
-  // flat is how the phone was held when the cover opened — and again after a
-  // turn to landscape, where the old baseline is in the other axes
-  if (!st.base || st.base.angle !== angle) st.base = Object.assign({ angle }, cur);
-  st.target = VinylCoverTilt.tiltFrom(st.base, cur);
-  if (!st.raf) st.raf = requestAnimationFrame(coverTiltFrame);
-}
-
-// Eases toward the latest reading and stops once it gets there, so a phone
-// lying still costs no frames at all.
-function coverTiltFrame() {
-  const st = coverTilt;
-  if (!st) return;
-  st.raf = 0;
-  st.shown = VinylCoverTilt.smooth(st.shown, st.target, 0.2);
-  const card = document.getElementById('coverViewCard');
-  for (const k of ['rx', 'ry', 'gx', 'gy']) card.style.setProperty('--' + k, st.shown[k].toFixed(2));
-  if (Object.keys(st.target).some(k => st.shown[k] !== st.target[k])) {
-    st.raf = requestAnimationFrame(coverTiltFrame);
-  }
-}
-
 function closeCoverView() {
-  window.removeEventListener('deviceorientation', coverOnOrient);
-  if (coverTilt && coverTilt.raf) cancelAnimationFrame(coverTilt.raf);
-  coverTilt = null;
-  const card = document.getElementById('coverViewCard');
-  ['--rx', '--ry', '--gx', '--gy'].forEach(p => card.style.removeProperty(p));
+  coverTiltToken = null;
+  if (coverFollow) { coverFollow.stop(); coverFollow = null; }
   document.getElementById('coverView').classList.add('hidden');
+  // back on the record behind it, its own cover leans again
+  if (currentDetailId != null) startSlideTilt();
 }
 
 // ── desktop vertical cover carousel ─────────────────────────────────────────
@@ -7337,6 +7362,7 @@ function openDetail(id, focus) {
   trackEvent('record-open', { record: VinylAnalytics.recordLabel(r) });
   confirmDeleteId = null;
   currentDetailId = id;
+  startSlideTilt();
   focusDetail(focus);
   renderDetailContent(r);
   updateDetailNavVisibility();
@@ -7482,6 +7508,7 @@ function renderDetailFoot(id) {
 }
 
 function closeDetail(){
+  stopSlideTilt();
   document.getElementById('detailOverlay').classList.add('hidden');
   confirmDeleteId=null;currentDetailId=null;focusDetail(null);
   // closing ends the desktop column's scroll position too — detailBody keeps

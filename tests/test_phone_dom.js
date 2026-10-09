@@ -1607,3 +1607,126 @@ test('raising the sheet leaves Tracks highlighted, and a tab press moves the hig
     assert.deepStrictEqual(on(), ['tracks']);
   } finally { win.close(); }
 });
+
+// ── the cover tilts as soon as the record is open ───────────────────────────
+const curSlide = doc => doc.querySelector('#dmCarousel .dm-slide.cur');
+const ry = el => Number(el.style.getPropertyValue('--ry') || 0);
+
+test('the open record\'s cover leans with the phone, no tap needed', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.openDetail(13);
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 15);
+    await frames(30);
+    assert.ok(ry(curSlide(doc)) > 0, 'it turns with the phone');
+    assert.ok(curSlide(doc).classList.contains('sealed'), 'a NEW record carries the shrink-wrap');
+  } finally { win.close(); }
+});
+
+test('iOS is asked inside the tap that opens the record, and only once', async () => {
+  const { win } = await boot({ phone: true });
+  try {
+    let asked = 0;
+    win.DeviceOrientationEvent = function () {};
+    win.DeviceOrientationEvent.requestPermission = async () => { asked++; return 'granted'; };
+    win.openDetail(1);
+    assert.strictEqual(asked, 1, 'asked synchronously');
+    await frames(2);
+    win.openDetail(13);
+    await frames(2);
+    assert.strictEqual(asked, 1, 'a granted answer is remembered');
+  } finally { win.close(); }
+});
+
+test('a refused or rejected permission leaves the cover flat without an error', async () => {
+  const { win, doc, errors } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.DeviceOrientationEvent.requestPermission = async () => { throw new Error('nope'); };
+    win.openDetail(13);
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(10);
+    assert.strictEqual(ry(curSlide(doc)), 0);
+    assert.deepStrictEqual(errors, []);
+  } finally { win.close(); }
+});
+
+test('reduced motion keeps the record\'s cover flat', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    const mm = win.matchMedia;
+    win.matchMedia = q => /prefers-reduced-motion/.test(q) ? { matches: true } : mm(q);
+    win.openDetail(13);
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(10);
+    assert.strictEqual(ry(curSlide(doc)), 0);
+  } finally { win.close(); }
+});
+
+test('desktop does not tilt anything', async () => {
+  const { win, doc } = await boot({ phone: false });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.openDetail(13);
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(10);
+    assert.strictEqual(ry(curSlide(doc)), 0);
+  } finally { win.close(); }
+});
+
+test('swiping to another record starts that cover flat', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    const ids = read('detailNavRecords().map(r => r.id)');
+    win.openDetail(ids[1]);
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(30);
+    assert.ok(ry(curSlide(doc)) > 0);
+    press(win, doc.querySelector('#dmNav .dm-nav-btn.next'));
+    assert.strictEqual(ry(curSlide(doc)), 0, 'the new cover is not left mid-lean');
+    assert.strictEqual(
+      [...doc.querySelectorAll('#dmCarousel .dm-slide')].filter(s => ry(s) !== 0).length, 0);
+  } finally { win.close(); }
+});
+
+test('the zoomed cover takes over the tilt and gives it back', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.openDetail(13);
+    await frames(2);
+    press(win, curSlide(doc).querySelector('img'));          // zoom
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(30);
+    assert.strictEqual(ry(curSlide(doc)), 0, 'the small cover rests while the big one leans');
+    assert.ok(Number(doc.getElementById('coverViewCard').style.getPropertyValue('--ry')) > 0);
+    win.closeCoverView();
+    await frames(2);
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(30);
+    assert.ok(ry(curSlide(doc)) > 0, 'back on the record, it leans again');
+  } finally { win.close(); }
+});
+
+test('closing the record stops listening to the phone', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.DeviceOrientationEvent = function () {};
+    win.openDetail(13);
+    await frames(2);
+    const slide = curSlide(doc);
+    win.closeDetail();
+    orient(win, 55, 0); orient(win, 55, 20);
+    await frames(10);
+    assert.strictEqual(ry(slide), 0);
+  } finally { win.close(); }
+});
