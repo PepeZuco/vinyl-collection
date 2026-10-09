@@ -850,9 +850,20 @@ test('the accent stays readable on its own ground, dark and light', async () => 
 test('the dice opens some record from the current filter', async () => {
   const { win, doc, read } = await boot();
   $(doc, '#randomBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  // the record opens once the thrown die lands
+  assert.ok($(doc, '#randomBtn').classList.contains('rolling'), 'the die was not thrown');
+  await new Promise(r => setTimeout(r, read('DICE_ROLL_MS') + 50));
   const shown = read('currentDetailId');
   assert.ok(shown !== null, 'the dice opened nothing');
   assert.ok(read('filtered()').some(r => r.id === shown), 'it opened something filtered out');
+});
+
+test('with reduced motion the dice opens its record without the throw', async () => {
+  const { win, doc, read } = await boot();
+  win.matchMedia = q => ({ matches: /reduce/.test(q), addListener() {}, removeListener() {} });
+  $(doc, '#randomBtn').dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+  assert.ok(!$(doc, '#randomBtn').classList.contains('rolling'), 'the die was thrown anyway');
+  assert.ok(read('currentDetailId') !== null, 'the dice opened nothing');
 });
 
 test('a calendar day with events opens its agenda', async () => {

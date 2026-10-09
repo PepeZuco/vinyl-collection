@@ -2014,12 +2014,42 @@ select option{background:var(--surface);color:var(--text)}
 @media(max-width:900px){.country-split{grid-template-columns:1fr}
   .country-rank{max-height:220px}}
 
-/* random dice button */
-.dice-btn{width:34px;height:34px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+/* random dice button: a solid ivory die, so it reads as a die and not as a
+   dot pattern. No overflow:hidden, the throw jumps past the button's edge. */
+[data-theme="dark"]{--die:#ece8dc;--die-edge:#b9b3a3;--die-pip:#141414}
+[data-theme="light"]{--die:#fbfaf6;--die-edge:#a99a80;--die-pip:#1a1a18}
+.dice-btn{width:34px;height:34px;padding:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dice-btn:hover{border-color:var(--text)}
-.dice-face{width:22px;height:22px;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr;padding:3px;gap:1px}
-.dice-pip{width:100%;height:100%;border-radius:50%;background:transparent}
-.dice-pip.on{background:#e8e8e0}
+.dice-die{width:20px;height:20px;padding:2.5px;border-radius:5px;background:var(--die);box-shadow:inset 0 -2px 0 var(--die-edge),0 0 0 1px var(--die-edge);transition:transform .15s}
+.dice-face{width:100%;height:100%;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);place-items:center}
+.dice-pip{width:72%;height:72%;border-radius:50%}
+.dice-pip.on{background:var(--die-pip)}
+.dice-btn:hover .dice-die{transform:rotate(-12deg)}
+/* a small wiggle every 8s until the first roll, so it reads as a thing to
+   press. CSS rather than a timer: nothing to keep a test runner alive. */
+.dice-btn:not(.rolled):not(:hover) .dice-die{animation:dice-nudge 8s ease-in-out infinite}
+.dice-btn.rolling .dice-die{animation:dice-throw .62s cubic-bezier(.3,.7,.4,1) both}
+.dice-btn.landed{animation:dice-land .5s ease-out}
+@keyframes dice-throw{
+  0%  {transform:translateY(0) rotate(0) scale(1)}
+  18% {transform:translateY(-9px) rotate(-140deg) scale(1.12)}
+  45% {transform:translateY(-3px) rotate(-290deg) scale(1.05)}
+  62% {transform:translateY(1px) rotate(-345deg) scale(1.08,.86)}
+  78% {transform:translateY(-2px) rotate(-365deg) scale(.98,1.04)}
+  100%{transform:translateY(0) rotate(-360deg) scale(1)}
+}
+@keyframes dice-nudge{
+  0%,88%,100%{transform:rotate(0)}
+  90.5%{transform:rotate(-14deg)} 93%{transform:rotate(10deg)}
+  95.5%{transform:rotate(-6deg)} 98%{transform:rotate(3deg)}
+}
+@keyframes dice-land{
+  0%  {border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+  100%{box-shadow:0 0 0 0 transparent}
+}
+@media (prefers-reduced-motion:reduce){
+  .dice-btn .dice-die,.dice-btn.rolling .dice-die,.dice-btn.landed{animation:none}
+}
 
 /* view toggle: grid / list */
 .view-toggle{display:flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;height:34px;flex-shrink:0}
@@ -2321,6 +2351,7 @@ select option{background:var(--surface);color:var(--text)}
   .bar-top .search{order:1;flex:1 1 calc(100% - 52px);max-width:none;height:44px}
   .arrange{display:contents}
   .arrange .dice-btn{order:2;width:44px;height:44px}
+  .arrange .dice-die{width:25px;height:25px;padding:3px;border-radius:6px}
   /* one row of three on a 360px phone: the words stay, the icons give way */
   .own-wrap{order:3;flex:1 1 0;min-width:0;display:flex}
   .own-seg{height:44px;flex:1;min-width:0}
@@ -3581,7 +3612,7 @@ select option{background:var(--surface);color:var(--text)}
           <button class="view-btn" id="viewListBtn" data-view="list" title="list view" aria-label="list view"><i class="ti ti-list"></i></button>
         </div>
         <button class="dice-btn" id="randomBtn" title="surprise me from this filter" aria-label="random record from this filter">
-          <div class="dice-face" id="diceFace"></div>
+          <div class="dice-die"><div class="dice-face" id="diceFace"></div></div>
         </button>
       </div>
     </div>
@@ -11517,7 +11548,9 @@ function bindEvents(){
     const recs = filtered();
     if (!recs.length) { toast('no records to pick from'); return; }
     trackEvent('random-record');
-    openDetail(recs[Math.floor(Math.random() * recs.length)].id);
+    // picked now, opened once the die lands: the filter can't change under it
+    const id = recs[Math.floor(Math.random() * recs.length)].id;
+    rollDice(() => openDetail(id));
   });
   document.getElementById('loginBtn').addEventListener('click',()=>authed?doLogout():openLogin());
   document.getElementById('addBtn').addEventListener('click',openAdd);
@@ -11604,7 +11637,7 @@ function focusSearch() {
   box.focus();
 }
 
-// ── dice button: random face, rapid cycling shuffle on hover ───────────────
+// ── dice button: a die that is thrown on click and lands on a new face ─────
 const DICE_PIPS = {
   1: [4],
   2: [0,8],
@@ -11619,21 +11652,39 @@ function renderDiceFace(n) {
   const on = new Set(DICE_PIPS[n] || DICE_PIPS[1]);
   el.innerHTML = Array.from({length:9}, (_,i) => `<div class="dice-pip${on.has(i)?' on':''}"></div>`).join('');
 }
-let diceShuffleTimer = null;
-function initDice() {
-  renderDiceFace(Math.ceil(Math.random()*6));
+const DICE_ROLL_MS = 620;
+let diceFace = 1, diceRollTimer = null;
+function diceReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function diceOtherFace(not) {
+  let n; do n = Math.ceil(Math.random()*6); while (n === not); return n;
+}
+function diceRestart(btn, cls, ms) {
+  btn.classList.remove(cls); void btn.offsetWidth; btn.classList.add(cls);
+  setTimeout(() => btn.classList.remove(cls), ms);
+}
+// Throw the die, flicker faces while it's in the air, then land on a new
+// face and call done. With reduced motion it just lands.
+function rollDice(done) {
   const btn = document.getElementById('randomBtn');
-  btn.addEventListener('mouseenter', () => {
-    let n = 0;
-    diceShuffleTimer = setInterval(() => {
-      n = (n % 6) + 1;
-      renderDiceFace(n);
-    }, 90);
-  });
-  btn.addEventListener('mouseleave', () => {
-    clearInterval(diceShuffleTimer);
-    renderDiceFace(Math.ceil(Math.random()*6));
-  });
+  btn.classList.add('rolled');   // the idle wiggle has done its job
+  diceFace = diceOtherFace(diceFace);
+  clearTimeout(diceRollTimer);
+  if (diceReducedMotion()) { renderDiceFace(diceFace); done(); return; }
+  diceRestart(btn, 'rolling', DICE_ROLL_MS);
+  const t0 = performance.now();
+  let last = 0;
+  (function flick(now) {
+    if (now - t0 > DICE_ROLL_MS * 0.6) { renderDiceFace(diceFace); return; }
+    if (now - last > 70) { renderDiceFace(diceOtherFace()); last = now; }
+    requestAnimationFrame(flick);
+  })(t0);
+  diceRollTimer = setTimeout(() => { diceRestart(btn, 'landed', 500); done(); }, DICE_ROLL_MS);
+}
+function initDice() {
+  diceFace = Math.ceil(Math.random()*6);
+  renderDiceFace(diceFace);
 }
 
 let toastTimer;
