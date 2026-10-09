@@ -3384,6 +3384,25 @@ html{overflow-x:clip}
    Pinned left, the arrows hold still however wide the title grows. */
 .cal-toolbar{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px;margin-bottom:16px}
 .cal-nav{grid-column:1;justify-self:start;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+/* previous / today / next as one fixed-size group. Every part has a set width and
+   none can wrap or reflow, so the buttons sit exactly where the last click left
+   them however many times they are pressed. */
+.cal-step{display:inline-flex;align-items:stretch;flex:none;height:34px;background:var(--surface);
+  border:1px solid var(--border);border-radius:999px;overflow:hidden}
+.cal-step button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;
+  background:transparent;color:var(--text);cursor:pointer;font-family:var(--font);font-size:12px;font-weight:600;
+  white-space:nowrap;touch-action:manipulation;user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;transition:background .12s,color .12s}
+.cal-step button + button{border-left:1px solid var(--border)}
+.cal-step button:hover:not(:disabled){background:var(--card-hover)}
+.cal-step button:active:not(:disabled){background:var(--card)}
+.cal-step button:disabled{color:var(--muted);opacity:.4;cursor:default}
+.cal-step-btn{width:36px;flex:0 0 36px}
+.cal-step-btn i{font-size:16px}
+.cal-step-today{width:86px;flex:0 0 86px}
+.cal-step-today i{font-size:14px;color:var(--accent)}
+.cal-step-today.is-here{color:var(--muted)}
+.cal-step-today.is-here i{color:var(--muted)}
 .cal-title{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;margin-left:4px;
   font-family:var(--font-mono);font-weight:700;font-size:15px;white-space:nowrap;
   background:transparent;border:1px solid transparent;border-radius:var(--radius-sm);
@@ -3406,12 +3425,19 @@ html{overflow-x:clip}
 .cal-type-btn.active[data-type="played"] i{color:var(--ev-played)}
 .cal-type-btn.active[data-type="liked"] i{color:var(--ev-liked)}
 .cal-type-btn.active[data-type="note"] i{color:var(--ev-note)}
-.cal-scale{display:flex;gap:6px;flex-shrink:0}
-.cal-scale-btn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border-radius:999px;background:transparent;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:var(--font);transition:all .12s}
-.cal-scale-btn i{font-size:15px;opacity:.45;transition:opacity .12s,color .12s}
-.cal-scale-btn:hover i{opacity:.8}
-.cal-scale-btn.active{background:var(--card);border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
-.cal-scale-btn.active i{opacity:1;color:var(--accent)}
+/* One pill, three labelled segments. Month and Week used to be two near-identical
+   calendar glyphs; a word on each is what tells them apart. */
+.cal-scale{display:inline-flex;gap:2px;padding:3px;flex-shrink:0;background:var(--surface);
+  border:1px solid var(--border);border-radius:999px}
+.cal-scale-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 12px;
+  border-radius:999px;background:transparent;border:1px solid transparent;color:var(--muted);cursor:pointer;
+  font-family:var(--font);font-size:12px;font-weight:600;white-space:nowrap;touch-action:manipulation;
+  transition:background .12s,color .12s,border-color .12s}
+.cal-scale-btn i{font-size:15px}
+.cal-scale-btn:hover{color:var(--text)}
+.cal-scale-btn.active{background:var(--card);color:var(--text);
+  border-color:color-mix(in srgb, var(--accent) 55%, var(--border))}
+.cal-scale-btn.active i{color:var(--accent)}
 /* month grid */
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
 .cal-dow{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:center;font-weight:600}
@@ -3581,6 +3607,8 @@ html{overflow-x:clip}
   .cal-toolbar{display:flex;flex-wrap:wrap;gap:8px}
   .cal-nav{width:100%}
   .cal-controls{width:100%;justify-content:space-between}
+  .cal-scale{flex:1}
+  .cal-scale-btn{flex:1;padding:0 8px}
   .cal-title{font-size:13px;margin-left:2px;padding:0 8px;height:32px}
   .cal-cell{min-height:64px;padding:5px}
   /* About 47px of cell means a quadrant is roughly 22x18: an icon and a
@@ -3763,9 +3791,11 @@ html{overflow-x:clip}
   <div class="timeline-page" id="timelinePage">
     <div class="cal-toolbar">
       <div class="cal-nav">
-        <button class="btn btn-icon" onclick="calNavigate(-1)" title="previous"><i class="ti ti-chevron-left"></i></button>
-        <button class="btn" onclick="calNavigate(0)">today</button>
-        <button class="btn btn-icon" onclick="calNavigate(1)" title="next"><i class="ti ti-chevron-right"></i></button>
+        <div class="cal-step" role="group" aria-label="change period">
+          <button type="button" class="cal-step-btn" id="calPrev" onclick="calNavigate(-1)" title="previous" aria-label="previous"><i class="ti ti-chevron-left"></i></button>
+          <button type="button" class="cal-step-today" id="calToday" onclick="calNavigate(0)" title="jump to today" aria-label="jump to today"><i class="ti ti-calendar-event"></i><span>Today</span></button>
+          <button type="button" class="cal-step-btn" id="calNext" onclick="calNavigate(1)" title="next" aria-label="next"><i class="ti ti-chevron-right"></i></button>
+        </div>
         <button class="cal-title" id="calTitle" onclick="openCalDatePicker()" title="jump to date"><span id="calTitleTxt"></span><i class="ti ti-chevron-down"></i></button>
       </div>
       <div class="cal-controls">
@@ -3776,10 +3806,10 @@ html{overflow-x:clip}
           <button class="cal-type-btn active" data-type="liked" onclick="toggleCalType('liked')" title="liked songs" aria-label="liked songs"><i class="ti ti-heart"></i></button>
           <button class="cal-type-btn active" data-type="note" onclick="toggleCalType('note')" title="notes" aria-label="notes"><i class="ti ti-note"></i></button>
         </div>
-        <div class="cal-scale" id="calScaleBar">
-          <button class="cal-scale-btn" data-scale="month" onclick="setCalScale('month')" title="month" aria-label="month"><i class="ti ti-calendar-month"></i></button>
-          <button class="cal-scale-btn active" data-scale="week" onclick="setCalScale('week')" title="week" aria-label="week"><i class="ti ti-calendar-week"></i></button>
-          <button class="cal-scale-btn" data-scale="replay" onclick="setCalScale('replay')" title="replay" aria-label="replay"><i class="ti ti-history"></i></button>
+        <div class="cal-scale" id="calScaleBar" role="tablist" aria-label="timeline view">
+          <button type="button" class="cal-scale-btn" data-scale="month" onclick="setCalScale('month')" title="month" aria-label="month"><i class="ti ti-layout-grid"></i><span>Month</span></button>
+          <button type="button" class="cal-scale-btn active" data-scale="week" onclick="setCalScale('week')" title="week" aria-label="week"><i class="ti ti-layout-columns"></i><span>Week</span></button>
+          <button type="button" class="cal-scale-btn" data-scale="replay" onclick="setCalScale('replay')" title="replay" aria-label="replay"><i class="ti ti-player-play"></i><span>Replay</span></button>
         </div>
       </div>
     </div>
@@ -13223,7 +13253,7 @@ function switchTab(tab) {
   // query, so the whole bar (not just Arrange) is out of place there.
   // Same for the playlists: each one carries its own filters.
   document.getElementById('filterBar').style.display =
-    tab === 'features' || tab === 'playlists' || tab === 'admin' ? 'none' : '';
+    tab === 'features' || tab === 'playlists' || tab === 'admin' || tab === 'timeline' ? 'none' : '';
   // Sort, crates and the summary that reads them back only mean something on
   // the shelf itself; the charts and the timeline have orders of their own.
   document.getElementById('arrangeRow').style.display = tab === 'collection' ? '' : 'none';
@@ -13362,9 +13392,9 @@ let raceRows = new Map();     // genre -> its row element, kept across frames
 
 function renderHistory() {
   histPause();
-  // The same records the calendar scales are showing. Reading the raw array
-  // here is what let Month say "Jazz" while Replay replayed all 292.
-  const scoped = VinylFilters.filterRecords(records, currentQuery(), FILTER_DEPS);
+  // The Timeline has no filter bar, so every scale reads the whole collection:
+  // a filter set on the shelf must not silently thin out a view that hides it.
+  const scoped = records;
   renderActivity(scoped);                    // builds `act`, the band and the lanes
   raceFrames = VinylHistory.buildTimeline(scoped);
   raceRows = new Map();
@@ -14750,37 +14780,69 @@ const TIMELINE_DEPS = {
   parseTracks: (raw) => parseTracks(raw),
 };
 
-/* The calendar used to read every record while the growth chart read only the
- * owned ones, so the same tab disagreed with itself about what the collection
- * was. Both now read what the shared query selected. */
+/* The Timeline hides the filter bar, so it reads every record — a filter set on
+ * the shelf would otherwise narrow it with nothing on screen to say so. */
 function calEventsByDay() {
-  const scoped = VinylFilters.filterRecords(records, currentQuery(), FILTER_DEPS);
-  return VinylTimeline.eventsByDay(scoped, calTypes, TIMELINE_DEPS);
+  return VinylTimeline.eventsByDay(records, calTypes, TIMELINE_DEPS);
+}
+
+/* Where a step lands, or null when there is nothing further that way.
+ *
+ * "Further" is judged in whole periods — a month in Month view, a Sunday-to-
+ * Saturday week in Week view — so the anchor's leftover day-of-month cannot
+ * block landing on a period that is plainly in range.
+ *
+ * The anchor may sit outside the data entirely (Today, after the newest
+ * record). A step toward the data then lands on its nearest edge instead of
+ * creeping a week at a time, and a step away from it is the only one refused. */
+function calStepTarget(dir) {
+  const weekStart = d => { const w = new Date(d); w.setHours(0, 0, 0, 0); w.setDate(w.getDate() - w.getDay()); return w; };
+  const idx = calScale === 'month'
+    ? d => d.getFullYear() * 12 + d.getMonth()
+    : d => Math.round(weekStart(d).getTime() / 604800000);
+  const cur = idx(calAnchor);
+  if (dir < 0 && calMinDate && cur <= idx(calMinDate)) return null;
+  if (dir > 0 && calMaxDate && cur >= idx(calMaxDate)) return null;
+
+  const next = new Date(calAnchor);
+  if (calScale === 'month') {
+    next.setDate(1);                      // else Jan 31 + 1 month skips February
+    next.setMonth(next.getMonth() + dir);
+  } else {
+    next.setDate(next.getDate() + 7 * dir);
+  }
+  if (dir < 0 && calMaxDate && idx(next) > idx(calMaxDate)) return new Date(calMaxDate);
+  if (dir > 0 && calMinDate && idx(next) < idx(calMinDate)) return new Date(calMinDate);
+  return next;
 }
 
 function calNavigate(dir) {
   if (dir === 0) calAnchor = new Date();
   else {
-    const newAnchor = new Date(calAnchor);
-    if (calScale === 'month') newAnchor.setMonth(newAnchor.getMonth() + dir);
-    else newAnchor.setDate(newAnchor.getDate() + 7*dir);
-
-    // Constrain to the data's date range. Month view names a whole month, not
-    // a day within it, so the clamp compares year+month there — comparing full
-    // dates would weigh the anchor's leftover day-of-month (carried over from
-    // whatever date it started as) against the boundary's day-of-month, and
-    // could block landing back on a month that's plainly in range.
-    if (calScale === 'month') {
-      const ym = d => d.getFullYear() * 12 + d.getMonth();
-      if (calMinDate && ym(newAnchor) < ym(calMinDate)) return;
-      if (calMaxDate && ym(newAnchor) > ym(calMaxDate)) return;
-    } else {
-      if (calMinDate && newAnchor < calMinDate) return;
-      if (calMaxDate && newAnchor > calMaxDate) return;
-    }
-    calAnchor = newAnchor;
+    const next = calStepTarget(dir);
+    if (!next) return;
+    calAnchor = next;
   }
   renderCalendar();
+}
+
+/* Previous / next go quiet at the ends of the data instead of silently doing
+ * nothing, and Today says when you are already there. The buttons keep their
+ * size and place either way. */
+function syncCalNav() {
+  const set = (id, off) => { const b = document.getElementById(id); if (b) b.disabled = off; };
+  set('calPrev', !calStepTarget(-1));
+  set('calNext', !calStepTarget(1));
+  const today = document.getElementById('calToday');
+  if (!today) return;
+  const now = new Date();
+  let here;
+  if (calScale === 'month') here = now.getFullYear() === calAnchor.getFullYear() && now.getMonth() === calAnchor.getMonth();
+  else {
+    const weekOf = d => { const s = new Date(d); s.setDate(s.getDate() - s.getDay()); return calKey(s); };
+    here = weekOf(now) === weekOf(calAnchor);
+  }
+  today.classList.toggle('is-here', here);
 }
 
 function setCalScale(scale) {
@@ -14818,6 +14880,7 @@ function renderCalendar() {
   const events = calEventsByDay();
   if (calScale === 'month') renderCalMonth(events);
   else renderCalWeek(events);
+  syncCalNav();
 }
 
 /* The day's records, as the cell's ground.

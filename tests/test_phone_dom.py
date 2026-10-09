@@ -92,8 +92,14 @@ def test_phone_dom_js(tmp_path):
         9: dict(have_it=False, bought_date="", bought_where="", condition="",
                 play_count=0, play_dates="[]", cleaned_dates="[]"),
     }
+    # The full-screen cover needs three more: a sealed record (13) that tilts,
+    # a censored one (14) whose blur the tap must not get around, and one with
+    # no artwork at all (15), where there is nothing to open.
     rows = ([rec(n, **overrides.get(n, {})) for n in range(1, 12)]
-            + [rec(12, bought_where="Amazon")])
+            + [rec(12, bought_where="Amazon"),
+               rec(13, condition="new"),
+               rec(14, condition="new", censored=True),
+               rec(15, cover_url="")])
     records = tmp_path / "records.json"
     records.write_text(json.dumps(rows), encoding="utf-8")
 
