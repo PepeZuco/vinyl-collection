@@ -815,12 +815,14 @@ html{overflow-x:clip}
 .disc{position:relative;display:block;width:var(--d);height:var(--d);flex:0 0 var(--d);
   border-radius:50%;
   --vinyl-b:var(--vinyl,#000);
-  --vinyl-a:color-mix(in srgb, var(--vinyl-b) 80%, white);
+  --vinyl-a:color-mix(in srgb, var(--vinyl-b) 92%, white);
   --vinyl-edge:color-mix(in srgb, var(--vinyl-b) 70%, white);
+  --vinyl-gap:color-mix(in srgb, var(--vinyl-b) 55%, white);
   background:
+    var(--gaps,none),
     radial-gradient(circle at 50% 50%, var(--lab,#fff) 0 32%, transparent 32.4%),
     repeating-radial-gradient(circle at 50% 50%,
-      var(--vinyl-a) 0 1.6px, var(--vinyl-b) 1.6px 3.2px),
+      var(--vinyl-a) 0 0.8px, var(--vinyl-b) 0.8px 1.6px),
     var(--vinyl-b);
   box-shadow:inset 0 0 0 1px var(--vinyl-edge), 0 1px 3px rgba(0,0,0,.5)}
 /* the spindle hole */
@@ -6708,7 +6710,50 @@ function recDiscColors(r, disc) {
  * record whose discs differ; the first by default. */
 function discStyle(r, extra, disc = 0) {
   const c = recDiscColors(r, disc);
-  return `--vinyl:${c.vinyl};--lab:${c.label}${extra ? ';' + extra : ''}`;
+  const gaps = discGapsGradient(r, disc);
+  return `--vinyl:${c.vinyl};--lab:${c.label}${gaps ? ';--gaps:' + gaps : ''}${extra ? ';' + extra : ''}`;
+}
+
+/* The smooth gaps a real record has between songs, drawn on the side we show
+ * (the disc's first side). The old picture was a wall of identical grooves that
+ * read as dozens of tracks whatever the record held; now a side with N songs
+ * has N bands and N-1 glossy gaps between them. Where the gaps fall is random
+ * — real bands are never equal, a 9-minute song is wider than a 2-minute one —
+ * but seeded by the record, so it is the same record every time it is drawn.
+ * Radii are fractions of the disc's radius: the label ends near .45, the
+ * run-out starts near .96. A side with no songs entered gets no gaps. */
+const _gapCache = new Map();
+function discGapsGradient(r, disc) {
+  const list = parseTracks(r.tracks);
+  if (!list.length) return '';
+  const side = tracksBySide(list, r.disc_count).find(s => s.disc === disc + 1);
+  const n = side ? side.tracks.length : 0;
+  if (n < 2) return '';
+  const key = `${r.id}|${disc}|${n}`;
+  if (_gapCache.has(key)) return _gapCache.get(key);
+  let seed = 2166136261;
+  for (const ch of key) seed = Math.imul(seed ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const rand = () => {                 // mulberry32
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const from = 0.50, to = 0.95, gap = 0.022;
+  const w = Array.from({ length: n }, () => 0.55 + rand() * 0.9);
+  const total = w.reduce((a, b) => a + b, 0);
+  const stops = [];
+  let at = from;
+  for (let i = 0; i < n - 1; i++) {
+    at += w[i] / total * (to - from);
+    stops.push(`transparent ${((at - gap / 2) * 100).toFixed(1)}% ${((at - gap / 2) * 100).toFixed(1)}%,`
+      + `var(--vinyl-gap) ${((at - gap / 2) * 100).toFixed(1)}% ${((at + gap / 2) * 100).toFixed(1)}%,`
+      + `transparent ${((at + gap / 2) * 100).toFixed(1)}%`);
+  }
+  const css = `radial-gradient(circle closest-side at 50% 50%,${stops.join(',')})`;
+  _gapCache.set(key, css);
+  return css;
 }
 
 /* Size and disc count in one cell rather than two: on a shelf they are one
