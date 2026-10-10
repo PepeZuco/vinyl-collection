@@ -246,7 +246,7 @@ def _parts(f):
     if ratings:
         out.append((" or " if f.get("rating_mode") == "or" else " and ").join(ratings))
     if f.get("countries"):
-        out.append(", ".join(f["countries"]))
+        out.append(", ".join(f"{flag(c)} {c}" for c in f["countries"]))
     if f.get("places"):
         out.append(", ".join(f["places"]))
     if "bought_from" in f or "bought_to" in f:
@@ -260,6 +260,11 @@ def _parts(f):
     elif f.get("owned") == "all":
         out.append("+ wishlist")
     return out
+
+
+def flag(code):
+    """The flag emoji of an ISO 3166-1 alpha-2 code ("BR" -> 🇧🇷)."""
+    return "".join(chr(0x1F1E6 + ord(c) - 65) for c in code.upper())
 
 
 def suggest_name(filters):

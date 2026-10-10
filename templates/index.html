@@ -12320,8 +12320,8 @@ function playlistFilterChips(p){
   if(!f||typeof f!=='object')return `<span class="playlist-sub">${esc(p.summary||'')}</span>`;
   const span=(lo,hi)=>lo!=null&&hi!=null?(lo===hi?String(lo):lo+'–'+hi):lo!=null?'≥ '+lo:'≤ '+hi;
   const chips=[];
-  const chip=(icon,text,cls)=>chips.push(`<span class="pl-tag${cls?' '+cls:''}" style="--i:${chips.length}">`
-    +`<i class="ti ${icon}"></i>${esc(text)}</span>`);
+  const chip=(icon,text,cls,html)=>chips.push(`<span class="pl-tag${cls?' '+cls:''}" style="--i:${chips.length}">`
+    +`<i class="ti ${icon}"></i>${html||esc(text)}</span>`);
   if(f.liked!==false)chip('ti-heart-filled','liked songs','liked');
   else chip('ti-list','every track');
   if(f.source==='compilations')chip('ti-playlist','compilations only');
@@ -12335,7 +12335,7 @@ function playlistFilterChips(p){
   if(f.pepe_min!=null)rate.push('Pepe ≥ '+Number(f.pepe_min));
   if(f.jenni_min!=null)rate.push('Jenni ≥ '+Number(f.jenni_min));
   if(rate.length)chip('ti-star-filled',rate.join(f.rating_mode==='or'?' or ':' & '),'rating');
-  (f.countries||[]).forEach(c=>chip('ti-world',countryLabelFromCode(c)));
+  (f.countries||[]).forEach(c=>chip('ti-world','','',flagImgHTML(c,16)+' '+esc(countryLabelFromCode(c))));
   (f.places||[]).forEach(pl=>chip('ti-building-store',pl));
   if(f.bought_from||f.bought_to)chip('ti-calendar-dollar','bought '+span(f.bought_from,f.bought_to));
   if(chips.length===1)chip('ti-vinyl','whole collection');
@@ -12352,10 +12352,10 @@ function renderPlaylistForm(){
   const chips=(field,choices,labelOf=x=>x)=>{
     const taken=new Set(f[field].map(x=>x.toLowerCase()));
     const left=choices.filter(c=>!taken.has(c.toLowerCase()));
-    return f[field].map((c,i)=>`<span class="pl-chip">${esc(labelOf(c))}<button type="button" aria-label="remove"
+    return f[field].map((c,i)=>`<span class="pl-chip">${field==='countries'?flagImgHTML(c,16)+' ':''}${esc(labelOf(c))}<button type="button" aria-label="remove"
         onclick="playlistChipRemove('${field}',${i})">×</button></span>`).join('')
       +(left.length?`<select class="pl-add" data-field="${field}" onchange="playlistChipAdd(this)">
-        <option value="">+ add</option>${left.map(c=>`<option value="${esc(c)}">${esc(labelOf(c))}</option>`).join('')}
+        <option value="">+ add</option>${left.map(c=>`<option value="${esc(c)}">${field==='countries'?flagEmoji(c)+' ':''}${esc(labelOf(c))}</option>`).join('')}
         </select>`:'');
   };
   // "70s" reads best; the full "1970s" only where two centuries would share a label.

@@ -169,6 +169,11 @@ const VinylPlaylistFilters = (function () {
     return has(lo) ? '≥' + lo : '≤' + hi;
   }
 
+  // "BR" -> the flag emoji, from its two regional-indicator letters
+  function flag(code) {
+    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+  }
+
   function parts(f) {
     const out = [];
     if (f.genres) out.push(f.genres.join(', '));
@@ -178,7 +183,7 @@ const VinylPlaylistFilters = (function () {
     if ('pepe_min' in f) r.push('Pepe ≥' + num(f.pepe_min));
     if ('jenni_min' in f) r.push('Jenni ≥' + num(f.jenni_min));
     if (r.length) out.push(r.join(f.rating_mode === 'or' ? ' or ' : ' and '));
-    if (f.countries) out.push(f.countries.join(', '));
+    if (f.countries) out.push(f.countries.map(c => flag(c) + ' ' + c).join(', '));
     if (f.places) out.push(f.places.join(', '));
     if ('bought_from' in f || 'bought_to' in f) out.push('bought ' + span(f.bought_from, f.bought_to));
     if (f.source === 'compilations') out.push('compilations only');

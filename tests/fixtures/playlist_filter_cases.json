@@ -47,6 +47,7 @@
   ],
   "names": [
     {"filters": {"liked": true}, "name": "Zucoloto Vinyl — Liked"},
+    {"filters": {"liked": true, "countries": ["br", "US"]}, "name": "Zucoloto Vinyl — Liked · 🇧🇷 BR, 🇺🇸 US"},
     {"filters": {"liked": false}, "name": "Zucoloto Vinyl"},
     {"filters": {"liked": true, "genres": ["rock", "Jazz"], "year_from": 1970, "year_to": 1979}, "name": "Zucoloto Vinyl — Liked · Jazz, rock · 1970–1979"},
     {"filters": {"liked": false, "year_from": 1990}, "name": "Zucoloto Vinyl · ≥1990"},

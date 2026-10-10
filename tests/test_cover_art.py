@@ -132,3 +132,18 @@ def test_render_draws_the_brand_record_on_the_left():
 def test_a_footer_too_wide_keeps_just_the_count():
     assert cover_art.footer({"liked": False}, 1234, len, 30) == "every track · 1234 tracks"
     assert cover_art.footer({"liked": False}, 1234, len, 20) == "1234 tracks"
+
+
+def test_countries_are_drawn_as_flags():
+    f = normalize_filters({"countries": ["br", "US"]})
+    assert cover_art.rows(f) == [("place", [["\U0001F1E7\U0001F1F7", "\U0001F1FA\U0001F1F8"]])]
+
+
+def test_flags_are_pictures_not_letters():
+    pic = cover_art._flag_image("\U0001F1E7\U0001F1F7", 40)
+    assert pic is not None and pic.height == 40 and pic.width > 40
+
+
+def test_fewer_filters_get_bigger_type():
+    assert cover_art.row_size(2, 2) > cover_art.row_size(5, 6) > cover_art.row_size(7, 8)
+    assert cover_art.row_size(7, 8) == 26

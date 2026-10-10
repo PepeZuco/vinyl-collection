@@ -12,8 +12,12 @@ static/fonts. Spotify takes a JPEG of at most 256 KB, sent as base64.
 
 import io
 import os
+import re
+from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFont
+
+from playlist_filters import flag
 
 SIZE = 640
 MAX_BASE64 = 256 * 1024
@@ -23,26 +27,29 @@ BG, TEXT, MUTED = "#0b0b0b", "#f2f2f2", "#9a9a9a"
 ROW_COLOURS = (YELLOW, PURPLE, PINK)
 
 _FONT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "fonts", "Ubuntu.ttf")
+_FLAGS = os.path.join(os.path.dirname(_FONT), "NotoColorEmoji-flags.ttf")  # flag glyphs only
+_FLAG = re.compile("([\U0001F1E6-\U0001F1FF]{2})")
 _S = 2  # supersampling
 
 # Layout, in 640-px units.
 _RECORD_X, _RECORD_K = 10, 5.6       # centre x, px per vinyl-icon.svg unit
-_ICON_X, _ICON = 360, 30
-_TEXT_X, _TEXT_RIGHT = 404, 616
+_ICON_X = 360
+_TEXT_RIGHT = 616
 _TITLE_Y = 58
 _ROWS_TOP, _ROWS_BOTTOM = 130, 500
-_ROW_FONT, _LINE, _MAX_GAP = 26, 32, 46
+_ROW_FONTS = (44, 38, 34, 30, 26)    # biggest that fits: a short list gets big type
+_MIN_GAP, _MAX_GAP = 14, 46
 _FOOT_Y = 548
 
 
 # ── what the cover says ───────────────────────────────────────────────────────
 
-def fit(items, measure, width):
-    """`items` joined with commas, as many as fit in `width`, then "+N" for the rest.
+def fit(items, measure, width, sep=", "):
+    """`items` joined with `sep`, as many as fit in `width`, then "+N" for the rest.
     A first item too long even alone is cut with an ellipsis."""
     n = len(items)
     for k in range(n, 0, -1):
-        text = ", ".join(items[:k]) + ("" if k == n else f" +{n - k}")
+        text = sep.join(items[:k]) + ("" if k == n else f" +{n - k}")
         if measure(text) <= width:
             return text
     suffix = f" +{n - 1}" if n > 1 else ""
@@ -89,7 +96,7 @@ def rows(filters):
     if ratings:
         out.append(("rating", ratings))
     if f.get("countries"):
-        out.append(("place", [f["countries"]]))
+        out.append(("place", [[flag(c) for c in f["countries"]]]))
     if f.get("places"):
         out.append(("place", [f["places"]]))
     if "bought_from" in f or "bought_to" in f:
@@ -99,6 +106,14 @@ def rows(filters):
     elif f.get("source") == "compilations":
         out.append(("source", ["compilations", "only"]))
     return out or [("collection", ["whole collection"])]
+
+
+def row_size(n_rows, n_lines):
+    """The biggest type size at which `n_lines` lines in `n_rows` rows still fit."""
+    for size in _ROW_FONTS:
+        if n_lines * round(size * 1.23) + (n_rows - 1) * _MIN_GAP <= _ROWS_BOTTOM - _ROWS_TOP:
+            return size
+    return _ROW_FONTS[-1]
 
 
 def footer(filters, total, measure=None, width=None):
@@ -115,6 +130,48 @@ def _font(size):
     font = ImageFont.truetype(_FONT, size * _S)
     font.set_variation_by_name("Bold")
     return font
+
+
+@lru_cache(maxsize=None)
+def _flag_image(pair, height):
+    """A flag emoji as an RGBA picture `height` px tall, or None without the font."""
+    try:
+        font = ImageFont.truetype(_FLAGS, 109)   # the one size the bitmap font ships
+    except OSError:
+        return None
+    big = Image.new("RGBA", (160, 160), (0, 0, 0, 0))
+    ImageDraw.Draw(big).text((10, 10), pair, font=font, embedded_color=True)
+    box = big.getbbox()
+    if not box:
+        return None
+    big = big.crop(box)
+    return big.resize((max(1, round(big.width * height / big.height)), height), Image.LANCZOS)
+
+
+def _measure(font, height, gap):
+    """Width of text in which each flag emoji takes its picture's width plus `gap`."""
+    def width(text):
+        total = 0
+        for part in _FLAG.split(text):
+            if _FLAG.fullmatch(part):
+                pic = _flag_image(part, height)
+                total += (pic.width + gap) if pic else 0
+            else:
+                total += font.getlength(part)
+        return total
+    return width
+
+
+def _text(img, d, x, y, text, font, fill, height, gap):
+    """Draw `text` at (x, y), flag emoji as pictures lined up with the letters."""
+    for part in _FLAG.split(text):
+        pic = _flag_image(part, height) if _FLAG.fullmatch(part) else None
+        if pic:
+            img.paste(pic, (round(x), round(y + font.size * 0.18)), pic)
+            x += pic.width + gap
+        elif not _FLAG.fullmatch(part):
+            d.text((x, y), part, font=font, fill=fill)
+            x += font.getlength(part)
 
 
 def _record(d):
@@ -197,20 +254,29 @@ def render(filters, total):
 
     _spaced(d, _ICON_X * _S, _TITLE_Y * _S, "ZUCOLOTO VINYL", _font(22), YELLOW, 3 * _S)
 
-    font = _font(_ROW_FONT)
-    width = (_TEXT_RIGHT - _TEXT_X) * _S
-    laid = [(icon, [fit(line if isinstance(line, list) else [line], font.getlength, width)
-                    for line in lines])
-            for icon, lines in rows(filters)]
-    lines = sum(len(ls) for _, ls in laid)
-    room = _ROWS_BOTTOM - _ROWS_TOP - lines * _LINE
-    gap = min(_MAX_GAP, room / max(len(laid) - 1, 1)) if len(laid) > 1 else 0
+    all_rows = rows(filters)
+    lines = sum(len(ls) for _, ls in all_rows)
+    size = row_size(len(all_rows), lines)
+    line = round(size * 1.23)
+    icon = round(size * 1.15)
+    text_x = _ICON_X + icon + 14
+    font = _font(size)
+    flag_h, flag_gap = round(size * 0.72) * _S, 3 * _S
+    measure = _measure(font, flag_h, flag_gap)
+    width = (_TEXT_RIGHT - text_x) * _S
+    def sep(items):     # flags sit side by side; names take commas
+        return " " if all(_FLAG.fullmatch(i) for i in items) else ", "
+    laid = [(name, [fit(ln if isinstance(ln, list) else [ln], measure, width,
+                        sep(ln) if isinstance(ln, list) else ", ") for ln in ls])
+            for name, ls in all_rows]
+    room = _ROWS_BOTTOM - _ROWS_TOP - lines * line
+    gap = min(_MAX_GAP, room / (len(laid) - 1)) if len(laid) > 1 else 0
     y = _ROWS_TOP + (room - gap * (len(laid) - 1)) / 2
-    for i, (icon, ls) in enumerate(laid):
-        _icon(d, icon, _ICON_X, y + 1, _ICON, ROW_COLOURS[i % len(ROW_COLOURS)])
-        for j, line in enumerate(ls):
-            d.text((_TEXT_X * _S, (y + j * _LINE) * _S), line, font=font, fill=TEXT)
-        y += len(ls) * _LINE + gap
+    for i, (name, ls) in enumerate(laid):
+        _icon(d, name, _ICON_X, y + (line - icon) / 2 + 1, icon, ROW_COLOURS[i % len(ROW_COLOURS)])
+        for j, text in enumerate(ls):
+            _text(img, d, text_x * _S, (y + j * line) * _S, text, font, TEXT, flag_h, flag_gap)
+        y += len(ls) * line + gap
 
     _icon(d, "heart" if filters.get("liked", True) else "collection",
           _ICON_X, _FOOT_Y + 2, 24, PINK)
