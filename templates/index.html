@@ -7582,6 +7582,7 @@ function renderDetailFoot(id) {
 }
 
 function closeDetail(){
+  const leftId = currentDetailId;
   stopSlideTilt();
   document.getElementById('detailOverlay').classList.add('hidden');
   confirmDeleteId=null;currentDetailId=null;focusDetail(null);
@@ -7591,6 +7592,13 @@ function closeDetail(){
   const dd = document.getElementById('ddInfo');
   if (dd) dd.dataset.rid = '';
   syncUrl(true);
+  // On the phone the carousel walks to other records than the one tapped, so
+  // the shelf can be left showing a different place. Bring the record just
+  // closed into view, so the way back lands on it.
+  if (leftId !== null && window.matchMedia('(max-width:760px)').matches) {
+    const card = document.querySelector('#recordsContainer .vcard[data-id="' + leftId + '"], #recordsContainer .list-row[data-id="' + leftId + '"]');
+    if (card && card.scrollIntoView) card.scrollIntoView({ block: 'center' });
+  }
 }
 
 async function doDelete(id){
