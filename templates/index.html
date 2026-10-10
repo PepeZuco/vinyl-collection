@@ -2443,6 +2443,8 @@ html{overflow-x:clip}
   .bar.open-views .bar-views,.bar.open-filters .bar-facets{display:flex}
   .bar-views>.bar-tag,.bar-facets>.bar-tag{display:none}
 }
+/* saved views are the owner's shortcuts — visitors get the filters only */
+body:not(.is-authed) .bar-views,body:not(.is-authed) #accViews{display:none!important}
 .acc-btn{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;margin-left:-10px;
   border:none;border-radius:var(--radius-sm);background:transparent;cursor:pointer;
   font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;
@@ -13500,8 +13502,8 @@ function renderFacetPop() {
         <button class="btn btn-ghost btn-sm" onclick="closeFacetPop()" aria-label="close"><i class="ti ti-x"></i></button>
       </div>
       <div class="facet-body">
-        <div class="facet-section"><i class="ti ti-bookmarks"></i>Quick views</div>
-        <div class="fs-chips">${SAVED_VIEWS.map(viewPillHTML).join('')}</div>` +
+        ${authed ? `<div class="facet-section"><i class="ti ti-bookmarks"></i>Quick views</div>
+        <div class="fs-chips">${SAVED_VIEWS.map(viewPillHTML).join('')}</div>` : ''}` +
       VinylFilters.FACETS.map(f => {
         const values = VinylFilters.facetValues(records, q, f.id, FILTER_DEPS);
         const picked = q.facets[f.id] || null;
