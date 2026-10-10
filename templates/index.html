@@ -416,15 +416,13 @@ html{overflow-x:clip}
      filter:brightness(var(--rate-flare));transform:scale(1.15)}
   100%{box-shadow:0 0 4px rgba(var(--glow-rgb),var(--rate-glow));filter:brightness(1);transform:scale(1)}
 }
-/* phone: a softer full-marks flare — small, dim halo, barely any brightening */
-@media(max-width:760px){
-  .score-sq.full{box-shadow:0 0 2px rgba(var(--glow-rgb),.35)}
-  .score-sq.full.in-view{animation-name:sq-glow-soft}
-  @keyframes sq-glow-soft{
-    0%{box-shadow:none;filter:brightness(1);transform:scale(1)}
-    30%{box-shadow:0 0 4px rgba(var(--glow-rgb),.4);filter:brightness(1.12);transform:scale(1.06)}
-    100%{box-shadow:0 0 2px rgba(var(--glow-rgb),.35);filter:brightness(1);transform:scale(1)}
-  }
+/* softer full-marks flare on every screen — small, dim halo, barely any brightening */
+.score-sq.full{box-shadow:0 0 2px rgba(var(--glow-rgb),.35)}
+.score-sq.full.in-view{animation-name:sq-glow-soft}
+@keyframes sq-glow-soft{
+  0%{box-shadow:none;filter:brightness(1);transform:scale(1)}
+  30%{box-shadow:0 0 4px rgba(var(--glow-rgb),.4);filter:brightness(1.12);transform:scale(1.06)}
+  100%{box-shadow:0 0 2px rgba(var(--glow-rgb),.35);filter:brightness(1);transform:scale(1)}
 }
 
 /* stars — used in detail modal only */
