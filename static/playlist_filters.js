@@ -16,6 +16,7 @@ const VinylPlaylistFilters = (function () {
   const PLAYLIST_LINK = /^(?:https?:\/\/open\.spotify\.com\/(?:intl-[a-z]+\/)?playlist\/|spotify:playlist:)/i;
   const SOURCES = ['albums', 'compilations', 'all'];
   const OWNED = ['owned', 'wishlist', 'all'];
+  const SORTS = ['artist', 'year', 'liked'];
 
   const tidy = s => String(s === undefined || s === null ? '' : s).split(/\s+/).filter(Boolean).join(' ');
   const fold = s => tidy(s).toLowerCase();
@@ -100,6 +101,8 @@ const VinylPlaylistFilters = (function () {
     const [bf, bt] = ordered(day(raw.bought_from), day(raw.bought_to));
     if (bf !== null) f.bought_from = bf;
     if (bt !== null) f.bought_to = bt;
+    if (SORTS.includes(raw.sort) && raw.sort !== 'artist') f.sort = raw.sort;
+    if (raw.order === 'desc') f.order = 'desc';
     return f;
   }
 
@@ -144,13 +147,15 @@ const VinylPlaylistFilters = (function () {
     return true;
   }
 
-  function hasLiked(r) {
+  function likedCount(r) {
     let t = r.tracks;
     if (typeof t === 'string') {
       try { t = t ? JSON.parse(t) : []; } catch (e) { t = []; }
     }
-    return Array.isArray(t) && t.some(s => s && s.liked_at);
+    return Array.isArray(t) ? t.filter(s => s && s.liked_at).length : 0;
   }
+
+  const hasLiked = r => likedCount(r) > 0;
 
   function matching(records, f) {
     return (records || []).filter(r => r && tidy(r.spotify_url)
@@ -159,6 +164,23 @@ const VinylPlaylistFilters = (function () {
 
   function countMatching(records, f) {
     return matching(records, f).length;
+  }
+
+  const artistKey = r => fold(String(r.artist || '').replace(/;/g, ' / '));
+  const cmp = (x, y) => x < y ? -1 : x > y ? 1 : 0;
+
+  // The playlist's order: artist, year or liked songs, asc or desc. Ties fall
+  // back to artist then album, ascending; yearless records go last.
+  function arrange(records, f) {
+    const out = (records || []).slice().sort((a, b) =>
+      cmp(artistKey(a), artistKey(b)) || cmp(fold(a.album_name), fold(b.album_name)));
+    const sort = f.sort || 'artist', dir = f.order === 'desc' ? -1 : 1;
+    const by = k => out.slice().sort((a, b) => dir * cmp(k(a), k(b)));  // stable: ties keep the base order
+    if (sort === 'artist') return by(artistKey);
+    if (sort === 'liked') return by(likedCount);
+    const dated = out.filter(r => recordYear(r.year) !== null);
+    const undated = out.filter(r => recordYear(r.year) === null);
+    return dated.sort((a, b) => dir * (recordYear(a.year) - recordYear(b.year))).concat(undated);
   }
 
   const num = x => String(Number(x));
@@ -198,7 +220,7 @@ const VinylPlaylistFilters = (function () {
     return name.length <= MAX ? name : name.slice(0, MAX - 1).trimEnd() + '…';
   }
 
-  return { normalize, linkKind, matches, matching, countMatching, suggestName };
+  return { normalize, linkKind, matches, matching, countMatching, suggestName, arrange, likedCount };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylPlaylistFilters;

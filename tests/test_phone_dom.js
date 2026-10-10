@@ -1461,76 +1461,48 @@ test('opening the cover is counted, with whether it is sealed', async () => {
 });
 
 // ── the phone's fixed record screen ─────────────────────────────────────────
-const navIds = doc => ({
-  prev: (doc.querySelector('#dmNav .dm-nav-btn.prev') || {}).dataset,
-  next: (doc.querySelector('#dmNav .dm-nav-btn.next') || {}).dataset,
-});
 const listIds = read => read('detailNavRecords().map(r => r.id)');
+// jsdom lays nothing out, so the sheet's threshold (a third of the cover) is 0
+// and any scroll past the top counts as scrolled "a third of the way".
+const scrollTo = (win, doc, y) => {
+  const sc = doc.getElementById('dmScroll');
+  sc.scrollTop = y;
+  sc.dispatchEvent(new win.Event('scroll'));
+};
 
-test('the bottom row names the records on either side', async () => {
-  const { win, doc, read } = await boot({ phone: true });
+test('there is no previous/next row and no handle under the cover', async () => {
+  const { win, doc } = await boot({ phone: true });
   try {
-    const ids = listIds(read);
-    win.openDetail(ids[1]);
-    const nav = navIds(doc);
-    assert.strictEqual(Number(nav.prev.id), ids[0]);
-    assert.strictEqual(Number(nav.next.id), ids[2]);
-    assert.strictEqual(doc.querySelector('#dmCrate'), null, 'the crate strip is gone');
+    win.openDetail(13);
+    assert.strictEqual(doc.getElementById('dmNav'), null);
+    assert.strictEqual(doc.querySelector('.dm-nav-btn'), null);
+    assert.strictEqual(doc.querySelector('.dm-handle'), null);
   } finally { win.close(); }
 });
 
-test('the first record leaves its previous slot empty, the last its next', async () => {
-  const { win, doc, read } = await boot({ phone: true });
-  try {
-    const ids = listIds(read);
-    win.openDetail(ids[0]);
-    assert.ok(doc.querySelector('#dmNav .dm-nav-btn.prev.empty'));
-    assert.ok(!doc.querySelector('#dmNav .dm-nav-btn.prev[data-id]'));
-    win.openDetail(ids[ids.length - 1]);
-    assert.ok(doc.querySelector('#dmNav .dm-nav-btn.next.empty'));
-  } finally { win.close(); }
-});
-
-test('tapping a bottom cover goes to that record', async () => {
-  const { win, doc, read } = await boot({ phone: true });
-  try {
-    const ids = listIds(read);
-    win.openDetail(ids[1]);
-    press(win, doc.querySelector('#dmNav .dm-nav-btn.next'));
-    assert.strictEqual(read('currentDetailId'), ids[2]);
-    assert.strictEqual(Number(doc.querySelector('#dmNav .dm-nav-btn.prev').dataset.id), ids[1]);
-    assert.strictEqual(doc.getElementById('dmLayout').dataset.rid, String(ids[2]));
-  } finally { win.close(); }
-});
-
-test('a neighbour without artwork shows a disc, a censored one stays wrapped', async () => {
-  const { win, doc, read } = await boot({ phone: true });
-  try {
-    // 14 is censored and 15 has no cover; open whichever record sits before them
-    const ids = listIds(read);
-    for (const bad of [14, 15]) {
-      const at = ids.indexOf(bad);
-      if (at < 1) continue;
-      win.openDetail(ids[at - 1]);
-      const art = doc.querySelector(`#dmNav .dm-nav-btn.next[data-id="${bad}"] .art`);
-      assert.ok(art, `record ${bad} is the next neighbour`);
-      if (bad === 15) assert.ok(art.querySelector('.ti-disc'), 'a disc stands in for the missing cover');
-      else assert.notStrictEqual(art.firstElementChild.tagName, 'IMG', 'the blur wrapper is kept');
-    }
-  } finally { win.close(); }
-});
-
-test('the sheet starts closed and the handle opens and closes it', async () => {
+test('the sheet starts closed and follows the scroll past a third of the cover', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
     win.openDetail(13);
     const lay = doc.getElementById('dmLayout');
     assert.ok(!lay.classList.contains('sheet-open'));
-    press(win, doc.querySelector('.dm-handle'));
+    scrollTo(win, doc, 40);
     assert.ok(lay.classList.contains('sheet-open'));
-    assert.strictEqual(doc.querySelector('.dm-handle').getAttribute('aria-expanded'), 'true');
-    press(win, doc.querySelector('.dm-handle'));
+    scrollTo(win, doc, 0);
     assert.ok(!lay.classList.contains('sheet-open'));
+  } finally { win.close(); }
+});
+
+test('only the cover is sticky; the details are not', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    const sc = doc.getElementById('dmScroll');
+    assert.ok(sc.contains(doc.getElementById('dmCarousel')));
+    assert.ok(sc.contains(doc.getElementById('dmInfo')));
+    const css = fs.readFileSync(path.join(ROOT, 'templates', 'index.html'), 'utf8');
+    assert.match(css, /\.dm-carousel\{[^}]*position:sticky;top:0/);
+    assert.doesNotMatch(css, /\.dm-info\{[^}]*position:sticky/);
   } finally { win.close(); }
 });
 
@@ -1556,55 +1528,57 @@ test('an open sheet survives a re-render of the same record, not a change of rec
   try {
     const ids = listIds(read);
     win.openDetail(ids[1]);
-    press(win, doc.querySelector('.dm-handle'));
+    scrollTo(win, doc, 40);
     win.__peek(`renderDetailContent(records.find(r => r.id === ${ids[1]}))`);   // what a like does
     assert.ok(doc.getElementById('dmLayout').classList.contains('sheet-open'), 'still open');
-    press(win, doc.querySelector('#dmNav .dm-nav-btn.next'));
+    win.__peek('dmSetCurrent(dmIdx + 1)');
     assert.ok(!doc.getElementById('dmLayout').classList.contains('sheet-open'), 'a new record starts closed');
+    assert.strictEqual(doc.getElementById('dmScroll').scrollTop, 0);
   } finally { win.close(); }
 });
 
-test('a drag up on the handle opens the sheet, a tap right after is swallowed', async () => {
-  const { win, doc } = await boot({ phone: true });
-  try {
-    win.openDetail(13);
-    const h = doc.querySelector('.dm-handle');
-    const ev = (type, y, t) => {
-      const e = new win.Event(type, { bubbles: true, cancelable: true });
-      e.touches = type === 'touchend' ? [] : [{ clientY: y }];
-      Object.defineProperty(e, 'timeStamp', { value: t });
-      h.dispatchEvent(e);
-    };
-    ev('touchstart', 400, 0); ev('touchmove', 300, 100); ev('touchend', 300, 110);
-    assert.ok(doc.getElementById('dmLayout').classList.contains('sheet-open'));
-    press(win, h);   // the click the browser fires after the touch
-    assert.ok(doc.getElementById('dmLayout').classList.contains('sheet-open'), 'not toggled back');
-  } finally { win.close(); }
-});
-
-test('a single record has an empty bottom row and does not throw', async () => {
-  const { win, doc, errors } = await boot({ phone: true });
+test('a single record does not throw', async () => {
+  const { win, errors } = await boot({ phone: true });
   try {
     win.__peek('filtered = () => records.slice(0, 1)');
     win.openDetail(win.__peek('records[0].id'));
-    assert.ok(doc.querySelector('#dmNav .dm-nav-btn.prev.empty'));
-    assert.ok(doc.querySelector('#dmNav .dm-nav-btn.next.empty'));
     assert.deepStrictEqual(errors, []);
   } finally { win.close(); }
 });
 
-test('raising the sheet leaves Tracks highlighted, and a tab press moves the highlight', async () => {
+test('scrolled past the threshold, Tracks is highlighted and a tab press moves the highlight', async () => {
   const { win, doc } = await boot({ phone: true });
   try {
     win.openDetail(13);
     const on = () => [...doc.querySelectorAll('#dmTabs .dm-tab.on')].map(b => b.dataset.ddsec);
-    press(win, doc.querySelector('.dm-handle'));
+    scrollTo(win, doc, 40);
     assert.deepStrictEqual(on(), ['tracks']);
     press(win, doc.querySelector('#dmTabs .dm-tab[data-ddsec="timeline"]'));
     assert.deepStrictEqual(on(), ['timeline']);
-    press(win, doc.querySelector('.dm-handle'));   // lower and raise again: back on Tracks
-    press(win, doc.querySelector('.dm-handle'));
-    assert.deepStrictEqual(on(), ['tracks']);
+  } finally { win.close(); }
+});
+
+test('a timeline link raises the sheet', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    win.__peek('dmSetSheet(true)');
+    assert.ok(doc.getElementById('dmLayout').classList.contains('sheet-open'));
+    assert.ok(doc.getElementById('dmScroll').scrollTop > 0, 'scroll and class agree');
+  } finally { win.close(); }
+});
+
+test('the record\'s dice is the collection\'s die, and a visitor gets no furniture button', async () => {
+  const { win, doc } = await boot({ phone: true });
+  try {
+    win.openDetail(13);
+    const dice = doc.querySelector('#dmInfo .dm-album-btns .dice-btn');
+    assert.ok(dice, 'the same die markup as the collection page');
+    assert.ok(dice.querySelector('.dice-die .dice-face .dice-pip.on'));
+    assert.ok(doc.querySelector('#dmInfo .dm-album-btns .shelf-btn'), 'the admin has it');
+    win.__peek('authed = false; renderDetailContent(records.find(r => r.id === 13))');
+    assert.strictEqual(doc.querySelector('#dmInfo .shelf-btn'), null, 'a visitor does not');
+    assert.ok(doc.querySelector('#dmInfo .dice-btn'));
   } finally { win.close(); }
 });
 
@@ -1690,7 +1664,7 @@ test('swiping to another record starts that cover flat', async () => {
     orient(win, 55, 0); orient(win, 55, 20);
     await frames(30);
     assert.ok(ry(curSlide(doc)) > 0);
-    press(win, doc.querySelector('#dmNav .dm-nav-btn.next'));
+    win.__peek('dmSetCurrent(dmIdx + 1)');
     assert.strictEqual(ry(curSlide(doc)), 0, 'the new cover is not left mid-lean');
     assert.strictEqual(
       [...doc.querySelectorAll('#dmCarousel .dm-slide')].filter(s => ry(s) !== 0).length, 0);
@@ -1738,10 +1712,9 @@ test('admin gets a small edit button on the record, a visitor does not', async (
     const btn = doc.getElementById('dmEdit');
     assert.strictEqual(read('authed'), true, 'the fixture session is the admin');
     assert.strictEqual(btn.hidden, false);
-    assert.ok(doc.getElementById('dmLayout').classList.contains('has-edit'));
+    assert.ok(doc.querySelector('#dmTop .dm-top-left #dmEdit'), 'top left, beside close');
     win.__peek('authed = false; renderDetailFoot(currentDetailId)');
     assert.strictEqual(btn.hidden, true);
-    assert.ok(!doc.getElementById('dmLayout').classList.contains('has-edit'));
   } finally { win.close(); }
 });
 
@@ -1805,31 +1778,16 @@ test('a re-render of the same record puts its cover back in the middle', async (
   } finally { win.close(); }
 });
 
-test('a bottom-row tap is not undone by the carousel gliding past other slides', async () => {
-  const { win, doc, read } = await boot({ phone: true });
-  try {
-    const ids = listIds(read);
-    win.openDetail(ids[1]);
-    win.Element.prototype.scrollTo = function () {};
-    press(win, doc.querySelector('#dmNav .dm-nav-btn.next'));
-    assert.strictEqual(read('currentDetailId'), ids[2]);
-    // jsdom lays nothing out, so the "closest" slide reads as the first one
-    doc.getElementById('dmCarousel').dispatchEvent(new win.Event('scroll'));
-    await new Promise(r => setTimeout(r, 100));
-    assert.strictEqual(read('currentDetailId'), ids[2], 'the glide flipped the record back');
-  } finally { win.close(); }
-});
-
 test('liking keeps the phone sheet scroll for the same record, a new record starts at the top', async () => {
   const { win, doc, read } = await boot({ phone: true });
   try {
     const ids = listIds(read);
     win.openDetail(ids[1]);
-    doc.getElementById('dmSecs').scrollTop = 420;
+    doc.getElementById('dmScroll').scrollTop = 420;
     win.__peek(`renderDetailContent(records.find(r => r.id === ${ids[1]}))`);
-    assert.strictEqual(doc.getElementById('dmSecs').scrollTop, 420);
-    doc.getElementById('dmSecs').scrollTop = 420;
+    assert.strictEqual(doc.getElementById('dmScroll').scrollTop, 420);
+    doc.getElementById('dmScroll').scrollTop = 420;
     win.openDetail(ids[2]);
-    assert.strictEqual(doc.getElementById('dmSecs').scrollTop, 0);
+    assert.strictEqual(doc.getElementById('dmScroll').scrollTop, 0);
   } finally { win.close(); }
 });

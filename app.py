@@ -2334,7 +2334,7 @@ def spotify_sync_playlist(pid):
     if not acct or not acct.refresh_token:
         return _not_connected()
     f = json.loads(row.filters)
-    records = playlist_filters.select(_playlist_records(), f)
+    records = playlist_filters.arrange(playlist_filters.select(_playlist_records(), f), f)
     deadline = time.monotonic() + _SPOTIFY_READ_BUDGET
 
     def keep_new_id(new_id):

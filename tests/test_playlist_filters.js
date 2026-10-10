@@ -77,3 +77,25 @@ test('leap day in a leap year is valid', () => {
     F.normalize({ bought_from: '2024-02-29' }),
     { liked: true, bought_from: '2024-02-29' });
 });
+
+test('sort and order: defaults stay out, and neither shows in the name', () => {
+  assert.deepStrictEqual(F.normalize({ sort: 'artist', order: 'asc' }), { liked: true });
+  const f = F.normalize({ sort: 'year', order: 'desc' });
+  assert.deepStrictEqual(f, { liked: true, sort: 'year', order: 'desc' });
+  assert.strictEqual(F.suggestName(f), F.suggestName({ liked: true }));
+});
+
+test('arrange mirrors the server: artist, year (yearless last) and liked songs', () => {
+  const rec = (artist, album_name, year, n) => ({
+    artist, album_name, year,
+    tracks: Array.from({ length: n }, (_, i) => ({ title: String(i), liked_at: 'x' })) });
+  const rs = [rec('Beta', 'B', '1980', 1), rec('alpha', 'A', '', 3),
+              rec('Gamma', 'G', '1970', 2), rec('Alpha', 'Z', '1970', 3)];
+  const order = o => F.arrange(rs, F.normalize(o)).map(r => r.album_name).join('');
+  assert.strictEqual(order({}), 'AZBG');
+  assert.strictEqual(order({ order: 'desc' }), 'GBAZ');
+  assert.strictEqual(order({ sort: 'year' }), 'ZGBA');
+  assert.strictEqual(order({ sort: 'year', order: 'desc' }), 'BZGA');
+  assert.strictEqual(order({ sort: 'liked', order: 'desc' }), 'AZGB');
+  assert.strictEqual(order({ sort: 'liked' }), 'BGAZ');
+});

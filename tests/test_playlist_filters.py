@@ -109,3 +109,47 @@ def test_owned_defaults_to_owned_and_keeps_old_keys():
     with pytest.raises(pf.FilterError) as e:
         pf.normalize_filters({"owned": "borrowed"})
     assert e.value.field == "owned"
+
+
+def _rec(artist, album, year, hearts):
+    return {"artist": artist, "album_name": album, "year": year,
+            "tracks": [{"title": str(i), "liked_at": "x"} for i in range(hearts)]}
+
+
+ARRANGE = [_rec("Beta", "B", "1980", 1), _rec("alpha", "A", "", 3),
+           _rec("Gamma", "G", "1970", 2), _rec("Alpha", "Z", "1970", 3)]
+
+
+def _order(filters):
+    f = pf.normalize_filters(filters)
+    return [r["album_name"] for r in pf.arrange(ARRANGE, f)]
+
+
+def test_sort_defaults_stay_out_of_the_key_and_the_name():
+    assert pf.normalize_filters({"sort": "artist", "order": "asc"}) == {"liked": True}
+    f = pf.normalize_filters({"sort": "year", "order": "desc"})
+    assert f == {"liked": True, "sort": "year", "order": "desc"}
+    assert pf.suggest_name(f) == pf.suggest_name({"liked": True})
+    assert pf.filter_key(f) != pf.filter_key({"liked": True})
+
+
+def test_bad_sort_is_rejected():
+    with pytest.raises(pf.FilterError):
+        pf.normalize_filters({"sort": "mood"})
+    with pytest.raises(pf.FilterError):
+        pf.normalize_filters({"order": "sideways"})
+
+
+def test_arrange_by_artist_is_the_default():
+    assert _order({}) == ["A", "Z", "B", "G"]
+    assert _order({"order": "desc"}) == ["G", "B", "A", "Z"]
+
+
+def test_arrange_by_year_puts_yearless_last_either_way():
+    assert _order({"sort": "year"}) == ["Z", "G", "B", "A"]
+    assert _order({"sort": "year", "order": "desc"}) == ["B", "Z", "G", "A"]
+
+
+def test_arrange_by_liked_songs():
+    assert _order({"sort": "liked", "order": "desc"}) == ["A", "Z", "G", "B"]
+    assert _order({"sort": "liked"}) == ["B", "G", "A", "Z"]

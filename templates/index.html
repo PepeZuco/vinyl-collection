@@ -710,7 +710,7 @@ html{overflow-x:clip}
 /* Nudged up by the difference between the button and the title's cap height, so
    they sit on the title's line rather than below it. The pair is one flex item
    so a title long enough to wrap squeezes the title, never the buttons. */
-.dm-album .dm-album-btns{flex:0 0 auto;display:flex;gap:6px;margin-top:-1px}
+.dm-album .dm-album-btns{flex:0 0 auto;display:flex;align-items:center;gap:6px;margin-top:-1px}
 .dm-album .dm-shelf{flex:0 0 auto}
 .dm-artist{margin-top:4px;font-size:14px;color:var(--muted)}
 .dm-artist .multi-artist-badge{margin-right:0;margin-left:4px}
@@ -981,19 +981,25 @@ html{overflow-x:clip}
     padding:calc(12px + env(safe-area-inset-top,0px)) 14px 8px;
     flex-shrink:0;background:var(--bg);
   }
-  .dm-close{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);
+  .dm-close,.dm-edit{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);
     background:var(--card);color:var(--muted);display:flex;align-items:center;
     justify-content:center;font-size:16px;cursor:pointer}
+  /* top left, beside the close button; both ends are flex:1 so the counter
+     stays centred whether or not the edit button is there */
+  .dm-top-left{flex:1 1 0;display:flex;align-items:center;gap:8px}
+  .dm-edit:active{color:var(--text)}
+  .dm-edit[hidden]{display:none}   /* display:flex above beats the UA [hidden] rule */
   .dm-count{font-size:11px;letter-spacing:.12em;color:var(--muted);
     font-variant-numeric:tabular-nums;text-transform:uppercase}
   .dm-count b{color:var(--accent);font-weight:700}
-  .dm-top-spacer{width:36px}
+  .dm-top-spacer{flex:1 1 0}
 
   /* The cover swipes like before; the current one tilts (JS writes --rx/--ry/
      --gx/--gy on it, see VinylCoverTilt.follow). */
   .dm-carousel{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;
     padding:6px calc(50% - var(--dm-cover) / 2) 10px;scrollbar-width:none;
-    -webkit-overflow-scrolling:touch;flex-shrink:0;perspective:900px}
+    -webkit-overflow-scrolling:touch;flex-shrink:0;perspective:900px;
+    position:sticky;top:0;z-index:1;background:var(--bg)}
   .dm-carousel::-webkit-scrollbar{display:none}
   .dm-slide{flex:0 0 var(--dm-cover);width:var(--dm-cover);scroll-snap-align:center;scroll-snap-stop:always;
     aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:#0a0a0a;
@@ -1016,58 +1022,24 @@ html{overflow-x:clip}
         rgba(255,255,255,0) calc(var(--gx,50) * 1% + 8%))}
   .dm-slide.sealed.cur .dm-glare{display:block}
 
-  /* The details: header (album, artist, ratings) stays; the tracklist scrolls
-     beneath it. Raised (.sheet-open), the same box covers the cover and shows
-     the tabs and all three blocks. */
-  .dm-info{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:0 16px;
-    background:var(--bg)}
-  .dm-handle{align-self:center;flex:0 0 auto;width:100%;height:22px;padding:0;border:0;
-    background:none;cursor:pointer;position:relative}
-  .dm-handle::after{content:"";position:absolute;left:50%;top:9px;width:40px;height:4px;
-    margin-left:-20px;border-radius:2px;background:var(--border)}
-  .dm-info .dm-tabs{display:none;flex-shrink:0;margin:10px 0 0}
-  .dm-secs{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin:8px -16px 0;
-    padding:0 16px 12px}
+  /* One scroller under the top bar. The cover is the only thing that sticks;
+     the details slide up over it, and once a third of the cover is covered
+     the tabs and all three blocks appear (.sheet-open, set from the scroll
+     position in JS). */
+  .dm-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;position:relative}
+  .dm-info{position:relative;z-index:2;min-height:100%;padding:16px 16px 12px;
+    background:var(--bg);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+  .dm-info .dm-tabs{display:none;position:sticky;top:0;z-index:3;background:var(--bg);margin:10px -16px 0;padding:0 16px}
   .dm-secs .dd-sec{display:none}
   .dm-secs #dmSec-tracks{display:block}
-  #dmLayout.sheet-open .dm-info{position:absolute;left:0;right:0;z-index:5;
-    top:var(--dm-top-h,56px);bottom:var(--dm-nav-h,72px);
-    border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
   #dmLayout.sheet-open .dm-info .dm-tabs{display:flex}
   #dmLayout.sheet-open .dm-secs .dd-sec{display:block}
-
-  /* previous / next */
-  .dm-nav{display:flex;justify-content:space-between;gap:12px;flex-shrink:0;margin-top:auto;position:relative;z-index:6;
-    padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));
-    border-top:1px solid var(--border);background:var(--bg)}
-  .dm-nav-btn{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:10px;
-    background:none;border:0;padding:0;color:var(--text);text-align:left;cursor:pointer}
-  .dm-nav-btn.next{flex-direction:row-reverse;text-align:right}
-  /* the page's generic .empty (a big padded placeholder) also matches this span */
-  .dm-nav-btn.empty{visibility:hidden;padding:0;min-height:48px}
-  .dm-nav-btn .art{flex:0 0 48px;width:48px;height:48px;border-radius:6px;overflow:hidden;
-    background:#26231d;color:#4a463e;display:flex;align-items:center;justify-content:center;
-    font-size:20px;opacity:.85}
-  [data-theme="light"] .dm-nav-btn .art{background:#c9c2b4;color:#a39c8e}
-  .dm-nav-btn .art img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-  .dm-nav-btn .cap{min-width:0;display:flex;flex-direction:column}
-  .dm-nav-btn .cap small{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-  .dm-nav-btn .cap b{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #dmLayout.has-edit .dm-nav-btn.next{margin-right:50px}   /* clear the edit button */
-
-  /* admin: small, quiet, fixed bottom right */
-  .dm-edit{position:absolute;right:14px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:7;
-    width:38px;height:38px;border-radius:50%;border:1px solid var(--border);background:var(--card);
-    color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:16px;
-    opacity:.6;cursor:pointer}
-  .dm-edit:active{opacity:1}
-  .dm-edit[hidden]{display:none}   /* display:flex above beats the UA [hidden] rule */
-
-  .dm-info .dd-tabs{position:static;background:var(--bg)}
+  .dm-secs{margin-top:8px}
 
   /* Nothing behind the record may scroll or pull-to-refresh from a drag here. */
-  .dm-handle,.dm-top,.dm-nav{touch-action:none}
-  .dm-carousel{touch-action:pan-x}
+  .dm-top{touch-action:none}
+  .dm-carousel{touch-action:pan-x pan-y}
   html:has(#detailOverlay:not(.hidden)){overscroll-behavior:none}
 
   /* A thumb, not a cursor, is aiming for this — 44px matches the platform's
@@ -1076,13 +1048,10 @@ html{overflow-x:clip}
     display:flex;align-items:center;justify-content:center;font-size:16px}
 }
 
-/* Short screens (landscape phones, small windows): the details column itself
-   scrolls, so Tracks, Info and Timeline stay reachable, and the cover shrinks. */
+/* Short screens (landscape phones, small windows): cover shrinks; the
+   scroller under the top bar already keeps Tracks, Info and Timeline reachable. */
 @media(max-width:760px) and (max-height:600px){
   .detail-mobile-layout{--dm-cover:min(40vw,26svh)}
-  .dm-info{overflow-y:auto;overscroll-behavior:contain}
-  .dm-secs{flex:none;overflow:visible}
-  .dm-handle{position:sticky;top:0;z-index:2;background:var(--bg)}
 }
 
 /* form */
@@ -5103,7 +5072,6 @@ body:not(.is-authed) .bar-views,body:not(.is-authed) #accViews{display:none!impo
 <script src="/static/grouping.js"></script>
 <script src="/static/carousel.js"></script>
 <script src="/static/covertilt.js"></script>
-<script src="/static/phonedetail.js"></script>
 <script src="/static/filters.js"></script>
 <script src="/static/timeline.js"></script>
 <script src="/static/health.js"></script>
@@ -6447,7 +6415,7 @@ function renderDetailContent(r) {
   // rebuilds the whole drawer and used to always land back at the cover, so
   // every like cost a re-drag down the page to find your place again.
   const prevDm = document.getElementById('dmLayout');
-  const prevSecs = document.getElementById('dmSecs');
+  const prevSecs = document.getElementById('dmScroll');
   const keepScrollMobile = prevDm && prevSecs && prevDm.dataset.rid === String(r.id) ? prevSecs.scrollTop : 0;
   const keepSheet = !!(prevDm && prevDm.dataset.rid === String(r.id) && prevDm.classList.contains('sheet-open'));
 
@@ -6462,15 +6430,18 @@ function renderDetailContent(r) {
     </div>
     <div class="detail-mobile-layout" id="dmLayout" data-rid="${r.id}">
       <div class="dm-top" id="dmTop">
-        <button class="dm-close" onclick="closeDetail()" title="close"><i class="ti ti-x"></i></button>
+        <span class="dm-top-left">
+          <button class="dm-close" onclick="closeDetail()" title="close"><i class="ti ti-x"></i></button>
+          <button type="button" class="dm-edit" id="dmEdit" hidden title="edit" aria-label="edit record"
+                  onclick="openEdit(currentDetailId)"><i class="ti ti-pencil"></i></button>
+        </span>
         <span class="dm-count" id="dmCount"></span>
         <span class="dm-top-spacer"></span>
       </div>
-      <div class="dm-carousel" id="dmCarousel">${dmList.map(dmSlideHTML).join('')}</div>
-      <div class="dm-info" id="dmInfo"></div>
-      <div class="dm-nav" id="dmNav"></div>
-      <button type="button" class="dm-edit" id="dmEdit" hidden title="edit" aria-label="edit record"
-              onclick="openEdit(currentDetailId)"><i class="ti ti-pencil"></i></button>
+      <div class="dm-scroll" id="dmScroll">
+        <div class="dm-carousel" id="dmCarousel">${dmList.map(dmSlideHTML).join('')}</div>
+        <div class="dm-info" id="dmInfo"></div>
+      </div>
     </div>`;
   dmBind();
   ddBind();
@@ -6478,10 +6449,9 @@ function renderDetailContent(r) {
   // the carousel was just rebuilt (scrollLeft 0): put this record's cover back in the middle
   dmCenterSlide(dmIdx, false);
   dmSetSheet(keepSheet);
-  dmMeasureChrome();
   const dd = document.getElementById('ddInfo');
   if (dd && keepScroll) dd.scrollTop = keepScroll;
-  const dm = document.getElementById('dmSecs');
+  const dm = document.getElementById('dmScroll');
   if (dm && keepScrollMobile) dm.scrollTop = keepScrollMobile;
   ddBindSections();
   renderDetailFoot(r.id);
@@ -6498,40 +6468,40 @@ function dmSlideHTML(rec) {
   return `<div class="dm-slide${sealed}" data-id="${rec.id}">${img}<span class="dm-glare"></span></div>`;
 }
 
-function dmNavHTML() {
-  const { prev, next } = VinylPhoneDetail.neighbors(dmList, dmIdx);
-  const side = (rec, dir, cap) => {
-    if (!rec) return `<span class="dm-nav-btn ${dir} empty"></span>`;
-    const art = rec.cover_url
-      ? censorWrap(rec, `<img src="${rec.cover_url}" alt="" loading="lazy">`, {eye: false})
-      : `<i class="ti ti-disc"></i>`;
-    return `<button type="button" class="dm-nav-btn ${dir}" data-id="${rec.id}"
-        aria-label="${cap}: ${esc(rec.album_name)}">
-      <span class="art">${art}</span>
-      <span class="cap"><small>${cap}</small><b>${esc(rec.album_name) || 'untitled'}</b></span></button>`;
-  };
-  return side(prev, 'prev', 'previous') + side(next, 'next', 'next');
+/* The details sheet: Tracks alone while the cover is mostly showing; the tabs
+ * and all three blocks once the details have slid a third of the way up over
+ * it. A class on #dmLayout, driven by the scroll position (dmSyncSheet). */
+function dmSheetThreshold() {
+  const car = document.getElementById('dmCarousel');
+  return car ? car.offsetHeight / 3 : 0;
 }
 
-/* The raised sheet. Class on #dmLayout; the handle mirrors it for assistive tech. */
+function dmSyncSheet() {
+  const lay = document.getElementById('dmLayout');
+  const sc = document.getElementById('dmScroll');
+  if (!lay || !sc) return;
+  const open = sc.scrollTop > dmSheetThreshold();
+  if (open !== lay.classList.contains('sheet-open')) {
+    lay.classList.toggle('sheet-open', open);
+    detailMarkSection('dm', 'tracks');
+    if (open) detailSyncSpy('dm');
+  }
+}
+
+/* Put the sheet in a state from code: raised means scrolled just past the
+ * threshold (so the scroll position and the class agree), lowered means the
+ * top. */
 function dmSetSheet(open) {
   const lay = document.getElementById('dmLayout');
+  const sc = document.getElementById('dmScroll');
   if (!lay) return;
   const was = lay.classList.contains('sheet-open');
   lay.classList.toggle('sheet-open', !!open);
-  // Raised or lowered, the view sits at the top of Tracks. The spy only runs on
-  // scroll, and while the sheet is down the other two blocks have no layout.
-  if (was !== !!open) {
-    const secs = document.getElementById('dmSecs');
-    if (secs) secs.scrollTop = 0;
+  if (sc) {
+    if (open && !was) sc.scrollTop = Math.max(sc.scrollTop, dmSheetThreshold() + 2);
+    else if (!open && was) sc.scrollTop = 0;
   }
   detailMarkSection('dm', 'tracks');
-  const h = lay.querySelector('.dm-handle');
-  if (h) {
-    h.setAttribute('aria-expanded', open ? 'true' : 'false');
-    h.setAttribute('aria-label', open ? 'show less' : 'show more');
-  }
-  dmMeasureChrome();
   if (open) detailSyncSpy('dm');
 }
 
@@ -6791,8 +6761,9 @@ function lastCleanedLabel(r) {
  * DOM at once and CSS hides one, so a shared id would have the phone's tab row
  * scrolling the desktop's column, and the spy marking the hidden pane's tabs.
  *
- * The phone is a raised sheet: closed it shows the header and the tracklist,
- * raised it covers the cover and shows the tabs and all three blocks. */
+ * The phone scrolls the details up over its sticky cover: until a third of the
+ * cover is covered it shows the header and the tracklist, after that the tabs
+ * and all three blocks. */
 function detailSectionsHTML(r, pane) {
   const order = DETAIL_PANES[pane].order;
   const TABS = { info: ['info-circle', 'Info'], tracks: ['playlist', 'Tracks'], timeline: ['timeline', 'Timeline'] };
@@ -6804,23 +6775,19 @@ function detailSectionsHTML(r, pane) {
   const secs = order.map(id =>
     `<section class="dd-sec" id="${pane}Sec-${id}">${BODY[id](r)}</section>`).join('');
   if (pane !== 'dm') return dmHeaderHTML(r, pane) + tabs + secs;
-  // The phone: a handle, the header, the tab row (shown only when raised), and
-  // one scroller holding the blocks (only Tracks shows until raised).
-  return `<button type="button" class="dm-handle" aria-expanded="false" aria-label="show more"></button>`
-    + dmHeaderHTML(r, pane) + tabs + `<div class="dm-secs" id="dmSecs">${secs}</div>`;
+  // The phone: the header, the tab row (shown only once scrolled up), and the
+  // blocks (only Tracks shows until then).
+  return dmHeaderHTML(r, pane) + tabs + `<div class="dm-secs" id="dmSecs">${secs}</div>`;
 }
 
 function dmInfoHTML(r) { return detailSectionsHTML(r, 'dm'); }
 function ddInfoHTML(r) { return detailSectionsHTML(r, 'dd'); }
 
-/* What each pane scrolls, and what else is pinned above its tab row. The
- * desktop's info column scrolls on its own with nothing over it; on the phone
- * the whole sheet scrolls and the header carrying the close button pins above
- * the row, so both have to clear the line a block is measured against. */
+/* What each pane scrolls, and what else is pinned above its tab row. Both
+ * panes pin the tab row to the top of their own scroller. */
 const DETAIL_PANES = {
   dd: { scroller: 'ddInfo', chrome: null, order: ['info', 'tracks', 'timeline'] },
-  // the phone's tab row sits above its scroller rather than over it
-  dm: { scroller: 'dmSecs', chrome: null, order: ['tracks', 'info', 'timeline'], tabsOutside: true },
+  dm: { scroller: 'dmScroll', chrome: null, order: ['tracks', 'info', 'timeline'] },
 };
 
 /* A click scrolls smoothly, passing through every block between here and the
@@ -6838,7 +6805,7 @@ function detailScroller(pane) {
 function detailBarHeight(pane) {
   const p = DETAIL_PANES[pane];
   const el = id => { const n = id && document.getElementById(id); return n ? n.offsetHeight : 0; };
-  return (p.tabsOutside ? 0 : el(pane + 'Tabs')) + el(p.chrome);
+  return el(pane + 'Tabs') + el(p.chrome);
 }
 
 function detailMarkSection(pane, id) {
@@ -6896,16 +6863,6 @@ function ddBindSections() {
   ddSyncSpy();
 }
 
-/* The raised sheet fills the gap between the header and the bottom row, so it
- * needs both heights. Measured rather than written into the stylesheet twice. */
-function dmMeasureChrome() {
-  const lay = document.getElementById('dmLayout');
-  if (!lay) return;
-  const h = id => { const n = document.getElementById(id); return n ? n.offsetHeight : 0; };
-  lay.style.setProperty('--dm-top-h', h('dmTop') + 'px');
-  lay.style.setProperty('--dm-nav-h', h('dmNav') + 'px');
-}
-
 function dmHeaderHTML(r, pane) {
   const myR = Number(r.my_rating) || 0;
   const herR = Number(r.wife_rating) || 0;
@@ -6929,13 +6886,14 @@ function dmHeaderHTML(r, pane) {
   // written into the markup rather than set afterwards, because the sheet this
   // lives in is redrawn on every swipe (see above).
   const rollable = detailNavRecords().length > 1;
+  // The furniture button is the owner's tool, so a visitor does not get it.
   const btns = pane !== 'dm' ? '' : `<span class="dm-album-btns">
-      <button type="button" class="detail-nav-btn shelf-btn dm-shelf${st.on ? ' on' : ''}"
+      ${authed ? `<button type="button" class="detail-nav-btn shelf-btn dm-shelf${st.on ? ' on' : ''}"
         ${st.pos ? '' : 'disabled'} title="${esc(st.title)}"
-        onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>
-      <button type="button" class="detail-nav-btn random-btn dm-shelf"
-        ${rollable ? '' : 'style="display:none"'} title="random record"
-        onclick="randomDetail()"><i class="ti ti-dice-5"></i></button>
+        onclick="toggleDetailShelfOrder()"><i class="ti ti-library"></i></button>` : ''}
+      <button type="button" class="dice-btn random-btn"
+        ${rollable ? '' : 'style="display:none"'} title="random record" aria-label="random record"
+        onclick="rollDetailDice(this)"><div class="dice-die"><div class="dice-face">${dicePipsHTML(diceOtherFace())}</div></div></button>
     </span>`;
   return `
     <div class="dm-album"><span class="dm-album-t">${esc(r.album_name)||'untitled'}<span class="dm-year">${esc(r.year)||''}</span></span>${btns}</div>
@@ -7180,14 +7138,14 @@ function dmSetCurrent(idx) {
   dmSyncCount();
   const info = document.getElementById('dmInfo');
   if (info) info.innerHTML = dmInfoHTML(rec);
-  const nav = document.getElementById('dmNav');
-  if (nav) nav.innerHTML = dmNavHTML();
-  // a different record starts with the sheet down; the same one (a like, a
-  // rating) keeps it where it was
+  // a different record starts at the top; the same one (a like, a rating)
+  // keeps the sheet where it was
   const lay = document.getElementById('dmLayout');
   const sameRecord = !lay || lay.dataset.rid === String(rec.id);
   if (lay) lay.dataset.rid = String(rec.id);
   dmSetSheet(!!lay && sameRecord && lay.classList.contains('sheet-open'));
+  const sc = document.getElementById('dmScroll');
+  if (sc && !sameRecord) sc.scrollTop = 0;
   clearSlideLean(); if (slideFollow) slideFollow.rebase();
   const ddCar = document.getElementById('ddCarousel');
   if (ddCar) {
@@ -7205,8 +7163,6 @@ function dmSetCurrent(idx) {
     ddSyncSpy();
   }
   renderDetailFoot(rec.id);
-  // the header and the bottom row were just rewritten, so the measurements are stale
-  dmMeasureChrome();
 }
 
 /* Put whichever layout is on screen back on the current record. Only one of
@@ -7228,7 +7184,6 @@ function dmCenterSlide(idx, smooth) {
   car.scrollTo({left: s.offsetLeft + s.offsetWidth/2 - car.clientWidth/2, behavior: smooth ? 'smooth' : 'auto'});
 }
 
-let dmScrollTarget = null, dmScrollTargetTimer = 0;   // slide a bottom-row tap is gliding to
 function dmBind() {
   const car = document.getElementById('dmCarousel');
   if (!car) return;
@@ -7242,16 +7197,9 @@ function dmBind() {
         const d = Math.abs(s.offsetLeft + s.offsetWidth/2 - mid);
         if (d < bd) { bd = d; best = k; }
       });
-      // after a bottom-row tap the carousel glides past other slides; their
-      // "closest" results are not the user's choice, so wait for the target
-      if (dmScrollTarget !== null) {
-        if (best !== dmScrollTarget) return;
-        dmScrollTarget = null;
-      }
       if (best !== dmIdx) dmSetCurrent(best);
     });
   }, {passive: true});
-  car.addEventListener('touchstart', () => { dmScrollTarget = null; }, {passive: true});
   // Only the cover in the middle opens. The neighbours peeking in at the
   // edges are a swipe away, not a tap, and opening one you are not on would
   // show a record the drawer below is not about.
@@ -7259,44 +7207,9 @@ function dmBind() {
     const sl = e.target.closest('.dm-slide.cur');
     if (sl) openCoverView(Number(sl.dataset.id));
   });
-  document.getElementById('dmNav').addEventListener('click', e => {
-    const b = e.target.closest('.dm-nav-btn[data-id]');
-    if (!b) return;
-    const idx = dmList.findIndex(r => r.id === Number(b.dataset.id));
-    if (idx === -1) return;
-    dmScrollTarget = idx;
-    clearTimeout(dmScrollTargetTimer);
-    dmScrollTargetTimer = setTimeout(() => { dmScrollTarget = null; }, 1200);
-    dmSetCurrent(idx);
-    dmCenterSlide(idx, true);
-  });
 
-  // The handle: a tap toggles the sheet; a drag on it decides by distance or
-  // flick (VinylPhoneDetail.settle). The click the browser sends after a drag
-  // is swallowed so it cannot undo it.
-  const lay = document.getElementById('dmLayout');
-  let y0 = null, t0 = 0, y1 = 0, t1 = 0, swallow = false;
-  lay.addEventListener('touchstart', e => {
-    if (!e.target.closest('.dm-handle')) { y0 = null; return; }
-    y0 = y1 = e.touches[0].clientY; t0 = t1 = e.timeStamp;
-  }, {passive: true});
-  lay.addEventListener('touchmove', e => {
-    if (y0 === null) return;
-    y1 = e.touches[0].clientY; t1 = e.timeStamp;
-  }, {passive: true});
-  lay.addEventListener('touchcancel', () => { y0 = null; });
-  lay.addEventListener('touchend', () => {
-    if (y0 === null) return;
-    const dy = y1 - y0, v = dy / Math.max(1, t1 - t0);
-    y0 = null;
-    if (Math.abs(dy) < 8) return;                       // a tap: the click handles it
-    dmSetSheet(VinylPhoneDetail.settle(lay.classList.contains('sheet-open'), dy, v));
-    swallow = true; setTimeout(() => { swallow = false; }, 350);
-  });
-  lay.addEventListener('click', e => {
-    if (!e.target.closest('.dm-handle') || swallow) return;
-    dmSetSheet(!lay.classList.contains('sheet-open'));
-  });
+  // The sheet follows the scroll: past a third of the cover it opens.
+  document.getElementById('dmScroll').addEventListener('scroll', dmSyncSheet, {passive: true});
 }
 
 // ── the record's own cover leans, from the moment it is open ────────────────
@@ -7517,7 +7430,6 @@ function openDetail(id, focus) {
   document.getElementById('detailOverlay').classList.remove('hidden');
   // first measurable moment — until the line above, .overlay.hidden is
   // display:none and everything below measures zero
-  dmMeasureChrome();
   ddSyncSpy();
   syncUrl(true);
   detailCenterOnCurrent();
@@ -7648,11 +7560,9 @@ function renderDetailFoot(id) {
       : '');
   // desktop drawer footer
   document.getElementById('detailFoot').innerHTML = html;
-  // phone: the one control is the small edit button; delete lives in the edit form
+  // phone: the one control is the small edit button, top left; delete lives in the edit form
   const dmEdit = document.getElementById('dmEdit');
   if (dmEdit) dmEdit.hidden = !authed;
-  const dmLay = document.getElementById('dmLayout');
-  if (dmLay) dmLay.classList.toggle('has-edit', !!authed);
 }
 
 function closeDetail(){
@@ -12121,7 +12031,7 @@ function setPlaylistBusy(busy){
 
 function blankPlaylistForm(){
   return {liked: true, decades: [], genres: [], pepe_min: '', jenni_min: '',
-          rating_mode: 'and', places: [], countries: [], bought_from: '', bought_to: '', source: 'albums', owned: 'owned', name: '', nameTouched: false};
+          rating_mode: 'and', places: [], countries: [], bought_from: '', bought_to: '', source: 'albums', owned: 'owned', sort: 'artist', order: 'asc', name: '', nameTouched: false};
 }
 let playlistForm = blankPlaylistForm();
 
@@ -12341,6 +12251,7 @@ function playlistFilterChips(p){
   (f.places||[]).forEach(pl=>chip('ti-building-store',pl));
   if(f.bought_from||f.bought_to)chip('ti-calendar-dollar','bought '+span(f.bought_from,f.bought_to));
   if(chips.length===1)chip('ti-vinyl','whole collection');
+  if(f.sort||f.order)chip('ti-arrows-sort',({year:'year',liked:'most liked'}[f.sort]||'artist')+(f.order==='desc'?' ↓':' ↑'));
   // Only the first draw pops in: a sync re-renders the list on every round.
   const enter=!playlistTagsShown.has(p.id);
   playlistTagsShown.add(p.id);
@@ -12390,6 +12301,10 @@ function renderPlaylistForm(){
     <div class="pl-field">${label('ti-building-store','bought at')}${chips('places',playlistChoices.places)}</div>
     <div class="pl-field">${label('ti-calendar-dollar','bought')}
       ${input('bought_from','date')} <span class="pl-sep">to</span> ${input('bought_to','date')}</div>
+    <div class="pl-field">${label('ti-arrows-sort','order by')}
+      <select data-field="sort" onchange="playlistFormInput(this)">
+        ${[['artist','artist'],['year','year'],['liked','most liked songs']].map(([v,t])=>`<option value="${v}" ${f.sort===v?'selected':''}>${t}</option>`).join('')}</select>
+      <span class="pl-seg sm">${radio('plOrder','order','asc','asc',f.order!=='desc','ti-sort-ascending')}${radio('plOrder','order','desc','desc',f.order==='desc','ti-sort-descending')}</span></div>
     <div class="pl-count" id="plCount"></div>
     <div class="pl-field">${label('ti-pencil','name')}
       <input class="pl-name" id="plName" data-field="name" maxlength="100"
@@ -12416,7 +12331,7 @@ function playlistFilters(){
   const f=playlistForm;
   return VinylPlaylistFilters.normalize({liked:f.liked,decades:f.decades,
     genres:f.genres,pepe_min:f.pepe_min,jenni_min:f.jenni_min,rating_mode:f.rating_mode,
-    places:f.places,countries:f.countries,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source,owned:f.owned});
+    places:f.places,countries:f.countries,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source,owned:f.owned,sort:f.sort,order:f.order});
 }
 
 // Updated in place rather than re-rendered, so typing in a field keeps focus.
@@ -12424,7 +12339,7 @@ function updatePlaylistPreview(){
   const filters=playlistFilters();
   const hits=VinylPlaylistFilters.matching(records,filters);
   const n=hits.length;
-  renderPlaylistMatches(hits,filters.liked);
+  renderPlaylistMatches(VinylPlaylistFilters.arrange(hits,filters),filters.liked);
   const count=document.getElementById('plCount');
   if(count){
     count.textContent=(n===1?'1 record matches':n+' records match')+(n===0?' — the playlist would be empty':'');
@@ -12456,8 +12371,7 @@ function renderPlaylistMatches(hits,liked){
     if(typeof t==='string'){try{t=t?JSON.parse(t):[];}catch(e){t=[];}}
     return Array.isArray(t)?t.filter(s=>s&&s.liked_at).length:0;
   };
-  const sorted=hits.slice().sort((a,b)=>String(artistDisplay(a)).localeCompare(String(artistDisplay(b)))
-    ||String(a.album_name||'').localeCompare(String(b.album_name||'')));
+  const sorted=hits;  // already in the playlist's order
   el.innerHTML=`<div class="playlist-heading">in this playlist · ${hits.length}</div>
     <div class="pl-match-list">${sorted.map(r=>{
       const cover=r.cover_url
@@ -12905,11 +12819,14 @@ const DICE_PIPS = {
   5: [0,2,4,6,8],
   6: [0,2,3,5,6,8],
 };
+function dicePipsHTML(n) {
+  const on = new Set(DICE_PIPS[n] || DICE_PIPS[1]);
+  return Array.from({length:9}, (_,i) => `<div class="dice-pip${on.has(i)?' on':''}"></div>`).join('');
+}
 function renderDiceFace(n) {
   const el = document.getElementById('diceFace');
   if (!el) return;
-  const on = new Set(DICE_PIPS[n] || DICE_PIPS[1]);
-  el.innerHTML = Array.from({length:9}, (_,i) => `<div class="dice-pip${on.has(i)?' on':''}"></div>`).join('');
+  el.innerHTML = dicePipsHTML(n);
 }
 const DICE_ROLL_MS = 620;
 let diceFace = 1, diceRollTimer = null;
@@ -12940,6 +12857,16 @@ function rollDice(done) {
     requestAnimationFrame(flick);
   })(t0);
   diceRollTimer = setTimeout(() => { diceRestart(btn, 'landed', 500); done(); }, DICE_ROLL_MS);
+}
+// The record screen's own die: thrown like the collection's, then the record
+// it lands on opens. The button is redrawn with the new record, so there is no
+// landing to animate afterwards.
+function rollDetailDice(btn) {
+  if (detailAnimating) return;
+  btn.classList.add('rolled');
+  if (diceReducedMotion()) { randomDetail(); return; }
+  diceRestart(btn, 'rolling', DICE_ROLL_MS);
+  setTimeout(randomDetail, DICE_ROLL_MS);
 }
 function initDice() {
   diceFace = Math.ceil(Math.random()*6);
@@ -14764,9 +14691,8 @@ function fitRotationList() {
 let statsResizeTimer = null;
 window.addEventListener('resize', function () {
   if (currentTab === 'stats') { clearTimeout(statsResizeTimer); statsResizeTimer = setTimeout(renderStats, 120); }
-  // a rotation changes the height the sheet's last block needs, and crossing
-  // the 760px line changes whether the phone's chrome is on screen at all
-  if (currentDetailId) dmMeasureChrome();
+  // a rotation changes the cover's height, and with it the sheet's threshold
+  if (currentDetailId) dmSyncSheet();
 });
 
 /* `day` shifted by `n` calendar days, and the whole days between two days —

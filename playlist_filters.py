@@ -24,6 +24,10 @@ Filters (all optional; absent means "does not filter"; they combine with AND):
                            its link: that playlist stands in for an album Spotify lacks.
   owned                    "owned" (default) | "wishlist" | "all" — records you have,
                            records on the wishlist, or both
+  sort, order              how the records are laid out in the playlist: "artist" (default) |
+                           "year" | "liked" (most hearted songs), "asc" (default) | "desc".
+                           Not a filter and never part of the name; it does change the key,
+                           since the same records in another order are another playlist.
 
 `filter_key` is what makes "same filters" mean "same playlist": two filter
 sets that select the same records produce the same key, whatever the order,
@@ -44,6 +48,8 @@ _PLAYLIST_LINK = re.compile(r"^(?:https?://open\.spotify\.com/(?:intl-[a-z]+/)?p
 
 SOURCES = ("albums", "compilations", "all")
 OWNED = ("owned", "wishlist", "all")
+SORTS = ("artist", "year", "liked")
+ORDERS = ("asc", "desc")
 
 
 class FilterError(ValueError):
@@ -206,6 +212,18 @@ def normalize_filters(raw):
         f["bought_from"] = lo
     if hi is not None:
         f["bought_to"] = hi
+
+    sort = raw.get("sort") or "artist"
+    if sort not in SORTS:
+        raise FilterError("sort", "must be artist, year or liked")
+    order = raw.get("order") or "asc"
+    if order not in ORDERS:
+        raise FilterError("order", "must be asc or desc")
+    # Defaults stay out, so playlists made before sorting existed keep their key.
+    if sort != "artist":
+        f["sort"] = sort
+    if order != "asc":
+        f["order"] = order
     return f
 
 
@@ -339,3 +357,28 @@ def select(records, filters):
     also on Spotify is spotify_sync.desired_tracks' business.
     """
     return [r for r in records if _matches(r, filters)]
+
+
+def _liked_count(r):
+    return sum(1 for t in r.get("tracks") or [] if isinstance(t, dict) and t.get("liked_at"))
+
+
+def arrange(records, filters):
+    """The records in the playlist's order: by artist, year or liked songs, asc or desc.
+
+    Ties fall back to artist then album, always ascending. A record with no
+    readable year goes last whichever way the years run.
+    """
+    out = sorted(records, key=lambda r: (_fold(str(r.get("artist") or "").replace(";", " / ")),
+                                         _fold(r.get("album_name"))))
+    sort = filters.get("sort", "artist")
+    if sort == "artist" and filters.get("order") != "desc":
+        return out
+    desc = filters.get("order") == "desc"
+    if sort == "artist":
+        return sorted(out, key=lambda r: _fold(str(r.get("artist") or "").replace(";", " / ")), reverse=True)
+    if sort == "liked":
+        return sorted(out, key=_liked_count, reverse=desc)
+    dated = [r for r in out if record_year(r.get("year")) is not None]
+    undated = [r for r in out if record_year(r.get("year")) is None]
+    return sorted(dated, key=lambda r: record_year(r.get("year")), reverse=desc) + undated

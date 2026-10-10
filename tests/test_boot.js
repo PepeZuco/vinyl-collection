@@ -3457,7 +3457,7 @@ function fullRecord(read) {
  * shadows the prototype stub the harness installs. */
 function watchSheetScroll(doc) {
   const calls = [];
-  $(doc, '#dmSecs').scrollTo = opts => calls.push(opts);
+  $(doc, '#dmScroll').scrollTo = opts => calls.push(opts);
   return calls;
 }
 
@@ -3515,15 +3515,15 @@ test('a focused history entry reaches the phone sheet without hiding the rest', 
 });
 
 // Liking a song rewrites the whole drawer, and the phone sheet is its own
-// scroller (#dmSecs). It used to come back at the cover every time.
+// scroller (#dmScroll). It used to come back at the cover every time.
 test('liking a song on the phone sheet keeps your place in it', async () => {
   const { win, doc, read } = await boot();
   const rec = fullRecord(read);
   win.openDetail(rec.id);
-  $(doc, '#dmSecs').scrollTop = 420;
+  $(doc, '#dmScroll').scrollTop = 420;
   win.toggleLike(rec.id, 0);
   assert.ok(count(doc, '#dmSec-tracks .tl-row.liked'), 'the like did not land');
-  assert.strictEqual($(doc, '#dmSecs').scrollTop, 420,
+  assert.strictEqual($(doc, '#dmScroll').scrollTop, 420,
     'liking a song threw the phone sheet back to the top');
 });
 
@@ -3531,9 +3531,9 @@ test('opening a different record on the phone sheet starts at its top', async ()
   const { win, doc, read } = await boot();
   const rec = fullRecord(read);
   win.openDetail(rec.id);
-  $(doc, '#dmSecs').scrollTop = 420;
+  $(doc, '#dmScroll').scrollTop = 420;
   win.openDetail(RECORDS.find(r => r.have_it && r.id !== rec.id).id);
-  assert.strictEqual($(doc, '#dmSecs').scrollTop, 0,
+  assert.strictEqual($(doc, '#dmScroll').scrollTop, 0,
     'a different record inherited the last one\'s scroll position');
 });
 
