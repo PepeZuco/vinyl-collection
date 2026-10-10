@@ -88,6 +88,8 @@ def rows(filters):
         ratings[1] = "or " + ratings[1]
     if ratings:
         out.append(("rating", ratings))
+    if f.get("countries"):
+        out.append(("place", [f["countries"]]))
     if f.get("places"):
         out.append(("place", [f["places"]]))
     if "bought_from" in f or "bought_to" in f:

@@ -12066,7 +12066,7 @@ function renderBackups(list, keepDays){
 // runs out of budget, and the loop in syncPlaylist simply asks again.
 let playlistAccount = null;
 let savedPlaylists = [];
-let playlistChoices = {genres: [], places: []};
+let playlistChoices = {genres: [], places: [], countries: []};
 const playlistStatus = {};      // playlist id -> {html, err}
 let playlistBusy = false;
 let playlistHighlight = null;   // id of the row a duplicate create pointed at
@@ -12082,7 +12082,7 @@ function setPlaylistBusy(busy){
 
 function blankPlaylistForm(){
   return {liked: true, decades: [], genres: [], pepe_min: '', jenni_min: '',
-          rating_mode: 'and', places: [], bought_from: '', bought_to: '', source: 'albums', owned: 'owned', name: '', nameTouched: false};
+          rating_mode: 'and', places: [], countries: [], bought_from: '', bought_to: '', source: 'albums', owned: 'owned', name: '', nameTouched: false};
 }
 let playlistForm = blankPlaylistForm();
 
@@ -12112,7 +12112,7 @@ async function loadPlaylists(){
       if(!s.ok)throw new Error('HTTP '+s.status);
       const d=await s.json();
       savedPlaylists=d.playlists||[];
-      playlistChoices={genres:d.genres||[],places:d.places||[]};
+      playlistChoices={genres:d.genres||[],places:d.places||[],countries:d.countries||[]};
     }
     renderPlaylists(playlistAccount);
   }catch(err){
@@ -12298,6 +12298,7 @@ function playlistFilterChips(p){
   if(f.pepe_min!=null)rate.push('Pepe ≥ '+Number(f.pepe_min));
   if(f.jenni_min!=null)rate.push('Jenni ≥ '+Number(f.jenni_min));
   if(rate.length)chip('ti-star-filled',rate.join(f.rating_mode==='or'?' or ':' & '),'rating');
+  (f.countries||[]).forEach(c=>chip('ti-world',countryLabelFromCode(c)));
   (f.places||[]).forEach(pl=>chip('ti-building-store',pl));
   if(f.bought_from||f.bought_to)chip('ti-calendar-dollar','bought '+span(f.bought_from,f.bought_to));
   if(chips.length===1)chip('ti-vinyl','whole collection');
@@ -12311,13 +12312,13 @@ function renderPlaylistForm(){
   const el=document.getElementById('playlistFormBody');
   if(!el)return;
   const f=playlistForm;
-  const chips=(field,choices)=>{
+  const chips=(field,choices,labelOf=x=>x)=>{
     const taken=new Set(f[field].map(x=>x.toLowerCase()));
     const left=choices.filter(c=>!taken.has(c.toLowerCase()));
-    return f[field].map((c,i)=>`<span class="pl-chip">${esc(c)}<button type="button" aria-label="remove"
+    return f[field].map((c,i)=>`<span class="pl-chip">${esc(labelOf(c))}<button type="button" aria-label="remove"
         onclick="playlistChipRemove('${field}',${i})">×</button></span>`).join('')
       +(left.length?`<select class="pl-add" data-field="${field}" onchange="playlistChipAdd(this)">
-        <option value="">+ add</option>${left.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+        <option value="">+ add</option>${left.map(c=>`<option value="${esc(c)}">${esc(labelOf(c))}</option>`).join('')}
         </select>`:'');
   };
   // "70s" reads best; the full "1970s" only where two centuries would share a label.
@@ -12343,6 +12344,7 @@ function renderPlaylistForm(){
       ${radio('plOwned','owned','owned','owned',f.owned==='owned','ti-check')}${radio('plOwned','owned','wishlist','wishlist',f.owned==='wishlist','ti-heart-plus')}${radio('plOwned','owned','all','both',f.owned==='all')}</span></div>
     <div class="pl-field">${label('ti-calendar','decade')}${decadePills()}</div>
     <div class="pl-field">${label('ti-tag','genre')}${chips('genres',playlistChoices.genres)}</div>
+    <div class="pl-field">${label('ti-world','country')}${chips('countries',playlistChoices.countries,countryLabelFromCode)}</div>
     <div class="pl-field">${label('ti-star','rating')}<span class="pl-rate">Pepe ≥ ${stars('pepe_min')}</span>
       <span class="pl-mode pl-seg sm" id="plMode">${radio('plMode','rating_mode','and','and',f.rating_mode!=='or')}${radio('plMode','rating_mode','or','or',f.rating_mode==='or')}</span>
       <span class="pl-rate">Jenni ≥ ${stars('jenni_min')}</span></div>
@@ -12375,7 +12377,7 @@ function playlistFilters(){
   const f=playlistForm;
   return VinylPlaylistFilters.normalize({liked:f.liked,decades:f.decades,
     genres:f.genres,pepe_min:f.pepe_min,jenni_min:f.jenni_min,rating_mode:f.rating_mode,
-    places:f.places,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source,owned:f.owned});
+    places:f.places,countries:f.countries,bought_from:f.bought_from,bought_to:f.bought_to,source:f.source,owned:f.owned});
 }
 
 // Updated in place rather than re-rendered, so typing in a field keeps focus.

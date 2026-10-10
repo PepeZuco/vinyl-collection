@@ -15,6 +15,7 @@ Filters (all optional; absent means "does not filter"; they combine with AND):
   pepe_min, jenni_min      minimum stars, 0.5–5 in halves
   rating_mode              "and" | "or" — only kept when both minimums are set
   places                   any of these bought-at places
+  countries                any of these pressing countries, as ISO 3166-1 alpha-2 codes
   bought_from, bought_to   YYYY-MM-DD purchase range, inclusive
   source                   "albums" (default) | "compilations" | "all" — which kind of
                            Spotify link counts: an album (or track) link, or a playlist
@@ -110,6 +111,22 @@ def _names(field, v):
     return sorted(out, key=str.lower)
 
 
+def _countries(v):
+    if isinstance(v, str):
+        v = [v]
+    if not isinstance(v, (list, tuple)):
+        raise FilterError("countries", "must be a list")
+    out = set()
+    for x in v:
+        c = _tidy(x).upper()
+        if not c:
+            continue
+        if not re.fullmatch(r"[A-Z]{2}", c):
+            raise FilterError("countries", "must be two-letter country codes")
+        out.add(c)
+    return sorted(out)
+
+
 def _decades(v):
     if not isinstance(v, (list, tuple)):
         v = [v]
@@ -146,6 +163,11 @@ def normalize_filters(raw):
         f["year_to"] = hi
     if not _blank(raw.get("decades")):
         f["decades"] = _decades(raw["decades"])
+
+    if not _blank(raw.get("countries")):
+        codes = _countries(raw["countries"])
+        if codes:
+            f["countries"] = codes
 
     for field in ("genres", "places"):
         if not _blank(raw.get(field)):
@@ -223,6 +245,8 @@ def _parts(f):
         ratings.append(f"Jenni ≥{_num(f['jenni_min'])}")
     if ratings:
         out.append((" or " if f.get("rating_mode") == "or" else " and ").join(ratings))
+    if f.get("countries"):
+        out.append(", ".join(f["countries"]))
     if f.get("places"):
         out.append(", ".join(f["places"]))
     if "bought_from" in f or "bought_to" in f:
@@ -282,6 +306,8 @@ def _matches(r, f):
         if y is None or y // 10 * 10 not in f["decades"]:
             return False
     if f.get("genres") and _fold(r.get("genre")) not in {g.lower() for g in f["genres"]}:
+        return False
+    if f.get("countries") and _tidy(r.get("country")).upper() not in set(f["countries"]):
         return False
     checks = []
     if "pepe_min" in f:

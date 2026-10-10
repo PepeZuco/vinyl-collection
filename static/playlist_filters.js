@@ -38,6 +38,15 @@ const VinylPlaylistFilters = (function () {
     return parseInt(v, 10);
   }
 
+  function countries(v) {
+    const out = new Set();
+    for (const x of (Array.isArray(v) ? v : [v])) {
+      const c = tidy(x).toUpperCase();
+      if (/^[A-Z]{2}$/.test(c)) out.add(c);
+    }
+    return [...out].sort();
+  }
+
   function decades(v) {
     const out = new Set();
     for (const x of (Array.isArray(v) ? v : [v])) {
@@ -72,6 +81,10 @@ const VinylPlaylistFilters = (function () {
     if (yt !== null) f.year_to = yt;
     const ds = decades(raw.decades);
     if (ds.length) f.decades = ds;
+    if (!blank(raw.countries)) {
+      const cs = countries(raw.countries);
+      if (cs.length) f.countries = cs;
+    }
     for (const k of ['genres', 'places']) {
       if (!blank(raw[k])) {
         const l = names(raw[k]);
@@ -116,6 +129,7 @@ const VinylPlaylistFilters = (function () {
       if (y === null || !f.decades.includes(Math.floor(y / 10) * 10)) return false;
     }
     if (f.genres && !f.genres.some(g => g.toLowerCase() === fold(r.genre))) return false;
+    if (f.countries && !f.countries.includes(tidy(r.country).toUpperCase())) return false;
     const checks = [];
     if ('pepe_min' in f) checks.push((Number(r.my_rating) || 0) >= f.pepe_min);
     if ('jenni_min' in f) checks.push((Number(r.wife_rating) || 0) >= f.jenni_min);
@@ -164,6 +178,7 @@ const VinylPlaylistFilters = (function () {
     if ('pepe_min' in f) r.push('Pepe ≥' + num(f.pepe_min));
     if ('jenni_min' in f) r.push('Jenni ≥' + num(f.jenni_min));
     if (r.length) out.push(r.join(f.rating_mode === 'or' ? ' or ' : ' and '));
+    if (f.countries) out.push(f.countries.join(', '));
     if (f.places) out.push(f.places.join(', '));
     if ('bought_from' in f || 'bought_to' in f) out.push('bought ' + span(f.bought_from, f.bought_to));
     if (f.source === 'compilations') out.push('compilations only');

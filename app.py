@@ -2288,7 +2288,10 @@ def spotify_playlists():
             for d in (r.to_dict() for r in rows) if d["url"]]})
     return jsonify({"playlists": [r.to_dict() for r in rows],
                     "genres": _distinct_names(Record.genre),
-                    "places": _distinct_names(Record.bought_where)})
+                    "places": _distinct_names(Record.bought_where),
+                    "countries": sorted({(c or "").strip().upper() for (c,) in
+                                         db.session.query(Record.country).distinct().all()
+                                         if len((c or "").strip()) == 2})})
 
 
 @app.route("/api/spotify/playlists", methods=["POST"])
