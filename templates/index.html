@@ -4251,20 +4251,20 @@ body:not(.is-authed) .bar-views,body:not(.is-authed) #accViews{display:none!impo
      Search takes the freed slot because it is what you actually reach for, and
      it puts the filter bar under a thumb. -->
 <nav class="mobile-tabbar" id="mobileTabbar">
-  <button class="mtab-item active" id="mtabCollection" onclick="switchTab('collection')">
+  <button class="mtab-item active" id="mtabCollection" onclick="tabClick('collection')">
     <span class="mtab-icon-wrap"><i class="ti ti-layout-grid"></i></span><span>Collection</span>
   </button>
-  <button class="mtab-item" id="mtabTimeline" onclick="switchTab('timeline')">
+  <button class="mtab-item" id="mtabTimeline" onclick="tabClick('timeline')">
     <span class="mtab-icon-wrap"><i class="ti ti-calendar-month"></i></span><span>Timeline</span>
   </button>
   <button class="mtab-fab" id="mtabFab" style="display:none" onclick="openAdd()" title="add record"><i class="ti ti-plus"></i></button>
   <!-- Both modes get Spotify, the playlists page (links only for visitors).
        Visitors keep Readme beside it; edit mode tucks Readme and Stats behind
        "More" — the owner's slot goes to what writes. -->
-  <button class="mtab-item" id="mtabSpotify" onclick="switchTab('playlists')">
+  <button class="mtab-item" id="mtabSpotify" onclick="tabClick('playlists')">
     <span class="mtab-icon-wrap"><i class="ti ti-brand-spotify"></i></span><span>Spotify</span>
   </button>
-  <button class="mtab-item mtab-visitor" id="mtabReadme" onclick="switchTab('features')">
+  <button class="mtab-item mtab-visitor" id="mtabReadme" onclick="tabClick('features')">
     <span class="mtab-icon-wrap"><i class="ti ti-user"></i></span><span>Readme</span>
   </button>
   <div class="mtab-more mtab-owner" id="mtabMore">
@@ -12662,10 +12662,10 @@ document.getElementById('idleTriggerBtn').addEventListener('click', fireIdleSpot
 
 // ── events ─────────────────────────────────────────────────────────────────
 function bindEvents(){
-  document.getElementById('tabCollection').addEventListener('click', () => switchTab('collection'));
-  document.getElementById('tabStats').addEventListener('click', () => switchTab('stats'));
-  document.getElementById('tabFeatures').addEventListener('click', () => switchTab('features'));
-  document.getElementById('tabPlaylists').addEventListener('click', () => switchTab('playlists'));
+  document.getElementById('tabCollection').addEventListener('click', () => tabClick('collection'));
+  document.getElementById('tabStats').addEventListener('click', () => tabClick('stats'));
+  document.getElementById('tabFeatures').addEventListener('click', () => tabClick('features'));
+  document.getElementById('tabPlaylists').addEventListener('click', () => tabClick('playlists'));
   document.getElementById('racePlayBtn').addEventListener('click', function () {
     histPlaying ? histPause() : histPlay();
   });
@@ -12776,7 +12776,7 @@ window.addEventListener('resize', function () {
     document.getElementById('raceTooltip').style.opacity = 0;
   });
   document.getElementById('tabTimeline').addEventListener('click', () => {
-    switchTab('timeline');
+    tabClick('timeline');
     calUpdateDateRange();
   });
   document.getElementById('calDayOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCalDay();});
@@ -13761,6 +13761,12 @@ document.addEventListener('click', e => {
 let currentTab = 'collection';
 let chartInstances = {};
 let worldMapFeatures = null; // cached GeoJSON features for the country choropleth
+
+// A tab press: re-pressing the tab you are already on takes you back to the top.
+function tabClick(tab) {
+  if (tab === currentTab) window.scrollTo({ top: 0, behavior: 'smooth' });
+  else switchTab(tab);
+}
 
 function switchTab(tab) {
   const leaving = currentTab;
