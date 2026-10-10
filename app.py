@@ -2217,12 +2217,14 @@ def _playlist_records():
     rows = (db.session.query(Record.id, Record.cover_hash, Record.artist, Record.album_name,
                              Record.spotify_url, Record.tracks, Record.year, Record.genre,
                              Record.my_rating, Record.wife_rating, Record.bought_where,
-                             Record.bought_date, Record.have_it, Record.spotify_standin)
+                             Record.bought_date, Record.have_it, Record.spotify_standin,
+                             Record.country)
             .filter(Record.spotify_url.isnot(None), Record.spotify_url != "")
             .order_by(Record.bought_date, Record.id).all())
     out = []
     for (rid, cover_hash, artist, album, link, tracks, year, genre,
-         my_rating, wife_rating, bought_where, bought_date, have_it, standin) in rows:
+         my_rating, wife_rating, bought_where, bought_date, have_it, standin,
+         country) in rows:
         try:
             parsed = json.loads(tracks) if tracks else []
         except ValueError:
@@ -2234,7 +2236,7 @@ def _playlist_records():
                     "year": year, "genre": genre, "my_rating": my_rating,
                     "wife_rating": wife_rating, "bought_where": bought_where,
                     "bought_date": bought_date, "have_it": bool(have_it),
-                    "spotify_standin": bool(standin)})
+                    "spotify_standin": bool(standin), "country": country})
     return out
 
 
