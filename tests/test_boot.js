@@ -362,63 +362,61 @@ test('every scale chip names itself', async () => {
   }
 });
 
-test('insights draws the health row from the same records', async () => {
-  const { win, doc } = await boot();
+/* The statistics page is two views of the records themselves: the piles and
+ * the country map. The KPI tiles, the rating radar and the year ridgeline are
+ * parked in #statsLegacy (hidden) — drawn by nothing, so a render of the tab
+ * must not build them. jsdom has no layout (clientWidth is 0), so what is
+ * asserted here is the page's shape and state, not the pixels. */
+test('the statistics page is the piles and the map, nothing else showing', async () => {
+  const { win, doc, errors } = await boot();
   win.switchTab('stats');
-  const tiles = [...doc.querySelectorAll('#statsCards .kpi-tile')];
-  assert.strictEqual(tiles.length, 4);
-  assert.match(tiles[0].textContent, /Records/);
-  assert.match(tiles[3].textContent, /Never cleaned/);
+  assert.deepStrictEqual(errors, [], 'rendering the stats tab threw:\n' + errors.join('\n'));
+  assert.ok($(doc, '#pileWrap'), 'the piles are missing');
+  assert.ok($(doc, '#worldMapWrap'), 'the map is missing');
+  assert.strictEqual($(doc, '#statsLegacy').hidden, true, 'the parked charts are showing');
+  assert.strictEqual(doc.querySelector('#countryRank'), null,
+    'the country list below the map came back');
+  assert.strictEqual(doc.querySelectorAll('#statsCards .kpi-tile').length, 0,
+    'the KPI tiles were drawn although they are parked');
 });
 
-test('the Plays tile tracks the week by weekday, Monday to Sunday', async () => {
-  const { win, doc } = await boot();
+test('the statistics page has no filter bar, and reads the owned collection', async () => {
+  const { win, doc, read } = await boot();
+  // a search left over from the collection tab must not shape the charts
+  const box = $(doc, '#searchInput');
+  box.value = 'zzzz';
+  box.dispatchEvent(new win.Event('input', { bubbles: true }));
   win.switchTab('stats');
-  const plays = [...doc.querySelectorAll('#statsCards .kpi-tile')]
-    .find(t => /Plays/.test(t.textContent));
-  assert.ok(plays, 'no Plays tile rendered');
-  assert.strictEqual(plays.querySelectorAll('.kpi-bars .b').length, 7);
-  assert.deepStrictEqual(
-    [...plays.querySelectorAll('.kpi-daylabels span')].map(s => s.textContent),
-    ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
-  // the initials repeat, so the hover text is what tells Saturday from Sunday
-  assert.match(plays.querySelectorAll('.kpi-bars .b')[6].getAttribute('title'),
-    /^Sunday · /);
+  assert.strictEqual($(doc, '#filterBar').style.display, 'none');
+  assert.strictEqual(read('statsRecords.length'), RECORDS.filter(r => r.have_it).length);
 });
 
-/* Condition used to be a doughnut of its own; it is bands inside the release
-   year distribution now. d3 is a chainable no-op in this harness, so what can
-   be asserted here is that the old chart is gone, the merged one still has a
-   key saying what the bands mean, and rendering the stats tab throws nothing —
-   the bands themselves are checked by hand in the running app. */
-test('condition folds into the year distribution rather than its own chart', async () => {
-  const { win, doc } = await boot();
+test('the pile toggles switch what is stacked and how it is coloured', async () => {
+  const { win, doc, read } = await boot();
   win.switchTab('stats');
-  assert.strictEqual(doc.querySelector('#conditionChart'), null,
-    'the condition doughnut is still on the page');
-  const legend = doc.querySelector('#yearLegend');
-  assert.ok(legend, 'the year distribution lost its legend');
-  assert.match(legend.textContent, /New/);
-  assert.match(legend.textContent, /Used/);
-  assert.match(legend.textContent, /Unknown/);
+  assert.strictEqual(read('pileX'), 'genre');
+  assert.strictEqual(read('pileC'), 'genre');
+  $(doc, '#pileSegX button[data-v=decade]').click();
+  $(doc, '#pileSegC button[data-v=decade]').click();
+  assert.strictEqual(read('pileX'), 'decade');
+  assert.strictEqual(read('pileC'), 'decade');
+  const on = id => [...doc.querySelectorAll(id + ' button.on')].map(b => b.dataset.v);
+  assert.deepStrictEqual(on('#pileSegX'), ['decade']);
+  assert.deepStrictEqual(on('#pileSegC'), ['decade']);
 });
 
-/* The map is stubbed out here (d3 is a chainable no-op), so this is really a
-   test of the list beside it — which is the half that has to be ordered. */
-test('the country list ranks countries beside the map', async () => {
-  const { win, doc } = await boot();
+test('a pile opens the list of its records, and a record opens its detail', async () => {
+  const { win, doc, read } = await boot();
   win.switchTab('stats');
-  const rows = [...doc.querySelectorAll('#countryRank .crank-row')];
-  assert.strictEqual(rows.length, 2, 'expected a row for Brazil and one for the US');
-  assert.match(rows[0].textContent, /Brazil/);
-  assert.match(rows[1].textContent, /United States/);
-  const counts = rows.map(r => Number(r.querySelector('.crank-count').textContent));
-  assert.ok(counts[0] > counts[1], 'not ordered by record count: ' + counts.join(','));
-  assert.match(rows[0].querySelector('img').getAttribute('src'), /\/br\.png$/,
-    'the row is missing its flag');
-  const bars = rows.map(r => parseFloat(r.querySelector('.crank-bar').style.width));
-  assert.strictEqual(bars[0], 100, 'the biggest country did not get the full-width bar');
-  assert.ok(bars[1] < bars[0], 'the bars do not follow the counts: ' + bars.join(','));
+  const owned = read('statsRecords.slice(0, 3)');
+  win.openStatsGroup('Test pile', owned);
+  assert.ok($(doc, '#statsSheetOv').classList.contains('on'), 'the sheet did not open');
+  const rows = doc.querySelectorAll('#statsSheet .ss-row');
+  assert.strictEqual(rows.length, 3);
+  assert.match($(doc, '#statsSheet header h3').textContent, /Test pile/);
+  rows[0].click();
+  assert.ok(!$(doc, '#statsSheetOv').classList.contains('on'), 'the sheet stayed open over the detail');
+  assert.ok(!$(doc, '#detailOverlay').classList.contains('hidden'), 'the record did not open');
 });
 
 // ── the address bar ─────────────────────────────────────────────────────────
