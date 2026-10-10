@@ -2745,10 +2745,23 @@ body:not(.is-authed) .bar-views,body:not(.is-authed) #accViews{display:none!impo
   font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .crate-body{padding:14px 0 20px}
 .crate.collapsed .crate-body{display:none}
+/* The two shelf levels: equal halves, side by side. minmax(0,1fr) so a wide
+   card or long title can't make one level wider than the other. */
+.setup-levels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+.setup-levels > .crate{margin:0;min-width:0}
+.setup-levels > .crate + .crate{border-left:2px solid var(--border);padding-left:24px;margin-left:-12px}
+.setup-levels .grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+@media(max-width:760px){
+  .setup-levels{grid-template-columns:1fr}
+  .setup-levels > .crate + .crate{border-left:0;padding-left:0;margin-left:0}
+}
 /* Letter index inside a setup-mode block: a full-width row in the card grid,
-   an inline label above the row it precedes in list view. */
-.setup-letter{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  color:var(--muted);padding:10px 2px 4px}
+   an inline label above the row it precedes in list view. A big accent letter
+   with a rule running out to the edge, so the alphabet reads at a glance. */
+.setup-letter{display:flex;align-items:center;gap:12px;font-family:var(--font-mono);font-size:26px;
+  font-weight:800;line-height:1;color:var(--accent);padding:22px 2px 10px}
+.setup-letter::after{content:"";flex:1;height:2px;border-radius:2px;
+  background:linear-gradient(to right,var(--accent),transparent);opacity:.5}
 .setup-letter:first-child{padding-top:0}
 .grid .setup-letter{grid-column:1/-1}
 
@@ -5884,7 +5897,7 @@ function renderSetup() {
 function setupHTML(recs, query) {
   const blocks = VinylGrouping.setupBlocks(recs);
   const q = (query || '').trim().toLowerCase();
-  return blocks.map(block => {
+  const sections = blocks.map(block => {
     const first = block.records[0], last = block.records[block.records.length - 1];
     const initial = r => (r.artist || '').trim().charAt(0).toUpperCase() || '#';
     const range = first ? `${initial(first)} – ${initial(last)}` : '';
@@ -5907,7 +5920,10 @@ function setupHTML(recs, query) {
       </div>
       <div class="crate-body">${body}</div>
     </section>`;
-  }).join('');
+  });
+  // The two shelf levels always sit side by side as equal halves; the
+  // compilations section (if any) spans full width underneath.
+  return `<div class="setup-levels">${sections.slice(0, 2).join('')}</div>${sections.slice(2).join('')}`;
 }
 
 // Same markup as recordsHTML, but with a letter divider inserted above the
