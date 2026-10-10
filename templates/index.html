@@ -1007,7 +1007,11 @@ html{overflow-x:clip}
   .dm-carousel{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;
     padding:6px calc(50% - var(--dm-cover) / 2) 10px;scrollbar-width:none;
     -webkit-overflow-scrolling:touch;flex-shrink:0;perspective:900px;
-    position:sticky;top:0;z-index:1;background:var(--bg)}
+    /* Scrolling pins the top third of the cover: the box is cover + 16px
+       (6 above, 10 below), so a top of -(2/3 cover + 10px) leaves 6px + a
+       third of the cover on screen. z-index above .dm-info makes the box its
+       own opaque clip for the details scrolling underneath it. */
+    position:sticky;top:calc(var(--dm-cover) * -2 / 3 - 10px);z-index:3;background:var(--bg)}
   .dm-carousel::-webkit-scrollbar{display:none}
   .dm-slide{flex:0 0 var(--dm-cover);width:var(--dm-cover);scroll-snap-align:center;scroll-snap-stop:always;
     aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:#0a0a0a;
@@ -1030,15 +1034,15 @@ html{overflow-x:clip}
         rgba(255,255,255,0) calc(var(--gx,50) * 1% + 8%))}
   .dm-slide.sealed.cur .dm-glare{display:block}
 
-  /* One scroller under the top bar. The cover is the only thing that sticks;
-     the details slide up over it, and once a third of the cover is covered
+  /* One scroller under the top bar. The cover is the only thing that sticks
+     (its top third stays pinned, see .dm-carousel); once a third of the cover is covered
      the tabs and all three blocks appear (.sheet-open, set from the scroll
      position in JS). */
   .dm-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
     -webkit-overflow-scrolling:touch;position:relative}
   .dm-info{position:relative;z-index:2;min-height:100%;padding:16px 16px 12px;
     background:var(--bg);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
-  .dm-info .dm-tabs{display:none;position:sticky;top:0;z-index:3;background:var(--bg);margin:10px -16px 0;padding:0 16px}
+  .dm-info .dm-tabs{display:none;position:sticky;top:calc(var(--dm-cover) / 3 + 6px);z-index:3;background:var(--bg);margin:10px -16px 0;padding:0 16px}
   .dm-secs .dd-sec{display:none}
   .dm-secs #dmSec-tracks{display:block}
   #dmLayout.sheet-open .dm-info .dm-tabs{display:flex}
@@ -6835,7 +6839,9 @@ function detailScroller(pane) {
 function detailBarHeight(pane) {
   const p = DETAIL_PANES[pane];
   const el = id => { const n = id && document.getElementById(id); return n ? n.offsetHeight : 0; };
-  return el(pane + 'Tabs') + el(p.chrome);
+  // the phone's pinned top third of the cover sits above the tab row
+  const strip = pane === 'dm' ? Math.round((el('dmCarousel') - 16) / 3 + 6) : 0;
+  return el(pane + 'Tabs') + el(p.chrome) + strip;
 }
 
 function detailMarkSection(pane, id) {
