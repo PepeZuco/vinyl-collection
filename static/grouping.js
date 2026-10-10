@@ -251,29 +251,27 @@ const VinylGrouping = (function () {
    * Compilations have no single artist: they're stored with every performer
    * semicolon-separated, so sorting them by name alone files each one under
    * whoever happens to be listed first and scatters them through the shelf.
-   * They live together apart from the two blocks instead, in their own
-   * section appended at the end -- and since they never join the block split,
-   * they can't skew it. Alphabetical among themselves is still how they sit
-   * within that section. A "/" is not the same signal -- it separates the
-   * two names of one credit ("Edu Lobo / Chico Buarque"), so it sorts by
-   * letter like any other artist and stays in the blocks.
-   *
-   * The Multiple artists section is only appended when at least one
-   * compilation exists, so a collection with none still gets exactly the two
-   * blocks. */
+   * They're appended after every single-artist record instead, alphabetical
+   * among themselves, and the cut is made over the combined list -- so the
+   * two blocks stay equal in count and the compilations end up at the bottom
+   * of Block 2. Each block's `multiple` lists the compilations it holds (the
+   * tail of its `records`) so the view can set them off under their own
+   * heading. A "/" is not the same signal -- it separates the two names of
+   * one credit ("Edu Lobo / Chico Buarque"), so it sorts by letter like any
+   * other artist. */
   function setupBlocks(records) {
     const isCompilation = r => (r.artist || '').includes(';');
     const name = r => (r.artist || '').trim().toLowerCase();
     const byName = (a, b) => name(a).localeCompare(name(b));
     const singles = records.filter(r => !isCompilation(r)).sort(byName);
     const compilations = records.filter(isCompilation).sort(byName);
-    const cut = Math.ceil(singles.length / 2);
-    const blocks = [
-      { label: 'Block 1', records: singles.slice(0, cut) },
-      { label: 'Block 2', records: singles.slice(cut) },
-    ];
-    if (compilations.length) blocks.push({ label: 'Multiple artists', records: compilations });
-    return blocks;
+    const all = singles.concat(compilations);
+    const cut = Math.ceil(all.length / 2);
+    const part = (label, from, to) => {
+      const recs = all.slice(from, to);
+      return { label, records: recs, multiple: recs.filter(isCompilation) };
+    };
+    return [part('Block 1', 0, cut), part('Block 2', cut)];
   }
 
   /* The letter divider inside a setup-mode block: the artist's first letter,

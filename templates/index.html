@@ -416,6 +416,16 @@ html{overflow-x:clip}
      filter:brightness(var(--rate-flare));transform:scale(1.15)}
   100%{box-shadow:0 0 4px rgba(var(--glow-rgb),var(--rate-glow));filter:brightness(1);transform:scale(1)}
 }
+/* phone: a softer full-marks flare — small, dim halo, barely any brightening */
+@media(max-width:760px){
+  .score-sq.full{box-shadow:0 0 2px rgba(var(--glow-rgb),.35)}
+  .score-sq.full.in-view{animation-name:sq-glow-soft}
+  @keyframes sq-glow-soft{
+    0%{box-shadow:none;filter:brightness(1);transform:scale(1)}
+    30%{box-shadow:0 0 4px rgba(var(--glow-rgb),.4);filter:brightness(1.12);transform:scale(1.06)}
+    100%{box-shadow:0 0 2px rgba(var(--glow-rgb),.35);filter:brightness(1);transform:scale(1)}
+  }
+}
 
 /* stars — used in detail modal only */
 .stars-mini{display:flex;gap:1px}
@@ -2763,6 +2773,7 @@ body:not(.is-authed) .bar-views,body:not(.is-authed) #accViews{display:none!impo
 .setup-letter::after{content:"";flex:1;height:2px;border-radius:2px;
   background:linear-gradient(to right,var(--accent),transparent);opacity:.5}
 .setup-letter:first-child{padding-top:0}
+.setup-multi{font-size:15px;letter-spacing:.08em;text-transform:uppercase;padding-top:28px}
 .grid .setup-letter{grid-column:1/-1}
 
 @media(max-width:760px){
@@ -5897,20 +5908,26 @@ function renderSetup() {
 function setupHTML(recs, query) {
   const blocks = VinylGrouping.setupBlocks(recs);
   const q = (query || '').trim().toLowerCase();
+  const initial = r => (r.artist || '').trim().charAt(0).toUpperCase() || '#';
   const sections = blocks.map(block => {
-    const first = block.records[0], last = block.records[block.records.length - 1];
-    const initial = r => (r.artist || '').trim().charAt(0).toUpperCase() || '#';
-    const range = first ? `${initial(first)} – ${initial(last)}` : '';
-    const shown = q ? block.records.filter(r =>
-      (r.artist || '').toLowerCase().includes(q) || (r.album_name || '').toLowerCase().includes(q)
-    ) : block.records;
-    const count = q ? `${shown.length} / ${block.records.length}` :
+    const multi = new Set(block.multiple);
+    const singles = block.records.filter(r => !multi.has(r));
+    const firstS = singles[0], lastS = singles[singles.length - 1];
+    const range = firstS ? `${initial(firstS)} – ${initial(lastS)}` : '';
+    const match = r => !q ||
+      (r.artist || '').toLowerCase().includes(q) || (r.album_name || '').toLowerCase().includes(q);
+    const shownSingles = singles.filter(match);
+    const shownMulti = block.multiple.filter(match);
+    const shownCount = shownSingles.length + shownMulti.length;
+    const count = q ? `${shownCount} / ${block.records.length}` :
       `${block.records.length} ${block.records.length === 1 ? 'record' : 'records'}`;
-    // Multiple artists is a small, already-alphabetical section -- the letter
-    // index only earns its keep on the two big by-artist blocks.
-    const body = !shown.length
+    // Compilations close out the last block under their own heading; the
+    // letter index only earns its keep on the by-artist part.
+    const multiBody = shownMulti.length
+      ? `<div class="setup-letter setup-multi">Multiple artists</div>${recordsHTML(shownMulti)}` : '';
+    const body = !shownCount
       ? `<div class="empty" style="padding:12px 0"><i class="ti ti-disc"></i>no matches in this block</div>`
-      : block.label === 'Multiple artists' ? recordsHTML(shown) : setupLetterBodyHTML(shown);
+      : (shownSingles.length ? setupLetterBodyHTML(shownSingles) : '') + multiBody;
     return `<section class="crate">
       <div class="crate-head-wrap">
         <div class="crate-head" style="cursor:default">
@@ -5921,9 +5938,8 @@ function setupHTML(recs, query) {
       <div class="crate-body">${body}</div>
     </section>`;
   });
-  // The two shelf levels always sit side by side as equal halves; the
-  // compilations section (if any) spans full width underneath.
-  return `<div class="setup-levels">${sections.slice(0, 2).join('')}</div>${sections.slice(2).join('')}`;
+  // The two shelf levels always sit side by side as equal halves.
+  return `<div class="setup-levels">${sections.join('')}</div>`;
 }
 
 // Same markup as recordsHTML, but with a letter divider inserted above the
