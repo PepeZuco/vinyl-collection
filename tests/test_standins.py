@@ -150,6 +150,34 @@ def test_a_band_name_with_an_ampersand_is_searched_whole_first(spotify):
     assert len([p for _, p in spotify.calls if p.startswith("/search")]) == 1
 
 
+def test_dotted_initials_meet_the_undotted_title():
+    items = [_track("SOS", artist="ABBA", uri="spotify:track:sos")]
+    assert standins.pick_hit("S.O.S", "ABBA", "Dez Anos", items)["uri"] == "spotify:track:sos"
+    items = [_track("S.O.S.", artist="ABBA", uri="spotify:track:dotted")]
+    assert standins.pick_hit("SOS", "ABBA", "Dez Anos", items)["uri"] == "spotify:track:dotted"
+
+
+def test_squashing_spaces_does_not_make_different_songs_meet():
+    assert standins.pick_hit("Song", "Artist", "Album", [_track("Songs")]) is None
+
+
+def test_a_near_spelling_is_suggested_not_picked():
+    items = [_track("Chiquitita", artist="ABBA", uri="spotify:track:chiq")]
+    assert standins.pick_hit("Chiquita", "ABBA", "Dez Anos", items) is None
+    assert standins.pick_suggestion("Chiquita", "ABBA", "Dez Anos", items)["uri"] == "spotify:track:chiq"
+
+
+def test_a_suggestion_must_credit_the_artist_and_be_close():
+    assert standins.pick_suggestion("Chiquita", "ABBA", "A", [_track("Chiquitita", artist="Cher")]) is None
+    assert standins.pick_suggestion("Chiquita", "ABBA", "A", [_track("Dancing Queen", artist="ABBA")]) is None
+
+
+def test_the_closest_spelling_is_suggested():
+    items = [_track("Chiquitita Reprise Extended", artist="ABBA", uri="spotify:track:far"),
+             _track("Chiquitita", artist="ABBA", uri="spotify:track:near")]
+    assert standins.pick_suggestion("Chiquita", "ABBA", "A", items)["uri"] == "spotify:track:near"
+
+
 def test_a_live_only_song_is_still_found():
     items = [_track("Song - Ao Vivo", album="Ao Vivo", uri="spotify:track:live")]
     assert standins.pick_hit("Song", "Artist", "Album", items)["uri"] == "spotify:track:live"
@@ -226,6 +254,8 @@ class SearchingSpotify(FakeSpotify):
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(url).query)["q"][0]
             # Like Spotify's field filter, near enough: the title and one credited artist.
+            if 'track:"' not in q:
+                return _Response(200, {"tracks": {"items": getattr(self, "plain", []), "next": None}})
             items = [t for title, ts in self.catalogue.items() if f'track:"{title}"' in q for t in ts
                      if any(f'artist:"{a["name"]}"' in q for a in t["artists"])]
             return _Response(200, {"tracks": {"items": items, "next": None}})
@@ -254,6 +284,22 @@ def test_preview_searches_each_song_by_title_and_artist(spotify):
         ("A", "Intro", "spotify:track:intro"), ("A", "Lost", None), ("B", "Outro", "spotify:track:outro")]
     search = [p for _, p in spotify.calls if p.startswith("/search")][0]
     assert "track%3A%22Intro%22" in search and "artist%3A%22Artist%22" in search
+
+
+def test_preview_suggests_a_near_spelling_when_nothing_matches(spotify):
+    spotify.catalogue["Chiquita"] = [_track("Chiquitita", artist="Artist", uri="spotify:track:chiq")]
+    songs = standins.preview(spotify_sync.Client("RT"), {
+        "artist": "Artist", "album_name": "Album",
+        "tracks": [{"side": "A", "title": "Chiquita"}, {"side": "A", "title": "Intro"}]})
+    assert songs[0]["hit"] is None and songs[0]["suggestion"]["uri"] == "spotify:track:chiq"
+    assert songs[1]["hit"]["uri"] == "spotify:track:intro" and songs[1]["suggestion"] is None
+
+
+def test_preview_searches_plainly_when_the_field_search_finds_nothing(spotify):
+    spotify.plain = [_track("Chiquitita", artist="Artist", uri="spotify:track:plain")]
+    songs = standins.preview(spotify_sync.Client("RT"), {
+        "artist": "Artist", "album_name": "Album", "tracks": [{"side": "A", "title": "Chiquita"}]})
+    assert songs[0]["suggestion"]["uri"] == "spotify:track:plain"
 
 
 def test_create_makes_a_private_playlist_and_reports_its_id_before_filling_it(spotify):

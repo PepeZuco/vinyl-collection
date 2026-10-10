@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { filterCandidates, tracksKeeps, pillKeeps, hitLabel, sidesFor, discCountFor, pickedUris } =
+const { filterCandidates, tracksKeeps, pillKeeps, hitLabel, sidesFor, discCountFor, pickedUris, songState } =
   require('../static/standins.js');
 
 const rec = (artist, album_name) => ({ artist, album_name });
@@ -55,4 +55,18 @@ test('only ticked songs with a hit go on the playlist, in tracklist order, once 
   const songs = [{ hit: { uri: 'u1' } }, { hit: null }, { hit: { uri: 'u2' } }, { hit: { uri: 'u1' } }];
   assert.deepStrictEqual(pickedUris(songs, new Set([0, 1, 2, 3])), ['u1', 'u2']);
   assert.deepStrictEqual(pickedUris(songs, new Set([2])), ['u2']);
+});
+
+test('a suggestion reads as a question and only goes on the playlist once ticked', () => {
+  const sug = { uri: 'u9', name: 'Chiquitita', album: 'Voulez-Vous', year: '1979' };
+  assert.strictEqual(hitLabel(null, sug), 'did you mean Chiquitita · Voulez-Vous · 1979?');
+  const songs = [{ hit: null, suggestion: sug }];
+  assert.deepStrictEqual(pickedUris(songs, new Set()), []);
+  assert.deepStrictEqual(pickedUris(songs, new Set([0])), ['u9']);
+});
+
+test('a song is a hit, a suggestion or a miss', () => {
+  assert.strictEqual(songState({ hit: { uri: 'u' } }), 'hit');
+  assert.strictEqual(songState({ hit: null, suggestion: { uri: 'u' } }), 'suggestion');
+  assert.strictEqual(songState({ hit: null }), 'miss');
 });

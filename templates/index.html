@@ -1764,6 +1764,7 @@ html{overflow-x:clip}
 .sti-song.miss .sti-song-title{color:var(--sp-sub)}
 .sti-song-hit{font-size:12px;color:var(--sp-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sti-song.miss .sti-song-hit{font-style:italic}
+.sti-song.maybe .sti-song-hit{font-style:italic;color:var(--sp-green)}
 .sti-draft-row{display:grid;grid-template-columns:58px minmax(0,1fr) 34px;gap:6px;margin-bottom:6px}
 .sti-draft-row select,.sti-draft-row input{background:var(--sp-hover);color:var(--sp-text);border:1px solid transparent;
   border-radius:4px;padding:6px 8px;font:inherit;font-size:13px;min-width:0}
@@ -11929,14 +11930,14 @@ function standinSongsHTML(){
   const songs = standin.songs;
   const found = songs.filter(s => s.hit).length;
   const n = VinylStandins.pickedUris(songs, standin.ticked).length;
-  const rows = songs.map((s, i) => `<li><label class="sti-song${s.hit ? '' : ' miss'}">
-      <input type="checkbox" ${standin.ticked.has(i) ? 'checked' : ''} ${s.hit && !standin.busy ? '' : 'disabled'}
+  const rows = songs.map((s, i) => `<li><label class="sti-song${VinylStandins.songState(s) === 'miss' ? ' miss' : ''}${VinylStandins.songState(s) === 'suggestion' ? ' maybe' : ''}">
+      <input type="checkbox" ${standin.ticked.has(i) ? 'checked' : ''} ${VinylStandins.songState(s) !== 'miss' && !standin.busy ? '' : 'disabled'}
         onchange="toggleStandinSong(${i},this.checked)">
       <span class="sti-side">${esc(s.side)}</span>
       <span class="sti-song-text"><span class="sti-song-title">${esc(s.title)}</span>
-        <span class="sti-song-hit">${esc(VinylStandins.hitLabel(s.hit))}</span></span>
+        <span class="sti-song-hit">${esc(VinylStandins.hitLabel(s.hit, s.suggestion))}</span></span>
     </label></li>`).join('');
-  return `<p class="sti-note">${found} of ${songs.length} found. Untick any hit that is the wrong recording.</p>
+  return `<p class="sti-note">${found} of ${songs.length} found. Untick any hit that is the wrong recording; tick a \u201cdid you mean\u201d to add it.</p>
     <ul class="sti-songs">${rows}</ul>
     <div class="sti-actions">
       <button class="sti-btn" id="stiCreate" ${n && !standin.busy ? '' : 'disabled'} onclick="createStandin()">

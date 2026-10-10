@@ -36,9 +36,19 @@ const VinylStandins = (function () {
     return true;
   }
 
-  function hitLabel(hit) {
-    if (!hit) return 'not found on Spotify';
-    return [hit.name, hit.album, hit.year].filter(Boolean).join(' · ');
+  function hitLabel(hit, suggestion) {
+    const label = h => [h.name, h.album, h.year].filter(Boolean).join(' · ');
+    if (hit) return label(hit);
+    if (suggestion) return `did you mean ${label(suggestion)}?`;
+    return 'not found on Spotify';
+  }
+
+  /* 'hit' goes on the playlist ticked; 'suggestion' is a near-spelt song the
+   * owner may tick; 'miss' has nothing. */
+  function songState(song) {
+    if (song && song.hit) return 'hit';
+    if (song && song.suggestion) return 'suggestion';
+    return 'miss';
   }
 
   /* A/B are disc 1, C/D disc 2 — the same rule static/tracks.js uses. */
@@ -52,16 +62,18 @@ const VinylStandins = (function () {
     return Math.floor(last / 2) + 1;
   }
 
-  /* The ticked songs that Spotify has, in tracklist order, each track once. */
+  /* The ticked songs that Spotify has (a hit, or a suggestion the owner
+   * ticked), in tracklist order, each track once. */
   function pickedUris(songs, ticked) {
     const out = [];
     (songs || []).forEach((s, i) => {
-      if (ticked.has(i) && s.hit && s.hit.uri && !out.includes(s.hit.uri)) out.push(s.hit.uri);
+      const h = s.hit || s.suggestion;
+      if (ticked.has(i) && h && h.uri && !out.includes(h.uri)) out.push(h.uri);
     });
     return out;
   }
 
-  return { filterCandidates, tracksKeeps, pillKeeps, hitLabel, sidesFor, discCountFor, pickedUris };
+  return { filterCandidates, tracksKeeps, pillKeeps, hitLabel, songState, sidesFor, discCountFor, pickedUris };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylStandins;

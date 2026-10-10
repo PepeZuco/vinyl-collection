@@ -11,6 +11,7 @@ Everything here talks to Spotify through a spotify_sync.Client — the owner's
 login, since a playlist belongs to a person.
 """
 
+import difflib
 import io
 import re
 import urllib.parse
@@ -27,6 +28,9 @@ COVER_SIZE = 640
 _SEARCH_LIMIT = 10
 # Spotify caps an add at 100 URIs per request.
 _BATCH = 100
+# How alike two squashed titles must be for Spotify's song to be offered as
+# "did you mean": "chiquita" / "chiquitita" is 0.89, a different song is far below.
+_SUGGEST_RATIO = 0.8
 
 # Wording that marks a take other than the studio one. A hit carrying it still
 # counts — a song only out live beats no song — but loses to one without.
@@ -60,6 +64,11 @@ def _variant(track):
     return bool(_VARIANT.search(words))
 
 
+def _squash(title):
+    """A title folded like a match's, then closed up: "S.O.S" and "SOS" both read "sos"."""
+    return spotify_sync._norm(title, strip_extras=True).replace(" ", "")
+
+
 def _hit(track):
     album = track.get("album") or {}
     return {"uri": track["uri"], "name": track.get("name") or "",
@@ -72,7 +81,8 @@ def pick_hit(title, artist, album, items):
     """The search result that is this record's song, or None.
 
     A hit must credit the record's artist and be the same song once titles are
-    folded (accents, case, " - Remastered" tails, bracketed words). Among hits:
+    folded (accents, case, punctuation, " - Remastered" tails, bracketed words).
+    Among hits:
     the record's own album first, then a studio take over a live/demo/remix,
     then an exact title over a folded one, then the earliest release.
     """
@@ -82,16 +92,45 @@ def pick_hit(title, artist, album, items):
     own_album = spotify_sync._norm(album, strip_extras=True)
     if not loose:
         return None
+    squashed = loose.replace(" ", "")
     ranked = []
     for t in items or []:
         if not t or not t.get("uri") or not (want_artists & _credits(t)):
             continue
         exact = spotify_sync._norm(t.get("name"), strip_extras=False) == strict
-        if not exact and spotify_sync._norm(t.get("name"), strip_extras=True) != loose:
+        if not exact and _squash(t.get("name")) != squashed:
             continue
         t_album = t.get("album") or {}
         ranked.append(((spotify_sync._norm(t_album.get("name"), strip_extras=True) != own_album,
                         _variant(t), not exact, t_album.get("release_date") or "9999"), t))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda pair: pair[0])
+    return _hit(ranked[0][1])
+
+
+def pick_suggestion(title, artist, album, items):
+    """The record's artist's song whose title nearly matches, or None.
+
+    For when the sleeve's spelling is off ("Chiquita" for "Chiquitita"): not
+    a hit, so the owner is asked rather than told. Same artist rule as a hit;
+    the closest title wins, ties broken like a hit's.
+    """
+    want_artists = {scan._normalise(a) for a in _artists(artist)} - {""}
+    squashed = _squash(title)
+    own_album = spotify_sync._norm(album, strip_extras=True)
+    if not squashed:
+        return None
+    ranked = []
+    for t in items or []:
+        if not t or not t.get("uri") or not (want_artists & _credits(t)):
+            continue
+        ratio = difflib.SequenceMatcher(None, squashed, _squash(t.get("name"))).ratio()
+        if ratio < _SUGGEST_RATIO:
+            continue
+        t_album = t.get("album") or {}
+        ranked.append(((-ratio, spotify_sync._norm(t_album.get("name"), strip_extras=True) != own_album,
+                        _variant(t), t_album.get("release_date") or "9999"), t))
     if not ranked:
         return None
     ranked.sort(key=lambda pair: pair[0])
@@ -112,21 +151,44 @@ def _search(client, title, artist):
     return (client.call("GET", f"/search?{query}").get("tracks") or {}).get("items")
 
 
-def find_song(client, title, artist, album):
-    """A Spotify search for a song by the record's artist; its best hit or None.
+def _search_plain(client, title, artist):
+    """Without field filters, which only match a title spelt exactly."""
+    query = urllib.parse.urlencode({"q": f"{_quoted(title)} {_quoted(artist)}",
+                                    "type": "track", "limit": _SEARCH_LIMIT})
+    return (client.call("GET", f"/search?{query}").get("tracks") or {}).get("items")
+
+
+def lookup(client, title, artist, album):
+    """(hit, suggestion) for a song: the best hit or None, and when there is
+    no hit, a near-spelt song by the same artist to ask about, or None.
 
     A duo's record ("A & B") is searched as written first; on a miss, again by
-    its first artist, since Spotify credits the two separately.
+    its first artist, since Spotify credits the two separately. With nothing
+    matching, one plain search looks for a near spelling.
     """
     names = _artists(artist)
-    hit = pick_hit(title, artist, album, _search(client, title, names[0]))
+    items = list(_search(client, title, names[0]) or [])
+    hit = pick_hit(title, artist, album, items)
     if hit is None and len(names) > 1:
-        hit = pick_hit(title, artist, album, _search(client, title, names[1]))
-    return hit
+        more = _search(client, title, names[1]) or []
+        items += more
+        hit = pick_hit(title, artist, album, more)
+    if hit is not None:
+        return hit, None
+    suggestion = pick_suggestion(title, artist, album, items)
+    if suggestion is None:
+        suggestion = pick_suggestion(title, artist, album, _search_plain(client, title, names[0]))
+    return None, suggestion
+
+
+def find_song(client, title, artist, album):
+    """A Spotify search for a song by the record's artist; its best hit or None."""
+    return lookup(client, title, artist, album)[0]
 
 
 def preview(client, record):
-    """Every song on the record's tracklist with its Spotify hit (or None), in order.
+    """Every song on the record's tracklist with its Spotify hit (or None) and,
+    failing a hit, a near-spelt suggestion (or None), in order.
 
     `record` is a dict with artist, album_name and tracks (the parsed list of
     {side, title}). Untitled rows are skipped: there is nothing to search for.
@@ -136,8 +198,9 @@ def preview(client, record):
         title = (song.get("title") or "").strip()
         if not title:
             continue
+        hit, suggestion = lookup(client, title, record.get("artist"), record.get("album_name"))
         out.append({"side": song.get("side") or "A", "title": title,
-                    "hit": find_song(client, title, record.get("artist"), record.get("album_name"))})
+                    "hit": hit, "suggestion": suggestion})
     return out
 
 
