@@ -85,7 +85,58 @@ const VinylCoverTilt = (() => {
     }
   }
 
-  return { MAX_TILT, wantsTilt, hasShrinkWrap, screenTilt, tiltFrom, smooth, requestMotion };
+  /* The listener, the baseline and the easing, for whichever element getEl()
+   * names right now (it is asked every frame: the inline cover's current slide
+   * changes as you swipe). Reads are eased a fraction of the way per frame and
+   * the loop stops once it arrives, so a phone lying still costs no frames.
+   * rebase() makes the next reading "flat" again — call it when the cover on
+   * show changes. stop() ends it and leaves the element as if never tilted. */
+  const KEYS = ['rx', 'ry', 'gx', 'gy'];
+  const REST = () => ({ rx: 0, ry: 0, gx: 50, gy: 50 });
+
+  function follow(win, getEl) {
+    const st = { on: true, base: null, shown: REST(), target: null, raf: 0 };
+
+    function frame() {
+      st.raf = 0;
+      if (!st.on || !st.target) return;
+      st.shown = smooth(st.shown, st.target, 0.2);
+      const el = getEl();
+      if (el) KEYS.forEach(k => el.style.setProperty('--' + k, st.shown[k].toFixed(2)));
+      if (KEYS.some(k => st.shown[k] !== st.target[k])) st.raf = win.requestAnimationFrame(frame);
+    }
+
+    function onOrient(e) {
+      // desktop Chrome fires one reading of nulls when there is no sensor at all
+      if (!st.on || e.beta == null || e.gamma == null) return;
+      const o = win.screen && win.screen.orientation;
+      const angle = (o && o.angle) || win.orientation || 0;
+      const cur = screenTilt(e.beta, e.gamma, angle);
+      // flat is however the phone was held — and again after a turn to
+      // landscape, where the old baseline is in the other axes
+      if (!st.base || st.base.angle !== angle) st.base = Object.assign({ angle }, cur);
+      st.target = tiltFrom(st.base, cur);
+      if (!st.raf) st.raf = win.requestAnimationFrame(frame);
+    }
+
+    win.addEventListener('deviceorientation', onOrient);
+    return {
+      rebase() {
+        if (st.raf) win.cancelAnimationFrame(st.raf);
+        st.raf = 0; st.base = null; st.target = null; st.shown = REST();
+      },
+      stop() {
+        st.on = false;
+        win.removeEventListener('deviceorientation', onOrient);
+        if (st.raf) win.cancelAnimationFrame(st.raf);
+        st.raf = 0;
+        const el = getEl();
+        if (el) KEYS.forEach(k => el.style.removeProperty('--' + k));
+      },
+    };
+  }
+
+  return { MAX_TILT, wantsTilt, hasShrinkWrap, screenTilt, tiltFrom, smooth, requestMotion, follow };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylCoverTilt;

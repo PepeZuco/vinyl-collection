@@ -14,7 +14,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const {
-  MAX_TILT, wantsTilt, hasShrinkWrap, screenTilt, tiltFrom, smooth, requestMotion,
+  MAX_TILT, wantsTilt, hasShrinkWrap, screenTilt, tiltFrom, smooth, requestMotion, follow,
 } = require('../static/covertilt.js');
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} != ${b}`);
@@ -134,4 +134,80 @@ test('a permission call that throws is a denial, not an error', async () => {
   assert.strictEqual(await requestMotion({ DeviceOrientationEvent: ev }), 'denied');
   const rej = function () {}; rej.requestPermission = () => Promise.reject(new Error('nope'));
   assert.strictEqual(await requestMotion({ DeviceOrientationEvent: rej }), 'denied');
+});
+
+// ── follow: the listener + easing the inline cover and the zoomed cover share ──
+
+function fakeWin(angle = 0) {
+  const w = {
+    screen: { orientation: { angle } },
+    _l: {}, _q: [], _id: 0,
+    addEventListener(t, f) { this._l[t] = f; },
+    removeEventListener(t, f) { if (this._l[t] === f) delete this._l[t]; },
+    requestAnimationFrame(f) { const id = ++this._id; this._q.push([id, f]); return id; },
+    cancelAnimationFrame(id) { this._q = this._q.filter(([i]) => i !== id); },
+    fire(beta, gamma) { if (this._l.deviceorientation) this._l.deviceorientation({ beta, gamma }); },
+    flush(n = 80) { for (let i = 0; i < n && this._q.length; i++) this._q.shift()[1](); },
+  };
+  return w;
+}
+function fakeEl() {
+  const props = {};
+  return { props, style: {
+    setProperty(k, v) { props[k] = v; },
+    removeProperty(k) { delete props[k]; },
+  } };
+}
+
+test('follow: the first reading is flat, a later one leans the element', () => {
+  const win = fakeWin(), el = fakeEl();
+  follow(win, () => el);
+  win.fire(55, 0); win.flush();
+  assert.strictEqual(Number(el.props['--ry']), 0);
+  win.fire(55, 10); win.flush();
+  assert.ok(Number(el.props['--ry']) > 0, 'right edge down turns the cover');
+  assert.ok(Number(el.props['--gx']) < 50, 'the glare runs the other way');
+});
+
+test('follow: a reading with no sensor data (nulls) is ignored', () => {
+  const win = fakeWin(), el = fakeEl();
+  follow(win, () => el);
+  win.fire(null, null); win.flush();
+  assert.deepStrictEqual(el.props, {});
+});
+
+test('follow: stop removes the listener and clears the element', () => {
+  const win = fakeWin(), el = fakeEl();
+  const f = follow(win, () => el);
+  win.fire(55, 0); win.fire(55, 10); win.flush();
+  f.stop();
+  assert.strictEqual(win._l.deviceorientation, undefined);
+  assert.deepStrictEqual(el.props, {});
+  win.fire(55, 30); win.flush();
+  assert.deepStrictEqual(el.props, {}, 'a stopped follower never moves again');
+});
+
+test('follow: rebase takes the next reading as flat again', () => {
+  const win = fakeWin(), el = fakeEl();
+  const f = follow(win, () => el);
+  win.fire(55, 0); win.fire(55, 20); win.flush();
+  f.rebase();
+  win.fire(55, 20); win.flush();      // how the phone is held now
+  assert.ok(Math.abs(Number(el.props['--ry'] || 0)) < 0.5, 'no jump after a rebase');
+});
+
+test('follow: turning to landscape re-measures instead of jumping', () => {
+  const win = fakeWin(0), el = fakeEl();
+  follow(win, () => el);
+  win.fire(55, 0); win.flush();
+  win.screen.orientation.angle = 90;
+  win.fire(5, 55); win.flush();
+  assert.ok(Math.abs(Number(el.props['--rx'])) < 0.5 && Math.abs(Number(el.props['--ry'])) < 0.5);
+});
+
+test('follow: a missing element is tolerated', () => {
+  const win = fakeWin();
+  follow(win, () => null);
+  win.fire(55, 0); win.fire(55, 10);
+  assert.doesNotThrow(() => win.flush());
 });
