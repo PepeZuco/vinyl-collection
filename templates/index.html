@@ -666,7 +666,7 @@ html{overflow-x:clip}
    leave the "current" slide scrolled miles out of view with nothing able to
    bring it back).
    Scrolling — or clicking a neighbor — swaps the current record in place,
-   same as the mobile crate tap, without the header's slide animation.
+   same as the phone's bottom-row tap, without the header's slide animation.
    Wheel/touch are handled entirely in JS (ddBind): native scrolling here
    would let one light swipe fly past several records, since most slides
    are much shorter than a full scroll gesture's travel.
@@ -969,7 +969,7 @@ html{overflow-x:clip}
   /* Nothing here scrolls as a page: the tracklist scrolls in its own area and
      the raised sheet scrolls inside itself. */
   .detail-mobile-layout{
-    --dm-cover:min(72vw,34vh);
+    --dm-cover:min(72vw,34svh);
     display:flex;flex-direction:column;position:relative;width:100%;height:100%;
     background:var(--bg);overflow:hidden;
   }
@@ -1063,10 +1063,26 @@ html{overflow-x:clip}
   .dm-edit:active{opacity:1}
   .dm-edit[hidden]{display:none}   /* display:flex above beats the UA [hidden] rule */
 
+  .dm-info .dd-tabs{position:static;background:var(--bg)}
+
+  /* Nothing behind the record may scroll or pull-to-refresh from a drag here. */
+  .dm-handle,.dm-top,.dm-nav{touch-action:none}
+  .dm-carousel{touch-action:pan-x}
+  html:has(#detailOverlay:not(.hidden)){overscroll-behavior:none}
+
   /* A thumb, not a cursor, is aiming for this — 44px matches the platform's
      touch-target guidance. */
   .tl-heart{min-width:44px;min-height:44px;padding:0;
     display:flex;align-items:center;justify-content:center;font-size:16px}
+}
+
+/* Short screens (landscape phones, small windows): the details column itself
+   scrolls, so Tracks, Info and Timeline stay reachable, and the cover shrinks. */
+@media(max-width:760px) and (max-height:600px){
+  .detail-mobile-layout{--dm-cover:min(40vw,26svh)}
+  .dm-info{overflow-y:auto;overscroll-behavior:contain}
+  .dm-secs{flex:none;overflow:visible}
+  .dm-handle{position:sticky;top:0;z-index:2;background:var(--bg)}
 }
 
 /* form */
@@ -6087,7 +6103,7 @@ const revealedCovers = new Set();
 // censored and not yet revealed; returns imgHTML unchanged otherwise. Callers
 // keep their own "no cover" fallback markup untouched — this only ever wraps
 // a real image. `eye:false` blurs without a reveal control, for thumbnails
-// too small to click (the drawer's crate strip).
+// too small to click (the phone's bottom row).
 function censorWrap(r, imgHTML, {eye = true} = {}) {
   if (!r.censored || revealedCovers.has(r.id)) return imgHTML;
   const eyeBtn = eye
@@ -6297,7 +6313,7 @@ function shelfBtnState(id) {
 }
 
 function renderDetailContent(r) {
-  // mobile crate carousel + desktop vertical carousel both navigate the same
+  // phone cover carousel + desktop vertical carousel both navigate the same
   // list as the header's prev/next arrows
   const dmRecs = detailNavRecords();
   dmList = dmRecs.length && dmRecs.some(x => x.id === r.id) ? dmRecs : [r];
@@ -6342,6 +6358,8 @@ function renderDetailContent(r) {
   dmBind();
   ddBind();
   dmSetCurrent(dmIdx);
+  // the carousel was just rebuilt (scrollLeft 0): put this record's cover back in the middle
+  dmCenterSlide(dmIdx, false);
   dmSetSheet(keepSheet);
   dmMeasureChrome();
   const dd = document.getElementById('ddInfo');
@@ -7093,6 +7111,7 @@ function dmCenterSlide(idx, smooth) {
   car.scrollTo({left: s.offsetLeft + s.offsetWidth/2 - car.clientWidth/2, behavior: smooth ? 'smooth' : 'auto'});
 }
 
+let dmScrollTarget = null, dmScrollTargetTimer = 0;   // slide a bottom-row tap is gliding to
 function dmBind() {
   const car = document.getElementById('dmCarousel');
   if (!car) return;
@@ -7106,9 +7125,16 @@ function dmBind() {
         const d = Math.abs(s.offsetLeft + s.offsetWidth/2 - mid);
         if (d < bd) { bd = d; best = k; }
       });
+      // after a bottom-row tap the carousel glides past other slides; their
+      // "closest" results are not the user's choice, so wait for the target
+      if (dmScrollTarget !== null) {
+        if (best !== dmScrollTarget) return;
+        dmScrollTarget = null;
+      }
       if (best !== dmIdx) dmSetCurrent(best);
     });
   }, {passive: true});
+  car.addEventListener('touchstart', () => { dmScrollTarget = null; }, {passive: true});
   // Only the cover in the middle opens. The neighbours peeking in at the
   // edges are a swipe away, not a tap, and opening one you are not on would
   // show a record the drawer below is not about.
@@ -7121,6 +7147,9 @@ function dmBind() {
     if (!b) return;
     const idx = dmList.findIndex(r => r.id === Number(b.dataset.id));
     if (idx === -1) return;
+    dmScrollTarget = idx;
+    clearTimeout(dmScrollTargetTimer);
+    dmScrollTargetTimer = setTimeout(() => { dmScrollTarget = null; }, 1200);
     dmSetCurrent(idx);
     dmCenterSlide(idx, true);
   });
@@ -7131,13 +7160,14 @@ function dmBind() {
   const lay = document.getElementById('dmLayout');
   let y0 = null, t0 = 0, y1 = 0, t1 = 0, swallow = false;
   lay.addEventListener('touchstart', e => {
-    if (!e.target.closest('.dm-handle')) return;
+    if (!e.target.closest('.dm-handle')) { y0 = null; return; }
     y0 = y1 = e.touches[0].clientY; t0 = t1 = e.timeStamp;
   }, {passive: true});
   lay.addEventListener('touchmove', e => {
     if (y0 === null) return;
     y1 = e.touches[0].clientY; t1 = e.timeStamp;
   }, {passive: true});
+  lay.addEventListener('touchcancel', () => { y0 = null; });
   lay.addEventListener('touchend', () => {
     if (y0 === null) return;
     const dy = y1 - y0, v = dy / Math.max(1, t1 - t0);
@@ -7381,8 +7411,8 @@ function openDetail(id, focus) {
   scrollFocusIntoView();
 }
 
-// The history sits below the cover carousel, the crate strip and the metadata
-// grid, which on a phone is a long way down. Both layouts are in the DOM at
+// The history sits below the cover and the details, in a block the phone's
+// closed sheet hides. Both layouts are in the DOM at
 // once and CSS hides one, so scrolling the wrong one scrolls nothing.
 function scrollFocusIntoView() {
   const phone = window.matchMedia('(max-width:760px)').matches;
@@ -7424,7 +7454,7 @@ function updateDetailNavVisibility() {
 
 /* The phone's sticky counter. In shelf order it names the spot in the furniture
  * -- the same block-scoped pair the desktop header prints -- because that is
- * what the strip below it is now ordered by; otherwise it stays the plain
+ * what the list is now ordered by; otherwise it stays the plain
  * "where am I in this list" count it has always been. */
 function dmSyncCount() {
   const count = document.getElementById('dmCount');
@@ -7453,7 +7483,7 @@ function goToDetailRecord(nextRecord, delta) {
     renderDetailContent(nextRecord);
     syncUrl();
     updateDetailNavVisibility();
-    // dmSetCurrent re-centres the desktop carousel and the phone's crate strip,
+    // dmSetCurrent re-centres the desktop carousel,
     // but not the phone's cover carousel -- which would leave a record arrived
     // at by dice or arrow key showing the PREVIOUS record's cover. Nothing
     // caught it before: until the phone got a dice, no control on that layout

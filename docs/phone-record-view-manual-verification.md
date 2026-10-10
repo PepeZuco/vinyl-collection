@@ -12,7 +12,11 @@ On a real phone (iOS Safari and Android Chrome), installed to the home screen if
 - [ ] Drag down or tap the handle: it closes. Changing record closes it. Liking a song with the sheet open keeps it open.
 - [ ] Tap the cover: the zoomed view leans and the small cover rests; closing it resumes the small one.
 - [ ] A Timeline link (e.g. from the History page) opens the record with the sheet raised and the entry in view.
-- [ ] Logged in: a small edit button sits bottom right, clear of the next cover; it opens the edit form, which has Delete.
+- [ ] Logged in: a small edit button sits bottom right, clear of the next cover; it opens the form's first step; Delete is under the form's "‹ edit" root.
 - [ ] Logged out: no edit button.
-- [ ] Rotate to landscape and back mid-tilt: no jump.
+- [ ] Rotate to landscape and back mid-tilt: no jump. (Most phones switch to the desktop drawer above 760px wide, so landscape checks apply only to phones 760px wide or less.)
 - [ ] Reduced-motion setting on: cover flat.
+- [ ] Liking a track (or rating) keeps the cover on THIS record: no cover jump.
+- [ ] Dragging the handle (or header, bottom row) does not scroll or pull-to-refresh the page behind.
+- [ ] Tapping a bottom cover switches records without flicker (no bounce back to the old one).
+- [ ] A short phone (small window or narrow landscape) stays usable: the tracklist has room and the raised sheet scrolls to Info and Timeline.

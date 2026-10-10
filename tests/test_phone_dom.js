@@ -1788,3 +1788,48 @@ test('the edit form on the phone still carries delete', async () => {
     assert.strictEqual(del.hidden, false, 'delete is not hidden');
   } finally { win.close(); }
 });
+
+// ── final review fixes ──────────────────────────────────────────────────────
+test('a re-render of the same record puts its cover back in the middle', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    const ids = listIds(read);
+    win.openDetail(ids[2]);
+    const calls = [];
+    win.Element.prototype.scrollTo = function (o) { calls.push([this.id, o]); };
+    win.__peek(`renderDetailContent(records.find(r => r.id === ${ids[2]}))`);   // what a like does
+    const c = calls.find(([id]) => id === 'dmCarousel');
+    assert.ok(c, 'the rebuilt carousel was re-centred');
+    assert.strictEqual(c[1].behavior, 'auto');
+    assert.strictEqual(read('dmIdx'), 2);
+  } finally { win.close(); }
+});
+
+test('a bottom-row tap is not undone by the carousel gliding past other slides', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    const ids = listIds(read);
+    win.openDetail(ids[1]);
+    win.Element.prototype.scrollTo = function () {};
+    press(win, doc.querySelector('#dmNav .dm-nav-btn.next'));
+    assert.strictEqual(read('currentDetailId'), ids[2]);
+    // jsdom lays nothing out, so the "closest" slide reads as the first one
+    doc.getElementById('dmCarousel').dispatchEvent(new win.Event('scroll'));
+    await new Promise(r => setTimeout(r, 100));
+    assert.strictEqual(read('currentDetailId'), ids[2], 'the glide flipped the record back');
+  } finally { win.close(); }
+});
+
+test('liking keeps the phone sheet scroll for the same record, a new record starts at the top', async () => {
+  const { win, doc, read } = await boot({ phone: true });
+  try {
+    const ids = listIds(read);
+    win.openDetail(ids[1]);
+    doc.getElementById('dmSecs').scrollTop = 420;
+    win.__peek(`renderDetailContent(records.find(r => r.id === ${ids[1]}))`);
+    assert.strictEqual(doc.getElementById('dmSecs').scrollTop, 420);
+    doc.getElementById('dmSecs').scrollTop = 420;
+    win.openDetail(ids[2]);
+    assert.strictEqual(doc.getElementById('dmSecs').scrollTop, 0);
+  } finally { win.close(); }
+});
