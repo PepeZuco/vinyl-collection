@@ -305,8 +305,23 @@ const VinylGrouping = (function () {
     return null;
   }
 
+  /* What a crate header says about the records inside it: the average of the
+   * ratings given (null when nothing in it is rated, so no empty star shows), up
+   * to four covers to preview it while it is collapsed, and the first and last
+   * day anything in it was added. */
+  function crateSummary(records) {
+    const rated = records.map(avgRating).filter(x => x > 0);
+    const days = records.map(r => momentOf(r.bought_date).day).filter(Boolean).sort();
+    return {
+      rating: rated.length ? rated.reduce((a, b) => a + b, 0) / rated.length : null,
+      covers: records.filter(r => r.cover_url).slice(0, 4),
+      firstDay: days[0] || '',
+      lastDay: days[days.length - 1] || '',
+    };
+  }
+
   return { avgRating, momentOf, lastPlayed, bucketOf, compareByGroup, buildGroups, setupBlocks,
-           setupLetterOf, shelfPositionOf };
+           setupLetterOf, shelfPositionOf, crateSummary };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = VinylGrouping;

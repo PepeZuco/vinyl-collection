@@ -2741,24 +2741,37 @@ html{overflow-x:clip}
 /* The wrapper is what sticks, not the header button: the place link sits
    beside the button rather than inside it (the button is the collapse target),
    and it has to stay pinned with it while the crate scrolls. */
-.crate-head-wrap{position:sticky;top:var(--nav-h);z-index:5;display:flex;align-items:stretch;background:var(--bg)}
-.crate-head{flex:1;min-width:0;display:flex;align-items:center;gap:10px;
-  padding:9px 2px;background:none;border:none;border-bottom:1px solid var(--border);
-  color:var(--text);font-family:var(--font);cursor:pointer;text-align:left;transition:color .12s}
+.crate-head-wrap{position:sticky;top:var(--nav-h);z-index:5;display:flex;align-items:stretch;background:var(--bg);padding-bottom:6px}
+.crate-head{flex:1;min-width:0;display:flex;align-items:center;gap:12px;
+  padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-family:var(--font);cursor:pointer;text-align:left;transition:color .12s,border-color .12s}
 .crate-link{flex:0 0 auto;display:flex;align-items:center;padding:0 4px 0 12px;
-  border-bottom:1px solid var(--border);color:var(--label);text-decoration:none;transition:color .12s}
+  color:var(--label);text-decoration:none;transition:color .12s}
 .crate-link:hover{color:var(--accent)}
-.crate-head:hover{color:var(--accent)}
+.crate-head:hover{border-color:var(--accent)}
 .crate-head .crate-chev{display:flex;color:var(--muted);transition:transform .18s}
-.crate-head:hover .crate-chev{color:var(--accent)}
+.crate:not(.collapsed) .crate-head{border-color:var(--accent)}
+.crate:not(.collapsed) .crate-chev{color:var(--accent)}
 .crate.collapsed .crate-chev{transform:rotate(-90deg)}
 /* --crate-hue is set per crate only when grouping by genre, so the crate name
    carries the same hue as the cards inside it; unset everywhere else */
-.crate-label{font-size:13px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:7px;min-width:0;color:var(--crate-hue,inherit)}
+.crate-name{display:flex;flex-direction:column;gap:2px;min-width:0}
+.crate-label{font-size:15px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:7px;min-width:0;color:var(--crate-hue,inherit)}
 .crate-label .flag-wrap{flex-shrink:0}
+.crate-sub{font-family:var(--font-mono);font-size:11px;color:var(--label);white-space:nowrap}
+/* a few overlapping covers, so a collapsed crate still shows what is in it */
+.crate-strip{display:flex;margin-left:auto;flex-shrink:0}
+.crate-strip .crate-thumb{width:26px;height:26px;border-radius:3px;overflow:hidden;margin-left:-9px;
+  border:2px solid var(--surface);background:var(--card);box-sizing:content-box}
+.crate-strip .crate-thumb:first-child{margin-left:0}
+.crate-thumb img,.crate-thumb .cover-censored{width:100%;height:100%;object-fit:cover;display:block}
+.crate-chip{font-family:var(--font-mono);font-size:11px;color:var(--label);border:1px solid var(--border);
+  border-radius:999px;padding:3px 9px;white-space:nowrap;font-variant-numeric:tabular-nums;flex-shrink:0}
+.crate-chip i{color:var(--accent);font-size:11px}
 /* --label, not --muted: #555 on the dark background is barely legible */
-.crate-count{font-family:var(--font-mono);font-size:11px;color:var(--label);margin-left:auto;
-  font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.crate-count{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text);flex-shrink:0;
+  background:var(--card);border:1px solid var(--border);border-radius:999px;padding:3px 10px;
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .crate-body{padding:14px 0 20px}
 .crate.collapsed .crate-body{display:none}
 /* Letter index inside a setup-mode block: a full-width row in the card grid,
@@ -2771,11 +2784,15 @@ html{overflow-x:clip}
 @media(max-width:760px){
   /* at two columns a hairline header gets lost between rows of covers, and it
      has to be a real tap target */
-  .crate-head-wrap{margin:0 -6px;background:var(--surface);
-    border:1px solid var(--border);border-radius:6px}
-  .crate-head{min-height:44px;padding:0 12px;border-bottom:none}
-  .crate-link{padding:0 12px 0 4px;border-bottom:none}
-  .crate-count{background:var(--card);border:1px solid var(--border);border-radius:999px;padding:2px 8px}
+  .crate-head-wrap{margin:0 -6px}
+  .crate-head{min-height:44px;padding:8px 12px;flex-wrap:wrap;row-gap:8px}
+  .crate-name{flex:1 1 60%}
+  .crate-sub{display:none}
+  .crate-label{font-size:14px;white-space:nowrap}
+  .crate-count{order:2}
+  .crate-strip{order:3;margin-left:0}
+  .crate-chip{order:4;margin-left:auto}
+  .crate-link{padding:0 12px 0 4px}
   .crate{margin-bottom:10px}
   .crate-body{padding:12px 0 16px}
 }
@@ -6043,6 +6060,14 @@ function toggleAllCrates() {
   render();
 }
 
+// "added Oct 1 – Oct 9" for a month crate; one day reads "added Oct 4"
+function addedSpan(first, last) {
+  if (!first) return '';
+  const fmt = d => MONTH_SHORT[Number(d.slice(5, 7)) - 1] + ' ' + Number(d.slice(8, 10));
+  return 'added ' + (first === last ? fmt(first) : fmt(first) + ' – ' + fmt(last));
+}
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 function cratesHTML(recs) {
   const crates = VinylGrouping.buildGroups(recs, groupBy, countryNameOf);
   const shut = collapsedFor(groupBy);
@@ -6061,11 +6086,18 @@ function cratesHTML(recs) {
     // and an anchor inside it would swallow that click.
     const crateUrl = (groupBy === 'bought_where' && !crate.unknown)
       ? placeUrlOf(crate.label) : '';
+    const sum = VinylGrouping.crateSummary(crate.records);
+    const sub = groupBy === 'bought_date' ? addedSpan(sum.firstDay, sum.lastDay) : '';
     return `<section class="crate${isShut ? ' collapsed' : ''}">
       <div class="crate-head-wrap">
       <button class="crate-head" data-crate="${esc(crate.id)}" aria-expanded="${!isShut}"${hue ? ` style="--crate-hue:${hue}"` : ''}>
         <span class="crate-chev"><i class="ti ti-chevron-down"></i></span>
-        <span class="crate-label">${crate.code ? flagImgHTML(crate.code, 18) : ''}${esc(crate.label)}</span>
+        <span class="crate-name">
+          <span class="crate-label">${crate.code ? flagImgHTML(crate.code, 18) : ''}${esc(crate.label)}</span>
+          ${sub ? `<span class="crate-sub">${esc(sub)}</span>` : ''}
+        </span>
+        <span class="crate-strip">${sum.covers.map(r => `<span class="crate-thumb">${censorWrap(r, `<img src="${r.cover_url}" alt="" loading="lazy">`, {eye: false})}</span>`).join('')}</span>
+        ${sum.rating ? `<span class="crate-chip" title="average rating"><i class="ti ti-star-filled"></i> ${sum.rating.toFixed(1)}</span>` : ''}
         <span class="crate-count">${crate.records.length} ${crate.records.length === 1 ? 'record' : 'records'}</span>
       </button>
       ${crateUrl ? `<a class="crate-link" href="${esc(crateUrl)}" target="_blank" rel="noopener noreferrer"

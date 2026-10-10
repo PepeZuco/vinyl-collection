@@ -10,7 +10,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { bucketOf, buildGroups, avgRating, momentOf, lastPlayed, compareByGroup, setupBlocks,
-        shelfPositionOf, setupLetterOf } = require('../static/grouping.js');
+        shelfPositionOf, setupLetterOf, crateSummary } = require('../static/grouping.js');
 
 // A record only needs the fields the bucket rule reads, so each test builds the
 // smallest one that exercises its rule.
@@ -672,4 +672,25 @@ test('a place crate is keyed by the place, trimmed, whatever link it carries', (
 test('a record with no place lands in the unknown crate', () => {
   const bucket = bucketOf(rec({ bought_where: '   ' }), 'bought_where');
   assert.strictEqual(bucket.unknown, true);
+});
+
+// ── crateSummary: what the crate header shows ───────────────────────────────
+
+test('crate summary averages the ratings given and skips unrated records', () => {
+  const s = crateSummary([rec({ my_rating: 4 }), rec({ my_rating: 5, wife_rating: 3 }), rec({})]);
+  assert.strictEqual(s.rating, 4);
+});
+
+test('crate summary has no rating when nothing in the crate is rated', () => {
+  assert.strictEqual(crateSummary([rec({})]).rating, null);
+});
+
+test('crate summary previews at most four covers, skipping records without one', () => {
+  const recs = [rec({}), ...[1, 2, 3, 4, 5].map(n => rec({ id: n, cover_url: `c${n}` }))];
+  assert.deepStrictEqual(crateSummary(recs).covers.map(r => r.cover_url), ['c1', 'c2', 'c3', 'c4']);
+});
+
+test('crate summary spans the first and last day added', () => {
+  const s = crateSummary([rec({ bought_date: '2026-10-09' }), rec({ bought_date: '2026-10-01' }), rec({})]);
+  assert.deepStrictEqual([s.firstDay, s.lastDay], ['2026-10-01', '2026-10-09']);
 });
